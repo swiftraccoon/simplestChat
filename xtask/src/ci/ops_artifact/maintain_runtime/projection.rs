@@ -19,7 +19,7 @@ fn status(value: &Value) -> Result<i64> {
         .filter(|v| (-127..=255).contains(v))
         .ok_or(Error::Refused)
 }
-const BOOLEAN_FACTS: [&str; 27] = [
+pub(super) const BOOLEAN_FACTS: [&str; 27] = [
     "namespaceMapped",
     "pidfdMapped",
     "credentialsMatched",
@@ -48,7 +48,7 @@ const BOOLEAN_FACTS: [&str; 27] = [
     "wrapperStdoutClosed",
     "wrapperStderrClosed",
 ];
-const HASH_FACTS: [&str; 6] = [
+pub(super) const HASH_FACTS: [&str; 6] = [
     "stdoutSha256",
     "stderrSha256",
     "opsSha256",
@@ -106,7 +106,7 @@ const NATIVE_FAILURES: [&str; 10] = [
     "bounds",
     "command",
 ];
-fn native(value: &Value) -> Result<()> {
+pub(super) fn native(value: &Value) -> Result<()> {
     exact(
         value,
         &[
@@ -136,7 +136,9 @@ fn native(value: &Value) -> Result<()> {
     {
         return Err(Error::Refused);
     }
-    let facts = &value["facts"];
+    native_facts(&value["facts"])
+}
+pub(super) fn native_facts(facts: &Value) -> Result<()> {
     let mut fields = BOOLEAN_FACTS.to_vec();
     fields.extend(HASH_FACTS);
     fields.extend([
@@ -195,7 +197,7 @@ fn native(value: &Value) -> Result<()> {
     }
     Ok(())
 }
-fn expected_native(value: &Value, raw: i64, scenario: &str) -> Result<()> {
+pub(super) fn expected_native(value: &Value, raw: i64, scenario: &str) -> Result<()> {
     let (trial, expected, failure) = match scenario {
         "positive" => ("normal", 0, None),
         "dirty-source" => ("normal", 1, Some("command")),
@@ -211,7 +213,16 @@ fn expected_native(value: &Value, raw: i64, scenario: &str) -> Result<()> {
     {
         return Err(Error::Refused);
     }
-    let facts = &value["facts"];
+    expected_facts(&value["facts"], scenario)
+}
+pub(super) fn expected_facts(facts: &Value, scenario: &str) -> Result<()> {
+    let expected = match scenario {
+        "positive" => 0,
+        "dirty-source" => 1,
+        "cancel-owned-launcher" => 143,
+        "timeout-stopped-launcher" => 124,
+        _ => return Err(Error::Input),
+    };
     for name in HASH_FACTS {
         if !facts[name]
             .as_str()
@@ -252,6 +263,72 @@ fn expected_native(value: &Value, raw: i64, scenario: &str) -> Result<()> {
     }
     Ok(())
 }
+pub(super) const GUEST_CHECKPOINTS: &[&str] = &[
+    "input",
+    "source-import",
+    "payload",
+    "render",
+    "render-inert-handoff",
+    "render-files",
+    "render-helpers",
+    "render-directories",
+    "render-assets",
+    "render-assets-receipt",
+    "render-tools",
+    "network-collector",
+    "network-create",
+    "network-marker",
+    "network-profile",
+    "network-route",
+    "network-firewall",
+    "network-guard",
+    "network-capture",
+    "network-capture-ready",
+    "network-probe",
+    "database-setup",
+    "caddy-natural",
+    "ready",
+    "native",
+    "native-result",
+    "daemon-observe",
+    "daemon-actor-identity",
+    "daemon-inventory",
+    "daemon-validation-input",
+    "daemon-event-shape",
+    "daemon-actor-classification",
+    "daemon-rename",
+    "daemon-action-history",
+    "daemon-network-history",
+    "daemon-pg-history",
+    "daemon-final-traces",
+    "database-observe",
+    "tls-observe",
+    "application-observe",
+    "source-observe",
+    "capture-live",
+    "capture-bounds",
+    "capture-eof",
+    "capture-stop",
+    "capture-wait",
+    "capture-status",
+    "capture-short",
+    "capture-close",
+    "capture-data-arp",
+    "capture-data-ipv4",
+    "capture-data-ipv4-icmp",
+    "capture-data-ipv4-igmp",
+    "capture-data-ipv4-tcp",
+    "capture-data-ipv4-udp",
+    "capture-data-ipv4-dhcp",
+    "capture-data-ipv4-ntp",
+    "capture-data-ipv4-dns",
+    "capture-data-ipv6",
+    "capture-data-icmpv6-router-advertisement",
+    "capture-data-other",
+    "capture-data-unknown",
+    "cleanup",
+    "complete",
+];
 pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
     exact(
         &value,
@@ -276,75 +353,7 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
         || value["scope"] != "MaintainLauncherPrerequisiteGuest"
         || value["passed"].as_bool().is_none()
         || value["cleanupPassed"].as_bool().is_none()
-        || !allowed(
-            &value["checkpoint"],
-            &[
-                "input",
-                "source-import",
-                "payload",
-                "render",
-                "render-inert-handoff",
-                "render-files",
-                "render-helpers",
-                "render-directories",
-                "render-assets",
-                "render-assets-receipt",
-                "render-tools",
-                "network-collector",
-                "network-create",
-                "network-marker",
-                "network-profile",
-                "network-route",
-                "network-firewall",
-                "network-guard",
-                "network-capture",
-                "network-capture-ready",
-                "network-probe",
-                "database-setup",
-                "caddy-natural",
-                "ready",
-                "native",
-                "native-result",
-                "daemon-observe",
-                "daemon-actor-identity",
-                "daemon-inventory",
-                "daemon-validation-input",
-                "daemon-event-shape",
-                "daemon-actor-classification",
-                "daemon-rename",
-                "daemon-action-history",
-                "daemon-network-history",
-                "daemon-pg-history",
-                "daemon-final-traces",
-                "database-observe",
-                "tls-observe",
-                "application-observe",
-                "source-observe",
-                "capture-live",
-                "capture-bounds",
-                "capture-eof",
-                "capture-stop",
-                "capture-wait",
-                "capture-status",
-                "capture-short",
-                "capture-close",
-                "capture-data-arp",
-                "capture-data-ipv4",
-                "capture-data-ipv4-icmp",
-                "capture-data-ipv4-igmp",
-                "capture-data-ipv4-tcp",
-                "capture-data-ipv4-udp",
-                "capture-data-ipv4-dhcp",
-                "capture-data-ipv4-ntp",
-                "capture-data-ipv4-dns",
-                "capture-data-ipv6",
-                "capture-data-icmpv6-router-advertisement",
-                "capture-data-other",
-                "capture-data-unknown",
-                "cleanup",
-                "complete",
-            ],
-        )
+        || !allowed(&value["checkpoint"], GUEST_CHECKPOINTS)
         || (!value["failure"].is_null()
             && !allowed(
                 &value["failure"],

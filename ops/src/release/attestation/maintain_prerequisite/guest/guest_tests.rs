@@ -54,6 +54,34 @@ fn exact_request_keeps_fifty_two_sources_fifteen_helpers_and_original_caps() {
     assert!(Request::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
 }
 #[test]
+fn prepared_host_purpose_does_not_raise_the_original_request_profile() {
+    let mut host = request_value();
+    host["scope"] = "PreparedHostMaintenanceRequest".into();
+    host["scenario"] = "host-success".into();
+    host["setupSeconds"] = 1560.into();
+    host["bodySeconds"] = 3660.into();
+    host["endSeconds"] = 3780.into();
+    let bytes = serde_json::to_vec(&host).unwrap();
+    let decoded = Request::decode_host(&bytes).unwrap();
+    assert!(decoded.is_host());
+    assert_eq!(decoded.native_scenario(), "positive");
+    assert!(Request::decode(&bytes).is_err());
+    assert!(Request::decode_host(&serde_json::to_vec(&request_value()).unwrap()).is_err());
+    for (pointer, bad) in [
+        ("/setupSeconds", json!(1561)),
+        ("/bodySeconds", json!(2039)),
+        ("/endSeconds", json!(3781)),
+        ("/scenario", json!("positive")),
+    ] {
+        let mut neighbor = host.clone();
+        *neighbor.pointer_mut(pointer).unwrap() = bad;
+        assert!(
+            Request::decode_host(&serde_json::to_vec(&neighbor).unwrap()).is_err(),
+            "{pointer}"
+        );
+    }
+}
+#[test]
 fn strict_wire_rejects_duplicates_nonfinite_trailing_and_deep_records() {
     for bytes in [
         b"{\"runId\":1,\"runId\":2}".as_slice(),

@@ -5,6 +5,7 @@ mod options;
 #[cfg(test)]
 mod oracle_tests;
 pub(super) mod process;
+mod reentry;
 #[cfg(test)]
 mod tests;
 
@@ -233,8 +234,13 @@ struct Outcome {
 pub(super) struct State {
     directories: Vec<Dir>,
     originals: Vec<Retained>,
+    benchmark_guard: Option<Retained>,
     records: files::Records,
     lock: Option<Retained>,
+    lock_stamp: Option<std::fs::Metadata>,
+    work: Option<Dir>,
+    maintenance_handoff_prepared: bool,
+    maintenance_reacquired: bool,
     socket: Option<Socket>,
     archive: Option<Retained>,
     manifest: Option<Retained>,
@@ -413,32 +419,19 @@ impl State {
             self.directories.push(dir.clone());
             dir
         };
+        self.work = Some(work.clone());
         self.lock = Some(if work.exists("workload.lock".as_ref(), owner)? {
             Retained::open(work.clone(), "workload.lock", owner)?
         } else {
             Retained::create(work.clone(), "workload.lock", owner)?
         });
         self.lock.as_ref().unwrap().protected(access.uid, owner)?;
+        self.lock_stamp = Some(control::io(
+            owner,
+            self.lock.as_ref().unwrap().file().metadata(),
+        )?);
         if self.host {
-            let file = control::io(owner, self.lock.as_ref().unwrap().file().try_clone())?;
-            self.lease = Some(crate::release::workload::Lease::acquire(file).map_err(
-                |failed| {
-                    let cause = match failed.first {
-                        crate::release::workload::Failure::Busy => {
-                            self.failure = Some("BlockingIOError".into());
-                            Cause::Io
-                        }
-                        crate::release::workload::Failure::Io => Cause::Io,
-                        crate::release::workload::Failure::Changed => Cause::Changed,
-                        crate::release::workload::Failure::Close => Cause::Close,
-                    };
-                    owner.record(cause);
-                    if failed.close_failed {
-                        owner.record(Cause::Close);
-                    }
-                    cause
-                },
-            )?);
+            self.acquire_workload(owner)?;
         } else {
             self.lock.as_ref().unwrap().lock(owner)?;
         }
@@ -467,6 +460,8 @@ impl State {
                 }
                 if name == "release-state.json" {
                     self.records.initial_journal = self.originals.pop();
+                } else {
+                    self.benchmark_guard = self.originals.pop();
                 }
             }
         }
@@ -564,6 +559,7 @@ impl State {
         for file in self
             .originals
             .iter()
+            .chain(self.benchmark_guard.iter())
             .chain(self.manifest.iter())
             .chain(self.archive.iter())
             .chain(self.tool.iter())
@@ -1178,6 +1174,7 @@ impl State {
         for file in self
             .originals
             .drain(..)
+            .chain(self.benchmark_guard.take())
             .chain(self.archive.take())
             .chain(self.manifest.take())
             .chain(self.tool.take())
@@ -1224,6 +1221,7 @@ impl State {
         self.unlock(owner);
         self.records.finish(owner);
         self.root.take();
+        self.work.take();
         self.tool_directory.take();
         self.destination.take();
         self.attempt.take();

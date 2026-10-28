@@ -83,12 +83,10 @@ impl Collector {
             "--format".into(),
             "{{json .}}".into(),
         ];
-        let actor = ctx.commands.spawn(
-            &mut ctx.control,
-            "daemon-events",
-            &args,
-            Duration::from_secs(1800),
-        )?;
+        let cap = ctx.control.monitor_limit();
+        let actor = ctx
+            .commands
+            .spawn(&mut ctx.control, "daemon-events", &args, cap)?;
         let mut value = Self {
             actor,
             rows: Vec::new(),
@@ -506,12 +504,10 @@ impl Watch {
             "-".into(),
             "not (ip and host 10.0.2.2 and tcp port 22) and not (arp and host 10.0.2.2)".into(),
         ];
-        let actor = ctx.commands.spawn(
-            &mut ctx.control,
-            "wire-capture",
-            &args,
-            Duration::from_secs(1800),
-        )?;
+        let cap = ctx.control.monitor_limit();
+        let actor = ctx
+            .commands
+            .spawn(&mut ctx.control, "wire-capture", &args, cap)?;
         let mut value = Self {
             actor,
             closed: false,

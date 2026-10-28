@@ -136,13 +136,20 @@ impl Fixture {
         )
     }
     fn invoke(&self, hook: Option<Hook>, owner: Owner) -> Result<Receipt> {
+        self.invoke_mode(hook, owner, false)
+    }
+    fn invoke_upgrade(&self, hook: Option<Hook>, owner: Owner) -> Result<Receipt> {
+        self.invoke_mode(hook, owner, true)
+    }
+    fn invoke_mode(&self, hook: Option<Hook>, owner: Owner, upgrade: bool) -> Result<Receipt> {
         let (access, ledger) = self.access(hook);
-        let value = run(
+        let value = transact(
             Path::new("/input/install-request.json"),
             &self.selected,
             access,
             &self.host,
             owner,
+            upgrade,
         );
         let ledger = ledger.borrow();
         assert_eq!(
@@ -154,6 +161,18 @@ impl Fixture {
     }
     fn install(&self) -> Receipt {
         self.invoke(None, Owner::fixture()).unwrap()
+    }
+    fn prepare_upgrade(&mut self) -> Vec<u8> {
+        let mut installed = fs::read(self.host.root.join("input/simplestchat-ops")).unwrap();
+        // Both inputs remain inert ELF metadata. This byte is not a header or
+        // loader policy field; no fixture executable is ever run.
+        installed[3000] ^= 1;
+        write(&self.final_path(), &installed, 0o755);
+        self.value["schemaVersion"] = 2.into();
+        self.value["installedBinary"] = json!({"sha256":files::sha(&installed),
+            "bytes":installed.len()});
+        self.save();
+        installed
     }
 }
 
@@ -224,6 +243,280 @@ fn first_install_then_exact_noop_preserves_entire_filesystem_and_original_pins()
     let before = snapshot(&f.host.root);
     assert!(!f.install().changed());
     assert_eq!(snapshot(&f.host.root), before);
+}
+
+#[test]
+fn explicit_upgrade_exchanges_only_expected_old_then_exact_repeat_is_a_noop() {
+    let mut f = Fixture::new();
+    let installed = f.prepare_upgrade();
+    let old = fs::metadata(f.final_path()).unwrap();
+    assert!(
+        f.invoke(None, Owner::fixture()).is_err(),
+        "install must not upgrade"
+    );
+    assert_eq!(fs::read(f.final_path()).unwrap(), installed);
+    let result = f.invoke_upgrade(None, Owner::fixture()).unwrap();
+    assert!(result.changed());
+    assert_ne!(old.ino(), fs::metadata(f.final_path()).unwrap().ino());
+    assert_eq!(
+        fs::read(f.final_path()).unwrap(),
+        fs::read(f.host.root.join("input/simplestchat-ops")).unwrap()
+    );
+    assert!(!f.temp_path().exists());
+    let before = snapshot(&f.host.root);
+    assert!(!f.invoke_upgrade(None, Owner::fixture()).unwrap().changed());
+    assert_eq!(before, snapshot(&f.host.root));
+}
+
+#[test]
+fn upgrade_request_is_closed_and_old_pin_is_not_an_authentication_claim() {
+    let mut f = Fixture::new();
+    f.prepare_upgrade();
+    for (field, value) in [
+        ("schemaVersion", json!(1)),
+        ("schemaVersion", json!(2.0)),
+        ("schemaVersion", json!(true)),
+        ("authenticated", json!(true)),
+    ] {
+        let mut request = f.value.clone();
+        request[field] = value;
+        assert!(UpgradeRequest::decode(&serde_json::to_vec(&request).unwrap()).is_err());
+    }
+    for value in [
+        json!(null),
+        json!({}),
+        json!({"sha256":"a".repeat(64),"bytes":0}),
+        json!({"sha256":"a".repeat(64),"bytes":true}),
+        json!({"sha256":"A".repeat(64),"bytes":4096}),
+        json!({"sha256":"a".repeat(64),"bytes":4096,"path":"/foreign"}),
+        json!({"sha256":f.value["binary"]["sha256"],"bytes":4096}),
+    ] {
+        let mut request = f.value.clone();
+        request["installedBinary"] = value;
+        assert!(UpgradeRequest::decode(&serde_json::to_vec(&request).unwrap()).is_err());
+    }
+    let duplicate = serde_json::to_string(&f.value).unwrap().replacen(
+        "\"schemaVersion\":2",
+        "\"schemaVersion\":2,\"schemaVersion\":2",
+        1,
+    );
+    assert!(UpgradeRequest::decode(duplicate.as_bytes()).is_err());
+}
+
+#[test]
+fn upgrade_refuses_absence_foreign_identity_modes_links_pending_and_unfinished_work() {
+    for kind in [
+        "missing", "bytes", "mode", "symlink", "hardlink", "pending", "journal",
+    ] {
+        let mut f = Fixture::new();
+        f.prepare_upgrade();
+        match kind {
+            "missing" => fs::remove_file(f.final_path()).unwrap(),
+            "bytes" => {
+                let mut bytes = fs::read(f.final_path()).unwrap();
+                bytes[3001] ^= 1;
+                write(&f.final_path(), &bytes, 0o755);
+            }
+            "mode" => {
+                fs::set_permissions(f.final_path(), fs::Permissions::from_mode(0o4755)).unwrap()
+            }
+            "symlink" => {
+                fs::rename(f.final_path(), f.final_path().with_extension("saved")).unwrap();
+                symlink(f.final_path().with_extension("saved"), f.final_path()).unwrap();
+            }
+            "hardlink" => {
+                fs::hard_link(f.final_path(), f.final_path().with_extension("alias")).unwrap()
+            }
+            "pending" => write(&f.temp_path(), b"FOREIGN_PENDING", 0o600),
+            _ => {
+                let held = f.host.lock().unwrap();
+                held.finish().unwrap();
+                write(
+                    &f.host.root.join("run/simplestchat-bench/current.json"),
+                    b"{\"schemaVersion\":1,\"finalized\":false}",
+                    0o600,
+                );
+            }
+        }
+        let before = snapshot(&f.host.root);
+        assert!(f.invoke_upgrade(None, Owner::fixture()).is_err(), "{kind}");
+        let after = snapshot(&f.host.root);
+        if kind != "missing" {
+            assert_eq!(before[&f.final_path()], after[&f.final_path()], "{kind}");
+        }
+        if kind == "pending" {
+            assert_eq!(fs::read(f.temp_path()).unwrap(), b"FOREIGN_PENDING");
+        }
+    }
+    let mut f = Fixture::new();
+    f.prepare_upgrade();
+    let held = f.host.lock().unwrap();
+    assert_eq!(
+        f.invoke_upgrade(None, Owner::fixture()).unwrap_err(),
+        Failure::Busy
+    );
+    held.finish().unwrap();
+}
+
+#[test]
+fn upgrade_faults_preserve_old_before_exchange_and_candidate_after_publication() {
+    for event in [
+        "created",
+        "write",
+        "fsync-file",
+        "writers-closed",
+        "after-chmod",
+        "before-publish",
+        "after-publish",
+        "before-retire-upgrade",
+        "after-retire-upgrade",
+        "fsync-parent",
+    ] {
+        let mut f = Fixture::new();
+        let old = f.prepare_upgrade();
+        let fired = Rc::new(Cell::new(false));
+        let flag = fired.clone();
+        let hook: Hook = Rc::new(move |actual, _| {
+            if actual == event && !flag.replace(true) {
+                Err(Failure::Unproven)
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(
+            f.invoke_upgrade(Some(hook), Owner::fixture()).unwrap_err(),
+            Failure::Unproven,
+            "{event}"
+        );
+        assert!(fired.get(), "{event}");
+        let expected = if matches!(
+            event,
+            "after-publish" | "before-retire-upgrade" | "after-retire-upgrade" | "fsync-parent"
+        ) {
+            fs::read(f.host.root.join("input/simplestchat-ops")).unwrap()
+        } else {
+            old
+        };
+        assert_eq!(fs::read(f.final_path()).unwrap(), expected, "{event}");
+        assert!(!f.temp_path().exists(), "{event}");
+    }
+}
+
+#[test]
+fn upgrade_rejoins_old_leaf_after_fault_hooks_and_never_retires_foreign_names() {
+    for event in ["before-publish", "before-retire-upgrade"] {
+        let mut f = Fixture::new();
+        let old = f.prepare_upgrade();
+        let selected = if event == "before-publish" {
+            f.final_path()
+        } else {
+            f.temp_path()
+        };
+        let saved = selected.with_extension("saved");
+        let flag = Rc::new(Cell::new(false));
+        let fired = flag.clone();
+        let hook: Hook = Rc::new(move |actual, _| {
+            if actual == event && !fired.replace(true) {
+                fs::rename(&selected, &saved).unwrap();
+                write(&selected, b"FOREIGN_REPLACEMENT", 0o755);
+            }
+            Ok(())
+        });
+        assert!(f.invoke_upgrade(Some(hook), Owner::fixture()).is_err());
+        assert!(flag.get());
+        let selected = if event == "before-publish" {
+            f.final_path()
+        } else {
+            f.temp_path()
+        };
+        assert_eq!(fs::read(selected).unwrap(), b"FOREIGN_REPLACEMENT");
+        assert_eq!(
+            fs::read(if event == "before-publish" {
+                f.final_path().with_extension("saved")
+            } else {
+                f.temp_path().with_extension("saved")
+            })
+            .unwrap(),
+            old
+        );
+        if event == "before-retire-upgrade" {
+            assert_eq!(
+                files::sha(&fs::read(f.final_path()).unwrap()),
+                f.value["binary"]["sha256"]
+            );
+        }
+    }
+}
+
+#[test]
+fn upgrade_checked_close_failures_remain_negative_after_all_peer_close_attempts() {
+    let mut baseline = Fixture::new();
+    baseline.prepare_upgrade();
+    let (access, ledger) = baseline.access(None);
+    transact(
+        Path::new("/input/install-request.json"),
+        &baseline.selected,
+        access,
+        &baseline.host,
+        Owner::fixture(),
+        true,
+    )
+    .unwrap();
+    let total = ledger.borrow().closed;
+    for failed in 1..=total {
+        let mut f = Fixture::new();
+        f.prepare_upgrade();
+        let count = Rc::new(Cell::new(0));
+        let seen = count.clone();
+        let hook: Hook = Rc::new(move |event, _| {
+            if event == "close" {
+                seen.set(seen.get() + 1);
+                if seen.get() == failed {
+                    return Err(Failure::Unproven);
+                }
+            }
+            Ok(())
+        });
+        assert!(
+            f.invoke_upgrade(Some(hook), Owner::fixture()).is_err(),
+            "close{failed}"
+        );
+        assert!(count.get() >= failed);
+    }
+}
+
+#[test]
+fn cancellation_after_upgrade_keeps_candidate_and_refuses_unretired_pending_state() {
+    let mut f = Fixture::new();
+    let old = f.prepare_upgrade();
+    let pending = Rc::new(Cell::new(false));
+    let signal = pending.clone();
+    let mut owner = Owner::fixture();
+    let observed = pending.clone();
+    owner.pending = Some(Rc::new(move || {
+        if observed.get() {
+            Err(Failure::Interrupted)
+        } else {
+            Ok(())
+        }
+    }));
+    let hook: Hook = Rc::new(move |event, _| {
+        if event == "after-publish" {
+            signal.set(true);
+        }
+        Ok(())
+    });
+    assert_eq!(
+        f.invoke_upgrade(Some(hook), owner).unwrap_err(),
+        Failure::Interrupted
+    );
+    assert_eq!(
+        files::sha(&fs::read(f.final_path()).unwrap()),
+        f.value["binary"]["sha256"]
+    );
+    assert_eq!(fs::read(f.temp_path()).unwrap(), old);
+    assert!(f.invoke_upgrade(None, Owner::fixture()).is_err());
+    assert_eq!(fs::read(f.temp_path()).unwrap(), old);
 }
 
 #[test]

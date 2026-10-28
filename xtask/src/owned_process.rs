@@ -6,6 +6,7 @@
 use crate::tooling::{Failure, Result};
 use rustix::process::Pid;
 pub(crate) use simplestchat_ops::owned_process::reserved;
+use std::sync::Arc;
 
 fn failure(error: simplestchat_ops::owned_process::Error) -> Failure {
     use simplestchat_ops::owned_process::Error;
@@ -48,6 +49,7 @@ pub(crate) use cleanup::finish;
 
 pub(crate) struct Signals {
     native: Option<simplestchat_ops::owned_process::Signals>,
+    completion: Option<Arc<simplestchat_ops::owned_process::CompletionSignals>>,
     #[cfg(test)]
     injected: Option<tokio::sync::mpsc::UnboundedReceiver<u8>>,
 }
@@ -55,6 +57,7 @@ impl Signals {
     pub(crate) fn new() -> Result<Self> {
         Ok(Self {
             native: Some(simplestchat_ops::owned_process::Signals::new().map_err(failure)?),
+            completion: None,
             #[cfg(test)]
             injected: None,
         })
@@ -63,10 +66,32 @@ impl Signals {
     pub(crate) fn injected(receiver: tokio::sync::mpsc::UnboundedReceiver<u8>) -> Self {
         Self {
             native: None,
+            completion: None,
             injected: Some(receiver),
         }
     }
+    /// Observe an existing synchronous registration without creating another.
+    /// The whole caller retains the original Arc through runtime teardown and
+    /// checks that all observational borrowers retired before checked finish.
+    pub(crate) fn from_completion(
+        owner: Arc<simplestchat_ops::owned_process::CompletionSignals>,
+    ) -> Self {
+        Self {
+            native: None,
+            completion: Some(owner),
+            #[cfg(test)]
+            injected: None,
+        }
+    }
     pub(crate) async fn next(&mut self) -> u8 {
+        if let Some(owner) = &self.completion {
+            loop {
+                if let Some(code) = owner.status() {
+                    return code;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        }
         #[cfg(test)]
         if let Some(receiver) = &mut self.injected {
             return match receiver.recv().await {
@@ -81,6 +106,9 @@ impl Signals {
             .await
     }
     pub(crate) async fn pending(&mut self) -> Option<u8> {
+        if let Some(owner) = &self.completion {
+            return owner.status();
+        }
         tokio::select! {
             biased;
             code = self.next() => Some(code),

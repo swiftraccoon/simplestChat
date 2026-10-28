@@ -2,6 +2,11 @@
 
 use super::*;
 
+pub(super) struct SelectionRequest<'a> {
+    pub options: &'a Options,
+    pub maintenance: Option<&'a crate::release::attestation::maintain::Options>,
+}
+
 impl State {
     pub(super) async fn preflight(
         &mut self,
@@ -12,6 +17,32 @@ impl State {
         owner: &mut Owner,
         executor: &mut impl Executor,
     ) -> Result<PreparedSelection> {
+        self.selection(
+            SelectionRequest {
+                options,
+                maintenance: None,
+            },
+            access,
+            manifest,
+            report,
+            owner,
+            executor,
+        )
+        .await
+    }
+    pub(super) async fn selection(
+        &mut self,
+        request: SelectionRequest<'_>,
+        access: &Access,
+        manifest: &Manifest,
+        report: &mut Value,
+        owner: &mut Owner,
+        executor: &mut impl Executor,
+    ) -> Result<PreparedSelection> {
+        let SelectionRequest {
+            options,
+            maintenance,
+        } = request;
         for name in SELECTION {
             self.input(name, 1024 * 1024, access, owner)?;
         }
@@ -57,10 +88,14 @@ impl State {
             .await;
         self.commands = self.stage.command_count();
         checked?;
-        self.policy(
-            owner,
-            ensure(old_image != new_image, "This image is already selected"),
-        )?;
+        if maintenance.is_none() {
+            self.policy(
+                owner,
+                ensure(old_image != new_image, "This image is already selected"),
+            )?;
+        } else {
+            self.maintenance_source_checkout(access, &options.revision, owner)?;
+        }
         let app = self
             .container(access, "simplestchat", false, owner, executor)
             .await?;
@@ -176,8 +211,21 @@ impl State {
         self.policy(
             owner,
             ensure(
-                applied == manifest.fields().migrations,
-                "Schema changes require the explicit maintenance deployment",
+                if maintenance.is_some() {
+                    applied.iter().all(|(version, checksum)| {
+                        manifest.fields().migrations.get(version) == Some(checksum)
+                    })
+                } else {
+                    applied == manifest.fields().migrations
+                },
+                if maintenance.is_some() {
+                    concat!(
+                        "Applied migrations differ from the candidate's packaged ones; ",
+                        "recover the ledger first"
+                    )
+                } else {
+                    "Schema changes require the explicit maintenance deployment"
+                },
             ),
         )?;
         self.stage.continue_commands(self.commands);
@@ -198,9 +246,48 @@ impl State {
                 "Candidate migration mismatch",
             ),
         )?;
-        let (preview, environment) = self
-            .candidate(access, &old, &new_image, owner, executor)
-            .await?;
+        let (preview, environment) = if let Some(maintenance) = maintenance {
+            let selected = self
+                .maintenance_candidate(
+                    access,
+                    &old,
+                    &new_image,
+                    maintenance.candidate_env.as_deref(),
+                    maintenance.browser_assets_upgrade,
+                    report,
+                    owner,
+                    executor,
+                )
+                .await?;
+            if maintenance.browser_assets_upgrade {
+                let proxy_id = self.policy(owner, text(&proxy, "id"))?.to_owned();
+                self.command(
+                    access,
+                    Role::Validate,
+                    argv(&[
+                        "exec",
+                        "--interactive",
+                        "--user",
+                        "10001:10001",
+                        &proxy_id,
+                        "caddy",
+                        "validate",
+                        "--config",
+                        "/dev/stdin",
+                        "--adapter",
+                        "caddyfile",
+                    ]),
+                    CommandIo::inherited(self.inputs["Caddyfile.candidate"]),
+                    owner,
+                    executor,
+                )
+                .await?;
+            }
+            selected
+        } else {
+            self.candidate(access, &old, &new_image, owner, executor)
+                .await?
+        };
         let images = if old_revision == options.revision {
             vec![(options.revision.clone(), new_image)]
         } else {
@@ -243,8 +330,10 @@ impl State {
         )?;
         self.ready(access, Some(&origin), 3, false, owner, executor)
             .await?;
-        self.quiet(access, options.quiet_seconds, report, owner, executor)
-            .await?;
+        if maintenance.is_none() {
+            self.quiet(access, options.quiet_seconds, report, owner, executor)
+                .await?;
+        }
         self.backup(
             access,
             &database_id,
@@ -254,6 +343,12 @@ impl State {
             executor,
         )
         .await?;
+        if maintenance.is_some() {
+            self.maintenance_evidence
+                .as_mut()
+                .ok_or(Cause::Changed)?
+                .backup(owner)?;
+        }
         #[cfg(test)]
         self.fault(super::super::files::Fault::BeforeCopy, owner)?;
         for name in SELECTION {
@@ -274,7 +369,12 @@ impl State {
             owner.record(Cause::Interrupt);
             return Err(Cause::Interrupt);
         }
-        self.journal("replace_application", false, owner, false)?;
+        let phase = if maintenance.is_some() {
+            "maintenance_stop"
+        } else {
+            "replace_application"
+        };
+        self.journal(phase, false, owner, false)?;
         Ok(PreparedSelection {
             old,
             database,

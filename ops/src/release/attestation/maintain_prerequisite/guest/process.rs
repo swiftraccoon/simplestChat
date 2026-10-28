@@ -355,6 +355,7 @@ enum Actor {
     Events,
     Capture,
     Native,
+    HostNative,
 }
 impl Actor {
     fn parse(role: &str, tool: Option<&String>) -> Result<Self> {
@@ -362,6 +363,7 @@ impl Actor {
             ("daemon-events", Some("docker")) => Ok(Self::Events),
             ("wire-capture", Some("tcpdump")) => Ok(Self::Capture),
             ("native", Some("ops")) => Ok(Self::Native),
+            ("host-native", Some("ops")) => Ok(Self::HostNative),
             _ => Err(Error::Input),
         }
     }
@@ -370,6 +372,7 @@ impl Actor {
             Self::Events => 0,
             Self::Capture => 1,
             Self::Native => 2,
+            Self::HostNative => 3,
         }
     }
 }
@@ -377,7 +380,8 @@ pub(super) struct Commands {
     tools: BTreeMap<String, Tool>,
     count: u16,
     ordinary: u16,
-    actors: [bool; 3],
+    actors: [bool; 4],
+    ordinary_limit: u16,
     failed: Vec<Running>,
     monitor: Option<Monitor>,
 }
@@ -387,10 +391,16 @@ impl Commands {
             tools: BTreeMap::new(),
             count: 0,
             ordinary: 0,
-            actors: [false; 3],
+            actors: [false; 4],
+            ordinary_limit: 128,
             failed: Vec::new(),
             monitor: None,
         }
+    }
+    pub fn new_host() -> Self {
+        let mut value = Self::new();
+        value.ordinary_limit = 256;
+        value
     }
     pub fn admit(&mut self, role: &str, path: &Path, control: &mut Control) -> Result<()> {
         control.check()?;
@@ -479,13 +489,16 @@ impl Commands {
     }
     fn account(&mut self, actor: Option<Actor>) -> Result<()> {
         if let Some(actor) = actor {
+            if matches!(actor, Actor::HostNative) && self.ordinary_limit != 256 {
+                return Err(Error::Input);
+            }
             let used = &mut self.actors[actor.index()];
             if *used {
                 return Err(Error::Input);
             }
             *used = true;
         } else {
-            if self.ordinary >= 128 {
+            if self.ordinary >= self.ordinary_limit {
                 return Err(Error::Input);
             }
             self.ordinary += 1;
@@ -834,7 +847,7 @@ mod tests {
         assert!(commands.failed.is_empty());
         assert!(commands.tools.is_empty());
         assert_eq!(owner.end(), original_end);
-        assert_eq!(commands.actors, [false; 3]);
+        assert_eq!(commands.actors, [false; 4]);
         for actor in [Actor::Events, Actor::Capture, Actor::Native] {
             commands.account(Some(actor)).unwrap();
             assert_eq!(commands.account(Some(actor)), Err(Error::Input));
@@ -843,6 +856,28 @@ mod tests {
         assert_eq!(commands.ordinary, 128);
         owner.begin_settling();
         owner.finish().unwrap();
+    }
+    #[test]
+    fn host_second_native_actor_is_bounded_and_unavailable_to_original_purpose() {
+        let mut original = Commands::new();
+        assert_eq!(original.account(Some(Actor::HostNative)), Err(Error::Input));
+        assert_eq!(original.count, 0);
+        let mut host = Commands::new_host();
+        for _ in 0..256 {
+            host.account(None).unwrap();
+        }
+        assert_eq!(host.account(None), Err(Error::Input));
+        for actor in [
+            Actor::Events,
+            Actor::Capture,
+            Actor::Native,
+            Actor::HostNative,
+        ] {
+            host.account(Some(actor)).unwrap();
+            assert_eq!(host.account(Some(actor)), Err(Error::Input));
+        }
+        assert_eq!(host.count, 260);
+        assert_eq!(host.ordinary, 256);
     }
     #[tokio::test(flavor = "current_thread")]
     async fn raw_zero_creation_is_adopted_after_body_sink_failure_before_settlement() {

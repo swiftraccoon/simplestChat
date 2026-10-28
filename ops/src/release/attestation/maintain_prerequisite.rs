@@ -1,4 +1,4 @@
-//! Fixed, test-only native launcher prerequisite. It changes no installed caller.
+//! Fixed native launcher proof and an internally borrowed normal transport.
 #[cfg(any(target_os = "linux", test))]
 use super::control::Cause;
 #[cfg(target_os = "linux")]
@@ -70,6 +70,10 @@ enum Options {
         nonce: String,
         clock: protocol::Clock,
     },
+    NormalInit {
+        nonce: String,
+        clock: protocol::Clock,
+    },
 }
 #[cfg(any(target_os = "linux", test))]
 impl Options {
@@ -118,14 +122,46 @@ impl Options {
                     clock,
                 })
             }
+            [
+                "normal-init",
+                "--nonce",
+                n,
+                "--origin-monotonic-ns",
+                origin,
+                "--body-deadline-monotonic-ns",
+                body,
+                "--deadline-monotonic-ns",
+                end,
+            ] => {
+                protocol::nonce(n)?;
+                Ok(Self::NormalInit {
+                    nonce: (*n).to_owned(),
+                    clock: protocol::Clock::parse_inherited(origin, body, end)?,
+                })
+            }
             _ => Err(Cause::Input),
         }
     }
 }
 
+#[cfg(target_os = "linux")]
+pub(super) use supervisor::{NormalLaunch, launch_normal};
+
 /// Only the explicit prerequisite route can enter the fixed native roles.
 /// Earlier JSON is passive; the returned status includes every final fence.
 pub fn run(args: &[OsString]) -> ExitCode {
+    if args.first().is_some_and(|arg| arg == "host-upgrade") {
+        #[cfg(feature = "maintain-guest")]
+        return guest::run_upgrade(&args[1..]);
+        #[cfg(not(feature = "maintain-guest"))]
+        return ExitCode::from(2);
+    }
+    if args.first().is_some_and(|arg| arg == "host-guest") {
+        #[cfg(feature = "maintain-guest")]
+        return guest::run_host(&args[1..]);
+        #[cfg(not(feature = "maintain-guest"))]
+        return ExitCode::from(2);
+    }
     if args.first().is_some_and(|arg| arg == "guest") {
         #[cfg(feature = "maintain-guest")]
         return guest::run(&args[1..]);

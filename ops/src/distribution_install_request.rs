@@ -22,6 +22,16 @@ pub(super) struct Request {
     pub selection: Pin,
     pub binary: Pin,
 }
+/// The old canonical executable expected by an authenticated delivery caller.
+/// This is custody policy, not signature evidence or a caller-selected path.
+pub(super) struct InstalledBinary {
+    pub sha256: String,
+    pub bytes: u64,
+}
+pub(super) struct UpgradeRequest {
+    pub candidate: Request,
+    pub installed: InstalledBinary,
+}
 pub(super) fn digest(value: &str) -> bool {
     value.len() == 64
         && value
@@ -93,6 +103,58 @@ impl Request {
             manifest: pin(&value["manifest"], 64 * 1024)?,
             selection: pin(&value["selection"], 16 * 1024)?,
             binary: pin(&value["binary"], super::super::MAX_BYTES)?,
+        })
+    }
+}
+
+impl UpgradeRequest {
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        if bytes.is_empty()
+            || bytes.len() as u64 > MAXIMUM
+            || bytes.starts_with(b"\xef\xbb\xbf")
+            || bytes.contains(&0)
+            || std::str::from_utf8(bytes).is_err()
+        {
+            return Err(Failure::Unproven);
+        }
+        let json = json::decode_limited(bytes, MAXIMUM as usize).map_err(|_| Failure::Unproven)?;
+        let value = object(
+            &json,
+            &[
+                "schemaVersion",
+                "manifest",
+                "selection",
+                "binary",
+                "installedBinary",
+            ],
+        )?;
+        if !matches!(&value["schemaVersion"], Json::Integer(n) if n == "2") {
+            return Err(Failure::Unproven);
+        }
+        let installed = object(&value["installedBinary"], &["sha256", "bytes"])?;
+        let sha256 = installed["sha256"].string().ok_or(Failure::Unproven)?;
+        let bytes = installed["bytes"]
+            .integer()
+            .and_then(|n| u64::try_from(n).ok())
+            .filter(|n| *n > 0 && *n <= super::super::MAX_BYTES)
+            .ok_or(Failure::Unproven)?;
+        if !digest(sha256) {
+            return Err(Failure::Unproven);
+        }
+        let candidate = Request {
+            manifest: pin(&value["manifest"], 64 * 1024)?,
+            selection: pin(&value["selection"], 16 * 1024)?,
+            binary: pin(&value["binary"], super::super::MAX_BYTES)?,
+        };
+        if candidate.binary.sha256 == sha256 {
+            return Err(Failure::Unproven);
+        }
+        Ok(Self {
+            candidate,
+            installed: InstalledBinary {
+                sha256: sha256.into(),
+                bytes,
+            },
         })
     }
 }

@@ -1,6 +1,6 @@
 //! One original outer interval and synchronous completion signal owner.
 
-use super::{Error, Result};
+use super::{Error, Result, options::Purpose};
 use simplestchat_ops::owned_process::CompletionSignals;
 use std::time::{Duration, Instant};
 
@@ -9,6 +9,33 @@ pub(super) const FINAL: Duration = Duration::from_secs(120);
 pub(super) const SETUP: Duration = Duration::from_secs(510);
 pub(super) const DEBT: Duration = Duration::from_secs(1170);
 
+#[derive(Clone, Copy)]
+struct Profile {
+    whole: Duration,
+    finalization: Duration,
+    setup: Duration,
+    debt: Duration,
+}
+impl Profile {
+    fn for_purpose(purpose: Purpose) -> Self {
+        match purpose {
+            Purpose::Prerequisite => Self {
+                whole: WHOLE,
+                finalization: FINAL,
+                setup: SETUP,
+                debt: DEBT,
+            },
+            Purpose::Host => Self {
+                whole: Duration::from_secs(3780),
+                finalization: Duration::from_secs(120),
+                setup: Duration::from_secs(1560),
+                // Whole maintain1800 + post-observation120 + VM cleanup120.
+                debt: Duration::from_secs(2040),
+            },
+        }
+    }
+}
+
 pub(super) struct Control {
     pub start: Instant,
     pub setup: bool,
@@ -16,10 +43,16 @@ pub(super) struct Control {
     pub first: Option<Error>,
     pub status: u8,
     pub cleanup_failed: bool,
+    purpose: Purpose,
+    profile: Profile,
     signals: CompletionSignals,
 }
 impl Control {
+    #[cfg(test)]
     pub fn new(start: Instant) -> Result<Self> {
+        Self::for_purpose(start, Purpose::Prerequisite)
+    }
+    pub fn for_purpose(start: Instant, purpose: Purpose) -> Result<Self> {
         Ok(Self {
             start,
             setup: true,
@@ -27,6 +60,8 @@ impl Control {
             first: None,
             status: 0,
             cleanup_failed: false,
+            purpose,
+            profile: Profile::for_purpose(purpose),
             signals: CompletionSignals::new().map_err(|_| Error::Io)?,
         })
     }
@@ -34,16 +69,34 @@ impl Control {
         self.first.get_or_insert(error);
     }
     pub fn end(&self) -> Instant {
-        self.start + WHOLE
+        self.start + self.profile.whole
     }
     pub fn whole_body_end(&self) -> Instant {
-        self.end() - FINAL
+        self.end() - self.profile.finalization
+    }
+    pub fn purpose(&self) -> Purpose {
+        self.purpose
+    }
+    pub fn setup_limit(&self) -> Duration {
+        self.profile.setup
+    }
+    pub fn debt(&self) -> Duration {
+        self.profile.debt
+    }
+    pub fn whole(&self) -> Duration {
+        self.profile.whole
+    }
+    pub fn response_debt(&self) -> Duration {
+        match self.purpose {
+            Purpose::Prerequisite => DEBT,
+            Purpose::Host => Duration::from_secs(1920),
+        }
     }
     pub fn body_end(&self) -> Instant {
         if self.settling {
             self.end()
         } else if self.setup {
-            (self.start + SETUP).min(self.whole_body_end())
+            (self.start + self.profile.setup).min(self.whole_body_end())
         } else {
             self.whole_body_end()
         }
@@ -95,7 +148,7 @@ impl Control {
             || self
                 .whole_body_end()
                 .saturating_duration_since(Instant::now())
-                < DEBT
+                < self.profile.debt
         {
             return Err(Error::Deadline);
         }
@@ -146,5 +199,22 @@ mod tests {
             Duration::from_secs(1680)
         );
         assert_eq!(owner.finish(), Err(Error::Deadline));
+    }
+    #[test]
+    fn host_profile_is_explicit_and_preserves_every_prerequisite_ceiling() {
+        let start = Instant::now();
+        let mut original = Control::new(start).unwrap();
+        let mut host = Control::for_purpose(start, Purpose::Host).unwrap();
+        assert_eq!(original.end() - start, Duration::from_secs(1800));
+        assert_eq!(original.body_end() - start, Duration::from_secs(510));
+        assert_eq!(original.debt(), Duration::from_secs(1170));
+        assert_eq!(host.end() - start, Duration::from_secs(3780));
+        assert_eq!(host.whole_body_end() - start, Duration::from_secs(3660));
+        assert_eq!(host.body_end() - start, Duration::from_secs(1560));
+        assert_eq!(host.debt(), Duration::from_secs(2040));
+        assert_eq!(host.response_debt(), Duration::from_secs(1920));
+        assert_eq!(host.purpose(), Purpose::Host);
+        assert_eq!(original.finish(), Ok(()));
+        assert_eq!(host.finish(), Ok(()));
     }
 }

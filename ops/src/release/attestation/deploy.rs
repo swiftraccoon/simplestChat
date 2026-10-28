@@ -22,6 +22,7 @@ use std::{
 };
 
 use execution::execute;
+pub(super) use execution::maintenance::execute as execute_maintenance;
 
 pub(super) struct Options {
     pub revision: String,
@@ -47,7 +48,7 @@ pub(super) struct Access {
     pub virtual_poll: bool,
 }
 impl Access {
-    fn fixed() -> Self {
+    pub(super) fn fixed() -> Self {
         Self {
             root: "/srv/simplestchat-public".into(),
             config: "/etc/simplestchat-public".into(),
@@ -88,6 +89,9 @@ pub(super) enum Role {
     AssetRemove,
     Ready,
     Metrics,
+    Source,
+    ProxyStop,
+    Validate,
 }
 impl Role {
     fn seconds(self) -> u64 {
@@ -95,7 +99,7 @@ impl Role {
             Self::Load => 300,
             Self::Dump | Self::Up => 60,
             Self::Stop => 45,
-            Self::Wait => 20,
+            Self::Wait | Self::Validate => 20,
             Self::Size => 15,
             Self::Ready | Self::Metrics => 5,
             _ => 30,

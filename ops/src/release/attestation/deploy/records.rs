@@ -52,6 +52,10 @@ fn absent(parent: &Dir, name: &str, owner: &mut Owner, recovery: bool) -> Result
 }
 #[cfg(test)]
 pub(super) const FOREIGN_AFTER_TEMP: u8 = 3;
+#[cfg(test)]
+thread_local! {
+    static CADDY_LATE_FAULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 fn close(file: File, owner: &mut Owner) -> Result<()> {
     let result = nix::unistd::close(file);
     #[cfg(test)]
@@ -501,10 +505,64 @@ impl Record {
         self.stamp = stamp;
         self.verify(owner, recovery)
     }
+    /// Only a newly published private Caddyfile may receive this exact mode
+    /// transition. Every other stamp field and the original content pin remain
+    /// authoritative; a later failure retains the already-published generation.
+    fn publish_caddy_mode(&mut self, owner: &mut Owner) -> Result<()> {
+        self.verify(owner, false)?;
+        if self.name != "Caddyfile"
+            || !self.visible
+            || self.stamp.mode() & 0o7777 != 0o600
+            || self.stamp.nlink() != 1
+            || self.stamp.uid() != rustix::process::geteuid().as_raw()
+        {
+            return control::failed(owner, Cause::Policy);
+        }
+        rustix::fs::fchmod(self.file(), rustix::fs::Mode::from_bits_truncate(0o644)).map_err(
+            |_| {
+                owner.record(Cause::Io);
+                Cause::Io
+            },
+        )?;
+        let stamp = control::io(owner, self.file().metadata())?;
+        if !stamp.is_file()
+            || self.stamp.dev() != stamp.dev()
+            || self.stamp.ino() != stamp.ino()
+            || self.stamp.uid() != stamp.uid()
+            || self.stamp.gid() != stamp.gid()
+            || self.stamp.nlink() != stamp.nlink()
+            || self.stamp.len() != stamp.len()
+            || (self.stamp.mode() & !0o7777) != (stamp.mode() & !0o7777)
+            || stamp.mode() & 0o7777 != 0o644
+            || (self.stamp.mtime(), self.stamp.mtime_nsec()) != (stamp.mtime(), stamp.mtime_nsec())
+        {
+            return control::failed(owner, Cause::Changed);
+        }
+        // The preceding fchmod is the sole authority for mode/ctime movement.
+        // Register it before a later sync, namespace probe or deadline can fail.
+        self.stamp = stamp;
+        #[cfg(test)]
+        if CADDY_LATE_FAULT.replace(false) {
+            return control::failed(owner, Cause::Io);
+        }
+        check(owner, false)?;
+        control::io(owner, self.file().sync_all())?;
+        self.parent.sync(owner)?;
+        self.verify(owner, false)
+    }
     fn displaced(&mut self, owner: &mut Owner) -> Result<()> {
         let stamp = control::io(owner, self.file().metadata())?;
+        // A readonly legacy Caddyfile may have other links. Our exact
+        // rename/unlink removes one original name; it grants no authority over
+        // those peers. All other private generations retain their zero-link rule.
+        let links =
+            if self.name == "Caddyfile" && matches!(self.stamp.mode() & 0o7777, 0o600 | 0o644) {
+                self.stamp.nlink().checked_sub(1) == Some(stamp.nlink())
+            } else {
+                stamp.nlink() == 0
+            };
         if !binding(&self.stamp, &stamp)
-            || stamp.nlink() != 0
+            || !links
             || self.stamp.len() != stamp.len()
             || (self.stamp.mtime(), self.stamp.mtime_nsec()) != (stamp.mtime(), stamp.mtime_nsec())
         {
@@ -562,6 +620,33 @@ impl Records {
         let record = Record::open(parent, name, uid, maximum, owner)?;
         self.files.push(record);
         Ok(self.files.len() - 1)
+    }
+    /// Replace the registered readonly Caddyfile generation and publish its
+    /// new fixed readonly mode. This grants no public mode to another record.
+    pub fn publish_caddy(&mut self, parent: &Dir, data: &[u8], owner: &mut Owner) -> Result<()> {
+        check(owner, false)?;
+        let old = self
+            .files
+            .iter()
+            .rposition(|record| {
+                record.visible
+                    && record.parent.path() == parent.path()
+                    && record.name == "Caddyfile"
+            })
+            .ok_or_else(|| {
+                owner.record(Cause::Changed);
+                Cause::Changed
+            })?;
+        self.files[old].verify(owner, false)?;
+        let next = self.files.len();
+        self.atomic(parent, "Caddyfile", data, owner, false)?;
+        self.files
+            .get_mut(next)
+            .ok_or_else(|| {
+                owner.record(Cause::Changed);
+                Cause::Changed
+            })?
+            .publish_caddy_mode(owner)
     }
     pub fn atomic(
         &mut self,
@@ -711,5 +796,191 @@ impl Records {
             record.finish(owner);
         }
         self.sealed.clear();
+    }
+}
+
+#[cfg(test)]
+mod caddy_publication_tests {
+    use super::*;
+    use crate::test_support::Fixture;
+    use std::{
+        fs,
+        os::unix::fs::PermissionsExt,
+        time::{Duration, Instant},
+    };
+
+    fn seed(path: &std::path::Path, bytes: &[u8], mode: u32) {
+        fs::write(path, bytes).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+    }
+    fn setup() -> (Fixture, Owner, Dir, Records) {
+        let fixture = Fixture::new();
+        let mut owner = Owner::new(
+            Instant::now(),
+            Duration::from_secs(1800),
+            Duration::from_secs(60),
+        )
+        .unwrap();
+        super::super::files::start_probe();
+        let directory = Dir::open(&fixture.0, &mut owner).unwrap();
+        (fixture, owner, directory, Records::default())
+    }
+    #[test]
+    fn replacement_publishes_only_new_caddy_readonly_and_retains_hardlinked_old_generation() {
+        for mode in [0o600, 0o644] {
+            for linked in [false, true] {
+                let (fixture, mut owner, directory, mut records) = setup();
+                let path = fixture.0.join("Caddyfile");
+                seed(&path, b"old source", mode);
+                let alias = fixture.0.join("old-caddy-alias");
+                if linked {
+                    fs::hard_link(&path, &alias).unwrap();
+                }
+                seed(&fixture.0.join("app.env"), b"private", 0o600);
+                let uid = rustix::process::geteuid().as_raw();
+                let old = records.caddy(directory.clone(), uid, &mut owner).unwrap();
+                records
+                    .open(directory.clone(), "app.env", uid, 64, &mut owner)
+                    .unwrap();
+                let written = records.publish_caddy(&directory, b"new source", &mut owner);
+                let verified = records.verify(&mut owner, false);
+                let old_data = records.files[old].bytes(64, &mut owner, false);
+                let old_links = records.files[old].stamp.nlink();
+                let visible = fs::read(&path);
+                let stamp = fs::metadata(&path).unwrap();
+                let private_mode = fs::metadata(fixture.0.join("app.env")).unwrap().mode() & 0o7777;
+                let alias_data = if linked {
+                    Some(fs::read(&alias).unwrap())
+                } else {
+                    None
+                };
+                records.finish(&mut owner);
+                directory.finish(&mut owner);
+                let closes = super::super::files::take_probe();
+                let ended = owner.finish();
+                assert_eq!(written, Ok(()));
+                assert_eq!(verified, Ok(()));
+                assert_eq!(ended, Ok(()));
+                assert_eq!(visible.unwrap(), b"new source");
+                assert_eq!(stamp.mode() & 0o7777, 0o644);
+                assert_eq!(stamp.nlink(), 1);
+                assert_eq!(private_mode, 0o600);
+                assert_eq!(old_data.unwrap(), b"old source");
+                assert_eq!(old_links, u64::from(linked));
+                if linked {
+                    assert_eq!(alias_data.unwrap(), b"old source");
+                }
+                assert!(closes.0 > 2);
+                assert_eq!(closes.1, 0);
+            }
+        }
+    }
+    #[test]
+    fn fixed_mode_transition_refuses_other_names_links_and_foreign_mode_changes() {
+        for kind in ["other-name", "hardlink", "mode"] {
+            let (fixture, mut owner, directory, _records) = setup();
+            let name = if kind == "other-name" {
+                "app.env"
+            } else {
+                "Caddyfile"
+            };
+            let mut record = Record::create(directory.clone(), name, &mut owner, false).unwrap();
+            record.write(b"private", &mut owner, false).unwrap();
+            let path = fixture.0.join(name);
+            if kind == "hardlink" {
+                fs::hard_link(&path, fixture.0.join("foreign-alias")).unwrap();
+            }
+            if kind == "mode" {
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+            }
+            let refused = record.publish_caddy_mode(&mut owner);
+            let mode = fs::metadata(&path).unwrap().mode() & 0o7777;
+            record.finish(&mut owner);
+            directory.finish(&mut owner);
+            let closes = super::super::files::take_probe();
+            let ended = owner.finish();
+            let cause = if kind == "other-name" {
+                Cause::Policy
+            } else {
+                Cause::Changed
+            };
+            assert_eq!(refused, Err(cause));
+            assert_eq!(ended, Err(cause));
+            assert_eq!(mode, if kind == "mode" { 0o640 } else { 0o600 });
+            assert_eq!(closes.1, 0);
+        }
+    }
+    #[test]
+    fn late_failure_retains_publication_and_authorized_stamp_through_all_checked_closes() {
+        let (fixture, mut owner, directory, mut records) = setup();
+        let path = fixture.0.join("Caddyfile");
+        seed(&path, b"old", 0o644);
+        records
+            .caddy(
+                directory.clone(),
+                rustix::process::geteuid().as_raw(),
+                &mut owner,
+            )
+            .unwrap();
+        CADDY_LATE_FAULT.set(true);
+        let written = records.publish_caddy(&directory, b"retained", &mut owner);
+        let checked = records.verify(&mut owner, true);
+        let stamp = fs::metadata(&path).unwrap();
+        let visible = fs::read(&path);
+        super::super::files::fail_close(super::super::files::checked_closes() + 1);
+        records.finish(&mut owner);
+        directory.finish(&mut owner);
+        let closes = super::super::files::take_probe();
+        let ended = owner.finish();
+        assert_eq!(written, Err(Cause::Io));
+        assert_eq!(checked, Ok(()));
+        assert_eq!(visible.unwrap(), b"retained");
+        assert_eq!(stamp.mode() & 0o7777, 0o644);
+        assert_eq!(ended, Err(Cause::Io));
+        assert!(closes.0 > 2);
+        assert_eq!(closes.1, 0);
+    }
+    #[test]
+    fn later_public_mode_tampering_remains_changed_instead_of_becoming_admitted() {
+        let (fixture, mut owner, directory, mut records) = setup();
+        let path = fixture.0.join("Caddyfile");
+        seed(&path, b"old", 0o644);
+        records
+            .caddy(
+                directory.clone(),
+                rustix::process::geteuid().as_raw(),
+                &mut owner,
+            )
+            .unwrap();
+        records
+            .publish_caddy(&directory, b"new", &mut owner)
+            .unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+        let checked = records.verify(&mut owner, false);
+        records.finish(&mut owner);
+        directory.finish(&mut owner);
+        let closes = super::super::files::take_probe();
+        let ended = owner.finish();
+        assert_eq!(checked, Err(Cause::Changed));
+        assert_eq!(ended, Err(Cause::Changed));
+        assert_eq!(fs::metadata(path).unwrap().mode() & 0o7777, 0o666);
+        assert_eq!(closes.1, 0);
+    }
+    #[test]
+    fn unregistered_old_caddy_is_refused_before_any_new_generation_or_mode_effect() {
+        let (fixture, mut owner, directory, mut records) = setup();
+        let path = fixture.0.join("Caddyfile");
+        seed(&path, b"foreign", 0o644);
+        let written = records.publish_caddy(&directory, b"new", &mut owner);
+        let count = fs::read_dir(&fixture.0).unwrap().count();
+        records.finish(&mut owner);
+        directory.finish(&mut owner);
+        let closes = super::super::files::take_probe();
+        let ended = owner.finish();
+        assert_eq!(written, Err(Cause::Changed));
+        assert_eq!(ended, Err(Cause::Changed));
+        assert_eq!(fs::read(path).unwrap(), b"foreign");
+        assert_eq!(count, 1);
+        assert_eq!(closes.1, 0);
     }
 }

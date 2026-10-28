@@ -3468,3 +3468,64 @@ All other analyzer checks remain exercised unchanged. The actual `f3559e6`
 summary reports the grouped code rather than private extension facts, so these
 source/inert results do not identify its exact branch or prove a corrected
 engine/TLS/KVM trial. See the [versioned source chain](maintenance-prerequisites.md).
+
+## Prepared-host native maintenance
+
+Run the focused local transaction checks with the pinned native dependencies:
+
+```sh
+cargo test --locked -p simplestchat-ops --features maintain-guest \
+  maintenance_effect_tests -- --test-threads=1
+cargo test --locked -p simplestchat-ops stage::reentry -- --test-threads=1
+cargo test --locked -p simplestchat-ops distribution::install::tests -- --test-threads=1
+cargo test --locked -p xtask ci::ops_artifact::export -- --test-threads=1
+```
+
+These checks use real private files, atomic publications, dump/list ownership
+and actual flock handoffs with finite synthetic daemon/launcher responses. They
+cover reviewed settings and candidate consumption, migration checksum holes
+with exact final equality, backup failures before interruption, selected-state
+retention after launcher refusal, second-lock contention, changed selected files,
+changed database CID and final-ledger mismatch. They do not prove live Docker,
+SQL migration, trusted HTTPS or Linux native stream/group behavior.
+
+The separate manual `maintenance-host-runtime.yml` workflow accepts exact
+same-head successful CI attempt and signed Ops artifact coordinates:
+
+```sh
+gh workflow run maintenance-host-runtime.yml --ref main \
+  -f run_id="$CI_RUN" -f run_attempt="$CI_ATTEMPT" -f artifact_id="$OPS_ARTIFACT"
+```
+
+Its `host-success` and `host-launcher-refusal` cases each own a fresh disposable
+Debian guest. The host profile has its own fixed 3,780/120-second owner, setup
+ceiling 1,560, complete-maintain 1800/60 and remaining post-GO debt 2,040. Setup
+includes the existing general preparation plus an actual normal-launcher
+bootstrap. The longer test owner is specific to this two-operation fixture;
+it does not change the existing prerequisite 1800/120 profile, its 510/1170 split,
+the public prerequisite 1050/60 interval, or the public maintain 1800 maximum.
+The new job has a 90-minute outer runner limit. Cold acquisition can still refuse
+inside its setup ceiling; no worst-case acquisition schedule is claimed to fit.
+
+Whole-operation acceptance requires actual signed-input verification, baseline
+live services and trusted TLS, backup publication before stop dispatch, actual
+first unlock and fresh guarded acquisition, expected configuration and database
+state, and complete native/guest/VM finalization. The refusal case must observe
+the real launcher reject the dirty source after selection and keep that selected
+state. An expected native refusal does not excuse cleanup or packet observations.
+Every required observation, process status and actual invocation/job/workflow
+result remains separate from source implementation or saved result JSON.
+The previously completed four-case launcher prerequisite is a different proof.
+Controlled README dirtiness, launcher status 1 and retained selection establish
+the refusal case by comparison with the clean baseline. Those observations do
+not identify a unique failing Bash branch; the frozen launcher has silent checks
+that can share that exit status.
+
+The host fixture's guest DATA roster remains the 52 rendered-input source files
+and 15 helper files. The new Rust host/controller implementation executes from the
+current authenticated Ops binary and is additionally bound by the expanded
+outer source catalogue; it is not interpreted from those 52 guest DATA files.
+Whole-host schema migration execution needs its own source-bound older-schema
+trial or authenticated historical distribution; deleting ledger rows alone
+cannot establish that proof. Preserve all failed trials and report the exact
+scope of the successful cases.

@@ -242,7 +242,7 @@ pub(super) fn expected_daemon_traces(
 }
 
 impl Fixture {
-    async fn attempt(&mut self, ctx: &mut Context) -> Result<Option<PathBuf>> {
+    pub(super) async fn attempt(&mut self, ctx: &mut Context) -> Result<Option<PathBuf>> {
         ctx.control.check()?;
         let names = directory_names(&Path::new(PUBLIC).join("results"))?;
         let added = names.difference(&self.attempts_before).collect::<Vec<_>>();
@@ -277,7 +277,7 @@ impl Fixture {
                 .iter()
                 .all(|n| object.contains_key(*n)),
         )?;
-        let positive = ctx.request.scenario == "positive";
+        let positive = ctx.request.native_scenario() == "positive";
         require(
             value["serverImage"] == self.image
                 && value["exitStatus"].as_i64() == Some(if positive { 0 } else { 1 })
@@ -334,8 +334,8 @@ impl Fixture {
         require(actual == expected.iter().map(String::as_str).collect::<Vec<_>>())?;
         Ok(Some(path))
     }
-    fn expected_pg_commands(&self, ctx: &Context) -> Result<BTreeMap<String, usize>> {
-        if ctx.request.scenario != "positive" {
+    pub(super) fn expected_pg_commands(&self, ctx: &Context) -> Result<BTreeMap<String, usize>> {
+        if ctx.request.native_scenario() != "positive" {
             return Ok(BTreeMap::new());
         }
         let source = std::str::from_utf8(
@@ -379,14 +379,18 @@ impl Fixture {
             ),
         ]))
     }
-    async fn daemon_observe(&mut self, ctx: &mut Context, attempt: Option<&Path>) -> Result<()> {
+    pub(super) async fn daemon_observe(
+        &mut self,
+        ctx: &mut Context,
+        attempt: Option<&Path>,
+    ) -> Result<()> {
         let earlier = ctx.control.first;
         if earlier.is_none() {
             ctx.control.checkpoint = "daemon-observe";
         }
         let mut stage = DaemonStage::ActorIdentity;
         let result = async {
-            let positive = ctx.request.scenario == "positive";
+            let positive = ctx.request.native_scenario() == "positive";
             let mut app_name = None;
             if positive {
                 let image = self.image.clone();
@@ -564,9 +568,13 @@ impl Fixture {
         .await;
         daemon_result(&mut ctx.control, earlier, stage, result)
     }
-    async fn database_observe(&mut self, ctx: &mut Context, attempt: Option<&Path>) -> Result<()> {
+    pub(super) async fn database_observe(
+        &mut self,
+        ctx: &mut Context,
+        attempt: Option<&Path>,
+    ) -> Result<()> {
         ctx.control.checkpoint = "database-observe";
-        if ctx.request.scenario == "positive" {
+        if ctx.request.native_scenario() == "positive" {
             let data = self
                 .sql(
                     ctx,
@@ -659,13 +667,13 @@ impl Fixture {
         }
         ctx.observed.set("expectedDatabaseStateObserved", true)
     }
-    async fn tls_observe(&mut self, ctx: &mut Context) -> Result<()> {
+    pub(super) async fn tls_observe(&mut self, ctx: &mut Context) -> Result<()> {
         ctx.control.checkpoint = "tls-observe";
         for index in &self.material_indices {
             ctx.originals[*index].check(&mut ctx.control)?;
         }
         ctx.observed.set("naturalMaterialsUnchanged", true)?;
-        if ctx.request.scenario == "positive" {
+        if ctx.request.native_scenario() == "positive" {
             let id = self.proxy.clone().ok_or(Error::Refused)?;
             let peers = BTreeSet::from([self.app.clone().ok_or(Error::Refused)?, id.clone()]);
             let root = ctx.originals[*self.material_indices.first().ok_or(Error::Refused)?]
@@ -676,9 +684,9 @@ impl Fixture {
         }
         Ok(())
     }
-    async fn application_observe(&mut self, ctx: &mut Context) -> Result<()> {
+    pub(super) async fn application_observe(&mut self, ctx: &mut Context) -> Result<()> {
         ctx.control.checkpoint = "application-observe";
-        if ctx.request.scenario == "positive" {
+        if ctx.request.native_scenario() == "positive" {
             let bytes = Self::call(
                 ctx,
                 "actual-backend-ready",
@@ -704,7 +712,15 @@ impl Fixture {
         }
         Ok(())
     }
-    async fn source_observe(&mut self, ctx: &mut Context) -> Result<()> {
+    pub(super) async fn source_observe(&mut self, ctx: &mut Context) -> Result<()> {
+        self.source_observe_for(ctx, ctx.request.scenario == "dirty-source")
+            .await
+    }
+    pub(super) async fn source_observe_for(
+        &mut self,
+        ctx: &mut Context,
+        dirty: bool,
+    ) -> Result<()> {
         ctx.control.checkpoint = "source-observe";
         ctx.check()?;
         let status = Self::call(
@@ -723,7 +739,7 @@ impl Fixture {
         .await?;
         require(
             status
-                == if ctx.request.scenario == "dirty-source" {
+                == if dirty {
                     b" M README.md\n".as_slice()
                 } else {
                     b""
@@ -820,7 +836,7 @@ impl Fixture {
         let ended = ctx.control.pop_phase(observation);
         close_phase(result, ended)
     }
-    async fn collector_finish(&mut self, ctx: &mut Context) -> Result<()> {
+    pub(super) async fn collector_finish(&mut self, ctx: &mut Context) -> Result<()> {
         let Some(mut collector) = self
             .monitors
             .lock()

@@ -40,6 +40,7 @@ pub(in crate::release) struct Owner {
     stage_cleanup: Option<Instant>,
     deploy_candidate: Option<Instant>,
     deploy_recovery: Option<Instant>,
+    maintain_launcher: Option<(Instant, Instant)>,
     signals: Signals,
     primary: Option<Cause>,
     #[cfg(test)]
@@ -67,6 +68,7 @@ impl Owner {
             stage_cleanup: None,
             deploy_candidate: None,
             deploy_recovery: None,
+            maintain_launcher: None,
             signals: Signals::new().map_err(|_| Cause::Io)?,
             primary: None,
             #[cfg(test)]
@@ -107,16 +109,48 @@ impl Owner {
         }
         Instant::now()
     }
+    pub fn start(&self) -> Instant {
+        self.start
+    }
     pub fn end(&self) -> Instant {
-        self.end
+        self.maintain_launcher.map_or(self.end, |(_, end)| end)
     }
     pub fn body_end(&self) -> Instant {
-        self.body
+        self.maintain_launcher.map_or(self.body, |(body, _)| body)
+    }
+    /// Borrow a launcher interval strictly inside the original transaction body.
+    /// Its finalization cannot consume the host transaction's local reserve.
+    #[cfg(any(target_os = "linux", test))]
+    pub fn begin_maintain_launcher(&mut self, body: Instant, end: Instant) -> Result<()> {
+        self.check(Window::Body)?;
+        if self.maintain_launcher.is_some()
+            || self.receiver_protocol.is_some()
+            || self.stage_validator.is_some()
+            || self.stage_cleanup.is_some()
+            || self.deploy_candidate.is_some()
+            || self.deploy_recovery.is_some()
+            || body >= end
+            || end > self.body
+            || self.now() >= body
+        {
+            return failed(self, Cause::Deadline);
+        }
+        self.maintain_launcher = Some((body, end));
+        self.check(Window::Body)
+    }
+    /// Fence the borrowed interval before returning to the same original body.
+    #[cfg(any(target_os = "linux", test))]
+    pub fn end_maintain_launcher(&mut self) {
+        if self.maintain_launcher.is_some() {
+            let _ = self.check(Window::Final);
+            self.maintain_launcher = None;
+        }
     }
     /// Reserve the fixed known replacement recovery debt inside original B.
     pub fn begin_deploy_candidate(&mut self, end: Instant) -> Result<()> {
         self.check(Window::Body)?;
         if self.deploy_candidate.is_some()
+            || self.maintain_launcher.is_some()
             || self.deploy_recovery.is_some()
             || self.receiver_protocol.is_some()
             || self.stage_validator.is_some()
@@ -141,6 +175,7 @@ impl Owner {
         self.final_work()?;
         if self.deploy_candidate.is_some()
             || self.deploy_recovery.is_some()
+            || self.maintain_launcher.is_some()
             || self.now() >= self.body
         {
             return failed(self, Cause::Deadline);
@@ -172,7 +207,11 @@ impl Owner {
     /// still owes its original transport tail. This does not change B or N.
     pub fn begin_receiver_protocol(&mut self, end: Instant) -> Result<()> {
         self.check(Window::Body)?;
-        if self.receiver_protocol.is_some() || self.stage_validator.is_some() || end > self.body {
+        if self.receiver_protocol.is_some()
+            || self.stage_validator.is_some()
+            || self.maintain_launcher.is_some()
+            || end > self.body
+        {
             return failed(self, Cause::Input);
         }
         self.receiver_protocol = Some(end);
@@ -182,7 +221,11 @@ impl Owner {
     /// inside B. It cannot replace or clear an admitted receiver protocol window.
     pub fn begin_stage_validator(&mut self, end: Instant) -> Result<()> {
         self.check(Window::Body)?;
-        if self.stage_validator.is_some() || self.receiver_protocol.is_some() || end > self.body {
+        if self.stage_validator.is_some()
+            || self.receiver_protocol.is_some()
+            || self.maintain_launcher.is_some()
+            || end > self.body
+        {
             return failed(self, Cause::Input);
         }
         if self.now() >= end {
@@ -201,7 +244,10 @@ impl Owner {
     /// Final-work filesystem loops stop at B while daemon retirement is owed.
     pub fn begin_stage_cleanup(&mut self) -> Result<()> {
         self.final_work()?;
-        if self.stage_cleanup.is_some() || self.stage_validator.is_some() {
+        if self.stage_cleanup.is_some()
+            || self.stage_validator.is_some()
+            || self.maintain_launcher.is_some()
+        {
             return failed(self, Cause::Input);
         }
         if self.now() >= self.body {
@@ -225,7 +271,7 @@ impl Owner {
         }
     }
     pub fn cleanup_before(&self, end: Instant) -> Result<()> {
-        if self.now() >= end.min(self.end) {
+        if self.now() >= end.min(self.end()) {
             Err(Cause::Deadline)
         } else {
             Ok(())
@@ -252,6 +298,7 @@ impl Owner {
                     .stage_cleanup
                     .unwrap_or(self.end)
                     .min(self.deploy_recovery.unwrap_or(self.end))
+                    .min(self.end())
                     .min(self.end)
         {
             self.record(Cause::Deadline);
@@ -279,8 +326,8 @@ impl Owner {
                             .unwrap_or(self.body)
                             .min(self.stage_validator.unwrap_or(self.body))
                             .min(self.deploy_candidate.unwrap_or(self.body))
-                            .min(self.body),
-                        Window::Final => self.end,
+                            .min(self.body_end()),
+                        Window::Final => self.end(),
                     }
             {
                 self.record(Cause::Deadline);
@@ -355,6 +402,9 @@ thread_local! {
     };
 }
 
+#[cfg(test)]
+#[path = "control_maintain_tests.rs"]
+mod maintain_tests;
 #[cfg(test)]
 #[path = "control_signal_tests.rs"]
 pub(super) mod signal_tests;

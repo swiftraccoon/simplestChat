@@ -9,7 +9,7 @@ use super::{CommandOutput, Executor, Role};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-pub(super) struct Native;
+pub(in crate::release::attestation) struct Native;
 
 impl Executor for Native {
     async fn run(&mut self, owner: &mut Owner, request: super::Invocation<'_>) -> CommandOutput {

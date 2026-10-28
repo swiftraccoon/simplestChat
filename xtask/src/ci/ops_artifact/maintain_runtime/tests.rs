@@ -813,13 +813,49 @@ fn workflow_entry_keeps_caps_and_selects_the_installed_native_guest() {
     assert!(!session.contains("security_vm_maintain_prerequisite_guest.py"));
 }
 #[test]
-fn retained_catalog_covers_every_native_guest_and_hosted_producer_module() {
+fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_roles() {
+    let workflow = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../.github/workflows/maintenance-host-runtime.yml"
+    ));
+    assert!(workflow.contains(options::HOST_WORKFLOW));
+    assert!(workflow.contains("target/debug/xtask ops-artifact maintain-host-runtime"));
+    assert!(workflow.contains("timeout-minutes: 90"));
+    for case in options::HOST_CASES {
+        assert!(workflow.contains(case));
+    }
+    let sources = catalog::sources();
+    for file in [
+        ".github/workflows/maintenance-host-runtime.yml",
+        "xtask/src/ci/ops_artifact/maintain_runtime/host_projection.rs",
+        "ops/src/release/attestation/maintain.rs",
+        "ops/src/release/attestation/deploy/maintenance.rs",
+        "ops/src/release/attestation/deploy/maintenance_selection.rs",
+        "ops/src/release/attestation/deploy/maintenance_effect_tests.rs",
+        "ops/src/release/attestation/stage/reentry.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/host.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/host/effects.rs",
+    ] {
+        assert!(sources.contains(file), "{file}");
+    }
+    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::HELPERS.len(), 15);
+    assert!(
+        !catalog::guest_sources()
+            .iter()
+            .any(|name| name.ends_with(".rs"))
+    );
+}
+#[test]
+fn retained_catalog_covers_every_guest_controller_and_authenticated_producer_module() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();
     let catalog = catalog::sources();
     for prefix in [
         "ops/src/release/attestation/maintain_prerequisite",
+        "xtask/src/ci/ops_artifact/maintain_runtime",
+        "xtask/src/ci/ops_artifact/export",
         "xtask/src/ci/ops_artifact/hosted",
         "xtask/src/ci/apt_mirror",
     ] {

@@ -3,6 +3,7 @@
 pub(super) mod control;
 pub(super) mod effects;
 pub(super) mod files;
+pub(super) mod host;
 pub(super) mod materials;
 pub(super) mod native;
 pub(super) mod observation;
@@ -19,7 +20,7 @@ use process::Commands;
 use protocol::{Request, Wire};
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     path::{Path, PathBuf},
     process::ExitCode,
@@ -75,6 +76,7 @@ struct Context {
     observed: Observations,
     wire: Wire,
     socket: Option<(PathBuf, std::fs::Metadata)>,
+    host_retired: BTreeSet<usize>,
 }
 impl Context {
     pub fn admit_socket(&mut self) -> Result<()> {
@@ -93,7 +95,13 @@ impl Context {
     pub fn check(&mut self) -> Result<()> {
         self.control.check()?;
         self.wire.no_extra(&mut self.control)?;
-        for original in &self.originals {
+        for (index, original) in self.originals.iter().enumerate() {
+            if self.host_retired.contains(&index) {
+                if !self.request.is_host() || !original.closed() {
+                    return Err(Error::Refused);
+                }
+                continue;
+            }
             original.check(&mut self.control)?;
         }
         sources::socket_check(self)?;
@@ -442,6 +450,15 @@ async fn transaction(ctx: &mut Context) -> Value {
 
 /// Entry captures its one monotonic origin before arguments, flags, I/O or effects.
 pub(in crate::release::attestation) fn run(arguments: &[OsString]) -> ExitCode {
+    entry(arguments, false)
+}
+pub(in crate::release::attestation) fn run_host(arguments: &[OsString]) -> ExitCode {
+    entry(arguments, true)
+}
+pub(in crate::release::attestation) fn run_upgrade(arguments: &[OsString]) -> ExitCode {
+    host::upgrade::run(arguments)
+}
+fn entry(arguments: &[OsString], host: bool) -> ExitCode {
     let started = Instant::now();
     if !arguments.is_empty() {
         eprintln!("Usage: simplestchat-ops release maintain-prerequisite guest");
@@ -451,7 +468,12 @@ pub(in crate::release::attestation) fn run(arguments: &[OsString]) -> ExitCode {
         return ExitCode::FAILURE;
     }
     let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
-    let mut control = match Control::new(started) {
+    let admitted_control = if host {
+        Control::new_host(started)
+    } else {
+        Control::new(started)
+    };
+    let mut control = match admitted_control {
         Ok(value) => value,
         Err(_) => {
             nix::sys::stat::umask(previous);
@@ -470,7 +492,11 @@ pub(in crate::release::attestation) fn run(arguments: &[OsString]) -> ExitCode {
     };
     let admitted = (|| {
         let bytes = wire.line(&mut control)?;
-        let request = Request::decode(&bytes)?;
+        let request = if host {
+            Request::decode_host(&bytes)?
+        } else {
+            Request::decode(&bytes)?
+        };
         control.configure(&request)?;
         wire.no_extra(&mut control)?;
         Ok(request)
@@ -490,13 +516,18 @@ pub(in crate::release::attestation) fn run(arguments: &[OsString]) -> ExitCode {
     let mut ctx = Context {
         source_root: Path::new("/srv/simplestchat-bench/sources").join(&request.revision),
         control,
-        commands: Commands::new(),
+        commands: if host {
+            Commands::new_host()
+        } else {
+            Commands::new()
+        },
         request,
         sources: BTreeMap::new(),
         originals: Vec::new(),
         observed: Observations::new(),
         wire,
         socket: None,
+        host_retired: BTreeSet::new(),
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -504,14 +535,22 @@ pub(in crate::release::attestation) fn run(arguments: &[OsString]) -> ExitCode {
         .build();
     let report = match runtime {
         Ok(runtime) => {
-            let report = runtime.block_on(transaction(&mut ctx));
+            let report = if host {
+                runtime.block_on(host::transaction(&mut ctx))
+            } else {
+                runtime.block_on(transaction(&mut ctx))
+            };
             drop(runtime);
             report
         }
         Err(_) => {
             ctx.control.record(Error::Io);
             ctx.control.begin_settling();
-            receipt(&ctx, &native::Native::new(), "input", true)
+            if host {
+                host::failed_receipt(&ctx)
+            } else {
+                receipt(&ctx, &native::Native::new(), "input", true)
+            }
         }
     };
     if let Err(error) = ctx.wire.emit(&report, &mut ctx.control) {

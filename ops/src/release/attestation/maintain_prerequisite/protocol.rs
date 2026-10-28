@@ -16,6 +16,11 @@ pub(super) struct Clock {
 }
 impl Clock {
     pub fn parse(origin: &str, body: &str, end: &str) -> Result<Self> {
+        let value = Self::fields(origin, body, end)?;
+        value.validate()?;
+        Ok(value)
+    }
+    fn fields(origin: &str, body: &str, end: &str) -> Result<Self> {
         let number = |value: &str| {
             if value.is_empty()
                 || value.len() > 20
@@ -26,13 +31,11 @@ impl Clock {
             }
             value.parse::<u64>().map_err(|_| Cause::Input)
         };
-        let value = Self {
+        Ok(Self {
             origin: number(origin)?,
             body: number(body)?,
             end: number(end)?,
-        };
-        value.validate()?;
-        Ok(value)
+        })
     }
     pub fn new(origin: u64) -> Result<Self> {
         let end = origin.checked_add(WHOLE * SECOND).ok_or(Cause::Input)?;
@@ -51,9 +54,67 @@ impl Clock {
         }
         Ok(())
     }
+    pub fn parse_inherited(origin: &str, body: &str, end: &str) -> Result<Self> {
+        let value = Self::fields(origin, body, end)?;
+        value.validate_inherited()?;
+        Ok(value)
+    }
+    fn validate_inherited(self) -> Result<()> {
+        if self.origin == 0
+            || self.body <= self.origin
+            || self.end.checked_sub(self.body) != Some(FINAL * SECOND)
+            || self
+                .end
+                .checked_sub(self.origin)
+                .is_none_or(|whole| whole > 1800 * SECOND)
+        {
+            return Err(Cause::Input);
+        }
+        Ok(())
+    }
+    /// Convert the parent's original interval conservatively. Sampling kernel
+    /// time first places every exported ceiling no later than its Instant bound.
+    #[cfg(target_os = "linux")]
+    pub fn inherited(owner: &mut Owner, body: Instant, end: Instant) -> Result<Self> {
+        owner.check(Window::Body)?;
+        let current = now()?;
+        let instant = Instant::now();
+        let nanos = |value: Duration| u64::try_from(value.as_nanos()).map_err(|_| Cause::Input);
+        let elapsed = nanos(
+            instant
+                .checked_duration_since(owner.start())
+                .ok_or(Cause::Input)?,
+        )?;
+        let value = Self {
+            origin: current.checked_sub(elapsed).ok_or(Cause::Input)?,
+            body: current
+                .checked_add(nanos(
+                    body.checked_duration_since(instant)
+                        .ok_or(Cause::Deadline)?,
+                )?)
+                .ok_or(Cause::Input)?,
+            end: current
+                .checked_add(nanos(
+                    end.checked_duration_since(instant).ok_or(Cause::Deadline)?,
+                )?)
+                .ok_or(Cause::Input)?,
+        };
+        value.validate_inherited()?;
+        owner.check(Window::Body)?;
+        Ok(value)
+    }
     #[cfg(target_os = "linux")]
     pub fn owner(self) -> Result<Owner> {
         self.validate()?;
+        self.role_owner()
+    }
+    #[cfg(target_os = "linux")]
+    pub fn inherited_owner(self) -> Result<Owner> {
+        self.validate_inherited()?;
+        self.role_owner()
+    }
+    #[cfg(target_os = "linux")]
+    fn role_owner(self) -> Result<Owner> {
         // Sampling Instant before CLOCK_MONOTONIC makes the converted ceiling
         // conservative. This backdates one owner; spawn and GO never restart it.
         let instant = Instant::now();
@@ -67,8 +128,8 @@ impl Clock {
             .ok_or(Cause::Input)?;
         Owner::new(
             start,
-            Duration::from_secs(WHOLE),
-            Duration::from_secs(FINAL),
+            Duration::from_nanos(self.end.checked_sub(self.origin).ok_or(Cause::Input)?),
+            Duration::from_nanos(self.end.checked_sub(self.body).ok_or(Cause::Input)?),
         )
     }
     #[cfg(target_os = "linux")]

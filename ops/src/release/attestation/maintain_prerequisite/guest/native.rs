@@ -34,6 +34,15 @@ impl Native {
         {
             return Err(Error::Deadline);
         }
+        if ctx.request.is_host()
+            && ctx
+                .control
+                .phase_end()
+                .saturating_duration_since(Instant::now())
+                < Duration::from_secs(1050)
+        {
+            return Err(Error::Deadline);
+        }
         let previous = ctx.control.push_phase(Duration::from_secs(1050))?;
         let arguments = vec![
             "ops".into(),
@@ -85,7 +94,7 @@ impl Native {
         let result = (|| {
             body?;
             let output = finished?;
-            let expected = match ctx.request.scenario.as_str() {
+            let expected = match ctx.request.native_scenario() {
                 "positive" => 0,
                 "dirty-source" => 1,
                 "cancel-owned-launcher" => 143,

@@ -5,6 +5,8 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 pub(super) const REPOSITORY: &str = "swiftraccoon/simplestChat";
 pub(super) const WORKFLOW: &str = "Signed musl maintenance launcher prerequisite KVM runtime";
+pub(super) const HOST_WORKFLOW: &str = "Signed musl prepared-host maintenance KVM runtime";
+pub(super) const HOST_CASES: [&str; 2] = ["host-success", "host-launcher-refusal"];
 pub(super) const CASES: [&str; 4] = [
     "positive",
     "dirty-source",
@@ -13,7 +15,47 @@ pub(super) const CASES: [&str; 4] = [
 ];
 pub(super) const USAGE: &str = "usage: xtask ops-artifact maintain-runtime --run-id N \
 --run-attempt N --artifact-id N --scenario CASE --output ABS";
+pub(super) const HOST_USAGE: &str = "usage: xtask ops-artifact maintain-host-runtime --run-id N \
+--run-attempt N --artifact-id N --scenario CASE --output ABS";
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Purpose {
+    Prerequisite,
+    Host,
+}
+impl Purpose {
+    pub fn workflow(self) -> &'static str {
+        match self {
+            Self::Prerequisite => WORKFLOW,
+            Self::Host => HOST_WORKFLOW,
+        }
+    }
+    pub fn cases(self) -> &'static [&'static str] {
+        match self {
+            Self::Prerequisite => &CASES,
+            Self::Host => &HOST_CASES,
+        }
+    }
+    pub fn usage(self) -> &'static str {
+        match self {
+            Self::Prerequisite => USAGE,
+            Self::Host => HOST_USAGE,
+        }
+    }
+    pub fn summary_scope(self) -> &'static str {
+        match self {
+            Self::Prerequisite => "SignedMuslMaintenanceLauncherPrerequisiteKvm",
+            Self::Host => "SignedMuslPreparedHostMaintenanceKvm",
+        }
+    }
+    pub fn proof_key(self) -> &'static str {
+        match self {
+            Self::Prerequisite => "maintainProof",
+            Self::Host => "hostProof",
+        }
+    }
+}
 pub(super) struct Options {
+    pub purpose: Purpose,
     pub run: u64,
     pub attempt: u64,
     pub artifact: u64,
@@ -38,6 +80,12 @@ fn number(text: &str) -> Result<u64> {
 }
 impl Options {
     pub fn parse(args: &[String]) -> Result<Option<Self>> {
+        Self::parse_for(args, Purpose::Prerequisite)
+    }
+    pub fn parse_host(args: &[String]) -> Result<Option<Self>> {
+        Self::parse_for(args, Purpose::Host)
+    }
+    fn parse_for(args: &[String], purpose: Purpose) -> Result<Option<Self>> {
         if args == ["--help"] {
             return Ok(None);
         }
@@ -62,7 +110,7 @@ impl Options {
         }
         let scenario = values["--scenario"];
         let output = PathBuf::from(values["--output"]);
-        if !CASES.contains(&scenario) || !files::safe_path(&output) {
+        if !purpose.cases().contains(&scenario) || !files::safe_path(&output) {
             return Err(Error::Input);
         }
         let revision = std::env::var("GITHUB_SHA").map_err(|_| Error::Input)?;
@@ -70,6 +118,7 @@ impl Options {
             return Err(Error::Input);
         }
         Ok(Some(Self {
+            purpose,
             run: number(values["--run-id"])?,
             attempt: number(values["--run-attempt"])?,
             artifact: number(values["--artifact-id"])?,
@@ -84,7 +133,7 @@ impl Options {
             ("RUNNER_ENVIRONMENT", "github-hosted"),
             ("GITHUB_REPOSITORY", REPOSITORY),
             ("GITHUB_REF", "refs/heads/main"),
-            ("GITHUB_WORKFLOW", WORKFLOW),
+            ("GITHUB_WORKFLOW", self.purpose.workflow()),
         ];
         if !cfg!(target_os = "linux")
             || expected
@@ -117,5 +166,22 @@ mod tests {
         assert!(!digest(&"A".repeat(40), 40));
         assert!(Options::parse(&["--timeout".into(), "4200".into()]).is_err());
         assert!(!files::safe_path(std::path::Path::new("/tmp/../foreign")));
+    }
+    #[test]
+    fn host_workflow_and_cases_are_a_separate_closed_purpose() {
+        assert_eq!(Purpose::Prerequisite.cases(), &CASES);
+        assert_eq!(Purpose::Host.cases(), &HOST_CASES);
+        for case in CASES {
+            assert!(!Purpose::Host.cases().contains(&case));
+        }
+        for case in HOST_CASES {
+            assert!(!Purpose::Prerequisite.cases().contains(&case));
+        }
+        assert_ne!(Purpose::Host.workflow(), Purpose::Prerequisite.workflow());
+        assert_ne!(
+            Purpose::Host.summary_scope(),
+            Purpose::Prerequisite.summary_scope()
+        );
+        assert_ne!(Purpose::Host.proof_key(), Purpose::Prerequisite.proof_key());
     }
 }
