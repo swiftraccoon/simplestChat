@@ -2625,7 +2625,8 @@ pending state. Neither installer authenticates signatures itself.
 `xtask ops-artifact export --request ABS --request-sha256 SHA` composes current
 signature verification from the opaque authenticated acquisition and publishes
 an exact three-member tar plus a pinned installer request. Its closed request
-adds `remoteInput` under `/run/simplestchat-ops-bootstrap/<32 lowercase hex>/input`
+adds `remoteInput` under the fixed executable namespace
+`/usr/local/libexec/simplestchat-ops-bootstrap/<32 lowercase hex>/input`
 and optionally the expected installed binary pin to the existing exact Ops
 selection/artifact/authentication fields. The separate 1,860-second controller
 profile includes the unchanged full acquisition allowance, export, replay and
@@ -2642,6 +2643,14 @@ to the actual staged `release.json`. These are passive custody and intent checks
 the completed application verifier and current native Ops verifier remain the
 authentication authorities. Root/controller/SSH remain trusted keepers.
 
+Before credentials or export, the caller requires an existing root-owned 0755
+`/usr/local/libexec` directory without a final symlink and reads its containing
+mount's options with fixed `findmnt` arguments. Empty, malformed or multiple
+option lines and a `noexec` token refuse; mount protections are never changed.
+The private bootstrap base is a sibling of the canonical installation directory,
+whose descendants the native installer refuses as inputs. Rebuild the trusted
+controller for this fixed request namespace; the former `/run` prefix is refused.
+
 The thin Ansible caller keeps only existing transport operations: private
 nonce creation, SSH copy, pre-parser transfer and pre-execution binary byte
 joins, fixed-member extraction, candidate install/upgrade and canonical
@@ -2649,6 +2658,6 @@ joins, fixed-member extraction, candidate install/upgrade and canonical
 deadline and cleanup policy remains in Rust. Expected-old host pins describe
 custody, never historical authentication. Ansible's separate stat/chmod/exec
 calls do not establish retained-FD atomic execution against an adversarial
-root. Bootstrap inputs are deliberately retained in private per-attempt
-directories, with no automatic retirement. The operator guide states the
-payload bounds, disk and reboot qualifications.
+root. Bootstrap inputs are deliberately retained in persistent private
+per-attempt directories, with no automatic retirement or aggregate disk quota.
+The operator guide states the payload bounds and disk qualifications.

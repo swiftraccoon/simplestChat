@@ -550,6 +550,15 @@ For the one-time legacy browser-asset proxy transition, set the JSON boolean
 Compose/Caddy changes and keeps the selected dependency images. Leave it false
 for ordinary schema or settings maintenance; it permits no arbitrary proxy change.
 
+Before credentials or export, the playbook checks the existing root-owned 0755
+`/usr/local/libexec` directory without following its final component and requires
+one well-formed mount-options line from fixed `findmnt` arguments, without a
+`noexec` token. It changes no mount options. Its root-only bootstrap base is
+`/usr/local/libexec/simplestchat-ops-bootstrap`, a sibling of the canonical helper
+directory. Inputs under the canonical directory remain refused by the installer.
+The controller must be rebuilt for this fixed namespace; the old `/run` request
+prefix is no longer accepted.
+
 The playbook invokes the source-built Rust exporter synchronously and requires
 its actual exit zero before consuming its current receipt. Opaque authenticated
 acquisition verifies the exact signed Ops revision/run/attempt/artifact and
@@ -615,9 +624,10 @@ payload is below 514 MiB: tar at most 257 MiB, extracted binary at most 256 MiB,
 manifest at most 64 KiB, selection at most 16 KiB and installer request at most
 16 KiB. This is a per-attempt payload bound, not an aggregate disk quota, a bound
 on transient Ansible copy staging or a retention lifetime. Repeated attempts keep
-separate nonces. The host path is beneath `/run` and may disappear at reboot;
-copy needed evidence into protected operational storage before then. Application
-staging, backups and other controller evidence require additional disk space.
+separate nonces beneath `/usr/local/libexec/simplestchat-ops-bootstrap`. This host
+evidence is persistent across reboot and consumes the executable filesystem's
+disk space until explicitly retired. Application staging, backups and other
+controller evidence require additional disk space.
 There is no automatic bootstrap cleanup or owned native retirement command yet.
 Do not substitute recursive unknown-path deletion for such an owner.
 

@@ -36,6 +36,38 @@
               - scpub_ops_gh_executable is match('^/')
               - scpub_ops_gh_executable | realpath | basename == 'gh'
 
+        - name: Inspect the fixed executable bootstrap ancestor without following links
+          ansible.builtin.stat:
+            path: /usr/local/libexec
+            follow: false
+            get_checksum: false
+          register: scpub_ops_exec_parent
+
+        - name: Require the protected existing executable bootstrap ancestor
+          ansible.builtin.assert:
+            that:
+              - scpub_ops_exec_parent.stat.isdir | default(false)
+              - not (scpub_ops_exec_parent.stat.islnk | default(false))
+              - scpub_ops_exec_parent.stat.uid == 0
+              - scpub_ops_exec_parent.stat.gid == 0
+              - scpub_ops_exec_parent.stat.mode == '0755'
+
+        - name: Read the fixed executable bootstrap ancestor mount options
+          ansible.builtin.command:
+            argv: [/usr/bin/findmnt, --noheadings, --raw, --output, OPTIONS,
+                   --target, /usr/local/libexec]
+          register: scpub_ops_exec_mount
+          changed_when: false
+          timeout: 15
+
+        - name: Require one executable bootstrap mount without changing mount policy
+          ansible.builtin.assert:
+            that:
+              - scpub_ops_exec_mount.stdout_lines | length == 1
+              - scpub_ops_exec_mount.stdout == (scpub_ops_exec_mount.stdout | trim)
+              - scpub_ops_exec_mount.stdout is match('^[^\\s,]+(,[^\\s,]+)*$')
+              - "'noexec' not in scpub_ops_exec_mount.stdout.split(',')"
+
         # Existing signed staging is authority; these are original-byte custody joins.
         - name: Snapshot the retained signed application predicate
           ansible.builtin.stat:
@@ -137,7 +169,8 @@
                 'artifactId': scpub_ops_artifact_id,
                 'output': scpub_ops_controller ~ '/export',
                 'authentication': 'gh-token',
-                'remoteInput': '/run/simplestchat-ops-bootstrap/' ~ scpub_ops_nonce ~ '/input'
+                'remoteInput': '/usr/local/libexec/simplestchat-ops-bootstrap/' ~
+                               scpub_ops_nonce ~ '/input'
               } | combine({'installedBinary': {
                 'sha256': scpub_ops_old.stat.checksum, 'bytes': scpub_ops_old.stat.size
               }} if scpub_ops_old.stat.exists else {}) | to_json }}
@@ -188,12 +221,12 @@
         - name: Read the current receipt only after actual native command success
           ansible.builtin.set_fact:
             scpub_ops_receipt: "{{ scpub_ops_export.stdout | from_json }}"
-            scpub_ops_remote: "/run/simplestchat-ops-bootstrap/{{ scpub_ops_nonce }}"
+            scpub_ops_remote: "/usr/local/libexec/simplestchat-ops-bootstrap/{{ scpub_ops_nonce }}"
             cacheable: false
 
         - name: Refuse an unknown bootstrap parent without repairing it
           ansible.builtin.stat:
-            path: /run/simplestchat-ops-bootstrap
+            path: /usr/local/libexec/simplestchat-ops-bootstrap
             follow: false
             get_checksum: false
           register: scpub_ops_parent
@@ -208,7 +241,7 @@
 
         - name: Create only an absent fixed bootstrap parent
           ansible.builtin.command:
-            argv: [/usr/bin/mkdir, --mode=0700, --, /run/simplestchat-ops-bootstrap]
+            argv: [/usr/bin/mkdir, --mode=0700, --, /usr/local/libexec/simplestchat-ops-bootstrap]
           when: not scpub_ops_parent.stat.exists
           changed_when: true
 
