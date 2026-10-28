@@ -7,7 +7,8 @@ mod proxy_upgrade;
 
 use super::super::{Error, Result, protocol::Request};
 use super::{Baseline, require};
-use diagnostic::{Auditor, Class, Stage};
+pub(in super::super) use diagnostic::{Auditor, PgReason};
+use diagnostic::{Class, Stage};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 

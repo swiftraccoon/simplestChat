@@ -3,7 +3,8 @@
 use super::{Error, Result, options, projection};
 use serde_json::Value;
 
-pub(super) const STAGES: [&str; 17] = [
+const BASELINE_STAGE: &str = "daemon-pg-history";
+pub(super) const STAGES: [&str; 18] = [
     "host-none-network",
     "host-attempt-delta",
     "host-shell-outcome",
@@ -21,6 +22,7 @@ pub(super) const STAGES: [&str; 17] = [
     "host-event-interruption-order",
     "host-event-proxy-validation",
     "host-event-proxy-replacement",
+    BASELINE_STAGE,
 ];
 const CLASSES: [&str; 7] = [
     "shape",
@@ -31,8 +33,35 @@ const CLASSES: [&str; 7] = [
     "nonzero-exit",
     "incomplete-sequence",
 ];
+const BASELINE_CLASSES: [&str; 15] = [
+    "pg-source-missing",
+    "pg-source-utf8",
+    "pg-query-shape",
+    "pg-query-count",
+    "pg-action-shape",
+    "pg-exec-id",
+    "pg-duplicate-create",
+    "pg-unknown-command",
+    "pg-missing-create",
+    "pg-start-order",
+    "pg-die-action",
+    "pg-die-order",
+    "pg-nonzero-exit",
+    "pg-incomplete-sequence",
+    "pg-command-count",
+];
 const MAXIMUM: usize = 1024;
 const ROWS: u64 = 2048;
+
+fn classes(stage: &str) -> Option<&'static [&'static str]> {
+    if stage == BASELINE_STAGE {
+        Some(&BASELINE_CLASSES)
+    } else if STAGES.contains(&stage) {
+        Some(&CLASSES)
+    } else {
+        None
+    }
+}
 
 pub(super) fn validate(value: &Value, positive: bool, checkpoint: &str) -> Result<()> {
     if value.is_null() {
@@ -57,14 +86,12 @@ pub(super) fn validate(value: &Value, positive: bool, checkpoint: &str) -> Resul
         ],
     )?;
     let rows = value["rows"].as_u64().ok_or(Error::Refused)?;
+    let stage = value["stage"].as_str().ok_or(Error::Refused)?;
+    let class = value["failureClass"].as_str().ok_or(Error::Refused)?;
     if value["schemaVersion"].as_u64() != Some(1)
         || value["scope"] != "PreparedHostObservationDiagnostic"
-        || !value["stage"]
-            .as_str()
-            .is_some_and(|stage| STAGES.contains(&stage) && stage == checkpoint)
-        || !value["failureClass"]
-            .as_str()
-            .is_some_and(|class| CLASSES.contains(&class))
+        || stage != checkpoint
+        || !classes(stage).is_some_and(|allowed| allowed.contains(&class))
         || rows > ROWS
         || (!value["rowIndex"].is_null()
             && !value["rowIndex"].as_u64().is_some_and(|index| index < rows))
@@ -93,8 +120,16 @@ pub(super) fn fixture() -> Value {
     use serde_json::json;
     // The longest admitted strings, nonnull hashes, and maximum row/count
     // values exercise the complete diagnostic's serialized upper boundary.
-    let stage = STAGES.iter().max_by_key(|stage| stage.len()).unwrap();
-    let class = CLASSES.iter().max_by_key(|class| class.len()).unwrap();
+    let (stage, class) = STAGES
+        .iter()
+        .flat_map(|stage| {
+            classes(stage)
+                .unwrap()
+                .iter()
+                .map(move |class| (*stage, *class))
+        })
+        .max_by_key(|(stage, class)| stage.len() + class.len())
+        .unwrap();
     json!({"schemaVersion":1,"scope":"PreparedHostObservationDiagnostic",
         "stage":stage,"failureClass":class,"rowIndex":2047,"rows":2048,
         "expectedCommandSha256":"a".repeat(64),"observedCommandSha256":"b".repeat(64),
@@ -117,6 +152,9 @@ mod tests {
         assert!(validate(&value, true, checkpoint).is_err());
         assert!(validate(&value, false, "host-cleanup").is_err());
         for stage in STAGES {
+            if stage == BASELINE_STAGE {
+                continue;
+            }
             let mut changed = value.clone();
             changed["stage"] = stage.into();
             validate(&changed, false, stage).unwrap();
@@ -143,6 +181,74 @@ mod tests {
             let mut changed = value.clone();
             changed.as_object_mut().unwrap().remove(name);
             assert!(validate(&changed, false, checkpoint).is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn baseline_classes_are_closed_and_cannot_cross_the_original_stage_domain() {
+        for stage in STAGES {
+            for class in CLASSES {
+                let mut value = fixture();
+                value["stage"] = stage.into();
+                value["failureClass"] = class.into();
+                assert_eq!(
+                    validate(&value, false, stage).is_ok(),
+                    stage != BASELINE_STAGE
+                );
+            }
+            for class in BASELINE_CLASSES {
+                let mut value = fixture();
+                value["stage"] = stage.into();
+                value["failureClass"] = class.into();
+                assert_eq!(
+                    validate(&value, false, stage).is_ok(),
+                    stage == BASELINE_STAGE
+                );
+                assert!(validate(&value, true, stage).is_err());
+                assert!(validate(&value, false, "host-cleanup").is_err());
+            }
+        }
+        for class in [
+            "pg-command-count-neighbor",
+            "pg-unknown-command\nPRIVATE",
+            "pg-source-missing\0",
+            "unknown-command",
+        ] {
+            let mut value = fixture();
+            value["stage"] = BASELINE_STAGE.into();
+            value["failureClass"] = class.into();
+            assert!(validate(&value, false, BASELINE_STAGE).is_err());
+        }
+    }
+
+    #[test]
+    fn baseline_source_failure_preserves_null_and_zero_without_exporting_source_bytes() {
+        let mut value = fixture();
+        value["stage"] = BASELINE_STAGE.into();
+        value["failureClass"] = "pg-source-missing".into();
+        value["rows"] = 0.into();
+        for name in [
+            "rowIndex",
+            "expectedCommandSha256",
+            "observedCommandSha256",
+            "expectedCount",
+        ] {
+            value[name] = Value::Null;
+        }
+        value["observedCount"] = 0.into();
+        validate(&value, false, BASELINE_STAGE).unwrap();
+        assert_eq!(value.as_object().unwrap().len(), 10);
+        assert!(value["expectedCount"].is_null());
+        assert_eq!(value["observedCount"].as_u64(), Some(0));
+        assert!(validate(&value, true, "complete").is_err());
+        assert!(validate(&value, false, "host-event-pg").is_err());
+        let mut changed = value.clone();
+        changed["rowIndex"] = 0.into();
+        assert!(validate(&changed, false, BASELINE_STAGE).is_err());
+        for (name, extra) in [("rawRows", json!([])), ("source", json!("PRIVATE"))] {
+            let mut changed = value.clone();
+            changed[name] = extra;
+            assert!(validate(&changed, false, BASELINE_STAGE).is_err());
         }
     }
 
@@ -206,7 +312,18 @@ mod tests {
     fn serialized_diagnostics_have_a_separate_bound_before_wire_projection() {
         let value = fixture();
         let checkpoint = value["stage"].as_str().unwrap();
-        assert!(serde_json::to_vec(&value).unwrap().len() <= MAXIMUM);
+        let maximum_bytes = serde_json::to_vec(&value).unwrap().len();
+        validate(&value, false, checkpoint).unwrap();
+        assert!(maximum_bytes <= MAXIMUM);
+        for stage in STAGES {
+            for class in classes(stage).unwrap() {
+                let mut admitted = value.clone();
+                admitted["stage"] = stage.into();
+                admitted["failureClass"] = (*class).into();
+                validate(&admitted, false, stage).unwrap();
+                assert!(serde_json::to_vec(&admitted).unwrap().len() <= maximum_bytes);
+            }
+        }
         let mut oversized = value.clone();
         oversized["observedCommandSha256"] = "a".repeat(MAXIMUM).into();
         assert!(serde_json::to_vec(&oversized).unwrap().len() > MAXIMUM);

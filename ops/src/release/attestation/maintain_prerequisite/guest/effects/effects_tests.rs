@@ -1771,3 +1771,270 @@ fn proxy_profile_joins_both_project_security_options_without_accepting_overrides
     );
     assert_eq!(check(&missing), Err(Error::Refused));
 }
+
+fn cold_pg_history(
+    rows: &[Value],
+    commands: &BTreeMap<String, usize>,
+) -> (super::Result<()>, Option<Value>) {
+    use super::super::host::events::Auditor;
+    // PG rows are a filtered clone. The diagnostic must report captured positions.
+    let noise = json!({"Type":"network","Actor":{"ID":"PRIVATE_NETWORK_ACTOR"}});
+    let mut raw = vec![noise.clone()];
+    raw.extend_from_slice(rows);
+    raw.push(noise);
+    let mut audit = Auditor::new(&raw);
+    audit.begin_cold_pg();
+    let result = policy::pg_exec_history_observed(rows, commands, "fixed-health", &mut audit);
+    assert_eq!(
+        result,
+        policy::pg_exec_history(rows, commands, "fixed-health")
+    );
+    (result, audit.diagnostic())
+}
+fn cold_pg_refusal(value: &Value, reason: &str, row: Option<usize>, rows: usize) {
+    assert_eq!(value.as_object().unwrap().len(), 10);
+    assert_eq!(value["schemaVersion"], 1);
+    assert_eq!(value["scope"], "PreparedHostObservationDiagnostic");
+    assert_eq!(value["stage"], "daemon-pg-history");
+    assert_eq!(value["failureClass"], reason);
+    assert_eq!(value["rowIndex"], row.map_or(Value::Null, |row| json!(row)));
+    assert_eq!(value["rows"], rows);
+    let encoded = serde_json::to_string(value).unwrap();
+    assert!(encoded.len() <= 1024);
+    for private in ["PRIVATE", "fixed-query", "fixed-health", &id('a')] {
+        assert!(!encoded.contains(private), "raw event or command leaked");
+    }
+}
+
+#[test]
+fn cold_pg_derivation_reports_each_source_branch_without_changing_commands() {
+    use super::super::host::events::Auditor;
+    use super::observation::derive_pg_commands;
+    let raw = vec![json!({"Type":"network","Actor":{"ID":"PRIVATE_SOURCE_ACTOR"}})];
+    for (source, reason, count) in [
+        (None, "pg-source-missing", None),
+        (Some(b"\xff".as_slice()), "pg-source-utf8", None),
+        (Some(b"--command \"\"".as_slice()), "pg-query-shape", None),
+        (
+            Some(b"--command \"PRIVATE\nQUERY\"".as_slice()),
+            "pg-query-shape",
+            None,
+        ),
+        (Some(b"".as_slice()), "pg-query-count", Some(0)),
+        (
+            Some(b"--command \"one\" --command \"two\" --command \"three\"".as_slice()),
+            "pg-query-count",
+            Some(3),
+        ),
+    ] {
+        let mut audit = Auditor::new(&raw);
+        audit.begin_cold_pg();
+        let result = derive_pg_commands(source, Some(&mut audit));
+        assert_eq!(result, Err(Error::Refused));
+        assert_eq!(result, derive_pg_commands(source, None));
+        let value = audit.diagnostic().unwrap();
+        cold_pg_refusal(&value, reason, None, raw.len());
+        assert_eq!(
+            value["observedCount"],
+            count.map_or(Value::Null, |n| json!(n))
+        );
+        assert_eq!(
+            value["expectedCount"],
+            if count.is_some() {
+                json!(2)
+            } else {
+                Value::Null
+            }
+        );
+    }
+    let mut audit = Auditor::new(&raw);
+    audit.begin_cold_pg();
+    let source = b"--command \"SELECT one\" --command \"SELECT two\"";
+    let commands = derive_pg_commands(Some(source), Some(&mut audit)).unwrap();
+    let base = concat!(
+        "psql --no-psqlrc --set ON_ERROR_STOP=on --host /run/simplestchat-postgres ",
+        "--username postgres --dbname simplestchat",
+    );
+    assert_eq!(
+        commands,
+        BTreeMap::from([
+            ("id -un".into(), 1),
+            (
+                format!("{base} --tuples-only --no-align --field-separator   --command SELECT one"),
+                1,
+            ),
+            (base.into(), 1),
+            (
+                format!("{base} --tuples-only --no-align --command SELECT two"),
+                1
+            ),
+            (
+                concat!(
+                    "pg_dump --host /run/simplestchat-postgres --username postgres ",
+                    "--dbname simplestchat --format custom"
+                )
+                .into(),
+                1,
+            ),
+        ])
+    );
+    assert!(audit.diagnostic().is_none());
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/ansible/files/deploy-public.sh"
+    ));
+    let commands = derive_pg_commands(Some(source), None).unwrap();
+    assert_eq!(commands.len(), 5);
+    assert!(commands.values().all(|count| *count == 1));
+}
+
+#[test]
+fn cold_pg_history_reports_exact_first_branch_and_original_captured_position() {
+    let commands = BTreeMap::from([("fixed-query".into(), 1)]);
+    let good = execution("fixed-query", "0");
+    let mut malformed_action = good.clone();
+    malformed_action[0]["Action"] = json!(true);
+    let mut malformed_id = good.clone();
+    malformed_id[0]["Actor"]["Attributes"]["execID"] = Value::Null;
+    let mut short_id = good.clone();
+    short_id[0]["Actor"]["Attributes"]["execID"] = json!("PRIVATE_SHORT_ID");
+    let duplicate = vec![good[0].clone(), good[0].clone()];
+    let mut duplicate_unknown = duplicate.clone();
+    duplicate_unknown[1]["Action"] = json!("exec_create: PRIVATE_UNKNOWN_QUERY");
+    let mut wrong_action = vec![good[0].clone(), good[1].clone(), good[2].clone()];
+    wrong_action[2]["Action"] = json!("exec_start: PRIVATE_UNKNOWN_QUERY");
+    let repeated_start = vec![good[0].clone(), good[1].clone(), good[1].clone()];
+    let early_die = vec![good[0].clone(), good[2].clone()];
+    let mut early_bad_die = early_die.clone();
+    early_bad_die[1]["Actor"]["Attributes"]["exitCode"] = json!("1");
+    let mut wrong_action_order_status = early_bad_die.clone();
+    wrong_action_order_status[1]["Action"] = json!("exec_pause");
+    let mut numeric_zero = good.clone();
+    numeric_zero[2]["Actor"]["Attributes"]["exitCode"] = json!(0);
+    for (rows, reason, row) in [
+        (malformed_action, "pg-action-shape", Some(1)),
+        (malformed_id, "pg-exec-id", Some(1)),
+        (short_id, "pg-exec-id", Some(1)),
+        (duplicate, "pg-duplicate-create", Some(2)),
+        (duplicate_unknown, "pg-duplicate-create", Some(2)),
+        (
+            execution("PRIVATE_UNKNOWN_QUERY", "0"),
+            "pg-unknown-command",
+            Some(1),
+        ),
+        (good[1..].to_vec(), "pg-missing-create", Some(1)),
+        (repeated_start, "pg-start-order", Some(3)),
+        (wrong_action, "pg-die-action", Some(3)),
+        (wrong_action_order_status, "pg-die-action", Some(2)),
+        (early_die, "pg-die-order", Some(2)),
+        (early_bad_die, "pg-die-order", Some(2)),
+        (execution("fixed-query", "1"), "pg-nonzero-exit", Some(3)),
+        (numeric_zero, "pg-nonzero-exit", Some(3)),
+        (good[..2].to_vec(), "pg-incomplete-sequence", None),
+        (Vec::new(), "pg-command-count", None),
+    ] {
+        let (result, value) = cold_pg_history(&rows, &commands);
+        assert_eq!(result, Err(Error::Refused));
+        let value = value.unwrap();
+        cold_pg_refusal(&value, reason, row, rows.len() + 2);
+        if reason == "pg-command-count" {
+            assert_eq!(value["expectedCount"], 1);
+            assert_eq!(value["observedCount"], 0);
+        }
+    }
+    let mut second = good.clone();
+    for row in &mut second {
+        row["Actor"]["Attributes"]["execID"] = json!(id('b'));
+    }
+    let rows = [good, second].concat();
+    let (result, value) = cold_pg_history(&rows, &commands);
+    assert_eq!(result, Err(Error::Refused));
+    let value = value.unwrap();
+    cold_pg_refusal(&value, "pg-command-count", None, rows.len() + 2);
+    assert_eq!(value["expectedCount"], 1);
+    assert_eq!(value["observedCount"], 2);
+    let rows = execution("PRIVATE_UNKNOWN_QUERY", "0");
+    let mut audit = super::super::host::events::Auditor::new(&rows);
+    audit.begin_cold_pg();
+    assert_eq!(
+        policy::pg_exec_history_observed(&rows, &commands, "fixed-health", &mut audit),
+        Err(Error::Refused)
+    );
+    let value = audit.diagnostic().unwrap();
+    cold_pg_refusal(&value, "pg-unknown-command", Some(0), rows.len());
+    assert!(value["observedCommandSha256"].as_str().is_some_and(|hash| {
+        hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }));
+}
+
+#[test]
+fn cold_pg_live_snapshot_health_edges_stay_rejected_and_complete_health_stays_valid() {
+    let commands = BTreeMap::from([("fixed-query".into(), 1)]);
+    let query = execution("fixed-query", "0");
+    let mut health = execution("fixed-health", "0");
+    for row in &mut health {
+        row["Actor"]["Attributes"]["execID"] = json!(id('b'));
+    }
+    let (result, value) = cold_pg_history(&query, &commands);
+    assert_eq!(result, Ok(()));
+    assert!(value.is_none());
+    let mut complete = [query.clone(), health.clone()].concat();
+    complete.push(json!({"Action":"health_status: healthy"}));
+    let (result, value) = cold_pg_history(&complete, &commands);
+    assert_eq!(result, Ok(()));
+    assert!(value.is_none());
+    let missing_opening_create = [query.clone(), health[1..].to_vec()].concat();
+    let (result, value) = cold_pg_history(&missing_opening_create, &commands);
+    assert_eq!(result, Err(Error::Refused));
+    cold_pg_refusal(
+        &value.unwrap(),
+        "pg-missing-create",
+        Some(4),
+        missing_opening_create.len() + 2,
+    );
+    for health_prefix in [&health[..1], &health[..2]] {
+        let trailing = [query.clone(), health_prefix.to_vec()].concat();
+        let (result, value) = cold_pg_history(&trailing, &commands);
+        assert_eq!(result, Err(Error::Refused));
+        cold_pg_refusal(
+            &value.unwrap(),
+            "pg-incomplete-sequence",
+            None,
+            trailing.len() + 2,
+        );
+    }
+    let unhealthy = vec![json!({"Action":"health_status: unhealthy"})];
+    let (result, value) = cold_pg_history(&unhealthy, &BTreeMap::new());
+    assert_eq!(result, Err(Error::Refused));
+    cold_pg_refusal(&value.unwrap(), "pg-exec-id", Some(1), unhealthy.len() + 2);
+}
+
+#[test]
+fn cold_pg_diagnostic_is_host_only_first_failure_and_never_changes_the_result() {
+    use super::super::host::events::{Auditor, PgReason};
+    use super::observation::retain_pg_failure;
+    let raw = vec![json!({"Action":"PRIVATE_ACTION"})];
+    let first = json!({"retained":"PRIVATE_EARLIER_DIAGNOSTIC"});
+    for (host, earlier, current, passed, existing, emitted) in [
+        (true, None, None, false, None, true),
+        (false, None, None, false, None, false),
+        (true, Some(Error::Refused), None, false, None, false),
+        (true, None, Some(Error::Refused), false, None, false),
+        (true, None, None, true, None, false),
+        (true, None, None, false, Some(first.clone()), false),
+    ] {
+        let mut audit = Auditor::new(&raw);
+        audit.begin_cold_pg();
+        audit.note_pg(PgReason::SourceMissing, None, None, None, None);
+        audit.note_pg(PgReason::CommandCount, None, None, Some(1), Some(0));
+        let result = if passed { Ok(()) } else { Err(Error::Refused) };
+        let mut diagnostic = existing.clone();
+        retain_pg_failure(host, earlier, current, &mut diagnostic, &result, audit);
+        assert_eq!(result, if passed { Ok(()) } else { Err(Error::Refused) });
+        if emitted {
+            cold_pg_refusal(&diagnostic.unwrap(), "pg-source-missing", None, raw.len());
+        } else {
+            assert_eq!(diagnostic, existing);
+        }
+    }
+}

@@ -1,5 +1,6 @@
 //! Independent fixed SQL, daemon, source and known-resource retirement facts.
 
+use super::super::host::events::{Auditor, PgReason};
 use super::*;
 use sha2::{Digest, Sha256, Sha384};
 use std::os::unix::fs::OpenOptionsExt;
@@ -89,6 +90,84 @@ fn timestamp(value: &Value) -> bool {
                 _ => b.is_ascii_digit(),
             })
     })
+}
+
+pub(super) fn retain_pg_failure(
+    host: bool,
+    earlier: Option<Error>,
+    current: Option<Error>,
+    diagnostic: &mut Option<Value>,
+    result: &Result<()>,
+    audit: Auditor<'_>,
+) {
+    if host && result.is_err() && earlier.is_none() && current.is_none() && diagnostic.is_none() {
+        *diagnostic = audit.diagnostic();
+    }
+}
+
+pub(super) fn derive_pg_commands(
+    source: Option<&[u8]>,
+    mut audit: Option<&mut Auditor<'_>>,
+) -> Result<BTreeMap<String, usize>> {
+    if let Some(audit) = audit.as_deref_mut() {
+        audit.post_rows();
+    }
+    let source = source.ok_or_else(|| {
+        policy::pg_note(&mut audit, PgReason::SourceMissing, None, None, None, None);
+        Error::Refused
+    })?;
+    let source = std::str::from_utf8(source).map_err(|_| {
+        policy::pg_note(&mut audit, PgReason::SourceUtf8, None, None, None, None);
+        Error::Refused
+    })?;
+    let mut queries = Vec::new();
+    for rest in source.split("--command \"").skip(1) {
+        let query = rest.split('"').next().ok_or_else(|| {
+            policy::pg_note(&mut audit, PgReason::QueryShape, None, None, None, None);
+            Error::Refused
+        })?;
+        require(!query.is_empty() && !query.contains('\n')).inspect_err(|_| {
+            policy::pg_note(&mut audit, PgReason::QueryShape, None, None, None, None);
+        })?;
+        queries.push(query);
+    }
+    require(queries.len() == 2).inspect_err(|_| {
+        policy::pg_note(
+            &mut audit,
+            PgReason::QueryCount,
+            None,
+            None,
+            Some(2),
+            Some(queries.len()),
+        );
+    })?;
+    let base = concat!(
+        "psql --no-psqlrc --set ON_ERROR_STOP=on --host /run/simplestchat-postgres ",
+        "--username postgres --dbname simplestchat",
+    );
+    Ok(BTreeMap::from([
+        ("id -un".into(), 1),
+        (
+            format!(
+                "{base} --tuples-only --no-align --field-separator   --command {}",
+                queries[0],
+            ),
+            1,
+        ),
+        (base.into(), 1),
+        (
+            format!("{base} --tuples-only --no-align --command {}", queries[1]),
+            1,
+        ),
+        (
+            concat!(
+                "pg_dump --host /run/simplestchat-postgres --username postgres ",
+                "--dbname simplestchat --format custom",
+            )
+            .into(),
+            1,
+        ),
+    ]))
 }
 async fn retained_data(ctx: &mut Context, path: &Path, maximum: u64) -> Result<(Vec<u8>, String)> {
     let original = Original::open(path, maximum, 0, 0o600, &mut ctx.control)?;
@@ -335,49 +414,22 @@ impl Fixture {
         Ok(Some(path))
     }
     pub(super) fn expected_pg_commands(&self, ctx: &Context) -> Result<BTreeMap<String, usize>> {
+        self.expected_pg_commands_observed(ctx, None)
+    }
+    fn expected_pg_commands_observed(
+        &self,
+        ctx: &Context,
+        audit: Option<&mut Auditor<'_>>,
+    ) -> Result<BTreeMap<String, usize>> {
         if ctx.request.native_scenario() != "positive" {
             return Ok(BTreeMap::new());
         }
-        let source = std::str::from_utf8(
+        derive_pg_commands(
             ctx.sources
                 .get("ops/ansible/files/deploy-public.sh")
-                .ok_or(Error::Refused)?,
+                .map(Vec::as_slice),
+            audit,
         )
-        .map_err(|_| Error::Refused)?;
-        let mut queries = Vec::new();
-        for rest in source.split("--command \"").skip(1) {
-            let query = rest.split('"').next().ok_or(Error::Refused)?;
-            require(!query.is_empty() && !query.contains('\n'))?;
-            queries.push(query);
-        }
-        require(queries.len() == 2)?;
-        let base = concat!(
-            "psql --no-psqlrc --set ON_ERROR_STOP=on --host /run/simplestchat-postgres ",
-            "--username postgres --dbname simplestchat",
-        );
-        Ok(BTreeMap::from([
-            ("id -un".into(), 1),
-            (
-                format!(
-                    "{base} --tuples-only --no-align --field-separator   --command {}",
-                    queries[0],
-                ),
-                1,
-            ),
-            (base.into(), 1),
-            (
-                format!("{base} --tuples-only --no-align --command {}", queries[1]),
-                1,
-            ),
-            (
-                concat!(
-                    "pg_dump --host /run/simplestchat-postgres --username postgres ",
-                    "--dbname simplestchat --format custom",
-                )
-                .into(),
-                1,
-            ),
-        ]))
     }
     pub(super) async fn daemon_observe(
         &mut self,
@@ -547,7 +599,35 @@ impl Fixture {
                 }
             }
             stage = DaemonStage::PgHistory;
-            policy::pg_exec_history(&pg_rows, &self.expected_pg_commands(ctx)?, &self.pg_health)?;
+            if ctx.request.is_host() {
+                let mut audit = Auditor::new(&self.native_rows);
+                audit.begin_cold_pg();
+                let result = self
+                    .expected_pg_commands_observed(ctx, Some(&mut audit))
+                    .and_then(|commands| {
+                        policy::pg_exec_history_observed(
+                            &pg_rows,
+                            &commands,
+                            &self.pg_health,
+                            &mut audit,
+                        )
+                    });
+                retain_pg_failure(
+                    ctx.request.is_host(),
+                    earlier,
+                    ctx.control.first,
+                    &mut ctx.host_diagnostic,
+                    &result,
+                    audit,
+                );
+                result?;
+            } else {
+                policy::pg_exec_history(
+                    &pg_rows,
+                    &self.expected_pg_commands(ctx)?,
+                    &self.pg_health,
+                )?;
+            }
             if positive {
                 stage = DaemonStage::FinalTraces;
                 expected_daemon_traces(
