@@ -61,9 +61,16 @@ ops/src/release/attestation/maintain_prerequisite/guest/**
 !ops/src/release/attestation/maintain_prerequisite/guest/host/
 ops/src/release/attestation/maintain_prerequisite/guest/host/**
 !ops/src/release/attestation/maintain_prerequisite/guest/host/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/host/events/
+ops/src/release/attestation/maintain_prerequisite/guest/host/events/**
+!ops/src/release/attestation/maintain_prerequisite/guest/host/events/*.rs
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/
 ops/src/release/attestation/maintain_prerequisite/guest/effects/**
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/
+ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/**
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/*.rs
 !ops/src/release/attestation/receive/
 ops/src/release/attestation/receive/**
 !ops/src/release/attestation/receive/*.rs

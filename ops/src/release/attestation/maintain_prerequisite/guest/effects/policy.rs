@@ -1,5 +1,8 @@
 //! Fixed daemon observations and containment policy for the owned fixture.
 
+mod legacy_proxy;
+pub(super) use legacy_proxy::legacy_proxy_profile;
+
 use super::super::{Error, Result};
 use serde_json::{Map, Value, json};
 use std::{

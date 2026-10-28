@@ -66,6 +66,24 @@ fn prepared_host_purpose_does_not_raise_the_original_request_profile() {
     assert!(decoded.is_host());
     assert_eq!(decoded.native_scenario(), "positive");
     assert!(Request::decode(&bytes).is_err());
+    for scenario in [
+        "host-success",
+        "host-launcher-refusal",
+        "host-migration-upgrade",
+        "host-proxy-upgrade",
+    ] {
+        host["scenario"] = scenario.into();
+        let bytes = serde_json::to_vec(&host).unwrap();
+        let request = Request::decode_host(&bytes).unwrap();
+        assert_eq!(request.host_success(), scenario != "host-launcher-refusal");
+        assert_eq!(
+            request.migration_upgrade(),
+            scenario == "host-migration-upgrade"
+        );
+        assert_eq!(request.proxy_upgrade(), scenario == "host-proxy-upgrade");
+        assert_eq!(request.native_scenario(), "positive");
+        assert!(Request::decode(&bytes).is_err());
+    }
     assert!(Request::decode_host(&serde_json::to_vec(&request_value()).unwrap()).is_err());
     for (pointer, bad) in [
         ("/setupSeconds", json!(1561)),

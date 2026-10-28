@@ -6,7 +6,12 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub(super) const REPOSITORY: &str = "swiftraccoon/simplestChat";
 pub(super) const WORKFLOW: &str = "Signed musl maintenance launcher prerequisite KVM runtime";
 pub(super) const HOST_WORKFLOW: &str = "Signed musl prepared-host maintenance KVM runtime";
-pub(super) const HOST_CASES: [&str; 2] = ["host-success", "host-launcher-refusal"];
+pub(super) const HOST_CASES: [&str; 4] = [
+    "host-success",
+    "host-launcher-refusal",
+    "host-migration-upgrade",
+    "host-proxy-upgrade",
+];
 pub(super) const CASES: [&str; 4] = [
     "positive",
     "dirty-source",
@@ -17,6 +22,9 @@ pub(super) const USAGE: &str = "usage: xtask ops-artifact maintain-runtime --run
 --run-attempt N --artifact-id N --scenario CASE --output ABS";
 pub(super) const HOST_USAGE: &str = "usage: xtask ops-artifact maintain-host-runtime --run-id N \
 --run-attempt N --artifact-id N --scenario CASE --output ABS";
+pub(super) fn host_success(scenario: &str) -> bool {
+    HOST_CASES.contains(&scenario) && scenario != "host-launcher-refusal"
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Purpose {
     Prerequisite,
@@ -183,5 +191,15 @@ mod tests {
             Purpose::Prerequisite.summary_scope()
         );
         assert_ne!(Purpose::Host.proof_key(), Purpose::Prerequisite.proof_key());
+    }
+    #[test]
+    fn success_classification_is_closed_to_the_three_positive_host_cases() {
+        for case in HOST_CASES {
+            assert_eq!(host_success(case), case != "host-launcher-refusal");
+        }
+        for case in ["host-upgrade", "host-proxy", "HOST-SUCCESS", "positive", ""] {
+            assert!(!host_success(case));
+            assert!(!Purpose::Host.cases().contains(&case));
+        }
     }
 }

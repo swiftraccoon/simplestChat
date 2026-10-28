@@ -96,7 +96,12 @@ impl Request {
                     "MaintainLauncherPrerequisiteRequest"
                 }
             || !(if host {
-                &["host-success", "host-launcher-refusal"][..]
+                &[
+                    "host-success",
+                    "host-launcher-refusal",
+                    "host-migration-upgrade",
+                    "host-proxy-upgrade",
+                ][..]
             } else {
                 &[
                     "positive",
@@ -144,6 +149,19 @@ impl Request {
     }
     pub fn is_host(&self) -> bool {
         self.scope == "PreparedHostMaintenanceRequest"
+    }
+    pub fn host_success(&self) -> bool {
+        self.is_host()
+            && matches!(
+                self.scenario.as_str(),
+                "host-success" | "host-migration-upgrade" | "host-proxy-upgrade"
+            )
+    }
+    pub fn migration_upgrade(&self) -> bool {
+        self.is_host() && self.scenario == "host-migration-upgrade"
+    }
+    pub fn proxy_upgrade(&self) -> bool {
+        self.is_host() && self.scenario == "host-proxy-upgrade"
     }
     /// The new host profile first establishes the same positive cold baseline.
     pub fn native_scenario(&self) -> &str {

@@ -2,10 +2,21 @@
 //! Destroyed transient actors are bound by their fixed command names, images,
 //! labels and complete traces. Final service rows are independent inspections.
 
+mod diagnostic;
+mod proxy_upgrade;
+
 use super::super::{Error, Result, protocol::Request};
 use super::{Baseline, require};
+use diagnostic::{Auditor, Class, Stage};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug)]
+pub(in super::super) struct AuditFailure {
+    pub cause: Error,
+    pub checkpoint: &'static str,
+    pub diagnostic: Option<Value>,
+}
 
 const PROJECT: &str = "simplestchat-public";
 const LABEL: &str = "simplestchat.maintain-prerequisite";
@@ -109,61 +120,152 @@ fn interruption_order(rows: &[Value], baseline: &Baseline) -> Result<()> {
     let proxy_first = first(&baseline.proxy, &["kill", "die"])?;
     require(dump < list && list < app_first && app_die < proxy_first)
 }
+#[cfg(test)]
 fn pg_history(
     rows: &[&Value],
     expected: &BTreeMap<String, usize>,
     health: &str,
     pending: &BTreeMap<String, u8>,
 ) -> Result<()> {
-    require(
-        pending.len() <= 1
-            && pending
-                .iter()
-                .all(|(id, phase)| digest(id) && [1, 2].contains(phase)),
-    )?;
+    let raw = rows.iter().map(|row| (*row).clone()).collect::<Vec<_>>();
+    let mut audit = Auditor::new(&raw);
+    audit.begin_pg();
+    pg_history_audited(rows, expected, health, pending, &mut audit)
+}
+fn pg_history_audited(
+    rows: &[&Value],
+    expected: &BTreeMap<String, usize>,
+    health: &str,
+    pending: &BTreeMap<String, u8>,
+    audit: &mut Auditor<'_>,
+) -> Result<()> {
+    let admitted = pending.len() <= 1
+        && pending
+            .iter()
+            .all(|(id, phase)| digest(id) && [1, 2].contains(phase));
+    if !admitted {
+        audit.note(Class::Identity, None, None, Some(1), Some(pending.len()));
+    }
+    require(admitted)?;
     let mut executions: BTreeMap<String, (String, u8)> = pending
         .iter()
         .map(|(id, phase)| (id.clone(), (health.into(), *phase)))
         .collect();
     for row in rows {
-        let action = text(&row["Action"])?;
+        audit.observe(row);
+        let action = text(&row["Action"]).inspect_err(|_| {
+            audit.note(Class::Shape, None, None, None, None);
+        })?;
         if action == "health_status: healthy" {
             continue;
         }
         let attrs = &row["Actor"]["Attributes"];
-        let id = text(&attrs["execID"])?;
+        let id = text(&attrs["execID"]).inspect_err(|_| {
+            audit.note(Class::Shape, None, None, None, None);
+        })?;
+        if !digest(id) {
+            audit.note(Class::Identity, None, None, None, None);
+        }
         require(digest(id))?;
         if let Some(command) = action.strip_prefix("exec_create: ") {
+            if let Some((held, _)) = executions.get(id) {
+                audit.note(Class::Ordering, Some(held), Some(command), None, None);
+            } else if !expected.contains_key(command) && command != health {
+                audit.note(Class::UnknownCommand, None, Some(command), None, None);
+            }
             require(
                 !executions.contains_key(id)
                     && (expected.contains_key(command) || command == health),
             )?;
             executions.insert(id.into(), (command.into(), 1));
         } else {
-            let (command, phase) = executions.get_mut(id).ok_or(Error::Refused)?;
+            let (command, phase) = executions.get_mut(id).ok_or_else(|| {
+                audit.note(Class::Identity, None, None, None, None);
+                Error::Refused
+            })?;
             if action == format!("exec_start: {command}") {
+                if *phase != 1 {
+                    audit.note(Class::Ordering, Some(command), Some(command), None, None);
+                }
                 require(*phase == 1)?;
                 *phase = 2;
             } else {
+                if action != "exec_die" {
+                    let observed = action.strip_prefix("exec_start: ");
+                    audit.note(
+                        if observed.is_some() {
+                            Class::UnknownCommand
+                        } else {
+                            Class::Shape
+                        },
+                        Some(command),
+                        observed,
+                        None,
+                        None,
+                    );
+                } else if *phase != 2 {
+                    audit.note(Class::Ordering, Some(command), None, None, None);
+                } else if attrs["exitCode"] != "0" {
+                    audit.note(
+                        if attrs["exitCode"].is_string() {
+                            Class::NonzeroExit
+                        } else {
+                            Class::Shape
+                        },
+                        Some(command),
+                        None,
+                        None,
+                        None,
+                    );
+                }
                 require(action == "exec_die" && *phase == 2 && attrs["exitCode"] == "0")?;
                 *phase = 3;
             }
         }
     }
-    require(
-        executions
+    audit.post_rows();
+    let complete = executions
+        .values()
+        .all(|(command, phase)| *phase == 3 || command == health && [1, 2].contains(phase));
+    let incomplete = executions.values().filter(|(_, phase)| *phase != 3).count();
+    if !complete {
+        if let Some((command, _)) = executions
             .values()
-            .all(|(command, phase)| *phase == 3 || command == health && [1, 2].contains(phase))
-            && executions.values().filter(|(_, phase)| *phase != 3).count() <= 1,
-    )?;
+            .find(|(command, phase)| *phase != 3 && !(command == health && [1, 2].contains(phase)))
+        {
+            audit.note(
+                Class::IncompleteSequence,
+                Some(command),
+                Some(command),
+                None,
+                None,
+            );
+        }
+    } else if incomplete > 1 {
+        audit.note(
+            Class::Cardinality,
+            Some(health),
+            Some(health),
+            Some(1),
+            Some(incomplete),
+        );
+    }
+    require(complete && incomplete <= 1)?;
     for (command, count) in expected {
-        require(
-            executions
-                .values()
-                .filter(|(actual, _)| actual == command)
-                .count()
-                == *count,
-        )?;
+        let observed = executions
+            .values()
+            .filter(|(actual, _)| actual == command)
+            .count();
+        if observed != *count {
+            audit.note(
+                Class::Cardinality,
+                Some(command),
+                (observed > 0).then_some(command.as_str()),
+                Some(*count),
+                Some(observed),
+            );
+        }
+        require(observed == *count)?;
     }
     Ok(())
 }
@@ -306,13 +408,37 @@ pub(in super::super) fn validate(
     request: &Request,
     app: &Value,
     proxy: &Value,
+) -> std::result::Result<(), AuditFailure> {
+    let mut audit = Auditor::new(rows);
+    let result = (|| {
+        if request.proxy_upgrade() {
+            audit.stage = Stage::ProxyValidation;
+            let projected = proxy_upgrade::project(rows, baseline, request)?;
+            validate_lifecycle(&projected, baseline, request, app, proxy, &mut audit)?;
+            audit.stage = Stage::ProxyReplacement;
+            proxy_upgrade::require_replacement(rows, baseline, request, proxy)
+        } else {
+            validate_lifecycle(rows, baseline, request, app, proxy, &mut audit)
+        }
+    })();
+    result.map_err(|cause| audit.failure(cause))
+}
+
+fn validate_lifecycle(
+    rows: &[Value],
+    baseline: &Baseline,
+    request: &Request,
+    app: &Value,
+    proxy: &Value,
+    audit: &mut Auditor<'_>,
 ) -> Result<()> {
+    audit.stage = Stage::Input;
     require(
         request.is_host()
             && rows.len() <= 2048
             && super::super::protocol::digest(&request.run_id, 32),
     )?;
-    let success = request.scenario == "host-success";
+    let success = request.host_success();
     let final_app = text(&app["Id"])?;
     let final_proxy = text(&proxy["Id"])?;
     require(
@@ -349,12 +475,14 @@ pub(in super::super) fn validate(
     let mut pg = Vec::new();
     let mut image_actions = BTreeSet::new();
     for row in rows {
+        audit.stage = Stage::Shape;
         let action = text(&row["Action"])?;
         let id = text(&row["Actor"]["ID"])?;
         let attrs = &row["Actor"]["Attributes"];
         require(attrs.is_object())?;
         match text(&row["Type"])? {
             "image" => {
+                audit.stage = Stage::Image;
                 require(
                     id == baseline.image
                         && ["load", "tag"].contains(&action)
@@ -369,6 +497,7 @@ pub(in super::super) fn validate(
                 }
             }
             "container" => {
+                audit.stage = Stage::Container;
                 require(digest(id))?;
                 if id == baseline.pg {
                     pg.push(row);
@@ -471,10 +600,25 @@ pub(in super::super) fn validate(
                         )?;
                         actor.stopped = true;
                     }
+                    "archive-path" => {
+                        // The source-bound native AssetCopy reads exactly
+                        // /app/web/dist/assets from this known created actor.
+                        // Docker emits this dispatch before fully reading the
+                        // stream; native bulk/exit/seal and later phase proofs
+                        // establish completion separately. No path is in the event.
+                        require(
+                            actor.kind == Kind::Asset
+                                && actor.phases == ["create"]
+                                && attrs["com.docker.compose.service"].is_null()
+                                && attrs["com.docker.compose.project"].is_null(),
+                        )?;
+                        actor.phases.push(action.into());
+                    }
                     "destroy" => {
                         require(
                             actor.phases.last().is_some_and(|phase| phase == "die")
-                                || actor.kind == Kind::Asset && actor.phases == ["create"],
+                                || actor.kind == Kind::Asset
+                                    && actor.phases == ["create", "archive-path"],
                         )?;
                         actor.phases.push(action.into());
                     }
@@ -482,6 +626,7 @@ pub(in super::super) fn validate(
                 }
             }
             "network" => {
+                audit.stage = Stage::Network;
                 require(id == baseline.network || id == baseline.none_network)?;
                 require(
                     attrs.as_object().is_some_and(|attrs| attrs.len() == 3)
@@ -518,6 +663,7 @@ pub(in super::super) fn validate(
             _ => return Err(Error::Refused),
         }
     }
+    audit.stage = Stage::ActorCounts;
     let count = |kind| actors.values().filter(|actor| actor.kind == kind).count();
     if success {
         require(
@@ -539,12 +685,13 @@ pub(in super::super) fn validate(
             && count(Kind::Proxy) == usize::from(success && final_proxy != baseline.proxy),
     )?;
     for (id, actor) in &actors {
+        audit.stage = Stage::ActorTraces;
         let phases = actor.phases.iter().map(String::as_str).collect::<Vec<_>>();
         let expected: &[&str] = match actor.kind {
             Kind::NativeValidator | Kind::ShellValidator | Kind::Migration => {
                 &["create", "start", "die", "destroy"]
             }
-            Kind::Asset => &["create", "destroy"],
+            Kind::Asset => &["create", "archive-path", "destroy"],
             Kind::AppBefore => {
                 if success {
                     &["die", "destroy"]
@@ -591,6 +738,7 @@ pub(in super::super) fn validate(
         } else {
             &baseline.none_network
         };
+        audit.stage = Stage::NetworkTraces;
         let edges = networks
             .get(&(key.clone(), id.clone()))
             .map(Vec::as_slice)
@@ -621,7 +769,15 @@ pub(in super::super) fn validate(
             *expected.entry(command.clone()).or_default() += *count;
         }
     }
-    pg_history(&pg, &expected, &baseline.health, &baseline.health_pending)?;
+    audit.begin_pg();
+    pg_history_audited(
+        &pg,
+        &expected,
+        &baseline.health,
+        &baseline.health_pending,
+        audit,
+    )?;
+    audit.stage = Stage::InterruptionOrder;
     interruption_order(rows, baseline)
 }
 
@@ -629,6 +785,7 @@ pub(in super::super) fn validate(
 mod tests {
     use super::*;
     use serde_json::json;
+    use sha2::{Digest, Sha256};
 
     fn container(id: &str, name: &str, service: Option<&str>, action: &str) -> Value {
         let mut attrs = json!({"name":name,"image":format!("sha256:{}", "6".repeat(64)),
@@ -704,6 +861,7 @@ mod tests {
         }
         let asset = format!("scpub-release-assets-{}", "a".repeat(32));
         rows.push(container(&"a".repeat(64), &asset, None, "create"));
+        rows.push(container(&"a".repeat(64), &asset, None, "archive-path"));
         rows.push(container(&"a".repeat(64), &asset, None, "destroy"));
         stopped(&mut rows, &baseline.app, APP, "simplestchat");
         stopped(&mut rows, &baseline.proxy, PROXY, "caddy");
@@ -782,6 +940,295 @@ mod tests {
             .chain(backup_rows.remove(NATIVE_LIST).unwrap());
         rows.splice(0..0, backup);
         (rows, baseline, request, final_app, proxy)
+    }
+
+    fn proxy_validation(baseline: &Baseline) -> Vec<Value> {
+        let command = "caddy validate --config /dev/stdin --adapter caddyfile";
+        [
+            format!("exec_create: {command}"),
+            format!("exec_start: {command}"),
+            "exec_die".into(),
+        ]
+        .into_iter()
+        .map(|action| {
+            let mut row = container(&baseline.proxy, PROXY, Some("caddy"), &action);
+            row["Actor"]["Attributes"]["execID"] = "0".repeat(64).into();
+            row
+        })
+        .collect()
+    }
+
+    fn proxy_fixture() -> (Vec<Value>, Baseline, Request, Value, Value) {
+        // Adapt the complete existing positive epoch. No actor, SQL execution,
+        // validator, migration or app-replacement trace is bypassed.
+        let (mut rows, mut baseline, mut request, app, mut proxy) = whole_fixture(true);
+        request.scenario = "host-proxy-upgrade".into();
+        let mounts = json!([
+            {"Type":"bind","Source":"/etc/simplestchat-public/Caddyfile",
+                "Destination":"/etc/caddy/Caddyfile","RW":false},
+            {"Type":"bind","Source":"/srv/simplestchat-public/caddy-data",
+                "Destination":"/data","RW":true},
+            {"Type":"bind","Source":"/srv/simplestchat-public/caddy-config",
+                "Destination":"/config","RW":true}
+        ]);
+        baseline.proxy_row["Mounts"] = mounts.clone();
+        proxy["Mounts"] = mounts;
+        proxy["Mounts"].as_array_mut().unwrap().push(json!({
+            "Type":"bind","Source":"/srv/simplestchat-public/browser-assets",
+            "Destination":"/run/simplestchat-browser-assets","RW":false
+        }));
+        let restarted = rows
+            .iter()
+            .position(|row| row["Actor"]["ID"] == baseline.proxy && row["Action"] == "start")
+            .unwrap();
+        assert_eq!(
+            rows[restarted + 1],
+            network(&baseline.proxy, true, "connect")
+        );
+        let next = "f".repeat(64);
+        let temporary = format!("{}_{PROXY}", &baseline.proxy[..12]);
+        let mut rename = container(&next, PROXY, Some("caddy"), "rename");
+        rename["Actor"]["Attributes"]["oldName"] = format!("/{temporary}").into();
+        rows.splice(
+            restarted..restarted + 2,
+            [
+                container(&next, &temporary, Some("caddy"), "create"),
+                container(&baseline.proxy, PROXY, Some("caddy"), "destroy"),
+                rename,
+                container(&next, PROXY, Some("caddy"), "start"),
+                network(&next, true, "connect"),
+            ],
+        );
+        proxy["Id"] = next.into();
+        rows.splice(0..0, proxy_validation(&baseline));
+        (rows, baseline, request, app, proxy)
+    }
+
+    #[test]
+    fn proxy_upgrade_composes_validation_full_epoch_and_actual_replacement_requirements() {
+        let (rows, baseline, request, app, proxy) = proxy_fixture();
+        assert!(validate(&rows, &baseline, &request, &app, &proxy).is_ok());
+        let mut missing_lane = rows.clone();
+        missing_lane.drain(..3);
+        assert!(validate(&missing_lane, &baseline, &request, &app, &proxy).is_err());
+        let mut overlapping_backup = rows.clone();
+        overlapping_backup.swap(2, 3);
+        assert!(validate(&overlapping_backup, &baseline, &request, &app, &proxy).is_err());
+        let mut missing_retirement = rows.clone();
+        let destroyed = missing_retirement
+            .iter()
+            .position(|row| row["Actor"]["ID"] == baseline.proxy && row["Action"] == "destroy")
+            .unwrap();
+        missing_retirement.remove(destroyed);
+        assert!(validate(&missing_retirement, &baseline, &request, &app, &proxy).is_err());
+        let mut writable_assets = proxy.clone();
+        writable_assets["Mounts"][3]["RW"] = true.into();
+        assert!(validate(&rows, &baseline, &request, &app, &writable_assets).is_err());
+        let mut reused_proxy = proxy.clone();
+        reused_proxy["Id"] = baseline.proxy.clone().into();
+        assert!(validate(&rows, &baseline, &request, &app, &reused_proxy).is_err());
+
+        // Even the otherwise complete basic success trace cannot substitute a
+        // restart for this case's independently required proxy replacement.
+        let (mut restarted, basic, mut proxy_request, app, mut proxy) = whole_fixture(true);
+        proxy_request.scenario = "host-proxy-upgrade".into();
+        proxy["Mounts"] = writable_assets["Mounts"].clone();
+        proxy["Mounts"][3]["RW"] = false.into();
+        restarted.splice(0..0, proxy_validation(&basic));
+        assert!(validate(&restarted, &basic, &proxy_request, &app, &proxy).is_err());
+    }
+
+    #[test]
+    fn migration_upgrade_retains_the_complete_positive_host_event_policy() {
+        let (rows, baseline, mut request, app, proxy) = whole_fixture(true);
+        request.scenario = "host-migration-upgrade".into();
+        assert!(validate(&rows, &baseline, &request, &app, &proxy).is_ok());
+    }
+
+    #[test]
+    fn archive_dispatch_is_exactly_once_for_the_known_unstarted_asset_actor() {
+        for success in [false, true] {
+            let (rows, baseline, request, app, proxy) = whole_fixture(success);
+            assert!(validate(&rows, &baseline, &request, &app, &proxy).is_ok());
+            let archive = rows
+                .iter()
+                .position(|row| row["Action"] == "archive-path")
+                .unwrap();
+            let mut missing = rows.clone();
+            missing.remove(archive);
+            assert!(validate(&missing, &baseline, &request, &app, &proxy).is_err());
+            let mut repeated = rows.clone();
+            repeated.insert(archive, rows[archive].clone());
+            assert!(validate(&repeated, &baseline, &request, &app, &proxy).is_err());
+            let mut early = rows.clone();
+            early.swap(archive - 1, archive);
+            assert!(validate(&early, &baseline, &request, &app, &proxy).is_err());
+            let mut late = rows.clone();
+            late.swap(archive, archive + 1);
+            assert!(validate(&late, &baseline, &request, &app, &proxy).is_err());
+            for field in [
+                "name",
+                "image",
+                "com.docker.compose.service",
+                "com.docker.compose.project",
+            ] {
+                let mut foreign = rows.clone();
+                foreign[archive]["Actor"]["Attributes"][field] = "foreign".into();
+                assert!(validate(&foreign, &baseline, &request, &app, &proxy).is_err());
+            }
+            let mut wrong_actor = rows;
+            wrong_actor.insert(
+                archive,
+                container(&baseline.app, APP, Some("simplestchat"), "archive-path"),
+            );
+            assert!(validate(&wrong_actor, &baseline, &request, &app, &proxy).is_err());
+        }
+    }
+
+    fn hash(command: &str) -> String {
+        super::super::super::files::hex(&Sha256::digest(command.as_bytes()))
+    }
+    fn pg_failure(
+        rows: &[Value],
+        baseline: &Baseline,
+        request: &Request,
+        app: &Value,
+        proxy: &Value,
+    ) -> Value {
+        let failure = validate(rows, baseline, request, app, proxy).unwrap_err();
+        assert_eq!(failure.cause, Error::Refused);
+        assert_eq!(failure.checkpoint, "host-event-pg");
+        let diagnostic = failure.diagnostic.unwrap();
+        assert_eq!(diagnostic.as_object().unwrap().len(), 10);
+        assert_eq!(diagnostic["stage"], failure.checkpoint);
+        assert_eq!(diagnostic["rows"], json!(rows.len()));
+        assert!(serde_json::to_vec(&diagnostic).unwrap().len() <= 1024);
+        diagnostic
+    }
+    fn pg_exec_id(rows: &[Value], baseline: &Baseline, command: &str) -> String {
+        rows.iter()
+            .find(|row| {
+                row["Actor"]["ID"] == baseline.pg
+                    && row["Action"] == format!("exec_create: {command}")
+            })
+            .unwrap()["Actor"]["Attributes"]["execID"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn first_pg_failure_records_exact_command_hashes_without_private_text() {
+        let (mut rows, baseline, request, app, proxy) = whole_fixture(false);
+        let command = "SELECT 'private-diagnostic-test-marker'  ";
+        let mut unknown = container(
+            &baseline.pg,
+            "postgres",
+            None,
+            &format!("exec_create: {command}"),
+        );
+        unknown["Actor"]["Attributes"]["execID"] = "f".repeat(64).into();
+        rows.insert(0, unknown);
+        let later = rows
+            .iter_mut()
+            .find(|row| row["Actor"]["ID"] == baseline.pg && row["Action"] == "exec_die")
+            .unwrap();
+        later["Actor"]["Attributes"]["exitCode"] = "1".into();
+        let diagnostic = pg_failure(&rows, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "unknown-command");
+        assert_eq!(diagnostic["rowIndex"], 0);
+        assert!(diagnostic["expectedCommandSha256"].is_null());
+        assert_eq!(diagnostic["observedCommandSha256"], hash(command));
+        let failure = validate(&rows, &baseline, &request, &app, &proxy).unwrap_err();
+        assert!(!format!("{failure:?}").contains("private-diagnostic-test-marker"));
+    }
+
+    #[test]
+    fn pg_start_mismatch_and_nonzero_exit_retain_their_first_actual_row() {
+        let (rows, baseline, request, app, proxy) = whole_fixture(false);
+        let id = pg_exec_id(&rows, &baseline, NATIVE_DUMP);
+        let start = rows
+            .iter()
+            .position(|row| {
+                row["Actor"]["Attributes"]["execID"] == id
+                    && row["Action"] == format!("exec_start: {NATIVE_DUMP}")
+            })
+            .unwrap();
+        let mut mismatch = rows.clone();
+        let wrong = "timeout --signal=TERM --kill-after=2s 45s foreign-command";
+        mismatch[start]["Action"] = format!("exec_start: {wrong}").into();
+        let diagnostic = pg_failure(&mismatch, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "unknown-command");
+        assert_eq!(diagnostic["rowIndex"], json!(start));
+        assert_eq!(diagnostic["expectedCommandSha256"], hash(NATIVE_DUMP));
+        assert_eq!(diagnostic["observedCommandSha256"], hash(wrong));
+        let death = rows
+            .iter()
+            .position(|row| {
+                row["Actor"]["Attributes"]["execID"] == id && row["Action"] == "exec_die"
+            })
+            .unwrap();
+        let mut nonzero = rows;
+        nonzero[death]["Actor"]["Attributes"]["exitCode"] = "1".into();
+        let diagnostic = pg_failure(&nonzero, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "nonzero-exit");
+        assert_eq!(diagnostic["rowIndex"], json!(death));
+        assert_eq!(diagnostic["expectedCommandSha256"], hash(NATIVE_DUMP));
+        assert!(diagnostic["observedCommandSha256"].is_null());
+    }
+
+    #[test]
+    fn missing_and_incomplete_commands_use_the_same_expected_counts_and_bytes() {
+        let (rows, baseline, request, app, proxy) = whole_fixture(false);
+        let size = native_commands(false)
+            .into_keys()
+            .find(|command| command.contains("pg_database_size"))
+            .unwrap();
+        let id = pg_exec_id(&rows, &baseline, &size);
+        let mut missing = rows.clone();
+        missing.retain(|row| {
+            row["Actor"]["ID"] != baseline.pg || row["Actor"]["Attributes"]["execID"] != id
+        });
+        let diagnostic = pg_failure(&missing, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "cardinality");
+        assert!(diagnostic["rowIndex"].is_null());
+        assert_eq!(diagnostic["expectedCommandSha256"], hash(&size));
+        assert!(diagnostic["observedCommandSha256"].is_null());
+        assert_eq!(diagnostic["expectedCount"], 1);
+        assert_eq!(diagnostic["observedCount"], 0);
+        let mut incomplete = rows;
+        let death = incomplete
+            .iter()
+            .position(|row| {
+                row["Actor"]["ID"] == baseline.pg
+                    && row["Actor"]["Attributes"]["execID"] == id
+                    && row["Action"] == "exec_die"
+            })
+            .unwrap();
+        incomplete.remove(death);
+        let diagnostic = pg_failure(&incomplete, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "incomplete-sequence");
+        assert!(diagnostic["rowIndex"].is_null());
+        assert_eq!(diagnostic["expectedCommandSha256"], hash(&size));
+        assert_eq!(diagnostic["observedCommandSha256"], hash(&size));
+    }
+
+    #[test]
+    fn projected_proxy_rows_preserve_original_captured_diagnostic_positions() {
+        let (mut rows, baseline, request, app, proxy) = proxy_fixture();
+        let command = "private-unknown-pg-command";
+        let mut unknown = container(
+            &baseline.pg,
+            "postgres",
+            None,
+            &format!("exec_create: {command}"),
+        );
+        unknown["Actor"]["Attributes"]["execID"] = "f".repeat(64).into();
+        rows.insert(3, unknown);
+        let diagnostic = pg_failure(&rows, &baseline, &request, &app, &proxy);
+        assert_eq!(diagnostic["failureClass"], "unknown-command");
+        assert_eq!(diagnostic["rowIndex"], 3);
+        assert_eq!(diagnostic["observedCommandSha256"], hash(command));
     }
 
     #[test]
