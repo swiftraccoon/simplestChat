@@ -3,7 +3,10 @@
 mod legacy_proxy;
 pub(super) use legacy_proxy::legacy_proxy_profile;
 
-use super::super::{Error, Result};
+use super::super::{
+    Error, Result,
+    host::events::{Auditor, PgReason},
+};
 use serde_json::{Map, Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -518,49 +521,163 @@ pub(super) fn pg_exec_history(
     commands: &BTreeMap<String, usize>,
     health: &str,
 ) -> Result<()> {
+    pg_exec_history_inner(rows, commands, health, None)
+}
+
+pub(super) fn pg_exec_history_observed(
+    rows: &[Value],
+    commands: &BTreeMap<String, usize>,
+    health: &str,
+    audit: &mut Auditor<'_>,
+) -> Result<()> {
+    pg_exec_history_inner(rows, commands, health, Some(audit))
+}
+
+pub(super) fn pg_note(
+    audit: &mut Option<&mut Auditor<'_>>,
+    reason: PgReason,
+    expected_command: Option<&str>,
+    observed_command: Option<&str>,
+    expected_count: Option<usize>,
+    observed_count: Option<usize>,
+) {
+    if let Some(audit) = audit.as_deref_mut() {
+        audit.note_pg(
+            reason,
+            expected_command,
+            observed_command,
+            expected_count,
+            observed_count,
+        );
+    }
+}
+
+fn pg_exec_history_inner(
+    rows: &[Value],
+    commands: &BTreeMap<String, usize>,
+    health: &str,
+    mut audit: Option<&mut Auditor<'_>>,
+) -> Result<()> {
     let mut executions: BTreeMap<String, (String, Vec<&str>)> = BTreeMap::new();
     for row in rows {
-        let action = string(&row["Action"])?;
+        if let Some(audit) = audit.as_deref_mut() {
+            audit.observe(row);
+        }
+        let action = string(&row["Action"]).inspect_err(|_| {
+            pg_note(&mut audit, PgReason::ActionShape, None, None, None, None);
+        })?;
         if action == "health_status: healthy" {
             continue;
         }
         let attrs = &row["Actor"]["Attributes"];
-        let id = string(&attrs["execID"])?;
-        require(digest(id))?;
+        let id = string(&attrs["execID"]).inspect_err(|_| {
+            pg_note(&mut audit, PgReason::ExecId, None, None, None, None);
+        })?;
+        require(digest(id)).inspect_err(|_| {
+            pg_note(&mut audit, PgReason::ExecId, None, None, None, None);
+        })?;
         if let Some(command) = action.strip_prefix("exec_create: ") {
-            require(
-                !executions.contains_key(id)
-                    && (commands.contains_key(command) || command == health),
+            let absent = !executions.contains_key(id);
+            require(absent && (commands.contains_key(command) || command == health)).inspect_err(
+                |_| {
+                    pg_note(
+                        &mut audit,
+                        if absent {
+                            PgReason::UnknownCommand
+                        } else {
+                            PgReason::DuplicateCreate
+                        },
+                        executions.get(id).map(|(command, _)| command.as_str()),
+                        Some(command),
+                        None,
+                        None,
+                    );
+                },
             )?;
             executions.insert(id.to_owned(), (command.to_owned(), vec!["create"]));
         } else {
-            let (command, phases) = executions.get_mut(id).ok_or(Error::Refused)?;
+            let (command, phases) = executions.get_mut(id).ok_or_else(|| {
+                pg_note(
+                    &mut audit,
+                    PgReason::MissingCreate,
+                    None,
+                    action.strip_prefix("exec_start: "),
+                    None,
+                    None,
+                );
+                Error::Refused
+            })?;
             if action == format!("exec_start: {command}") {
-                require(phases == &["create"])?;
+                require(phases == &["create"]).inspect_err(|_| {
+                    pg_note(
+                        &mut audit,
+                        PgReason::StartOrder,
+                        Some(command),
+                        None,
+                        None,
+                        None,
+                    );
+                })?;
                 phases.push("start");
             } else {
-                require(
-                    action == "exec_die"
-                        && phases == &["create", "start"]
-                        && attrs["exitCode"] == "0",
-                )?;
+                let die = action == "exec_die";
+                let ordered = die && phases == &["create", "start"];
+                require(ordered && attrs["exitCode"] == "0").inspect_err(|_| {
+                    pg_note(
+                        &mut audit,
+                        if !die {
+                            PgReason::DieAction
+                        } else if !ordered {
+                            PgReason::DieOrder
+                        } else {
+                            PgReason::NonzeroExit
+                        },
+                        Some(command),
+                        action.strip_prefix("exec_start: "),
+                        None,
+                        None,
+                    );
+                })?;
                 phases.push("die");
             }
         }
+    }
+    if let Some(audit) = audit.as_deref_mut() {
+        audit.post_rows();
     }
     require(
         executions
             .values()
             .all(|(_, phases)| phases == &["create", "start", "die"]),
-    )?;
-    for (command, count) in commands {
-        require(
+    )
+    .inspect_err(|_| {
+        pg_note(
+            &mut audit,
+            PgReason::IncompleteSequence,
             executions
                 .values()
-                .filter(|(actual, _)| actual == command)
-                .count()
-                == *count,
-        )?;
+                .find(|(_, phases)| phases != &["create", "start", "die"])
+                .map(|(command, _)| command.as_str()),
+            None,
+            None,
+            None,
+        );
+    })?;
+    for (command, count) in commands {
+        let observed = executions
+            .values()
+            .filter(|(actual, _)| actual == command)
+            .count();
+        require(observed == *count).inspect_err(|_| {
+            pg_note(
+                &mut audit,
+                PgReason::CommandCount,
+                Some(command),
+                None,
+                Some(*count),
+                Some(observed),
+            );
+        })?;
     }
     Ok(())
 }

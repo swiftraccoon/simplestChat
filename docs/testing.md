@@ -3531,6 +3531,19 @@ state. An expected native refusal does not excuse cleanup or packet observations
 Every required observation, process status and actual invocation/job/workflow
 result remains separate from source implementation or saved result JSON.
 The previously completed four-case launcher prerequisite is a different proof.
+
+Cold-baseline PostgreSQL refusals can retain the first bounded `hostDiagnostic`
+at checkpoint `daemon-pg-history`. The closed reason identifies source/query
+derivation, event shape or identity, create/start/die ordering, nonzero exit,
+incomplete triplet or command-count failure. It exposes command hashes and
+bounded counts only; row indices refer to the original retained event array.
+These reasons are valid only at that baseline stage and never on a passed
+receipt. An earlier failure retains its checkpoint and diagnostic. The older
+launcher-prerequisite output, clocks and acceptance criteria remain unchanged.
+Controlled incomplete-health fixtures at both snapshot boundaries must continue
+to fail. They test diagnostic attribution rather than establish why a previous
+hosted run failed; a fresh complete signed trial is separate evidence.
+
 Controlled README dirtiness, launcher status 1 and retained selection establish
 the refusal case by comparison with the clean baseline. Those observations do
 not identify a unique failing Bash branch; the frozen launcher has silent checks

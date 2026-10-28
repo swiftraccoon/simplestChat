@@ -187,3 +187,23 @@ first bounded command-hash/count diagnostic. The closed diagnostic excludes
 raw commands, SQL, IDs, labels, URLs and stderr; it cannot accompany a passed
 receipt or grant execution authority. This improves attribution without
 changing the required lifecycle, checksum, packet or cleanup observations.
+
+The cold baseline uses that same bounded diagnostic at `daemon-pg-history`.
+Its closed reasons distinguish missing/non-UTF-8 launcher source, malformed or
+unexpected query counts, action/exec-ID shape, duplicate or unknown creates,
+missing creates, start/die ordering, nonzero exits, incomplete triplets and
+command cardinality. Baseline reasons are accepted only with that stage; the
+existing host-event stages keep their existing reason domain. Row indices refer
+to the original retained event array, not the filtered PostgreSQL subset.
+Source failures have no event-row index, and command material remains hashes.
+
+The diagnostic sink is enabled only for the complete prepared-host fixture and
+cannot replace an earlier error, checkpoint or diagnostic. The older launcher
+prerequisite keeps its output and uses the same strict checked implementation
+without that sink. All predicates, their evaluation order, original clocks,
+event limits and required cleanup observations remain unchanged. In particular,
+health executions cut by either snapshot boundary still refuse. Controlled
+branch tests establish attribution and unchanged rejection, not the cause of
+an earlier hosted failure or successful new signed execution. The previous two
+`daemon-pg-history` setup failures retained no branch detail; their exact causes
+remain unknown until an applicable fresh observation provides it.

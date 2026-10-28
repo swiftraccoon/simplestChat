@@ -19,6 +19,7 @@ pub(super) enum Stage {
     InterruptionOrder,
     ProxyValidation,
     ProxyReplacement,
+    ColdPg,
 }
 impl Stage {
     pub fn checkpoint(self) -> &'static str {
@@ -35,12 +36,52 @@ impl Stage {
             Self::InterruptionOrder => "host-event-interruption-order",
             Self::ProxyValidation => "host-event-proxy-validation",
             Self::ProxyReplacement => "host-event-proxy-replacement",
+            Self::ColdPg => "daemon-pg-history",
         }
     }
 }
 
-#[derive(Clone, Copy, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Copy)]
+pub(in super::super::super) enum PgReason {
+    SourceMissing,
+    SourceUtf8,
+    QueryShape,
+    QueryCount,
+    ActionShape,
+    ExecId,
+    DuplicateCreate,
+    UnknownCommand,
+    MissingCreate,
+    StartOrder,
+    DieAction,
+    DieOrder,
+    NonzeroExit,
+    IncompleteSequence,
+    CommandCount,
+}
+impl PgReason {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::SourceMissing => "pg-source-missing",
+            Self::SourceUtf8 => "pg-source-utf8",
+            Self::QueryShape => "pg-query-shape",
+            Self::QueryCount => "pg-query-count",
+            Self::ActionShape => "pg-action-shape",
+            Self::ExecId => "pg-exec-id",
+            Self::DuplicateCreate => "pg-duplicate-create",
+            Self::UnknownCommand => "pg-unknown-command",
+            Self::MissingCreate => "pg-missing-create",
+            Self::StartOrder => "pg-start-order",
+            Self::DieAction => "pg-die-action",
+            Self::DieOrder => "pg-die-order",
+            Self::NonzeroExit => "pg-nonzero-exit",
+            Self::IncompleteSequence => "pg-incomplete-sequence",
+            Self::CommandCount => "pg-command-count",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub(super) enum Class {
     Shape,
     Identity,
@@ -49,6 +90,21 @@ pub(super) enum Class {
     UnknownCommand,
     NonzeroExit,
     IncompleteSequence,
+    Pg(PgReason),
+}
+impl Serialize for Class {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(match self {
+            Self::Shape => "shape",
+            Self::Identity => "identity",
+            Self::Ordering => "ordering",
+            Self::Cardinality => "cardinality",
+            Self::UnknownCommand => "unknown-command",
+            Self::NonzeroExit => "nonzero-exit",
+            Self::IncompleteSequence => "incomplete-sequence",
+            Self::Pg(reason) => reason.name(),
+        })
+    }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,8 +121,8 @@ struct Record {
     observed_count: Option<usize>,
 }
 
-pub(super) struct Auditor<'a> {
-    pub stage: Stage,
+pub(in super::super::super) struct Auditor<'a> {
+    pub(super) stage: Stage,
     raw: &'a [Value],
     cursor: usize,
     row: Option<usize>,
@@ -87,8 +143,16 @@ impl<'a> Auditor<'a> {
         self.cursor = 0;
         self.row = None;
     }
+    pub fn begin_cold_pg(&mut self) {
+        self.stage = Stage::ColdPg;
+        self.cursor = 0;
+        self.row = None;
+    }
+    pub fn diagnostic(self) -> Option<Value> {
+        self.detail
+    }
     pub fn observe(&mut self, row: &Value) {
-        // The proxy adapter clones only its unchanged retained rows. A forward
+        // Adapters clone only their unchanged retained rows. A forward
         // join preserves their original captured positions, even with repeated
         // equal JSON records; no reported actor identifier authorizes a lookup.
         self.row = self.raw[self.cursor..]
@@ -102,7 +166,7 @@ impl<'a> Auditor<'a> {
     pub fn post_rows(&mut self) {
         self.row = None;
     }
-    pub fn note(
+    pub(super) fn note(
         &mut self,
         class: Class,
         expected_command: Option<&str>,
@@ -136,6 +200,22 @@ impl<'a> Auditor<'a> {
         {
             self.detail = Some(value);
         }
+    }
+    pub fn note_pg(
+        &mut self,
+        reason: PgReason,
+        expected_command: Option<&str>,
+        observed_command: Option<&str>,
+        expected_count: Option<usize>,
+        observed_count: Option<usize>,
+    ) {
+        self.note(
+            Class::Pg(reason),
+            expected_command,
+            observed_command,
+            expected_count,
+            observed_count,
+        );
     }
     pub fn failure(self, cause: Error) -> AuditFailure {
         AuditFailure {
