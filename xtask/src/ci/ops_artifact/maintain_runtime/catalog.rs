@@ -308,6 +308,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "oracle_tests",
         "policy",
         "process",
+        "process_recovery_tests",
         "records",
         "replacement",
         "retention",

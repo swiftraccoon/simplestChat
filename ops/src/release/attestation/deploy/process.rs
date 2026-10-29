@@ -1,18 +1,58 @@
 //! One shared safe owner, with fixed-role inherited input and retained bulk output.
 
-use super::super::control::{Cause, Owner};
+use super::super::control::{Cause, Owner, Window};
 pub(super) use super::super::stage::process::Invocation;
 #[cfg(test)]
 pub(super) use super::super::stage::process::run;
-use super::super::stage::process::{Io, Sink, run_io};
+use super::super::stage::process::{Io, Observation, Sink, run_io};
 use super::{CommandOutput, Executor, Role};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub(in crate::release::attestation) struct Native;
 
+fn command_error(
+    prior: Option<Cause>,
+    cleanup: bool,
+    cumulative: Option<Cause>,
+    proof: &Observation,
+    settled: bool,
+    active: std::result::Result<(), Cause>,
+    allow_nonzero: bool,
+) -> Option<Cause> {
+    // Completion remains cumulative. Only this adapter separates its inherited
+    // failure from the current command's independently checked observations.
+    let mut error = cumulative;
+    if cleanup && error == prior {
+        error = None;
+    }
+    // Known current role/stream refusals are more specific than secondary
+    // incomplete-EOF/close fallout. This is not a complete temporal fault log.
+    if proof.role_timed_out {
+        error.get_or_insert(Cause::Deadline);
+    }
+    if proof.stdout_limited || proof.stderr_limited {
+        error.get_or_insert(Cause::Bounds);
+    }
+    if let Some(cause) = proof.cleanup_errors.first() {
+        error.get_or_insert(*cause);
+    }
+    if let Err(cause) = active {
+        error.get_or_insert(cause);
+    }
+    if !allow_nonzero && proof.exit_status.is_some_and(|status| status != 0) {
+        error.get_or_insert(Cause::Command);
+    }
+    if !settled {
+        error.get_or_insert(Cause::Close);
+    }
+    error
+}
+
 impl Executor for Native {
     async fn run(&mut self, owner: &mut Owner, request: super::Invocation<'_>) -> CommandOutput {
+        let prior = owner.error();
+        let cleanup = request.cleanup;
         let entered = owner.now();
         let end = request.settlement_end;
         let inherited = request.input.is_some();
@@ -29,7 +69,7 @@ impl Executor for Native {
                 ]),
                 body_end: request.body_end,
                 settlement_end: end,
-                cleanup: request.cleanup,
+                cleanup,
             },
             Io {
                 stderr: None,
@@ -63,6 +103,13 @@ impl Executor for Native {
         };
         let stderr = proof.stderr_bytes == completed.stderr.len() as u64
             && proof.stderr_sha256 == super::super::files::hex(&Sha256::digest(&completed.stderr));
+        let active = if cleanup {
+            owner
+                .final_work()
+                .and_then(|()| owner.signal_cause().map_or(Ok(()), Err))
+        } else {
+            owner.check(Window::Body)
+        };
         let settled = proof.pid.is_some()
             && stdin
             && stdout
@@ -79,15 +126,28 @@ impl Executor for Native {
             && proof.reaped
             && !proof.stdout_limited
             && !proof.stderr_limited
-            && !proof.timed_out
+            && !(if cleanup {
+                proof.role_timed_out
+            } else {
+                proof.timed_out
+            })
             && proof.cleanup_errors.is_empty()
             && proof.elapsed <= end.saturating_duration_since(entered)
-            && proof.exit_status.is_some();
+            && proof.exit_status.is_some()
+            && active.is_ok()
+            && owner.now() < end;
         let stdout_complete = proof.stdout_body_eof && !proof.stdout_limited && stdout;
-        let mut error = completed.result.err();
-        if !settled && error.is_none() {
-            owner.record(Cause::Close);
-            error = Some(Cause::Close);
+        let error = command_error(
+            prior,
+            cleanup,
+            completed.result.err(),
+            proof,
+            settled,
+            active,
+            allow_nonzero,
+        );
+        if let Some(cause) = error {
+            owner.record(cause);
         }
         CommandOutput {
             stdout: completed.stdout,
@@ -102,3 +162,7 @@ impl Executor for Native {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "process_recovery_tests.rs"]
+mod recovery_tests;

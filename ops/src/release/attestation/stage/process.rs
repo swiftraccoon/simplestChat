@@ -522,7 +522,10 @@ pub(in crate::release::attestation) async fn run_io(
     run_io_with(owner, request, Faults::default(), OUT_LIMIT, io).await
 }
 #[cfg(test)]
-pub(super) async fn run_stderr_close_fault(owner: &mut Owner, request: Invocation) -> Completion {
+pub(in crate::release::attestation) async fn run_stderr_close_fault(
+    owner: &mut Owner,
+    request: Invocation,
+) -> Completion {
     run_with(
         owner,
         request,
