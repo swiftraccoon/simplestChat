@@ -708,24 +708,43 @@ fn database_refusals_never_expose_credentials_or_connect_to_the_database() {
 #[test]
 fn occupied_http_and_media_sockets_remain_owned_and_preflight_releases_its_own_probes() {
     let f = Fixture::new();
-    let tcp = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-    let port = tcp.local_addr().unwrap().port().to_string();
-    let failure = f
-        .prepare(&[], &[("PORT", &port)], Platform::Other)
-        .unwrap_err();
-    assert!(failure.message.contains("EADDRINUSE"));
-    assert_eq!(tcp.local_addr().unwrap().port().to_string(), port);
+    let port = f.environment[std::ffi::OsStr::new("PORT")]
+        .to_str()
+        .unwrap()
+        .parse::<u16>()
+        .unwrap();
+    let media = f.environment[std::ffi::OsStr::new("WEBRTC_SERVER_PORT_BASE")]
+        .to_str()
+        .unwrap()
+        .parse::<u16>()
+        .unwrap();
+    let tcp = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).unwrap();
+    let failure = f.prepare(&[], &[], Platform::Other).unwrap_err();
+    assert_eq!(
+        failure.message,
+        format!("Cannot launch locally: HTTP loopback port {port}: EADDRINUSE.")
+    );
+    assert_eq!(tcp.local_addr().unwrap().port(), port);
     assert!(f.events().is_empty());
-    let udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
-    let media = udp.local_addr().unwrap().port().to_string();
-    let failure = f
-        .prepare(&[], &[("WEBRTC_SERVER_PORT_BASE", &media)], Platform::Other)
-        .unwrap_err();
-    assert!(failure.message.contains("EADDRINUSE"));
-    assert_eq!(udp.local_addr().unwrap().port().to_string(), media);
+    drop(tcp);
+
+    let udp = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, media)).unwrap();
+    let failure = f.prepare(&[], &[], Platform::Other).unwrap_err();
+    assert_eq!(
+        failure.message,
+        format!("Cannot launch locally: media UDP port {media}: EADDRINUSE.")
+    );
+    assert_eq!(udp.local_addr().unwrap().port(), media);
     assert!(f.events().is_empty());
+    drop(udp);
+
     for _ in 0..2 {
-        f.prepare(&["--skip-web"], &[], Platform::Other).unwrap();
+        let prepared = f.prepare(&["--skip-web"], &[], Platform::Other).unwrap();
+        assert!(prepared.is_some());
+        let http_probe = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).unwrap();
+        let media_probe = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, media)).unwrap();
+        drop(http_probe);
+        drop(media_probe);
     }
 }
 
