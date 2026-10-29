@@ -22,7 +22,7 @@ struct Pin {
     bytes: usize,
     sha: &'static str,
 }
-const PINS: [Pin; 7] = [
+const PINS: [Pin; 8] = [
     Pin {
         source: "ops/ansible/tests/test_release_playbook.py",
         relative: "ops/ansible/tests/test_release_playbook.py",
@@ -64,6 +64,12 @@ const PINS: [Pin; 7] = [
         relative: ".github/workflows/ci.yml",
         bytes: routing::WORKFLOW_BYTES,
         sha: routing::WORKFLOW_SHA256,
+    },
+    Pin {
+        source: "ops/ansible/tests/test_release_container_ci.py",
+        relative: "ops/ansible/tests/test_release_container_ci.py",
+        bytes: routing::CONTAINER_BYTES,
+        sha: routing::CONTAINER_SHA256,
     },
 ];
 #[derive(Clone, Eq, PartialEq)]
