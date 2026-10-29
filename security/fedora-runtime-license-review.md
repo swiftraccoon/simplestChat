@@ -1,5 +1,67 @@
 # Canonical runtime RPM license context review
 
+## util-linux-core 2.41.6 source/RPM assessment — 2026-10-29
+
+The exact `util-linux-core-2.41.6-1.fc44.x86_64` binary RPM and matching source
+RPM support the same license context as the retained 2.41.5 assessment. The
+[new evidence](license-evidence/fedora-util-linux-2.41.6-1.fc44.json) records
+this separate source/RPM review. The new ledger entry is a prospective exact
+scanner match for
+`pkg:rpm/fedora/util-linux-core@2.41.6-1.fc44?arch=x86_64&distro=fedora-44&upstream=util-linux-2.41.6-1.fc44.src.rpm`;
+it is supported by the inspected RPM identity, rather than a new canonical image
+observation. Owner `swiftraccoon` and expiry **2026-11-29** remain unchanged.
+
+The official read-only Koji response identifies successful
+[build 3125685](https://koji.fedoraproject.org/koji/buildinfo?buildID=3125685),
+completed 2026-10-22, and immutable Fedora dist-git commit
+`976ba3962840960381a9e0e3122613043a0ba44f`.
+[RPM 49196089](https://koji.fedoraproject.org/koji/rpminfo?rpmID=49196089)
+binds the x86_64 core output to that build. Its actual `LICENSE` header agrees
+with the core subpackage in the
+[exact spec](https://src.fedoraproject.org/rpms/util-linux/raw/976ba3962840960381a9e0e3122613043a0ba44f/f/util-linux.spec):
+`GPL-2.0-only AND GPL-2.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND BSD-4-Clause-UC AND LicenseRef-Fedora-Public-Domain`.
+The corresponding ordered-expression fingerprint remains
+`license:bb3f33b374637fdc1c0f31661b684339a87dd1dcb6096980313eb8ddaa14b0c5`.
+
+The spec applies ten source-RPM patches through `%autosetup -p1`. Review of all
+ten diffs found changes to libmount, fileutils, nsenter, login, wall, a build
+configuration and mount documentation. They do not change `COPYING`,
+`include/xalloc.h`, `lib/colors.c` or the license notices. The core subpackage
+continues to install `Documentation/licenses/*`. Its ten actual binary-RPM
+notice files match every path, byte count and SHA-256 in the earlier `N15` set,
+including the additional copied EUPL text. Their presence alone does not
+establish that a component bearing each copied license is shipped in this
+subpackage; the complete RPM aggregate remains preserved.
+
+The new source archive's `COPYING`, `include/xalloc.h` and `lib/colors.c` match
+the earlier `S055`–`S057` hashes exactly. The two helper files still state
+their public-domain/no-copyright context; `COPYING` retains GPL version 2.
+
+| Inspected input | SHA-256 |
+| --- | --- |
+| Binary RPM | `c43c4af8d24c649f205f3e7393082ec902f2edbd5207c0ea21cec87c56052c6e` |
+| Source RPM | `f08d25ec16a5cad34eb9fa0125311978e1278a3e4f64500e76f5a3c3dbb1e3b6` |
+| Source archive | `e596083744e746be7d2823b62b43f4418dd7bf56303b4dc09e6fe8112fe3d7ed` |
+| Spec | `ec9922eddb6d1d1c8b68d0fba539d29dbd2ad30ecf8ef778d8366b1943a85832` |
+| `COPYING` | `8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643` |
+| `include/xalloc.h` | `117ca39cba8d4465be1820f21f1f140c4f761d483120e7a7764bb2f106572438` |
+| `lib/colors.c` | `dca0d71e286cd7621132199257a87f91f76cad1361595b48a70049539c485450` |
+
+This inspection used retained primary-HTTPS metadata and payloads without
+executing package scripts or source code. It makes no independent detached RPM
+signature-verification claim. The immutable build identity and inspected bytes
+support this package-specific context; the URLs alone are insufficient.
+
+Before admitting a refreshed image, its actual inventory must independently
+provide the exact PURL and complete ordered declaration, and its bound runtime
+notice evidence must agree with the reviewed context. The automatic ledger
+matcher checks scanner, PURL and fingerprint. It does not compare the committed
+notice/source hashes; that comparison remains explicit review work. This
+assessment adds no globally allowed term and grants no vulnerability exception,
+image-security pass, runtime proof, signing result or release authorization.
+The valid 2.41.5 license-context row remains for immutable frozen reference
+tests and evidence; its presence does not waive the old package's CVE findings.
+
 ## Current vim 9.2.1202 assessment — 2026-10-19
 
 The canonical packages `vim-data` (noarch) and `vim-minimal` (x86_64) changed from

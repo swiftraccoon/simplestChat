@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "review": {
+    "date": "2026-10-29",
+    "owner": "swiftraccoon",
+    "expires": "2026-11-29",
+    "status": "exact-source-and-RPM-context-reviewed"
+  },
+  "scope": "Exact Fedora 44 x86_64 util-linux-core 2.41.6-1.fc44 source/RPM license context; this is not a rebuilt image observation or a vulnerability exception.",
+  "subject": {
+    "name": "util-linux-core",
+    "version": "2.41.6",
+    "release": "1.fc44",
+    "architecture": "x86_64",
+    "sourceRpm": "util-linux-2.41.6-1.fc44.src.rpm",
+    "orderedLicenseDeclaration": "GPL-2.0-only AND GPL-2.0-or-later AND BSD-2-Clause AND BSD-3-Clause AND BSD-4-Clause-UC AND LicenseRef-Fedora-Public-Domain",
+    "expectedScannerScope": "pkg:rpm/fedora/util-linux-core@2.41.6-1.fc44?arch=x86_64&distro=fedora-44&upstream=util-linux-2.41.6-1.fc44.src.rpm",
+    "expectedDeclarationFingerprint": "license:bb3f33b374637fdc1c0f31661b684339a87dd1dcb6096980313eb8ddaa14b0c5",
+    "scannerIdentityStatus": "Conditional exact matcher; no new image PURL or Syft record was observed for this source/RPM review."
+  },
+  "sourceAuthentication": {
+    "provider": "Primary HTTPS Koji API and Fedora package repository",
+    "kojiEndpoint": "https://koji.fedoraproject.org/kojihub",
+    "buildMethod": "getBuild",
+    "rpmMethod": "getRPM",
+    "headersMethod": "getRPMHeaders",
+    "buildId": 3125685,
+    "rpmId": 49196089,
+    "buildState": 1,
+    "buildNvr": "util-linux-2.41.6-1.fc44",
+    "fedoraSource": "git+https://src.fedoraproject.org/rpms/util-linux.git#976ba3962840960381a9e0e3122613043a0ba44f",
+    "completionTime": "2026-10-22 10:21:01.110085+00:00",
+    "buildResponseSha256": "ef5314fd3d285740bb4d85569844ae938047b89a2cb8488dbb87ec1cbf98301e",
+    "rpmResponseSha256": "f2229cc8ae7747c48a5e4280d356a8f42fb2de4154b1170c841be1e110b6d75d",
+    "rpmHeadersResponseSha256": "320d04c4aefa6dabcf621c95d70325de68cde9bd03f18ab54807204abf88c22b",
+    "limitations": "No independent detached RPM/source signature verification or image execution is claimed. No package script or downloaded source code was executed."
+  },
+  "artifacts": {
+    "binaryRpm": {
+      "url": "https://kojipkgs.fedoraproject.org/packages/util-linux/2.41.6/1.fc44/x86_64/util-linux-core-2.41.6-1.fc44.x86_64.rpm",
+      "bytes": 556248,
+      "sha256": "c43c4af8d24c649f205f3e7393082ec902f2edbd5207c0ea21cec87c56052c6e"
+    },
+    "sourceRpm": {
+      "url": "https://kojipkgs.fedoraproject.org/packages/util-linux/2.41.6/1.fc44/src/util-linux-2.41.6-1.fc44.src.rpm",
+      "bytes": 9543704,
+      "sha256": "f08d25ec16a5cad34eb9fa0125311978e1278a3e4f64500e76f5a3c3dbb1e3b6"
+    },
+    "includedUpstreamArchive": {
+      "sourceRpmMember": "util-linux-2.41.6.tar.xz",
+      "bytes": 9470680,
+      "sha256": "e596083744e746be7d2823b62b43f4418dd7bf56303b4dc09e6fe8112fe3d7ed",
+      "sha512": "db63574a6e854c1b56876a125631ca94fcca77067f5b59c293f1b06b7765eb5e284d3cb6d31d319d6f7e9f7070881321fa6b8cc11f3453281454e9943e477560"
+    },
+    "fedoraSpec": {
+      "sourceRpmMember": "util-linux.spec",
+      "bytes": 29753,
+      "sha256": "ec9922eddb6d1d1c8b68d0fba539d29dbd2ad30ecf8ef778d8366b1943a85832"
+    }
+  },
+  "previousEvidence": {
+    "path": "security/license-evidence/fedora-runtime-2026-09-30.json",
+    "sha256": "c6b3ad4a9a7d65b1f4472d2204b18ccc2be409851bbab38900fb5e0e9b8796fa",
+    "declaration": "D15",
+    "noticeSet": "N15",
+    "scope": "The earlier exact license context remains historical evidence; retaining its row does not waive vulnerabilities in an earlier package."
+  },
+  "sourceFiles": [
+    {
+      "path": "COPYING",
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "upstreamUrl": "https://raw.githubusercontent.com/util-linux/util-linux/v2.41.6/COPYING",
+      "sourceArchiveMember": "util-linux-2.41.6/COPYING",
+      "matchesPreviousSource": "S055"
+    },
+    {
+      "path": "include/xalloc.h",
+      "bytes": 3950,
+      "sha256": "117ca39cba8d4465be1820f21f1f140c4f761d483120e7a7764bb2f106572438",
+      "upstreamUrl": "https://raw.githubusercontent.com/util-linux/util-linux/v2.41.6/include/xalloc.h",
+      "sourceArchiveMember": "util-linux-2.41.6/include/xalloc.h",
+      "matchesPreviousSource": "S056"
+    },
+    {
+      "path": "lib/colors.c",
+      "bytes": 17920,
+      "sha256": "dca0d71e286cd7621132199257a87f91f76cad1361595b48a70049539c485450",
+      "upstreamUrl": "https://raw.githubusercontent.com/util-linux/util-linux/v2.41.6/lib/colors.c",
+      "sourceArchiveMember": "util-linux-2.41.6/lib/colors.c",
+      "matchesPreviousSource": "S057"
+    }
+  ],
+  "noticeFiles": [
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.BSD-2-Clause",
+      "bytes": 1245,
+      "sha256": "527f738966ca396cd5a68c1509390de2a780c6b614d9ee57f7544a6161938ed1",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.BSD-3-Clause",
+      "bytes": 1391,
+      "sha256": "9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.BSD-4-Clause-UC",
+      "bytes": 1824,
+      "sha256": "ba7640f00d93e72e92b94b9d71f25ec53bac2f1682f5c4adcccb0018359f60f8",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.EUPL-1.2",
+      "bytes": 13827,
+      "sha256": "6fc9e709ccbfe0d77fbffa2427a983282be2eb88e47b1cdb49f21a83b4d1e665",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.GPL-2.0-only",
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.GPL-2.0-or-later",
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.GPL-3.0-or-later",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.ISC",
+      "bytes": 697,
+      "sha256": "e53348ce276358e9997014071c5294b36a18c4b34f32f00ee57b9acce0aafd63",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.LGPL-2.1-or-later",
+      "bytes": 26530,
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    },
+    {
+      "path": "/usr/share/licenses/util-linux-core/COPYING.MIT",
+      "bytes": 1054,
+      "sha256": "8555341619542abb48c102afd954e42d4478e5be16ad3d5af7b0ff71009e7348",
+      "matchesPreviousN15": true,
+      "matchesRpmHeaderDigest": true,
+      "rpmMode": 33188,
+      "rpmFlags": 128
+    }
+  ],
+  "fedoraPatches": [
+    {
+      "file": "0000-libmount-add-missing-fileutils.h-include-to-hook_idm.patch",
+      "sha256": "632f72c2e154c530f470e197f863f885cbb895778dcd7684014e1903e9ceac44",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0001-nsenter-close-cgroup.procs-fd-after-join-to-prevent-.patch",
+      "sha256": "cdf75ee21818dadd11f00b819a2468070f158114401f0789ca23bdd318ff57bd",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0002-lib-fileutils-fix-unused-parameter-warnings-without-.patch",
+      "sha256": "2181860dc1cb0000a845011b3b8a1f0762b5774487b39a7183b4074fe19b15b8",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0003-libmount-use-USE_LIBMOUNT_MOUNTFD_SUPPORT-for-idmap-.patch",
+      "sha256": "f6b90bf29da834e2c27caf362723ef5d0b124351dcb5c61212193986593c8130",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0004-tools-add-non-newmount.conf-config-gen-profile.patch",
+      "sha256": "c33cefb14d55f96b2e7f6f27b3cacf8cda48198059d1b13d684c2cb94daac273",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0005-lib-fileutils-fix-RESOLVE_NO_SYMLINKS-fallback-value.patch",
+      "sha256": "6d20c5c860e0b9624cfcc8dfd9e8ac438470b4e6a0231e33eda36b9858dcabac",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0006-wall-fix-off-by-one-in-is_gr_member-group-matching.patch",
+      "sha256": "b0b72f28a66c0ddefdd3ba9a514f068e86a77492112a8b6fc53e55e846ce2de1",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0007-login-use-O_CREAT-on-lastlog.patch",
+      "sha256": "36accf521116cf74c07b13ae1740ac79b2204213f2ad73b421c43481d3bd025e",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0008-login-add-run-motd.d-to-the-hardcoded-MOTD_FILE.patch",
+      "sha256": "4ada201dcbdf8a782a131ef932c771c59531a0b0e03489f39d2ad166850762cb",
+      "criticalLicenseContextTouched": false
+    },
+    {
+      "file": "0009-libmount-disable-EROFS-backing-file-support.patch",
+      "sha256": "18279838c1043ccdd7b39d48687d4523ed1e0178f03515be0f61552f49a88aba",
+      "criticalLicenseContextTouched": false
+    }
+  ],
+  "assessment": {
+    "declarationUnchanged": true,
+    "allTenNoticeBytesUnchanged": true,
+    "reviewedHelperBytesUnchanged": true,
+    "patchesChangeReviewedLicenseContext": false,
+    "context": "include/xalloc.h and lib/colors.c retain the exact previously reviewed public-domain/no-copyright statements. Preserve the complete RPM license declaration and all ten copied notices. Copied EUPL or other texts do not alone establish that a corresponding component ships in this subpackage."
+  },
+  "requiredImageVerification": [
+    "Observe the actual rebuilt image, exact RPM PURL/source RPM and complete ordered scanner declaration.",
+    "Compare the installed ten notice files with this reviewed RPM evidence; a declaration fingerprint alone is not a notice allowlist.",
+    "Audit any other package or notice changes caused by the Fedora refresh.",
+    "Require the same exported image to pass vulnerability, license, secret, ELF and runtime checks. This context record provides no CVE waiver."
+  ]
+}
