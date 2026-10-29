@@ -392,3 +392,15 @@ observed grants failure.
 The baseline app readiness call also uses the frozen 45-second cap instead of
 the adapter's 120-second local allowance. This narrows that phase without changing
 the original setup clock or the separate continuity profile.
+
+The third signed trial completed baseline and positive deployment, then exposed
+an unsuccessful native rollback. `C-GOOD-ERR`, `C-FAILURE` and `C-RW-VALUE` apply
+to separating a command's current result from the operation owner's retained
+first failure. The shared process completion remains cumulative; the deploy
+adapter must independently establish recovery command closure and fresh failure
+observations before accepting that command. A successful recovery command never
+clears the original operation failure. Inert tests execute the real native
+adapter and process owner; source or fixture success remains distinct from signed
+rollback qualification. The [third trial record](release-deploy-runtime-proof.md#third-signed-rust-trial-positive-deployment-passes-rollback-is-refused)
+retains actual positive and negative facts without inferring the unexported raw
+stop status from a cumulative executor error.

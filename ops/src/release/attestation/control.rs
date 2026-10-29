@@ -309,6 +309,19 @@ impl Owner {
     pub fn error(&self) -> Option<Cause> {
         self.primary
     }
+    /// Sample the original sticky signal flags without consuming an observation.
+    /// INT takes precedence over TERM. This neither changes the first cause nor
+    /// registers, clears or transfers signal custody; recovery adapters use it
+    /// when an earlier poll already consumed the pending notification.
+    pub fn signal_cause(&self) -> Option<Cause> {
+        self.signals.status().map(|status| {
+            if status == 130 {
+                Cause::Interrupt
+            } else {
+                Cause::Terminate
+            }
+        })
+    }
     pub fn check(&mut self, window: Window) -> Result<()> {
         if self.primary.is_none() {
             if let Some(signal) = self.signals.pending_now() {

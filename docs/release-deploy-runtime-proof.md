@@ -468,3 +468,47 @@ an observed grants failure. Fresh signed qualification remains required.
 The same parity review restores the baseline app readiness cap from the new
 adapter's 120 seconds to the frozen fixture's 45 seconds; the original total
 setup clock and the separate 15-second continuity observation remain unchanged.
+
+## Third signed Rust trial: positive deployment passes, rollback is refused
+
+[40831869765 / attempt 1](https://github.com/swiftraccoon/simplestChat/actions/runs/40831869765)
+used `5225522dc3f2d8f320333a3d7774c544364658ae`, successful full CI
+`40829920831 / attempt 1`, signed Ops artifact `12879166495` and current server
+artifact `12878288667`. Its explicit previous selection remained revision
+`67e6b3b476541d90cf044593063406de5084edd4`, CI `40806549629 / attempt 1`,
+server artifact `12868269710`. All 33 prerequisite cases, authentication roles
+6/8/8 and metadata pairs 2/2 passed. Baseline preparation completed in 26.108
+seconds; the A-to-B trial passed with native exit zero in 16.934 seconds. Its
+retained dump was listed, without a restore rehearsal, and its admitted actor
+history included both validators and both asset captures. This partial success
+does not qualify the complete fixture.
+
+The negative trial observed native exit one, `replace_application` phase and a
+`readiness` failure. Both independently decoded stdout and outcome reported
+rollback attempted but unsuccessful, with the same typed diagnostic:
+`stage=stop`, `boundary=executor`, `cause=policy`, `logOrdinal=100`. The fixture
+retained those facts before its ordinary successful-negative report validation
+refused the extra failed-rollback diagnostic. That downstream input refusal does
+not erase or explain away the native rollback failure.
+
+Source review found that the shared process completion deliberately carries the
+operation owner's first failure. The deploy executor used that cumulative result
+as each individual command's result, including recovery commands after readiness
+had already recorded `Policy`. It therefore re-reported that original failure at
+the rollback executor boundary even if a recovery command itself succeeded. The
+public capture does not expose that stop command's raw exit, so it does not prove
+a new policy refusal or a nonzero Docker stop. The correction separates command
+completion from the inherited operation failure while retaining every fresh
+process, stream, close, deadline and signal check. The original failure remains
+authoritative for the whole failed deployment. Shared completion semantics and
+the ordinary negative-report success requirements remain unchanged.
+
+The SSH session's raw status was one, with complete group, reaping, stream, EOF
+and close outcomes. Both VM epochs recorded QEMU exit zero and complete QMP,
+drainer, stream and close outcomes. Whole `passed` and `cleanupPassed` remain
+false. Summary artifact `12879860372` had ZIP SHA256
+`cc3bd9897c1bc90e6ec0afefe94dd839c55a99f9e656d3874a5759dca247d0fd`,
+checked against fresh API size and digest before parsing; the summary SHA256 is
+`8af40f6451905d50d279ba8b0c6cc3ca5a43b423b903372431d6b84ff08bf26d`.
+Fresh signed execution must qualify rollback after the correction. No production
+operation was performed.
