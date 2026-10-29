@@ -484,6 +484,7 @@ impl State {
         self.mark("sources");
         sources::prepare(ctx).await?;
         ctx.commands.admit_lookup("mount", &mut ctx.control)?;
+        ctx.commands.admit_lookup("nsenter", &mut ctx.control)?;
         self.mark("payload");
         self.payloads = Some(payload::prepare(ctx, &self.request)?);
         let old_path = Path::new(PUBLIC)
