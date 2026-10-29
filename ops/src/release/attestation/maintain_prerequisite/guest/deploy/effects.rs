@@ -6,6 +6,8 @@ use super::super::deploy::{payload, validation};
 use super::*;
 use serde_json::json;
 
+#[path = "grants.rs"]
+mod grants;
 #[path = "readiness.rs"]
 mod readiness;
 
@@ -316,15 +318,7 @@ impl Fixture {
         )?;
         self.actors.insert(id.clone());
         readiness::complete(self, ctx, &id, &image).await?;
-        let path = Path::new(CONFIG).join("runtime-grants.sql");
-        let source = ctx
-            .originals
-            .iter()
-            .find(|original| original.path == path)
-            .ok_or(Error::Input)?;
-        let grants = source.data(1024 * 1024, &mut ctx.control)?;
-        let grants = std::str::from_utf8(&grants).map_err(|_| Error::Refused)?;
-        self.sql(ctx, "deploy-runtime-grants", grants).await?;
+        grants::apply(self, ctx).await?;
         self.sql(
             ctx,
             "deploy-marker-create",
@@ -369,7 +363,7 @@ impl Fixture {
         .await?;
         let (app, _) = self.service(ctx, "simplestchat", &image).await?;
         self.app = Some(app.clone());
-        self.deploy_ready(ctx, 120).await?;
+        self.deploy_ready(ctx, 45).await?;
         let dependencies = self.deploy_dependencies(ctx).await?;
         let seed = self
             .sql(
