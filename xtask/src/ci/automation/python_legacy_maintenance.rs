@@ -1,4 +1,4 @@
-//! One byte-pinned old YAML contract, executed by its unchanged Python class.
+//! Byte-pinned old YAML contracts, executed by unchanged Python tests.
 //! The existing shard Control owns every deadline and final signal observation.
 //! Copies are data custody, not retained-FD Python execution or same-UID isolation.
 #[path = "python_legacy_maintenance/routing.rs"]
@@ -22,7 +22,7 @@ struct Pin {
     bytes: usize,
     sha: &'static str,
 }
-const PINS: [Pin; 3] = [
+const PINS: [Pin; 7] = [
     Pin {
         source: "ops/ansible/tests/test_release_playbook.py",
         relative: "ops/ansible/tests/test_release_playbook.py",
@@ -40,6 +40,30 @@ const PINS: [Pin; 3] = [
         relative: "ops/ansible/tasks/source.yml",
         bytes: routing::OLD_SOURCE_BYTES,
         sha: routing::OLD_SOURCE_SHA256,
+    },
+    Pin {
+        source: "ops/ansible/tests/test_python_quality.py",
+        relative: "ops/ansible/tests/test_python_quality.py",
+        bytes: routing::QUALITY_BYTES,
+        sha: routing::QUALITY_SHA256,
+    },
+    Pin {
+        source: "ops/ansible/tests/test_ci_verified.py",
+        relative: "ops/ansible/tests/test_ci_verified.py",
+        bytes: routing::VERIFIED_BYTES,
+        sha: routing::VERIFIED_SHA256,
+    },
+    Pin {
+        source: "ops/ansible/tests/test_support.py",
+        relative: "ops/ansible/tests/test_support.py",
+        bytes: routing::SUPPORT_BYTES,
+        sha: routing::SUPPORT_SHA256,
+    },
+    Pin {
+        source: "xtask/src/ci/automation/reference/ci-python.yml",
+        relative: ".github/workflows/ci.yml",
+        bytes: routing::WORKFLOW_BYTES,
+        sha: routing::WORKFLOW_SHA256,
     },
 ];
 #[derive(Clone, Eq, PartialEq)]
@@ -251,6 +275,9 @@ impl LegacyMaintenance {
             "ops/ansible",
             "ops/ansible/tests",
             "ops/ansible/tasks",
+            ".github",
+            ".github/workflows",
+            "results",
         ] {
             self.directory(path.join(name), control)?;
         }

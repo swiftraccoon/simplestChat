@@ -11,6 +11,8 @@ mod maintenance_caller_tests;
 mod python_captures;
 mod python_inventory;
 mod python_shards;
+#[cfg(test)]
+mod workflow_contract_tests;
 
 const PLAYBOOKS: [&str; 10] = [
     "site.yml",
