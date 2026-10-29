@@ -1,5 +1,51 @@
 # Fedora RPM database secret findings
 
+## Two regions after the October 29 RPM refresh — 2026-10-29
+
+The rebuilt runtime image in
+[CI run 40845018289](https://github.com/swiftraccoon/simplestChat/actions/runs/40845018289)
+(revision `8ceb61a62e9861058bb5e9703a3853ada473b409`) passed vulnerability and
+license checks but failed on two new complete 62-byte `generic-api-key` regions
+in `001/usr/lib/sysimage/rpm/rpmdb.sqlite`. Three previously reviewed RPM regions
+recur. The [new evidence](secret-evidence/fedora-rpm-2026-10-29.json) supports only
+the two newly added exact records. Owner `swiftraccoon` and expiry
+**2026-11-29** remain unchanged; prior exact records retain their historical
+contexts.
+
+This review examines the canonical database directly. The opt-in Rust owner
+encrypted only that retained file with OpenSSL CMS AES-256-GCM and RSA-OAEP with
+SHA-256. The encrypted artifact's GitHub API length and digest were checked
+before ZIP parsing. Its manifest joins the revision, run, public recipient,
+ciphertext and decrypted database hashes. The private key stayed outside GitHub;
+the temporary public-certificate variable was removed and its absence confirmed.
+The complete regenerated ASCII projection equals the canonical scanner input,
+and pinned fragment framing resolves each complete reported region uniquely by
+coordinates, length and SHA-256. No local image rebuild or detector rerun is
+claimed.
+
+Both regions occupy `Basenames_key_idx` page 1824. Each contains 28 public
+filename bytes and two serialized row-identifier bytes from a live index record,
+then four decoded freeblock-header bytes and 28 surviving filename bytes from
+a freed cell. The surviving bytes equal that live filename exactly. Live
+row identifiers 26924 and 26942 join package 162, file indexes 126 and 144,
+under `fedora-gpg-keys` **44-2/noarch**, matching the canonical package inventory.
+Each filename and complete path independently agrees with live records in the
+previously authenticated, rehashed immutable Fedora base database. That base
+contains **44-1/noarch**; equal filename/path bytes do not imply equal package
+versions. SQLite integrity checks passed for both databases, and page bounds,
+cell/freeblock ownership and every covered byte were checked independently.
+The interpretation follows SQLite's
+[index representation](https://www.sqlite.org/fileformat.html#representation_of_sql_indices)
+and [freeblock format](https://www.sqlite.org/fileformat.html#b_tree_pages), with
+the public filenames owned by Fedora's
+[RPM signing-key package](https://packages.fedoraproject.org/pkgs/fedora-repos/fedora-gpg-keys/).
+
+No raw candidate, database or private-key bytes are published. These are exact
+public-data classifications, with the complete metadata bytes included in each
+match digest. A changed path, rule, format, region or additional finding remains
+blocking. The observed image scan failed and CI contains required failures; a
+fresh complete image gate and CI must pass before signing or deployment.
+
 ## Two regions after the vim 9.2.1202 refresh — 2026-10-19
 
 When the runtime package layer was rebuilt from the Fedora 44 repositories
