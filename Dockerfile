@@ -4,7 +4,7 @@ ARG FEDORA_REFRESH_EPOCH=2026-10-29
 
 # Node builds the frontend and projects image reviews; it is never deployed.
 # Pin the latest stable Current release and its verified multi-arch manifest.
-FROM docker.io/library/node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS image-review-inputs
+FROM docker.io/library/node:26.11.1-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS image-review-inputs
 COPY security/exceptions.json /reviews.json
 # Only image-relevant reviews invalidate package layers. The complete current
 # policy is still validated by the independent image audit on every release.
@@ -24,7 +24,7 @@ const records = policy.exceptions.filter(row => scanners.has(row.scanner))
 writeFileSync(output, JSON.stringify({ schemaVersion: 1, exceptions: records }) + '\n', { mode: 0o644 });
 IMAGE_REVIEWS
 
-FROM docker.io/library/node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS web-builder
+FROM docker.io/library/node:26.11.1-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS web-builder
 COPY build/install-npm.mjs /usr/local/lib/install-simplestchat-npm.mjs
 RUN node /usr/local/lib/install-simplestchat-npm.mjs /opt/npm-12.2.0
 ENV PATH="/opt/npm-12.2.0/bin:${PATH}"
