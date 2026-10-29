@@ -2,7 +2,8 @@
 
 use super::Scope;
 
-pub(super) const SCOPES: &[&str] = &[
+// These nine scopes retain byte-for-byte comparison with the frozen Python reference.
+pub(super) const REFERENCE_SCOPES: &[&str] = &[
     "automation",
     "rust-lint",
     "rust-test",
@@ -15,6 +16,50 @@ pub(super) const SCOPES: &[&str] = &[
 ];
 
 pub(super) const BINARIES: &[&str] = &["simplestChat", "load_test"];
+
+// Rust-only app/load artifacts. Unrelated Ops and xtask implementations are not
+// inputs to these packages; current cache-policy execution remains explicitly keyed.
+pub(super) const BROWSER_BACKEND_PREFIXES: &[&str] = &[
+    "src/",
+    "load_tests/",
+    "migrations/",
+    "vendor/",
+    ".cargo/",
+    "security/authorization/",
+];
+pub(super) const BROWSER_BACKEND_FILES: &[&str] = &[
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+    "ops/Cargo.toml",
+    "xtask/Cargo.toml",
+    "xtask/src/main.rs",
+    "xtask/src/ci/mod.rs",
+    "xtask/src/ci/inputs.rs",
+    "xtask/src/ci/fingerprint.rs",
+    "xtask/src/ci/receipts.rs",
+    "xtask/src/ci/io.rs",
+    "xtask/src/ci/github_output.rs",
+    ".github/actions/native-toolchain/action.yml",
+    ".github/workflows/ci.yml",
+    "build/install-openssl.sh",
+    "build/install-aws-lc.sh",
+    "build/pip-constraints.txt",
+];
+
+pub(super) fn backend_artifact_input(scope: Scope, name: &str) -> bool {
+    match scope {
+        Scope::Backend => backend_input(name),
+        Scope::BrowserBackend => {
+            BROWSER_BACKEND_PREFIXES
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+                || BROWSER_BACKEND_FILES.contains(&name)
+        }
+        _ => false,
+    }
+}
 
 pub(super) const NATIVE_PREFIXES: &[&str] = &["vendor/", "security/native/"];
 
@@ -225,6 +270,9 @@ fn independent_helper_or_guide(name: &str) -> bool {
 }
 
 pub(super) fn selected(scope: Scope, name: &str) -> bool {
+    if scope == Scope::BrowserBackend {
+        return backend_artifact_input(scope, name);
+    }
     if scope.native() && !native_security_input(name) {
         return false;
     }

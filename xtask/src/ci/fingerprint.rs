@@ -150,7 +150,7 @@ pub(super) fn key(context: &Context, scope: Scope) -> Result<String> {
     ]);
     let mut hashed = Sha256::new();
     hashed.update(io::json_object(&identity).as_bytes());
-    if scope == Scope::Backend {
+    if scope.binary_reuse() {
         hashed.update(io::json_object(&backend_environment(context)?).as_bytes());
     }
     let tracked = context.tracked(true)?;
@@ -183,7 +183,7 @@ pub(super) fn key(context: &Context, scope: Scope) -> Result<String> {
             !path.is_symlink() && path.is_file(),
             "ci_cache_source_missing",
         )?;
-        let content = if scope == Scope::Backend && name == ".github/workflows/ci.yml" {
+        let content = if scope.binary_reuse() && name == ".github/workflows/ci.yml" {
             io::sha256(&backend_workflow(&path)?)
         } else {
             io::digest(&path)?

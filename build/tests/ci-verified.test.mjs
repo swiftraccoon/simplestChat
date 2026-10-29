@@ -137,7 +137,13 @@ test('CI CLI validates the complete restored receipt before acknowledging reuse'
 
 test('CI key appends the same fixed output for each workflow scope without stdout or shell expansion', (t) => {
   const f = fixture(t);
-  for (const scope of ['automation', 'rust-lint', 'rust-test', 'backend']) {
+  for (const scope of [
+    'automation',
+    'rust-lint',
+    'rust-test',
+    'backend',
+    'browser-backend',
+  ]) {
     const key = f.run(['key', '--scope', scope]);
     assert.equal(key.status, 0, key.stderr);
     const filename = path.join(f.root, `output ${scope} $(touch unowned); literal`);

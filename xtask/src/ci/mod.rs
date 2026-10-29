@@ -87,6 +87,7 @@ pub(super) enum Scope {
     RustLint,
     RustTest,
     Backend,
+    BrowserBackend,
     NativeAsan,
     NativeUbsan,
     NativeReplay,
@@ -96,7 +97,7 @@ pub(super) enum Scope {
 
 impl Scope {
     fn parse(value: &str) -> Option<Self> {
-        if !inputs::SCOPES.contains(&value) {
+        if value != "browser-backend" && !inputs::REFERENCE_SCOPES.contains(&value) {
             return None;
         }
         Some(match value {
@@ -104,6 +105,7 @@ impl Scope {
             "rust-lint" => Self::RustLint,
             "rust-test" => Self::RustTest,
             "backend" => Self::Backend,
+            "browser-backend" => Self::BrowserBackend,
             "native-asan" => Self::NativeAsan,
             "native-ubsan" => Self::NativeUbsan,
             "native-replay" => Self::NativeReplay,
@@ -119,12 +121,17 @@ impl Scope {
             Self::RustLint => "rust-lint",
             Self::RustTest => "rust-test",
             Self::Backend => "backend",
+            Self::BrowserBackend => "browser-backend",
             Self::NativeAsan => "native-asan",
             Self::NativeUbsan => "native-ubsan",
             Self::NativeReplay => "native-replay",
             Self::CodeqlNative => "codeql-native",
             Self::CodeqlRust => "codeql-rust",
         }
+    }
+
+    fn binary_reuse(self) -> bool {
+        matches!(self, Self::Backend | Self::BrowserBackend)
     }
 
     fn native(self) -> bool {

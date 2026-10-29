@@ -57,7 +57,13 @@ fn words(source: &str) -> Result<Vec<String>> {
     Ok(tokens)
 }
 
-fn dependencies(context: &Context, directory: &Path, name: &str, built: bool) -> Result<()> {
+fn dependencies(
+    context: &Context,
+    scope: Scope,
+    directory: &Path,
+    name: &str,
+    built: bool,
+) -> Result<()> {
     let source = io::bounded(&directory.join(format!("{name}.d")), 4 * 1024 * 1024)?;
     let words = words(std::str::from_utf8(&source)?)?;
     let expected = format!(
@@ -119,7 +125,10 @@ fn dependencies(context: &Context, directory: &Path, name: &str, built: bool) ->
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("ci_backend_dep_external"))?;
         if tracked.contains(relative) {
-            require(inputs::backend_input(relative), "ci_backend_dep_unkeyed")?;
+            require(
+                inputs::backend_artifact_input(scope, relative),
+                "ci_backend_dep_unkeyed",
+            )?;
             require(path.is_file(), "ci_backend_dep_missing")?;
             sources += 1;
         } else if path.is_dir() && (relative == "vendor" || relative.starts_with("vendor/")) {
@@ -129,7 +138,10 @@ fn dependencies(context: &Context, directory: &Path, name: &str, built: bool) ->
                 .filter(|name| name.starts_with(&prefix))
                 .collect::<Vec<_>>();
             require(
-                !children.is_empty() && children.iter().all(|name| inputs::backend_input(name)),
+                !children.is_empty()
+                    && children
+                        .iter()
+                        .all(|name| inputs::backend_artifact_input(scope, name)),
                 "ci_backend_dep_tree",
             )?;
         } else {
@@ -208,14 +220,14 @@ pub(super) fn save(context: &Context, scope: Scope, key: &str, directory: &Path)
         "ci_cache_revision",
     )?;
     let output = context.root.join("target/debug");
-    if scope == Scope::Backend {
+    if scope.binary_reuse() {
         for name in inputs::BINARIES {
-            dependencies(context, &output, name, true)?;
+            dependencies(context, scope, &output, name, true)?;
         }
     }
     private_directory(directory)?;
     let mut artifacts = Vec::new();
-    if scope == Scope::Backend {
+    if scope.binary_reuse() {
         for name in names() {
             let source = output.join(&name);
             artifacts.push(format!(
@@ -275,7 +287,7 @@ pub(super) fn verify(
         "ci_cache_receipt_identity",
     )?;
     let revision = revision(&receipt["revision"])?;
-    let names = if scope == Scope::Backend {
+    let names = if scope.binary_reuse() {
         names()
     } else {
         Vec::new()
@@ -288,9 +300,9 @@ pub(super) fn verify(
             "ci_cache_binary_changed",
         )?;
     }
-    if scope == Scope::Backend {
+    if scope.binary_reuse() {
         for name in inputs::BINARIES {
-            dependencies(context, directory, name, false)?;
+            dependencies(context, scope, directory, name, false)?;
         }
         for name in inputs::BINARIES {
             let destination = context.root.join("target/debug").join(name);
