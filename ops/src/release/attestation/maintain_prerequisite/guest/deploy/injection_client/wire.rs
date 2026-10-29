@@ -130,7 +130,7 @@ pub(super) fn receipt_value(
 ) -> Result<()> {
     require(raw.len() <= FRAME && out.len() <= STREAM && err.len() <= STREAM)?;
     require(hash(raw) == expected)?;
-    let value = decode(&raw)?;
+    let value = decode(raw)?;
     exact(
         &value,
         &[
