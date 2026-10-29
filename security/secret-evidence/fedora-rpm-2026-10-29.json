@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-10-29",
+  "matchFormat": "gitleaks-8.30.1-projection-match",
+  "canonicalRevision": "8ceb61a62e9861058bb5e9703a3853ada473b409",
+  "canonicalImageId": "sha256:d8405d5cc165f06f1df81adee3ea27111daab83d713109e007b0e1f532206e58",
+  "canonicalArchiveSha256": "a763c920542f0b7b48cef649a90035501449c286c342ede110ab8c93ce3e6d4a",
+  "canonicalImagePassed": false,
+  "artifact": {
+    "id": 12885256290,
+    "ciRunId": 40845018289,
+    "runAttempt": 1,
+    "zipBytes": 1809963,
+    "zipSha256": "60e76c80c9ad38051f756d57b13d036d90221566abc67bd9aaadd60c5beda573",
+    "zipDigestMatchesGithubApi": true,
+    "url": "https://github.com/swiftraccoon/simplestChat/actions/runs/40845018289/artifacts/12885256290"
+  },
+  "canonicalReports": [
+    {
+      "path": "outcome.json",
+      "sha256": "6583a38749d4c8bec78b2881fca81224061f4e02a52a8eef2ad260ca02946f82"
+    },
+    {
+      "path": "checks.json",
+      "sha256": "b245af4c203629151213c41648fb1e570cd7826a037ae5b5809ed855f58d9db0"
+    },
+    {
+      "path": "secret-paths.json",
+      "sha256": "528a54f53fda97ce3f1c8fff43523074d64a80c7e30b75118340011b5ee48520"
+    },
+    {
+      "path": "sbom/sbom.syft.json",
+      "sha256": "78ca2a02f2a59589a7559ed28d6e224ce06bb7e5ccd20bf80126110da1e2ce17"
+    },
+    {
+      "path": "runtime-license-evidence.json",
+      "sha256": "f38744c3fd9ee60c226d41e9cf60976843243ef267723a000295a1325ee920c2"
+    }
+  ],
+  "file": {
+    "neutralName": "content-003927",
+    "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+    "projectionBytes": 9691246,
+    "projectionFormat": "ascii-printable",
+    "projectionSha256": "227c34d96e86072bd011d23538df54deb2bb30d333657e8f9148c31e72a6bdf9",
+    "sha256": "2e305e723f8570b2f875ce204707dd32279861ad224313a721634072d2384b0d",
+    "sourceBytes": 9658368
+  },
+  "package": {
+    "name": "fedora-gpg-keys",
+    "version": "44-2",
+    "architecture": "noarch",
+    "type": "rpm",
+    "purl": "pkg:rpm/fedora/fedora-gpg-keys@44-2?arch=noarch&distro=fedora-44&upstream=fedora-repos-44-2.src.rpm"
+  },
+  "trigger": {
+    "description": "The rebuilt runtime RPM database after the October 29 Fedora refresh produced two new complete regions at the existing path; three previously reviewed RPM regions recur. Only the two newly proved regions are added to the ledger.",
+    "recurringReviewedFingerprints": [
+      "image-match:3126abb26c2adac0d96b381546b424f003bdfbd0279685874c637e76bebed294",
+      "image-match:61937b657d1400ca48c69f80ff380abb1c0ec5f0d8e01b5399fbd5187a5a2d18",
+      "image-match:8151be4ea07844ef88e1ed64c3fb599452bca5db2e923a848c39b65bcbfa2cd5"
+    ]
+  },
+  "directDatabaseEvidence": {
+    "encryptedArtifact": {
+      "id": 12885565431,
+      "ciRunId": 40845018289,
+      "runAttempt": 1,
+      "zipBytes": 9659654,
+      "zipSha256": "6b02b97f7945bca506aac97cbdd395ad0005ebeebc8705dc78db07cc8513d363",
+      "zipDigestMatchesGithubApi": true,
+      "url": "https://github.com/swiftraccoon/simplestChat/actions/runs/40845018289/artifacts/12885565431"
+    },
+    "manifest": {
+      "schemaVersion": 1,
+      "revision": "8ceb61a62e9861058bb5e9703a3853ada473b409",
+      "runId": 40845018289,
+      "runAttempt": 1,
+      "recipientSha256": "58e93718d5675a275193f4216a5e0b0bb349fdb4fd3bc88f120ad9f2069eeebc",
+      "inputSha256": "2e305e723f8570b2f875ce204707dd32279861ad224313a721634072d2384b0d",
+      "inputBytes": 9658368,
+      "ciphertextSha256": "952c5eb6e526ca1ac1362ffa56427db6d9dadeb9da7f743fd78824ab7ed1c89d",
+      "ciphertextBytes": 9658989
+    },
+    "method": "Retained canonical database encrypted by the bounded Rust owner using OpenSSL CMS AES-256-GCM/RSA-OAEP-SHA256, then privately decrypted with the operator-held key. API ZIP length/digest verified before parsing; ciphertext, recipient, revision, run and plaintext hashes joined. No database replay or detector rerun.",
+    "privateKeyUploaded": false,
+    "temporaryPublicRecipientVariableRemoved": true,
+    "completeProjectionTranslationVerified": true,
+    "projectionPrefixBytes": 32878,
+    "frozenProjectionSourceSha256": "de5343a3df952911f0ba6a17c445251909629f851014065c261c4e2e33f9975c",
+    "frozenSpansSourceSha256": "53829f2c784fcceef25f0d8dbc742da72230ba93a6d5f128b58ab1030e804e5f",
+    "sqliteQuickChecks": {
+      "current": "ok",
+      "base": "ok"
+    },
+    "allRegionsUniquelyResolvedWithPinnedFragmentFraming": true,
+    "independentStructuralAndRootChecksPassed": true
+  },
+  "baseProvenance": {
+    "baseIndex": "sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80",
+    "baseLayer": "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+    "baseDatabaseSha256": "93e5a50049dd109d2a3cc0b8d973897d4c4f511f0fb8c4a607daa72c303c0db6",
+    "currentDockerfileUsesSameBaseIndex": true,
+    "basePackage": "fedora-gpg-keys",
+    "basePackageVersion": "44-1",
+    "currentPackageVersion": "44-2",
+    "scope": "Previously authenticated immutable-base database rehashed and integrity checked. Each current filename and full path separately agrees with actual base live records; current package 44-2 and base package 44-1 are explicitly distinct.",
+    "historicalEvidence": "security/secret-evidence/fedora-rpm-2026-10-19.json",
+    "historicalEvidenceSha256": "5c6ddaaa296470b4e7b6761ff48cc97c102132c7203108180baa0b1fd8ef2ebe"
+  },
+  "findings": [
+    {
+      "fingerprint": "image-match:def870c113a9bac23cd32643d5a7fa6ed7436782a3a26f2961f078591d5ece50",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 30,
+        "endLine": 2656271,
+        "fileSha256": "2e305e723f8570b2f875ce204707dd32279861ad224313a721634072d2384b0d",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "227c34d96e86072bd011d23538df54deb2bb30d333657e8f9148c31e72a6bdf9",
+        "rule": "generic-api-key",
+        "spanBytes": 62,
+        "spanSha256": "bce9c0232172f48bfb850e685814459519e5310b36384b0a2aa6017fa579ed39",
+        "startColumn": 2,
+        "startLine": 2656268,
+        "status": "resolved"
+      },
+      "uniqueCandidateCount": 1,
+      "projectionOffset": 7500708,
+      "rawOffset": 7467830,
+      "rawBytes": 62,
+      "rawSha256": "400e808d2353c75933758d785d57ab7cd5f66daaa0628d9060d3ba3e6a07a86c",
+      "page": 1824,
+      "pageSize": 4096,
+      "btree": "Basenames_key_idx",
+      "table": "Basenames",
+      "byteCoverage": {
+        "value0": 28,
+        "value1": 2,
+        "freeblockHeader": 4,
+        "freeblockContent": 28
+      },
+      "coveredSourceBytes": 62,
+      "liveRecords": [
+        {
+          "cell": 3,
+          "recordOffset": 7467826,
+          "recordBytes": 34,
+          "recordSha256": "95e6544740ce6aa924a13c6eec70d229a924435e3718558bba2e0d12c83d5179",
+          "overlapOffset": 0,
+          "overlapBytes": 30,
+          "payloadVarintBytes": 1,
+          "recordHeaderBytes": 3,
+          "serialTypes": [
+            69,
+            2
+          ],
+          "filenameOffset": 7467830,
+          "filenameBytes": 28,
+          "filenameSha256": "7ae44e5115c6f1cdcd8cf14746d5d4113646c675891d17fc4044182779621dc0",
+          "rowid": 26924,
+          "rowidBytes": 2,
+          "hnum": 162,
+          "fileIndex": 126,
+          "package": "fedora-gpg-keys",
+          "packageVersion": "44-2",
+          "architecture": "noarch",
+          "packagePurl": "pkg:rpm/fedora/fedora-gpg-keys@44-2?arch=noarch&distro=fedora-44&upstream=fedora-repos-44-2.src.rpm",
+          "canonicalPathSha256": "d1e4de099ad28f048b8ffee46a7dfc85cd863e40e02b8e32eeb7496e82de3f0c",
+          "baseLiveRecords": [
+            {
+              "rowid": 147,
+              "hnum": 5,
+              "fileIndex": 126,
+              "package": "fedora-gpg-keys",
+              "packageVersion": "44-1",
+              "architecture": "noarch",
+              "headerBlobSha256": "aa13e778b350e2b1f5904853c739734d2a40f7778a5df4d2280b5a80247c1e28",
+              "filenameBytes": 28,
+              "filenameSha256": "7ae44e5115c6f1cdcd8cf14746d5d4113646c675891d17fc4044182779621dc0",
+              "canonicalPathSha256": "d1e4de099ad28f048b8ffee46a7dfc85cd863e40e02b8e32eeb7496e82de3f0c",
+              "sameFilenameAndFullPathBytes": true,
+              "samePackageNameAndArchitecture": true,
+              "samePackageVersion": false
+            }
+          ],
+          "sameFilenamePathAndPackageNameInImmutableBase": true,
+          "packageHeaderBlobSha256": "2ffa522090de153f7da7637b67eca156bc93f956bca852a9c4b12feded371886"
+        }
+      ],
+      "freeblocks": [
+        {
+          "offset": 7467860,
+          "bytes": 34,
+          "nextPageOffset": 956,
+          "coveredContentBytes": 28,
+          "coveredContentSha256": "7ae44e5115c6f1cdcd8cf14746d5d4113646c675891d17fc4044182779621dc0",
+          "coveredContentExactlyPublicFilename": true,
+          "liveFilenameProofs": [
+            {
+              "filenameBytes": 28,
+              "filenameSha256": "7ae44e5115c6f1cdcd8cf14746d5d4113646c675891d17fc4044182779621dc0",
+              "currentCell": 3,
+              "currentRowid": 26924,
+              "package": "fedora-gpg-keys",
+              "packageVersion": "44-2",
+              "canonicalPathSha256": "d1e4de099ad28f048b8ffee46a7dfc85cd863e40e02b8e32eeb7496e82de3f0c",
+              "baseLiveRecords": [
+                {
+                  "rowid": 147,
+                  "hnum": 5,
+                  "fileIndex": 126,
+                  "package": "fedora-gpg-keys",
+                  "packageVersion": "44-1",
+                  "architecture": "noarch",
+                  "headerBlobSha256": "aa13e778b350e2b1f5904853c739734d2a40f7778a5df4d2280b5a80247c1e28",
+                  "filenameBytes": 28,
+                  "filenameSha256": "7ae44e5115c6f1cdcd8cf14746d5d4113646c675891d17fc4044182779621dc0",
+                  "canonicalPathSha256": "d1e4de099ad28f048b8ffee46a7dfc85cd863e40e02b8e32eeb7496e82de3f0c",
+                  "sameFilenameAndFullPathBytes": true,
+                  "samePackageNameAndArchitecture": true,
+                  "samePackageVersion": false
+                }
+              ]
+            }
+          ],
+          "coveredContentEqualsCurrentLiveKeyAndImmutableBaseKey": true,
+          "headerBytes": 4,
+          "headerFullyCovered": true
+        }
+      ],
+      "allRawAndProjectedBytesStructurallyAccounted": true,
+      "structuralBoundsAndNonOverlapValidated": true
+    },
+    {
+      "fingerprint": "image-match:93900801893e96e5268f964a9fc987cefbc7ed99e7b68e0d60142836844e9957",
+      "classification": "public-package-filename-and-sqlite-index-metadata",
+      "span": {
+        "endColumn": 30,
+        "endLine": 2656431,
+        "fileSha256": "2e305e723f8570b2f875ce204707dd32279861ad224313a721634072d2384b0d",
+        "path": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+        "projectionSha256": "227c34d96e86072bd011d23538df54deb2bb30d333657e8f9148c31e72a6bdf9",
+        "rule": "generic-api-key",
+        "spanBytes": 62,
+        "spanSha256": "e6a5b60b3ebd46326203be4252700b2173346fc0f65433aa97fd4daaeb678730",
+        "startColumn": 2,
+        "startLine": 2656428,
+        "status": "resolved"
+      },
+      "uniqueCandidateCount": 1,
+      "projectionOffset": 7502549,
+      "rawOffset": 7469671,
+      "rawBytes": 62,
+      "rawSha256": "8f68dab041d49a289813f2b61f3938b9bbafe2fef0983438614798e774b46929",
+      "page": 1824,
+      "pageSize": 4096,
+      "btree": "Basenames_key_idx",
+      "table": "Basenames",
+      "byteCoverage": {
+        "value0": 28,
+        "value1": 2,
+        "freeblockHeader": 4,
+        "freeblockContent": 28
+      },
+      "coveredSourceBytes": 62,
+      "liveRecords": [
+        {
+          "cell": 39,
+          "recordOffset": 7469667,
+          "recordBytes": 34,
+          "recordSha256": "63af896a15f801ddaa04d1bc95d84bee9298ad2aef18dbd52f54598aa278d775",
+          "overlapOffset": 0,
+          "overlapBytes": 30,
+          "payloadVarintBytes": 1,
+          "recordHeaderBytes": 3,
+          "serialTypes": [
+            69,
+            2
+          ],
+          "filenameOffset": 7469671,
+          "filenameBytes": 28,
+          "filenameSha256": "071ad7e55dd65fb710e2a305deddbe8e40ad1e0c4e497324c02b6e811fe5d0d4",
+          "rowid": 26942,
+          "rowidBytes": 2,
+          "hnum": 162,
+          "fileIndex": 144,
+          "package": "fedora-gpg-keys",
+          "packageVersion": "44-2",
+          "architecture": "noarch",
+          "packagePurl": "pkg:rpm/fedora/fedora-gpg-keys@44-2?arch=noarch&distro=fedora-44&upstream=fedora-repos-44-2.src.rpm",
+          "canonicalPathSha256": "2e65f9b1fdbfea6f1442c5a2e16795074f49c3bf05472eb819c42ee9dff81da3",
+          "baseLiveRecords": [
+            {
+              "rowid": 165,
+              "hnum": 5,
+              "fileIndex": 144,
+              "package": "fedora-gpg-keys",
+              "packageVersion": "44-1",
+              "architecture": "noarch",
+              "headerBlobSha256": "aa13e778b350e2b1f5904853c739734d2a40f7778a5df4d2280b5a80247c1e28",
+              "filenameBytes": 28,
+              "filenameSha256": "071ad7e55dd65fb710e2a305deddbe8e40ad1e0c4e497324c02b6e811fe5d0d4",
+              "canonicalPathSha256": "2e65f9b1fdbfea6f1442c5a2e16795074f49c3bf05472eb819c42ee9dff81da3",
+              "sameFilenameAndFullPathBytes": true,
+              "samePackageNameAndArchitecture": true,
+              "samePackageVersion": false
+            }
+          ],
+          "sameFilenamePathAndPackageNameInImmutableBase": true,
+          "packageHeaderBlobSha256": "2ffa522090de153f7da7637b67eca156bc93f956bca852a9c4b12feded371886"
+        }
+      ],
+      "freeblocks": [
+        {
+          "offset": 7469701,
+          "bytes": 34,
+          "nextPageOffset": 2762,
+          "coveredContentBytes": 28,
+          "coveredContentSha256": "071ad7e55dd65fb710e2a305deddbe8e40ad1e0c4e497324c02b6e811fe5d0d4",
+          "coveredContentExactlyPublicFilename": true,
+          "liveFilenameProofs": [
+            {
+              "filenameBytes": 28,
+              "filenameSha256": "071ad7e55dd65fb710e2a305deddbe8e40ad1e0c4e497324c02b6e811fe5d0d4",
+              "currentCell": 39,
+              "currentRowid": 26942,
+              "package": "fedora-gpg-keys",
+              "packageVersion": "44-2",
+              "canonicalPathSha256": "2e65f9b1fdbfea6f1442c5a2e16795074f49c3bf05472eb819c42ee9dff81da3",
+              "baseLiveRecords": [
+                {
+                  "rowid": 165,
+                  "hnum": 5,
+                  "fileIndex": 144,
+                  "package": "fedora-gpg-keys",
+                  "packageVersion": "44-1",
+                  "architecture": "noarch",
+                  "headerBlobSha256": "aa13e778b350e2b1f5904853c739734d2a40f7778a5df4d2280b5a80247c1e28",
+                  "filenameBytes": 28,
+                  "filenameSha256": "071ad7e55dd65fb710e2a305deddbe8e40ad1e0c4e497324c02b6e811fe5d0d4",
+                  "canonicalPathSha256": "2e65f9b1fdbfea6f1442c5a2e16795074f49c3bf05472eb819c42ee9dff81da3",
+                  "sameFilenameAndFullPathBytes": true,
+                  "samePackageNameAndArchitecture": true,
+                  "samePackageVersion": false
+                }
+              ]
+            }
+          ],
+          "coveredContentEqualsCurrentLiveKeyAndImmutableBaseKey": true,
+          "headerBytes": 4,
+          "headerFullyCovered": true
+        }
+      ],
+      "allRawAndProjectedBytesStructurallyAccounted": true,
+      "structuralBoundsAndNonOverlapValidated": true
+    }
+  ],
+  "limits": [
+    "Every finding outside these exact complete regions remains blocking.",
+    "No raw candidate, filename, database or private-key bytes are published.",
+    "This review classifies two public-data findings; the observed image scan failed and CI contains required failures. A new complete image gate and CI are required before signing.",
+    "Owner swiftraccoon and expiry 2026-11-29 are unchanged; no path/package exemption or expiry renewal."
+  ]
+}

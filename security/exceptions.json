@@ -1782,6 +1782,26 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
     },
     {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:def870c113a9bac23cd32643d5a7fa6ed7436782a3a26f2961f078591d5ece50",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 62-byte canonical region was inspected directly in the retained database after authenticated CMS decryption. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for. The exact filename and full path join current fedora-gpg-keys 44-2 records and independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:93900801893e96e5268f964a9fc987cefbc7ed99e7b68e0d60142836844e9957",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 62-byte canonical region was inspected directly in the retained database after authenticated CMS decryption. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for. The exact filename and full path join current fedora-gpg-keys 44-2 records and independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+    },
+    {
       "scanner": "codeql",
       "fingerprint": "codeql:783d7a6196a1d66de55a9cb7c08e3e3509c315dd71536ca7bfaf4e0be29ff03b",
       "scope": "src/room/dormant_join_tests.rs:102:102:57:79",
