@@ -370,7 +370,56 @@ pub(super) async fn server(
     )
     .await?;
     let id = server_artifact(&listing, &options.revision)?;
-    let parent = runner.output.join("server-acquired");
+    server_explicit(runner, control, options, id, false, report).await
+}
+
+/// An explicit old selection has its own directory, roles and completed counts.
+/// Current metadata and both signature passes still authorize the held bytes.
+pub(super) async fn server_explicit(
+    runner: &mut Runner,
+    control: &mut Control,
+    options: &Options,
+    id: u64,
+    previous: bool,
+    report: &mut Value,
+) -> Result<AuthenticatedServer> {
+    if id == 0
+        || id >= (1 << 53)
+        || (previous && options.purpose != super::options::Purpose::Deploy)
+    {
+        return Err(Error::Input);
+    }
+    let parent = runner.output.join(if previous {
+        "previous-acquired"
+    } else {
+        "server-acquired"
+    });
+    let role = if previous {
+        "previous-server"
+    } else {
+        "server"
+    };
+    let deploy = options.purpose == super::options::Purpose::Deploy;
+    let completed = if previous {
+        "previousServerVerifierCalls"
+    } else if deploy {
+        "currentServerVerifierCalls"
+    } else {
+        "serverVerifierCalls"
+    };
+    let n = if deploy {
+        let left = control
+            .body_end()
+            .saturating_duration_since(std::time::Instant::now())
+            .as_secs();
+        let clipped = left.saturating_sub(40).min(300);
+        if clipped < 100 {
+            return Err(Error::Deadline);
+        }
+        clipped
+    } else {
+        900
+    };
     let mut argv = args(&[
         "release",
         "verify",
@@ -387,20 +436,20 @@ pub(super) async fn server(
         "--output-parent".into(),
         parent.clone().into_os_string(),
         "--timeout-seconds".into(),
-        "900".into(),
+        n.to_string().into(),
         "--finalization-seconds".into(),
         "60".into(),
     ]);
     let observed = runner
         .credential(
             control,
-            "authenticate-server",
+            &format!("authenticate-{role}"),
             "ops",
             argv,
-            Duration::from_secs(300),
+            Duration::from_secs(if deploy { n + 10 } else { 300 }),
         )
         .await?;
-    report["serverVerifierCalls"] = 4.into();
+    report[completed] = 4.into();
     let receipt = decode(&observed.stdout)?;
     super::projection::exact(
         &receipt,
@@ -437,14 +486,14 @@ pub(super) async fn server(
         let artifact = api(
             runner,
             control,
-            "current-server-artifact",
+            &format!("current-{role}-artifact"),
             format!("repos/{REPOSITORY}/actions/artifacts/{id}"),
         )
         .await?;
         let run = api(
             runner,
             control,
-            "current-server-run",
+            &format!("current-{role}-run"),
             format!("repos/{REPOSITORY}/actions/runs/{}", options.run),
         )
         .await?;
@@ -474,7 +523,7 @@ pub(super) async fn server(
         let verified = runner
             .credential(
                 control,
-                "authenticate-retained-server",
+                &format!("authenticate-retained-{role}"),
                 "ops",
                 argv,
                 Duration::from_secs(n + 10),

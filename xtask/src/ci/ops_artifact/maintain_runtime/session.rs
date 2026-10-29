@@ -153,6 +153,7 @@ impl Session {
         let guest: String = match control.purpose() {
             super::super::options::Purpose::Prerequisite => "guest".into(),
             super::super::options::Purpose::Host => "host-guest".into(),
+            super::super::options::Purpose::Deploy => "deploy-guest".into(),
         };
         let args = vm.ssh(
             runner,

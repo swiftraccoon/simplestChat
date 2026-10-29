@@ -12,7 +12,7 @@ pub(super) const CADDY_IMAGE: &str = concat!(
     "@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0"
 );
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Pin {
     pub sha256: String,
@@ -63,6 +63,9 @@ pub(super) fn exact(value: &Value, names: &[&str]) -> Result<()> {
     Ok(())
 }
 impl Request {
+    pub fn is_deploy(&self) -> bool {
+        self.scope == "NativeHostDeployRequest"
+    }
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         Self::decode_for(bytes, false)
     }
@@ -188,6 +191,16 @@ pub(super) struct Wire {
     buffer: Vec<u8>,
 }
 impl Wire {
+    #[cfg(test)]
+    pub(super) fn fixture(input: File, output: File) -> Self {
+        Self {
+            input: Some(input),
+            output: Some(output),
+            input_flags: None,
+            output_flags: None,
+            buffer: Vec::new(),
+        }
+    }
     pub fn new(control: &mut Control) -> Result<Self> {
         control.check()?;
         let mut wire = Self {
@@ -226,19 +239,28 @@ impl Wire {
         Ok(wire)
     }
     pub fn line(&mut self, control: &mut Control) -> Result<Vec<u8>> {
+        self.line_bounded(control, MAX_RECORD)
+    }
+    pub fn line_bounded(&mut self, control: &mut Control, maximum: usize) -> Result<Vec<u8>> {
+        if maximum == 0 || maximum > MAX_RECORD {
+            return Err(Error::Input);
+        }
         loop {
             control.check()?;
             if let Some(at) = self.buffer.iter().position(|b| *b == b'\n') {
                 let rest = self.buffer.split_off(at + 1);
                 let mut line = std::mem::replace(&mut self.buffer, rest);
                 line.pop();
+                if line.len() + 1 > maximum {
+                    return Err(Error::Bounds);
+                }
                 return Ok(line);
             }
-            if self.buffer.len() >= MAX_RECORD {
+            if self.buffer.len() >= maximum {
                 return Err(Error::Bounds);
             }
             let mut bytes = [0u8; 8192];
-            let size = bytes.len().min(MAX_RECORD + 1 - self.buffer.len());
+            let size = bytes.len().min(maximum + 1 - self.buffer.len());
             match rustix::io::read(self.input.as_ref().ok_or(Error::Close)?, &mut bytes[..size]) {
                 Ok(0) => return Err(Error::Refused),
                 Ok(count) => self.buffer.extend_from_slice(&bytes[..count]),
@@ -248,7 +270,7 @@ impl Wire {
                 Err(_) => return Err(Error::Io),
             }
             control.check()?;
-            if self.buffer.len() > MAX_RECORD {
+            if self.buffer.len() > maximum {
                 return Err(Error::Bounds);
             }
         }
@@ -266,10 +288,21 @@ impl Wire {
         }
     }
     pub fn emit(&mut self, value: &Value, control: &mut Control) -> Result<()> {
+        self.emit_bounded(value, control, MAX_RECORD)
+    }
+    pub fn emit_bounded(
+        &mut self,
+        value: &Value,
+        control: &mut Control,
+        maximum: usize,
+    ) -> Result<()> {
+        if maximum == 0 || maximum > MAX_RECORD {
+            return Err(Error::Input);
+        }
         control.check()?;
         let mut bytes = serde_json::to_vec(value).map_err(|_| Error::Input)?;
         bytes.push(b'\n');
-        if bytes.len() > MAX_RECORD {
+        if bytes.len() > maximum {
             return Err(Error::Bounds);
         }
         let mut at = 0;

@@ -54,6 +54,10 @@ const USAGE: &str = concat!(
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    #[cfg(feature = "maintain-guest")]
+    if std::env::args_os().next().as_deref() == Some(std::ffi::OsStr::new("/usr/bin/docker")) {
+        return simplestchat_ops::release::maintain_prerequisite::deploy_fixture_docker(&args);
+    }
     if args.len() >= 2 && args[0] == "release" && args[1] == "maintain" {
         return simplestchat_ops::release::maintain::run(&args[2..]);
     }

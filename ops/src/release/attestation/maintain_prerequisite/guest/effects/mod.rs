@@ -2,6 +2,8 @@
 
 mod actors;
 mod cold_pg;
+#[path = "../deploy/effects.rs"]
+pub(super) mod deploy;
 #[path = "../host/effects.rs"]
 mod host;
 mod migration_upgrade;
@@ -144,6 +146,16 @@ impl Fixture {
             .check(&mut ctx.control)
     }
     pub async fn prepare_payload(&mut self, ctx: &mut Context) -> Result<()> {
+        let revision = ctx.request.revision.clone();
+        self.prepare_payload_for(ctx, Path::new(PAYLOAD), &revision)
+            .await
+    }
+    pub(super) async fn prepare_payload_for(
+        &mut self,
+        ctx: &mut Context,
+        payload: &Path,
+        revision: &str,
+    ) -> Result<()> {
         ctx.control.checkpoint = "payload";
         ctx.check()?;
         let socket = fs::canonicalize("/var/run/docker.sock").map_err(|_| Error::Io)?;
@@ -151,19 +163,24 @@ impl Fixture {
         require(socket_stamp.file_type().is_socket() && socket_stamp.uid() == 0)?;
         self.socket = Some((socket, socket_stamp));
         ctx.admit_socket()?;
-        let manifest_path = Path::new(PAYLOAD).join("release.json");
-        let archive_path = Path::new(PAYLOAD).join("image.tar");
-        let manifest = Original::open(&manifest_path, 131072, 0, 0o600, &mut ctx.control)?;
+        let manifest_path = payload.join("release.json");
+        let archive_path = payload.join("image.tar");
+        let manifest_limit = if ctx.request.is_deploy() {
+            1024 * 1024
+        } else {
+            131072
+        };
+        let manifest = Original::open(&manifest_path, manifest_limit, 0, 0o600, &mut ctx.control)?;
         ctx.originals.push(manifest);
         let manifest_index = ctx.originals.len() - 1;
         require(
             ctx.originals[manifest_index].sha256 == ctx.request.manifest.sha256
                 && ctx.originals[manifest_index].bytes == ctx.request.manifest.bytes,
         )?;
-        let bytes = ctx.originals[manifest_index].data(131072, &mut ctx.control)?;
+        let bytes = ctx.originals[manifest_index].data(manifest_limit, &mut ctx.control)?;
         let manifest =
             crate::release::manifest::Manifest::decode(&bytes).map_err(|_| Error::Refused)?;
-        require(manifest.fields().revision == ctx.request.revision)?;
+        require(manifest.fields().revision == revision)?;
         let archive = Original::open(
             &archive_path,
             2 * 1024 * 1024 * 1024,
@@ -225,8 +242,7 @@ impl Fixture {
             15,
         )
         .await?;
-        self.image =
-            policy::server_image(&policy::one(&observed)?, &verified, &ctx.request.revision)?;
+        self.image = policy::server_image(&policy::one(&observed)?, &verified, revision)?;
         for role in ["postgres", "caddy"] {
             let selected = if role == "postgres" {
                 ctx.request.postgres_image.clone()
@@ -761,7 +777,7 @@ impl Fixture {
         let materials = materials::analyze(&bytes, SystemTime::now(), remaining)?;
         proof.bind(&materials)?;
         self.materials = Some(materials);
-        if ctx.request.is_host() {
+        if ctx.request.is_host() || ctx.request.is_deploy() {
             ctx.control.checkpoint = "host-trust";
             super::host::prepare_trust(ctx, &root_bytes).await?;
         }

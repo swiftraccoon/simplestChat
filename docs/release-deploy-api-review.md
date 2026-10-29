@@ -277,3 +277,83 @@ reference cases. The genuine comparison took 420.808 seconds wall locally. The
 reference producer and all tracked Python files remain unchanged. These are
 inert/native filesystem and process checks, without a real engine or signed VM
 trial of this diagnostic extension.
+
+## Native runtime controller and guest composition
+
+The manual deploy fixture now has a Rust controller entry,
+`xtask ops-artifact deploy-runtime`, and a distinct signed guest entry,
+`release maintain-prerequisite deploy-guest`. This is a fixture orchestration
+change. The production `release deploy` operation, installed caller policy and
+all frozen Python references retain their established roles. The retained
+`47094af` / `40237650754` trial remains a failed rollback trial; the new source
+and its local tests do not establish its cause or a corrected signed result.
+
+The controller keeps current Ops and current server selectors separate from an
+explicit previous server revision, run, attempt and artifact ID. Both server
+acquisitions use the existing verifier and retained-tree owners; their original
+packaged migration maps must be equal before fixture effects. Expected hashes,
+JSON observations and completed-role counters do not construct authenticated
+input authority. Source-built GNU tools remain trusted controller prerequisites;
+the retained current signed musl executable is the guest operation authority.
+
+`C-CUSTOM-TYPE`, `C-VALIDATE`, `C-STRUCT-PRIVATE` and `C-SERDE` apply to the closed
+deploy purpose, explicit selectors, opaque acquisition owners and exact passive
+request/result domains. The shared private `Owners`, `Runner`, `Original`, VM,
+prepared-overlay, QMP and session adapters remain the lifetime owners. The deploy
+purpose retains one 4500-second original interval, a 180-second final reserve,
+a 600-second setup ceiling and the 3720-second continuation debt for two complete
+N1800/M60 calls plus observation. No phase, restart or diagnostic starts another
+outer clock. Existing maintenance purposes retain their own profiles.
+
+`C-DTOR-FAIL`, `C-DTOR-BLOCK` and `C-RW-VALUE` apply through explicit original
+replays, all-known finalization and the terminal session/VM verdict. A result
+frame remains passive until the final session exit, stream closure, original
+witnesses, QMP/VM settlement and signal/clock checks succeed. Earlier JSON cannot
+certify later closure. Same-UID swap-and-restore limitations and blocking-kernel
+limitations of the reused owners remain; this is no new isolation claim.
+
+`C-GOOD-ERR` and `C-FAILURE` apply to capture before ordinary success validation.
+The guest and controller retain a closed 14-field `failureCapture` on negative
+results, including independent stdout/outcome decode states and rollback
+objects. Each rollback object has the existing four producer fields. Two
+independently valid but differing objects remain available in a negative
+capture; disagreement still refuses ordinary report/outcome validity. Native
+stdout flags are never inferred from an independently decoded outcome. Unknown,
+invalid and actual zero values stay distinct. The old command classification's
+1..192 range does not limit the producer's nullable positive `logOrdinal`.
+No raw command, exception, configuration, credentials or stream bytes are public
+fields, and diagnostics never add cleanup or retry authority.
+
+The source contracts cover the manual/read-only workflow boundary, credential
+exposure after unprivileged compilation, exact selectors, fixed preparation
+paths, private copies, pins and original outer/inner budgets. They execute no
+workflow, Ansible, Docker or KVM operation. Actual signed execution and successful
+rollback qualification remain separate evidence requirements.
+
+The existing optional `maintain-guest` feature also enables the already locked
+Rustix dependency's `mount` API for the fixed Linux namespace adapter. The default
+controller dependency graph retains its previous features and needs no native
+TLS or mount implementation. This narrow safe binding replaces the fixture's
+Python mount client; it introduces no package or first-party unsafe code.
+The inherited executable handoff uses an owned read-only duplicate under the
+same process-wide gate as every guest spawn. Only that duplicate temporarily
+changes CLOEXEC; its flags and checked close settle before releasing the gate.
+The source descriptor retains its flags, and a spawned child remains registered
+if later flag restoration or close fails. The namespace entry checks and closes
+the inherited duplicate before any further subprocess, then executes its own
+separately admitted canonical executable original.
+
+The fixture's dump-list observation passes a read-only duplicate through standard
+process stdin while retaining and replaying the original dump. Standard-library
+ownership makes that duplicate's close status opaque; the original close and all
+returned child/group/pipe outcomes remain checked. A successful list is still
+neither a restore rehearsal nor acknowledgement of complete dump consumption.
+
+Deploy's routine command/health boundaries compare retained file and parent
+metadata, matching the frozen deploy controller's original checks. This applies
+only to the closed deploy profile. Initial admission, actual reads and copies,
+prepared/native/trial acceptance, final successful acceptance and descriptor
+finalization retain full hash replays. Existing maintenance profiles keep their
+full boundary checks. The distinction avoids adding repeated whole-archive
+hashing to the unchanged 20-second inspection service; it is source parity,
+not a measured speedup or an explanation of any historical failed trial.

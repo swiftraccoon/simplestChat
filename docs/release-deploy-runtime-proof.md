@@ -319,3 +319,58 @@ describes its contract and the twelve exact legacy-comparison profiles. The
 Python VM harness remains frozen and does not project this new object. Actual
 capture of it belongs to the Rust orchestration migration; no additional Python
 collector or successful corrected runtime is claimed here.
+
+## Rust orchestration replacement awaiting signed runtime evidence
+
+The active manual workflow now invokes the compiled Rust
+`xtask ops-artifact deploy-runtime` controller. Its native guest entry is
+`release maintain-prerequisite deploy-guest`. The unchanged Python controller,
+guest and negative interposer remain frozen references; the active workflow and
+new preparation playbook do not execute those deploy fixture programs.
+The existing Ansible provisioning and authenticated tool installer keep their
+keeper roles. This source transition is not a new signed VM or deployment
+qualification claim.
+
+The command requires all eight explicit workflow selectors: current `run-id`,
+`run-attempt`, Ops `artifact-id`, current `server-artifact-id`, and previous
+`revision`, `run-id`, `run-attempt`, `artifact-id`, plus an absolute private
+output directory. Current revision is the guarded workflow head. The old and
+current signed server artifacts must have identical packaged migration maps.
+The controller retains both authenticated trees and the current Ops executable
+through the shared VM, session and original-input finalizers.
+
+The two intended transactions retain their original semantics: deploy A to B
+with native exit zero, then deliberately stop the owned candidate during the
+B-to-A attempt and require native exit one with successful rollback to B.
+Each trial still requires its backup, actor history, selected state and
+independent continuity observations. A failed rollback never satisfies the
+expected negative trial. The recorded `47094af` / `40237650754` positive
+transaction and failed rollback remain historical negative whole-fixture
+evidence; no new source check supersedes that outcome.
+
+A 17-field request binds the original source bundle/tree, 52 guest data pins,
+15 helper pins, current and previous payloads, binary and fixed dependency
+images. The 10-field prepared frame and 22-field result are closed projections.
+Successful results require both complete trials and every prior success
+predicate. A negative result can retain partial facts in its required nullable
+`failureCapture`: 14 fixed keys with independent stdout/outcome states, actual
+nullable native status, old native classifications and closed rollback objects.
+Capture occurs before expected-status, normal report, rollback and outcome
+validation. Unknown data is not replaced with a default success or failure.
+Different independently valid stdout/outcome diagnoses can both be retained;
+they cannot authorize a passing proof or replace the original failure.
+
+The original 90-minute job and 80-minute invocation caps remain. The controller
+still owns 4500 seconds with 180 reserved for finalization, setup remains at
+most 600 seconds, and continuation requires the original 3720-second debt.
+The two native calls each retain N1800/M60. Shared prepared-VM owners perform
+checked first-epoch settlement and restricted restart without resetting that
+origin or doubling stream/QMP allowances. Fresh signed execution must establish
+actual outcomes, every original replay and all session/QMP/VM closures before
+this replacement can be called qualified.
+
+The new Rust source tests check workflow authority, tokens after compilation,
+all selector bindings, bounded preparation, exact original payload paths and
+strict malformed neighbors. Those tests do not execute Ansible, a guest,
+a daemon, authentication services or production operations. Their results and
+any later CI/signed runtime results must be recorded separately.

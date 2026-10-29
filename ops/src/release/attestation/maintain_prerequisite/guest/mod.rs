@@ -1,6 +1,7 @@
 //! Complete fixed disposable maintenance guest. No Python code is invoked here.
 
 pub(super) mod control;
+mod deploy;
 pub(super) mod effects;
 pub(super) mod files;
 pub(super) mod host;
@@ -94,16 +95,29 @@ impl Context {
         sources::socket_check(self)
     }
     pub fn check(&mut self) -> Result<()> {
+        self.check_inputs(!self.request.is_deploy())
+    }
+    pub fn check_full(&mut self) -> Result<()> {
+        self.check_inputs(true)?;
+        self.commands.check_full(&mut self.control)
+    }
+    fn check_inputs(&mut self, full: bool) -> Result<()> {
         self.control.check()?;
-        self.wire.no_extra(&mut self.control)?;
+        if !(self.request.is_deploy() && self.control.is_settling()) {
+            self.wire.no_extra(&mut self.control)?;
+        }
         for (index, original) in self.originals.iter().enumerate() {
             if self.host_retired.contains(&index) {
-                if !self.request.is_host() || !original.closed() {
+                if !(self.request.is_host() || self.request.is_deploy()) || !original.closed() {
                     return Err(Error::Refused);
                 }
                 continue;
             }
-            original.check(&mut self.control)?;
+            if full {
+                original.check(&mut self.control)?;
+            } else {
+                original.check_metadata(&mut self.control)?;
+            }
         }
         sources::socket_check(self)?;
         self.control.check()
@@ -187,6 +201,10 @@ fn assets_initialized(bytes: &[u8]) -> Result<()> {
 }
 
 async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
+    let revision = ctx.request.revision.clone();
+    rendered_files_for(ctx, image, &revision).await
+}
+async fn rendered_files_for(ctx: &mut Context, image: &str, revision: &str) -> Result<()> {
     ctx.control.checkpoint = "render";
     let mut secrets = BTreeMap::new();
     for name in render::SECRET_NAMES {
@@ -201,7 +219,7 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
         &ctx.sources,
         render::Identity {
             image,
-            revision: &ctx.request.revision,
+            revision,
             run_id: &ctx.request.run_id,
             postgres: &ctx.request.postgres_image,
             caddy: &ctx.request.caddy_image,
@@ -458,6 +476,15 @@ pub(in crate::release::attestation) fn run_host(arguments: &[OsString]) -> ExitC
 }
 pub(in crate::release::attestation) fn run_upgrade(arguments: &[OsString]) -> ExitCode {
     host::upgrade::run(arguments)
+}
+pub(in crate::release::attestation) fn run_deploy(arguments: &[OsString]) -> ExitCode {
+    deploy::run(arguments)
+}
+pub(in crate::release::attestation) fn run_deploy_injection(arguments: &[OsString]) -> ExitCode {
+    deploy::injection::enter(arguments)
+}
+pub(in crate::release::attestation) fn run_deploy_docker(arguments: &[OsString]) -> ExitCode {
+    deploy::injection::client(arguments)
 }
 fn entry(arguments: &[OsString], host: bool) -> ExitCode {
     let started = Instant::now();

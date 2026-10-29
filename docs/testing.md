@@ -3048,6 +3048,45 @@ Source/inert checks alone do not establish signed Stage execution, production
 application deployment, a database migration, rollback or caller cutover.
 
 
+## Native deploy and rollback fixture
+
+The manual [deploy runtime workflow](../.github/workflows/release-deploy-runtime.yml)
+uses `xtask ops-artifact deploy-runtime` and the authenticated Ops artifact's Rust
+guest. Its eight explicit selectors bind the current Ops/server CI attempt and
+a different previous server revision, CI attempt and artifact. Both server
+artifacts need exactly the same nonempty packaged migration map. The controller
+authenticates both, retains their actual files through VM cleanup, and invokes
+only the installed signed musl Ops executable inside the owned guest.
+
+The controller preserves the original 4,500-second interval, 180-second
+finalization reserve and strict initial 600-second setup phase. Leaving setup
+requires the full 3,720-second continuation debt for two native 1,800-second
+calls and observation. Existing maintenance profiles keep their own limits.
+The fixture prepares A, deploys B, then stops its own A candidate during the
+reverse attempt and requires actual successful rollback to B. Raw native exits
+are 0 and 1 respectively; the negative exit alone is insufficient evidence.
+Backups, DB/proxy identity, SQL state, browser selection, transient actor history,
+namespace barrier delivery and complete resource settlement are checked separately.
+
+Bounded stdout and outcome observations retain closed `rollbackFailure` facts
+before ordinary report or success checks. Their stage, boundary, cause and
+nullable positive log ordinal are passive diagnostics; they cannot authorize a
+retry or turn failed rollback into passing proof. Both independently valid
+diagnostics survive a later mismatch refusal. The previous Python controller,
+guest, injection client and playbook remain unchanged as references. The active
+fixture's controller, guest and injection mechanism are Rust; Ansible and pinned
+platform provisioning retain their existing roles.
+
+Harmless help is available locally:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact deploy-runtime --help
+```
+
+Source and local checks do not establish signed runtime qualification. The
+[deploy proof record](release-deploy-runtime-proof.md) preserves the earlier
+failed rollback trials and the distinction from production caller adoption.
+
 ## Native standalone restore verification
 
 The complete `release backup verify` operation compares 90 finite scenarios with

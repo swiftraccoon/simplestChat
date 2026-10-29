@@ -4,6 +4,8 @@ use super::{
     Error, Result, auth, catalog,
     control::Control,
     decode,
+    deploy_options::DeployOptions,
+    deploy_projection,
     files::{self, Original},
     host_projection,
     options::{Options, Purpose},
@@ -256,34 +258,45 @@ fn recap(data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-struct Owners {
-    runner: Option<Runner>,
-    ops: Option<auth::AuthenticatedOps>,
-    server: Option<auth::AuthenticatedServer>,
-    bundle: Option<source::Bundle>,
-    transfer: Option<source::Transfer>,
-    vm: Option<Vm>,
-    session: Option<Session>,
+pub(super) struct Owners {
+    pub runner: Option<Runner>,
+    pub ops: Option<auth::AuthenticatedOps>,
+    pub server: Option<auth::AuthenticatedServer>,
+    pub previous: Option<auth::AuthenticatedServer>,
+    pub bundle: Option<source::Bundle>,
+    pub transfer: Option<source::Transfer>,
+    pub vm: Option<Vm>,
+    pub session: Option<Session>,
+}
+pub(super) struct Prepared {
+    pub run: String,
+    pub postgres: String,
+    pub engine: String,
+    pub caddy: String,
 }
 impl Owners {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             runner: None,
             ops: None,
             server: None,
+            previous: None,
             bundle: None,
             transfer: None,
             vm: None,
             session: None,
         }
     }
-    async fn body(
+    pub async fn prepare(
         &mut self,
         options: &Options,
+        deploy: Option<&DeployOptions>,
         control: &mut Control,
         report: &mut Value,
-    ) -> Result<()> {
-        if options.purpose != control.purpose() {
+    ) -> Result<Prepared> {
+        if options.purpose != control.purpose()
+            || deploy.is_some() != (options.purpose == Purpose::Deploy)
+        {
             return Err(Error::Input);
         }
         options.guard()?;
@@ -296,7 +309,7 @@ impl Owners {
         let root = crate::repository_root().map_err(|_| Error::Input)?;
         self.runner = Some(Runner::new(root, options.output.clone(), control)?);
         let runner = self.runner.as_mut().ok_or(Error::Refused)?;
-        for name in catalog::sources() {
+        for name in catalog::sources_for(options.purpose) {
             let original = Original::open(&runner.root.join(&name), 1024 * 1024, control)?;
             runner.sources.insert(name, original);
         }
@@ -316,12 +329,61 @@ impl Owners {
         report["opsSelection"] = ops.selection.clone();
         timing(report, "authentication", control)?;
         checkpoint(report, "server-authentication");
-        self.server = Some(auth::server(runner, control, options, report).await?);
+        self.server = Some(match deploy {
+            Some(selected) => {
+                auth::server_explicit(
+                    runner,
+                    control,
+                    options,
+                    selected.current_server,
+                    false,
+                    report,
+                )
+                .await?
+            }
+            None => auth::server(runner, control, options, report).await?,
+        });
         let server = self.server.as_ref().ok_or(Error::Refused)?;
-        report["serverVerifierCalls"] = 8.into();
-        report["serverCurrentMetadataApiCalls"] = 2.into();
+        if deploy.is_some() {
+            report["currentServerVerifierCalls"] = 8.into();
+            report["currentServerMetadataApiCalls"] = 2.into();
+        } else {
+            report["serverVerifierCalls"] = 8.into();
+            report["serverCurrentMetadataApiCalls"] = 2.into();
+        }
         report["authenticatedServerDistribution"] = true.into();
         timing(report, "server-authentication", control)?;
+        if let Some(selected) = deploy {
+            checkpoint(report, "previous-server-authentication");
+            self.previous = Some(
+                auth::server_explicit(
+                    runner,
+                    control,
+                    &selected.previous_options(),
+                    selected.previous.artifact,
+                    true,
+                    report,
+                )
+                .await?,
+            );
+            let previous = self.previous.as_ref().ok_or(Error::Refused)?;
+            report["previousServerVerifierCalls"] = 8.into();
+            report["previousServerMetadataApiCalls"] = 2.into();
+            report["authenticatedPreviousServerDistribution"] = true.into();
+            report["previousRevision"] = selected.previous.revision.clone().into();
+            report["previousServerArtifactId"] = selected.previous.artifact.into();
+            report["previousServerCiRunId"] = selected.previous.run.into();
+            report["previousServerRunAttempt"] = selected.previous.attempt.into();
+            report["serverArtifactId"] = selected.current_server.into();
+            report["serverCiRunId"] = options.run.into();
+            report["revision"] = options.revision.clone().into();
+            deploy_projection::same_migrations(
+                server.pin("release.json")?,
+                previous.pin("release.json")?,
+                control,
+            )?;
+            timing(report, "previous-server-authentication", control)?;
+        }
         checkpoint(report, "source-bundle");
         self.bundle = Some(source::bundle(runner, control, options).await?);
         timing(report, "source-bundle", control)?;
@@ -401,13 +463,15 @@ impl Owners {
         clear_install_diagnostic(report);
         let bundle = self.bundle.as_ref().ok_or(Error::Refused)?;
         let values = runner.output.join("fixture-input-vars.json");
-        files::write(
-            &values,
-            &auth::encoded(&json!({"vm_maintain_bundle_path":bundle.original.path,
+        let mut variables = json!({"vm_maintain_bundle_path":bundle.original.path,
             "vm_maintain_bundle_sha256":bundle.original.sha256,
-            "vm_current_artifact_dir":server.path()}))?,
-            control,
-        )?;
+            "vm_current_artifact_dir":server.path()});
+        if let Some(selected) = deploy {
+            variables["vm_previous_artifact_dir"] =
+                json!(self.previous.as_ref().ok_or(Error::Refused)?.path());
+            variables["vm_previous_revision"] = selected.previous.revision.clone().into();
+        }
+        files::write(&values, &auth::encoded(&variables)?, control)?;
         let original = Original::open(&values, 131072, control)?;
         runner
             .sources
@@ -418,7 +482,11 @@ impl Owners {
             inventory.into_os_string(),
             runner
                 .root
-                .join("ops/ansible/security-vm-maintain-prerequisite.yml")
+                .join(if deploy.is_some() {
+                    "ops/ansible/security-vm-native-deploy.yml"
+                } else {
+                    "ops/ansible/security-vm-maintain-prerequisite.yml"
+                })
                 .into_os_string(),
             "--extra-vars".into(),
             format!("@{}", values.display()).into(),
@@ -429,7 +497,7 @@ impl Owners {
                 "maintain-fixture-setup",
                 "ansible-playbook",
                 argv,
-                Duration::from_secs(300),
+                Duration::from_secs(if deploy.is_some() { 600 } else { 300 }),
                 &[0],
             )
             .await?;
@@ -474,6 +542,33 @@ impl Owners {
         vm.check(control)?;
         runner.integrity(control)?;
         timing(report, "fixture-setup", control)?;
+        if let Some(previous) = &self.previous {
+            previous.check(control)?;
+        }
+        Ok(Prepared {
+            run,
+            postgres,
+            engine,
+            caddy,
+        })
+    }
+    async fn body(
+        &mut self,
+        options: &Options,
+        control: &mut Control,
+        report: &mut Value,
+    ) -> Result<()> {
+        let Prepared {
+            run,
+            postgres,
+            engine,
+            caddy,
+        } = self.prepare(options, None, control, report).await?;
+        let runner = self.runner.as_mut().ok_or(Error::Refused)?;
+        let ops = self.ops.as_ref().ok_or(Error::Refused)?;
+        let server = self.server.as_ref().ok_or(Error::Refused)?;
+        let bundle = self.bundle.as_ref().ok_or(Error::Refused)?;
+        let vm = self.vm.as_mut().ok_or(Error::Refused)?;
         if options.purpose == Purpose::Host {
             checkpoint(report, "host-upgrade");
             let arguments = vm.ssh(
@@ -551,6 +646,7 @@ impl Owners {
         let request_scope = match options.purpose {
             Purpose::Prerequisite => "MaintainLauncherPrerequisiteRequest",
             Purpose::Host => "PreparedHostMaintenanceRequest",
+            Purpose::Deploy => return Err(Error::Input),
         };
         let setup_seconds = (control.start + control.setup_limit())
             .saturating_duration_since(sample)
@@ -570,6 +666,7 @@ impl Owners {
                 .body_end()
                 .min(Instant::now() + Duration::from_secs(300)),
             Purpose::Host => control.body_end(),
+            Purpose::Deploy => return Err(Error::Input),
         };
         let first = session.line(control, end).await?;
         let (guest_scope, ready_scope) = match options.purpose {
@@ -581,11 +678,13 @@ impl Owners {
                 "PreparedHostMaintenanceGuest",
                 "PreparedHostMaintenanceReady",
             ),
+            Purpose::Deploy => return Err(Error::Input),
         };
         if first["scope"] == guest_scope {
             report[options.purpose.proof_key()] = match options.purpose {
                 Purpose::Prerequisite => projection::guest(first, &expected)?,
                 Purpose::Host => host_projection::guest(first, &expected)?,
+                Purpose::Deploy => return Err(Error::Input),
             };
             return Err(Error::Refused);
         }
@@ -623,6 +722,7 @@ impl Owners {
         let final_frame = match options.purpose {
             Purpose::Prerequisite => projection::guest(frame, &expected)?,
             Purpose::Host => host_projection::guest(frame, &expected)?,
+            Purpose::Deploy => return Err(Error::Input),
         };
         let passed = final_frame["passed"] == true;
         report[options.purpose.proof_key()] = final_frame;
@@ -640,7 +740,7 @@ impl Owners {
         report["checkpoint"] = "complete".into();
         Ok(())
     }
-    async fn finish(&mut self, control: &mut Control, report: &mut Value) -> Result<()> {
+    pub async fn finish(&mut self, control: &mut Control, report: &mut Value) -> Result<()> {
         let mut first = None;
         fn remember(first: &mut Option<Error>, result: Result<()>, control: &mut Control) {
             if let Err(error) = result {
@@ -673,6 +773,9 @@ impl Owners {
         if let Some(server) = &self.server {
             remember(&mut first, server.check(control), control);
         }
+        if let Some(previous) = &self.previous {
+            remember(&mut first, previous.check(control), control);
+        }
         if let Some(ops) = &self.ops {
             remember(&mut first, ops.check(control), control);
         }
@@ -701,6 +804,9 @@ impl Owners {
         }
         if let Some(server) = &mut self.server {
             remember(&mut first, server.finish(control), control);
+        }
+        if let Some(previous) = &mut self.previous {
+            remember(&mut first, previous.finish(control), control);
         }
         if let Some(ops) = &mut self.ops {
             remember(&mut first, ops.finish(control), control);

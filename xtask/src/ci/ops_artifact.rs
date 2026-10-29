@@ -44,9 +44,17 @@ xtask ops-artifact maintain-runtime --run-id N --run-attempt N --artifact-id N \
 --scenario CASE --output ABS\n\
 xtask ops-artifact maintain-host-runtime --run-id N --run-attempt N --artifact-id N \
 --scenario host-success|host-launcher-refusal|host-migration-upgrade|host-proxy-upgrade \
---output ABS";
+--output ABS\n\
+xtask ops-artifact deploy-runtime --run-id N --run-attempt N --artifact-id N \
+--server-artifact-id N --previous-revision SHA --previous-run-id N \
+--previous-run-attempt N --previous-artifact-id N --output ABS";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
+    if let Some((operation, arguments)) = arguments.split_first()
+        && operation == "deploy-runtime"
+    {
+        return Ok(maintain_runtime::run_deploy(arguments));
+    }
     if let Some((operation, arguments)) = arguments.split_first()
         && operation == "maintain-runtime"
     {

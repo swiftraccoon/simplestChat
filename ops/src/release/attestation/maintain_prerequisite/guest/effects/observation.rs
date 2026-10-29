@@ -1093,6 +1093,12 @@ impl Fixture {
             first.get_or_insert(error);
             ctx.control.record(error);
         }
+        if ctx.request.is_deploy()
+            && let Err(error) = self.deploy_retired(ctx)
+        {
+            first.get_or_insert(error);
+            ctx.control.record(error);
+        }
         if let Err(error) = self.retire_actors(ctx).await {
             first.get_or_insert(error);
             ctx.control.record(error);

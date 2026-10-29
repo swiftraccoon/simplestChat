@@ -150,6 +150,18 @@ pub(super) use supervisor::{NormalLaunch, launch_normal};
 /// Only the explicit prerequisite route can enter the fixed native roles.
 /// Earlier JSON is passive; the returned status includes every final fence.
 pub fn run(args: &[OsString]) -> ExitCode {
+    if args.first().is_some_and(|arg| arg == "deploy-injection") {
+        #[cfg(feature = "maintain-guest")]
+        return guest::run_deploy_injection(&args[1..]);
+        #[cfg(not(feature = "maintain-guest"))]
+        return ExitCode::from(2);
+    }
+    if args.first().is_some_and(|arg| arg == "deploy-guest") {
+        #[cfg(feature = "maintain-guest")]
+        return guest::run_deploy(&args[1..]);
+        #[cfg(not(feature = "maintain-guest"))]
+        return ExitCode::from(2);
+    }
     if args.first().is_some_and(|arg| arg == "host-upgrade") {
         #[cfg(feature = "maintain-guest")]
         return guest::run_upgrade(&args[1..]);
@@ -188,6 +200,13 @@ pub fn run(args: &[OsString]) -> ExitCode {
         eprint!("{USAGE}");
         ExitCode::FAILURE
     }
+}
+
+/// Fixed client for the marked disposable deploy fixture's private mount view.
+/// The guest admits its ownership marker and peer before forwarding any request.
+#[cfg(feature = "maintain-guest")]
+pub fn deploy_fixture_docker(args: &[OsString]) -> ExitCode {
+    guest::run_deploy_docker(args)
 }
 #[cfg(target_os = "linux")]
 fn fail<T>(owner: &mut Owner, cause: Cause) -> Result<T> {
