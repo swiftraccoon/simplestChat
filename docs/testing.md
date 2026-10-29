@@ -1625,11 +1625,34 @@ browser suite groups (accounts, media, stress) run as parallel CI jobs. Their
 native toolchain caches bind the vendored sources, whose files receive a fixed
 mtime so reusable worker artifacts stay valid across checkouts. Rust lint,
 native/PostgreSQL tests and browser backends use separate `rust-check`,
-`rust-test` and `rust-build` dependency-cache namespaces. The test job primes
-all targets with `cargo build --locked --workspace --all-targets --profile test`,
+`rust-test` and `browser-backend-v1` dependency-cache namespaces. Browser builds
+select only `simplestchat` and `simplestchat-load-test`, with their current default
+features (including the full load generator). Their Rust-only `browser-backend`
+success cache retains the server, load generator and both dependency files. Its
+fresh namespace binds product/native source, manifests and lockfile, compiler and
+runner identity, build environment, workflow build prefix and the current
+key/save/verify implementation. Unrelated Ops implementation and xtask modules
+do not invalidate these two artifacts; workspace and tool manifests remain
+conservatively bound. A restored receipt must pass all four hashes and the
+role-specific dependency-file checks before either executable is installed.
+Unexpected tracked or generated dependencies fail closed. The older `backend`
+scope remains covered by its unchanged frozen-reference comparisons. The
+retention owner recognizes the fixed new compiled-cache role under its existing
+main-ref, freshness, retained-copy and deletion limits. Verified-success receipts
+keep their existing protected treatment.
+
+The affected API review applies `C-CUSTOM-TYPE`, `C-VALIDATE` and `C-SERDE` to
+the private scope enum, exact receipt identity and dependency admission. A
+matching artifact hash cannot admit an input outside its role, and receipt
+serialization grants no release or execution authority. The existing file,
+process, error and explicit-finalization contracts retain their prior scope.
+
+The test job separately primes all targets with
+`cargo build --locked --workspace --all-targets --all-features --profile test`,
 including development dependencies and test harnesses; it then runs the complete
-test command with ignored tests included and one test thread. A browser-only
-binary cache cannot substitute for that test graph. The production image caches
+test command with ignored tests included and one test thread. Browser artifact
+reuse cannot substitute for that test graph, current required checks or release
+provenance and signing. The production image caches
 completed application layers as well as warmed dependencies, with a new cache
 key whenever its build inputs change. BuildKit validates fallback layers against
 the current inputs. The native image policy commands are:
@@ -2155,11 +2178,13 @@ inventory/linkage commands; it performs no installation or native compilation.
 The Linux CI step runs it after building the server.
 
 Browser jobs reuse backend executables only for the same bound inputs and after
-checking both executable and compiler dependency-file hashes. Backend keys bind
-all Rust targets (including `load_tests`), embedded source/fixture trees, Cargo
-manifests/configuration, the complete native-toolchain action and its helpers,
-compiler environment overrides, and runner/trust identities. The CI workflow's
-global configuration and browser job through backend publication are bound;
+checking both executable and compiler dependency-file hashes. Browser backend
+keys bind the app/full-load packages and their product/native source trees, Cargo
+manifests/configuration, the fixed native-toolchain action/installers, current
+Rust key/save/verify policy, compiler environment overrides and runner/trust
+identities. Unrelated Ops implementation and other xtask modules are outside
+this artifact role. The CI workflow's global configuration and browser job
+through backend publication are bound;
 independent image-job, operations-test and documentation edits do not rebuild
 unchanged binaries. Unsupported workflow layouts fail closed.
 Before publication, both Cargo `.d` files must name the expected binary and only

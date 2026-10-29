@@ -42,6 +42,13 @@ static FAMILIES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
             "(?:Linux|macOS|Windows)-(?:x64|arm64))-[a-f0-9]{8}-[a-f0-9]{8}"
         )
         .into(),
+        // Fixed new browser build role; do not widen the legacy role grammar.
+        format!("(vendored-v2-{NAMESPACE}-browser-backend-v1)-{DIGEST}"),
+        concat!(
+            "(v3-rust-(?:main|untrusted)-(?:X64|ARM64)-browser-backend-v1-",
+            "(?:Linux|macOS|Windows)-(?:x64|arm64))-[a-f0-9]{8}-[a-f0-9]{8}"
+        )
+        .into(),
     ]
     .into_iter()
     .map(|pattern| {

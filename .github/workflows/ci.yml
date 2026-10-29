@@ -601,21 +601,21 @@ jobs:
       - name: Fingerprint the exact backend inputs
         id: verified-inputs
         env:
-          CI_CACHE_SCOPE: backend
+          CI_CACHE_SCOPE: browser-backend
         run: |
           cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified backend result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/ci-verified-backend
+          path: ${{ runner.temp }}/ci-verified-browser-backend
           key: ${{ steps.verified-inputs.outputs.key }}
       - name: Validate the restored backend receipt
         if: steps.verified.outputs.cache-hit == 'true'
         env:
-          CI_CACHE_SCOPE: backend
+          CI_CACHE_SCOPE: browser-backend
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
-          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-browser-backend
         run: |
           cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
@@ -623,7 +623,7 @@ jobs:
       - uses: ./.github/actions/native-toolchain
         if: steps.verified.outputs.cache-hit != 'true'
         with:
-          cache-key: rust-build
+          cache-key: browser-backend-v1
 
       - name: Connect the isolated local runner to its disposable database
         if: ${{ env.ACT }}
@@ -643,21 +643,19 @@ jobs:
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
           cargo run --locked -q -p xtask -- ci npm-path
 
-      # One feature set for every Rust target in CI. Distinct feature sets
-      # (default for the server, load-test for the generator, all for the
-      # tests) each rebuilt the native worker, three minutes apiece. The
-      # load-test feature only adds the generator's dependencies and binary;
-      # the server code is identical.
+      # This cache retains only the server and full load generator, not Ops
+      # or xtask executables. Workspace tests keep their separate complete
+      # all-feature graph and always use the rust-test cache role.
       - name: Build server and load generator
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo build --locked --workspace --bins
+        run: cargo build --locked -p simplestchat -p simplestchat-load-test --bins
 
       - name: Record the successful backend verification
         if: steps.verified.outputs.cache-hit != 'true'
         env:
-          CI_CACHE_SCOPE: backend
+          CI_CACHE_SCOPE: browser-backend
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
-          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-browser-backend
         run: |
           cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
@@ -665,7 +663,7 @@ jobs:
         if: steps.verified.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/ci-verified-backend
+          path: ${{ runner.temp }}/ci-verified-browser-backend
           key: ${{ steps.verified.outputs.cache-primary-key }}
 
       - name: Migrate disposable test database with the real server

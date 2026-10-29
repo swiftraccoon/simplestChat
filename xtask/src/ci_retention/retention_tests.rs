@@ -922,3 +922,64 @@ print(json.dumps({'families':[reference.family(key) for key in data['keys']],'pl
         assert_eq!(expected["edges"], json!(parsed_edges));
     }
 }
+
+#[test]
+fn browser_dependency_roles_are_exact_families_under_the_original_retention_limits() {
+    // These are synthetic cache metadata, not provider observations or API actions.
+    let prefixes = [
+        "vendored-v2-main-Linux-X64-browser-backend-v1",
+        "vendored-v2-untrusted-Linux-ARM64-browser-backend-v1",
+    ];
+    for prefix in prefixes {
+        let key = format!("{prefix}-{}", "a".repeat(64));
+        assert_eq!(policy::family(&key), Some((prefix.into(), 2)));
+        for bad in [
+            key.replace("browser-backend-v1", "browser-backend-v2"),
+            key.replace("browser-backend-v1", "browser-backend-v1-extra"),
+            format!("prefix-{key}"),
+            format!("{key}\n"),
+            format!("{key}0"),
+            key[..key.len() - 1].into(),
+            key.to_uppercase(),
+        ] {
+            assert_eq!(policy::family(&bad), None, "{bad}");
+        }
+    }
+    let raw = "v3-rust-main-X64-browser-backend-v1-Linux-x64";
+    let key = format!("{raw}-01234567-89abcdef");
+    assert_eq!(policy::family(&key), Some((raw.into(), 2)));
+    for bad in [
+        key.replace("browser-backend-v1", "browser-backend-v2"),
+        key.replace("browser-backend-v1", "browser-backend-v1-extra"),
+        format!("prefix-{key}"),
+        format!("{key}\n"),
+        format!("{key}0"),
+        key[..key.len() - 1].into(),
+        key.to_uppercase(),
+    ] {
+        assert_eq!(policy::family(&bad), None, "{bad}");
+    }
+    for raw_cache in [false, true] {
+        let mut entries = (1..=4)
+            .map(|id| {
+                let mut entry = named(id, prefixes[0]);
+                if raw_cache {
+                    entry.key = format!("{raw}-{id:08x}-89abcdef");
+                }
+                entry
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(ids(&policy::plan(&entries, now())), [1, 2]);
+        assert_eq!(
+            ids(&policy::plan_with_limits(&entries, now(), u64::MAX, 1)),
+            [1]
+        );
+        entries[0].accessed = now();
+        let mut pull = entries[1].clone();
+        pull.id = 10;
+        pull.reference = "refs/pull/7/merge".into();
+        entries.push(pull);
+        entries.push(named(11, "unknown-browser-backend-v1"));
+        assert_eq!(ids(&policy::plan(&entries, now())), [2]);
+    }
+}

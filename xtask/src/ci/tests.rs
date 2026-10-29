@@ -141,13 +141,13 @@ impl Drop for Fixture {
 }
 
 #[test]
-fn every_scope_matches_the_python_oracle_and_worktree_changes() {
+fn every_reference_scope_matches_the_python_oracle_and_worktree_changes() {
     let fixture = Fixture::new();
     for changed in [false, true] {
         if changed {
             fixture.write("src/main.rs", b"changed worktree, unchanged index\n");
         }
-        for name in inputs::SCOPES {
+        for name in inputs::REFERENCE_SCOPES {
             let scope = Scope::parse(name).unwrap();
             let expected = fixture.oracle("key", scope, "", Path::new("."));
             assert_eq!(
@@ -248,7 +248,7 @@ fn assert_key_parity(fixture: &Fixture, scope: Scope) -> String {
 #[test]
 fn input_closures_and_index_modes_preserve_oracle_decisions() {
     let fixture = Fixture::new();
-    let scopes = inputs::SCOPES
+    let scopes = inputs::REFERENCE_SCOPES
         .iter()
         .map(|name| Scope::parse(name).unwrap())
         .collect::<Vec<_>>();
@@ -392,12 +392,16 @@ fn workflow_projection_preserves_build_and_rejects_late_global_or_alias_inputs()
         ),
         ("test:stress", "test:stress-extra", false),
         (
-            "cargo build --locked --workspace --bins",
+            "cargo build --locked -p simplestchat -p simplestchat-load-test --bins",
             "cargo build --locked --bins",
             true,
         ),
         ("OPENSSL_STATIC: \"1\"", "OPENSSL_STATIC: \"0\"", true),
-        ("cache-key: rust-build", "cache-key: different-build", true),
+        (
+            "cache-key: browser-backend-v1",
+            "cache-key: different-build",
+            true,
+        ),
     ] {
         assert!(source.contains(before));
         fs::write(&path, source.replace(before, after)).unwrap();
@@ -702,7 +706,7 @@ fn symlinked_sources_or_restored_executables_never_become_proof() {
 }
 
 #[test]
-fn every_scope_binds_the_compiled_fingerprint_implementation() {
+fn every_reference_scope_binds_the_compiled_fingerprint_implementation() {
     let fixture = Fixture::new();
     for path in [
         "xtask/src/ci/mod.rs",
@@ -714,7 +718,7 @@ fn every_scope_binds_the_compiled_fingerprint_implementation() {
         fixture.write(path, b"original compiler input\n");
     }
     fixture.git(&["add", "."]);
-    for name in inputs::SCOPES {
+    for name in inputs::REFERENCE_SCOPES {
         let scope = Scope::parse(name).unwrap();
         let original = assert_key_parity(&fixture, scope);
         fixture.write("xtask/src/ci/mod.rs", b"new fingerprint implementation\n");
@@ -871,7 +875,7 @@ fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity
     fixture.write(catalog, b"original reviewed catalog\n");
     fixture.write(adjacent, b"original unrelated JSON\n");
     fixture.git(&["add", "."]);
-    for name in inputs::SCOPES {
+    for name in inputs::REFERENCE_SCOPES {
         let scope = Scope::parse(name).unwrap();
         let original = assert_key_parity(&fixture, scope);
         fixture.write(catalog, b"changed reviewed catalog\n");
@@ -959,3 +963,6 @@ fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_f
     // to reconstruct the Rust analyzer's compiler extraction.
     assert!(!inputs::selected(Scope::CodeqlRust, workflow));
 }
+
+#[path = "browser_backend_tests.rs"]
+mod browser_backend;

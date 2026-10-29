@@ -75,7 +75,11 @@ impl Drop for Fixture {
 
 #[test]
 fn framing_accepts_only_the_exact_scope_trust_and_lowercase_digest() {
-    for name in super::super::inputs::SCOPES {
+    for name in super::super::inputs::REFERENCE_SCOPES
+        .iter()
+        .copied()
+        .chain(["browser-backend"])
+    {
         let scope = Scope::parse(name).unwrap();
         for trusted in [true, false] {
             let trust = if trusted { "main" } else { "untrusted" };
@@ -316,7 +320,7 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
         ("automation", "automation", 18),
         ("rust-lint", "rust-lint", 13),
         ("rust-test", "rust-test", 20),
-        ("browser", "backend", 44),
+        ("browser", "browser-backend", 44),
     ] {
         let steps = workflow.jobs[job]["steps"].as_array().unwrap();
         assert_eq!(
