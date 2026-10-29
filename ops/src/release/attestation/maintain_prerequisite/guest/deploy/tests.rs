@@ -1,5 +1,20 @@
 use super::*;
 
+const FIXTURE_CONFIGURATION: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/ansible/group_vars/benchmark_hosts.yml"
+));
+fn fixture_scalar(key: &str) -> &'static str {
+    // These two source-bound plain scalars are data, without a template evaluator.
+    let prefix = format!("{key}: ");
+    let values = FIXTURE_CONFIGURATION
+        .lines()
+        .filter_map(|line| line.strip_prefix(&prefix))
+        .collect::<Vec<_>>();
+    assert_eq!(values.len(), 1, "{key}");
+    values[0]
+}
+
 fn request() -> Value {
     let pins = |names: Vec<String>| {
         names
@@ -8,15 +23,74 @@ fn request() -> Value {
             .collect::<serde_json::Map<_, _>>()
     };
     let pin = json!({"sha256":"b".repeat(64),"bytes":1});
+    let engine = fixture_scalar("scbench_docker_engine_version")
+        .split_once(':')
+        .unwrap()
+        .1
+        .split_once('-')
+        .unwrap()
+        .0;
     json!({"schemaVersion":1,"scope":"NativeHostDeployRequest","runId":"c".repeat(32),
         "revision":"d".repeat(40),"previousRevision":"e".repeat(40),
         "setupSeconds":600,"bodySeconds":4320,"sourcePins":pins(sources::guest_names()),
         "helperPins":pins(sources::helper_names()),"binary":pin,
         "current":{"release.json":pin,"image.tar":pin},
         "previous":{"release.json":pin,"image.tar":pin},"sourceBundle":pin,
-        "sourceTree":"f".repeat(40),"engineVersion":"29.8.2",
-        "postgresImage":format!("postgres:17-alpine@sha256:{}","b".repeat(64)),
+        "sourceTree":"f".repeat(40),"engineVersion":engine,
+        "postgresImage":fixture_scalar("scpub_postgres_image"),
         "caddyImage":super::super::protocol::CADDY_IMAGE})
+}
+
+#[test]
+fn deploy_admits_the_actual_frozen_postgres_profile_and_refuses_other_images() {
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../build/release_container_harness.py"
+    ));
+    // Read only the frozen two-literal selection, never execute the reference module.
+    let block = source
+        .split_once("\nPOSTGRES = (\n")
+        .unwrap()
+        .1
+        .split_once("\n)\n")
+        .unwrap()
+        .0;
+    let selected = block
+        .lines()
+        .map(|line| {
+            let literal = line.trim();
+            literal
+                .strip_prefix("+ ")
+                .unwrap_or(literal)
+                .strip_prefix('"')
+                .unwrap()
+                .strip_suffix('"')
+                .unwrap()
+        })
+        .collect::<String>();
+    assert_eq!(selected, fixture_scalar("scpub_postgres_image"));
+    assert_eq!(selected, protocol::POSTGRES_IMAGE);
+    let value = request();
+    assert_eq!(value["postgresImage"], selected);
+    assert_eq!(value["engineVersion"], "29.8.2");
+    assert!(protocol::Request::decode(&serde_json::to_vec(&value).unwrap()).is_ok());
+    let (locator, digest) = selected.split_once("@sha256:").unwrap();
+    for image in [
+        format!("postgres:17-alpine@sha256:{digest}"),
+        format!("registry.invalid/library/postgres:18.6-bookworm@sha256:{digest}"),
+        format!("{locator}@sha256:{}", "b".repeat(64)),
+        format!("{locator}@sha256:{}", digest.to_ascii_uppercase()),
+        format!("{locator}@sha256:{}", &digest[..63]),
+        locator.to_owned(),
+        format!("{locator}@sha256:"),
+    ] {
+        let mut changed = value.clone();
+        changed["postgresImage"] = image.into();
+        assert!(protocol::Request::decode(&serde_json::to_vec(&changed).unwrap()).is_err());
+    }
+    let mut missing = value;
+    missing.as_object_mut().unwrap().remove("postgresImage");
+    assert!(protocol::Request::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
 }
 #[test]
 fn deploy_request_is_closed_and_distinct_from_maintenance() {

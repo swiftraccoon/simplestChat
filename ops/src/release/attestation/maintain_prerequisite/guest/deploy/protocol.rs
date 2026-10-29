@@ -3,6 +3,11 @@
 use super::*;
 use serde::Deserialize;
 
+pub(super) const POSTGRES_IMAGE: &str = concat!(
+    "docker.io/library/postgres:18.6-bookworm@sha256:",
+    "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650",
+);
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Payload {
@@ -49,12 +54,7 @@ impl Request {
         require((3720..=4320).contains(&request.body_seconds) && hex(&request.source_tree, 40))?;
         require(request.engine_version == "29.8.2")?;
         require(request.caddy_image == super::super::protocol::CADDY_IMAGE)?;
-        require(
-            request
-                .postgres_image
-                .strip_prefix("postgres:17-alpine@sha256:")
-                .is_some_and(|hash| hex(hash, 64)),
-        )?;
+        require(request.postgres_image == POSTGRES_IMAGE)?;
         require(
             request.source_pins.keys().cloned().collect::<BTreeSet<_>>()
                 == sources::guest_names().into_iter().collect(),

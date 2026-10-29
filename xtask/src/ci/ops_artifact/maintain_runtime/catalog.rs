@@ -11,6 +11,7 @@ pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
             "build/security_vm_deploy.py",
             "build/security_vm_deploy_guest.py",
             "build/security_vm_deploy_injection.py",
+            "build/release_container_harness.py",
             "ops/ansible/security-vm-native-deploy.yml",
             "ops/ansible/tests/test_security_vm_deploy.py",
             "ops/ansible/tests/test_security_vm_deploy_injection.py",
