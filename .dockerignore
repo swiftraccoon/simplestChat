@@ -67,6 +67,9 @@ ops/src/release/attestation/maintain_prerequisite/guest/host/events/**
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/
 ops/src/release/attestation/maintain_prerequisite/guest/effects/**
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/cold_pg/
+ops/src/release/attestation/maintain_prerequisite/guest/effects/cold_pg/**
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/cold_pg/*.rs
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/
 ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/**

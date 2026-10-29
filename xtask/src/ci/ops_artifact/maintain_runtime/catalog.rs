@@ -149,6 +149,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "control",
         "execute",
         "files",
+        "host_baseline",
         "host_diagnostic",
         "host_projection",
         "host_upgrade",
@@ -322,6 +323,8 @@ pub(super) fn sources() -> BTreeSet<String> {
     for name in [
         "control",
         "effects/actors",
+        "effects/cold_pg",
+        "effects/cold_pg/tests",
         "effects/effects_tests",
         "effects/migration_upgrade",
         "effects/mod",

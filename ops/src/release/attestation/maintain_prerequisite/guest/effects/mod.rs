@@ -1,6 +1,7 @@
 //! Owned daemon effects and independent observations for the fixed guest.
 
 mod actors;
+mod cold_pg;
 #[path = "../host/effects.rs"]
 mod host;
 mod migration_upgrade;
@@ -60,6 +61,8 @@ pub(super) struct Fixture {
     body_finished: bool,
     local_finished: bool,
     host_proxy_legacy: bool,
+    cold_opening: Option<cold_pg::Opening>,
+    cold_pg: Option<cold_pg::ColdPg>,
 }
 impl Fixture {
     pub fn new(request: &Request) -> Self {
@@ -89,6 +92,8 @@ impl Fixture {
             body_finished: false,
             local_finished: false,
             host_proxy_legacy: false,
+            cold_opening: None,
+            cold_pg: None,
         }
     }
     fn check_socket(&self) -> Result<()> {

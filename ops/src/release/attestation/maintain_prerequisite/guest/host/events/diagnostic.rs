@@ -148,8 +148,19 @@ impl<'a> Auditor<'a> {
         self.cursor = 0;
         self.row = None;
     }
+    pub fn begin_cold_pg_at(&mut self, index: usize) -> bool {
+        self.begin_cold_pg();
+        if index > self.raw.len() {
+            return false;
+        }
+        self.cursor = index;
+        true
+    }
     pub fn diagnostic(self) -> Option<Value> {
         self.detail
+    }
+    pub fn rows(&self) -> usize {
+        self.raw.len()
     }
     pub fn observe(&mut self, row: &Value) {
         // Adapters clone only their unchanged retained rows. A forward

@@ -521,16 +521,34 @@ pub(super) fn pg_exec_history(
     commands: &BTreeMap<String, usize>,
     health: &str,
 ) -> Result<()> {
-    pg_exec_history_inner(rows, commands, health, None)
+    pg_exec_history_inner(rows, commands, health, None, None).map(|_| ())
 }
 
+#[cfg(test)]
 pub(super) fn pg_exec_history_observed(
     rows: &[Value],
     commands: &BTreeMap<String, usize>,
     health: &str,
     audit: &mut Auditor<'_>,
 ) -> Result<()> {
-    pg_exec_history_inner(rows, commands, health, Some(audit))
+    pg_exec_history_inner(rows, commands, health, Some(audit), None).map(|_| ())
+}
+
+pub(super) type PgExecutions = BTreeMap<String, (String, Vec<&'static str>)>;
+/// Passive state derived from the retained pre-cut capture, never from a report.
+pub(super) struct PgBoundary {
+    pub seeds: BTreeMap<String, u8>,
+    pub origins: BTreeMap<String, String>,
+    pub seen: BTreeSet<String>,
+}
+pub(super) fn pg_exec_history_epoch(
+    rows: &[Value],
+    commands: &BTreeMap<String, usize>,
+    health: &str,
+    audit: &mut Auditor<'_>,
+    boundary: &PgBoundary,
+) -> Result<PgExecutions> {
+    pg_exec_history_inner(rows, commands, health, Some(audit), Some(boundary))
 }
 
 pub(super) fn pg_note(
@@ -557,8 +575,36 @@ fn pg_exec_history_inner(
     commands: &BTreeMap<String, usize>,
     health: &str,
     mut audit: Option<&mut Auditor<'_>>,
-) -> Result<()> {
-    let mut executions: BTreeMap<String, (String, Vec<&str>)> = BTreeMap::new();
+    boundary: Option<&PgBoundary>,
+) -> Result<PgExecutions> {
+    let mut executions = PgExecutions::new();
+    if let Some(boundary) = boundary {
+        require(
+            boundary.seeds.len() <= 1
+                && boundary
+                    .seeds
+                    .iter()
+                    .all(|(id, phase)| digest(id) && [1, 2].contains(phase)),
+        )
+        .inspect_err(|_| {
+            pg_note(
+                &mut audit,
+                PgReason::IncompleteSequence,
+                Some(health),
+                None,
+                Some(1),
+                Some(boundary.seeds.len()),
+            );
+        })?;
+        for (id, phase) in &boundary.seeds {
+            let phases = if *phase == 1 {
+                vec!["create"]
+            } else {
+                vec!["create", "start"]
+            };
+            executions.insert(id.clone(), (health.into(), phases));
+        }
+    }
     for row in rows {
         if let Some(audit) = audit.as_deref_mut() {
             audit.observe(row);
@@ -577,7 +623,8 @@ fn pg_exec_history_inner(
             pg_note(&mut audit, PgReason::ExecId, None, None, None, None);
         })?;
         if let Some(command) = action.strip_prefix("exec_create: ") {
-            let absent = !executions.contains_key(id);
+            let absent = !executions.contains_key(id)
+                && boundary.is_none_or(|boundary| !boundary.seen.contains(id));
             require(absent && (commands.contains_key(command) || command == health)).inspect_err(
                 |_| {
                     pg_note(
@@ -587,7 +634,14 @@ fn pg_exec_history_inner(
                         } else {
                             PgReason::DuplicateCreate
                         },
-                        executions.get(id).map(|(command, _)| command.as_str()),
+                        executions
+                            .get(id)
+                            .map(|(command, _)| command.as_str())
+                            .or_else(|| {
+                                boundary
+                                    .and_then(|boundary| boundary.origins.get(id))
+                                    .map(String::as_str)
+                            }),
                         Some(command),
                         None,
                         None,
@@ -600,7 +654,9 @@ fn pg_exec_history_inner(
                 pg_note(
                     &mut audit,
                     PgReason::MissingCreate,
-                    None,
+                    boundary
+                        .and_then(|boundary| boundary.origins.get(id))
+                        .map(String::as_str),
                     action.strip_prefix("exec_start: "),
                     None,
                     None,
@@ -645,10 +701,17 @@ fn pg_exec_history_inner(
     if let Some(audit) = audit.as_deref_mut() {
         audit.post_rows();
     }
+    let complete = |command: &str, phases: &[&str]| {
+        phases == ["create", "start", "die"]
+            || boundary.is_some()
+                && command == health
+                && !commands.contains_key(command)
+                && (phases == ["create"] || phases == ["create", "start"])
+    };
     require(
         executions
             .values()
-            .all(|(_, phases)| phases == &["create", "start", "die"]),
+            .all(|(command, phases)| complete(command, phases)),
     )
     .inspect_err(|_| {
         pg_note(
@@ -656,13 +719,29 @@ fn pg_exec_history_inner(
             PgReason::IncompleteSequence,
             executions
                 .values()
-                .find(|(_, phases)| phases != &["create", "start", "die"])
+                .find(|(command, phases)| !complete(command, phases))
                 .map(|(command, _)| command.as_str()),
             None,
             None,
             None,
         );
     })?;
+    if boundary.is_some() {
+        let unfinished = executions
+            .values()
+            .filter(|(_, phases)| phases != &["create", "start", "die"])
+            .count();
+        require(unfinished <= 1).inspect_err(|_| {
+            pg_note(
+                &mut audit,
+                PgReason::IncompleteSequence,
+                Some(health),
+                None,
+                Some(1),
+                Some(unfinished),
+            );
+        })?;
+    }
     for (command, count) in commands {
         let observed = executions
             .values()
@@ -679,7 +758,7 @@ fn pg_exec_history_inner(
             );
         })?;
     }
-    Ok(())
+    Ok(executions)
 }
 
 pub(super) fn normal_arguments(image: &str, bridge: &str, run_id: &str) -> Vec<String> {

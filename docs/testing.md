@@ -3532,9 +3532,32 @@ bounded counts only; row indices refer to the original retained event array.
 These reasons are valid only at that baseline stage and never on a passed
 receipt. An earlier failure retains its checkpoint and diagnostic. The older
 launcher-prerequisite output, clocks and acceptance criteria remain unchanged.
-Controlled incomplete-health fixtures at both snapshot boundaries must continue
-to fail. They test diagnostic attribution rather than establish why a previous
-hosted run failed; a fresh complete signed trial is separate evidence.
+Controlled incomplete-health fixtures at both snapshot boundaries continue to
+fail through the strict launcher-prerequisite wrapper. The complete host fixture
+instead permits a cut health execution only with a unique retained create for
+the same container and exact inspected health command. It reconciles the gap and
+requires every distinct cold-boundary obligation to end with string exit code
+`"0"` before whole-operation success. Tests cover both edges, shared-ID counting,
+gap and final completion, and rejected unknown origins, other commands, reused
+IDs, nonzero exits and incomplete bootstrap commands. This reconciliation does
+not clear other uncertain mutations or renew an owner or observation timer.
+Known read-only health completion debt is tracked separately so it does not
+bypass or block the existing mutation-admission guard. Terminal daemon uncertainty
+includes unresolved cold debt even when a preparation audit has cleared its own
+mutation latch; completing health work cannot clear an uncertain mutation.
+
+The host proof now requires the nineteenth field `baselinePgEvidence`, containing
+only `openingHealthSeeded`, `trailingHealthDeferred`, `coldHealthObligations` and
+`coldHealthCompletions`. The first two are 0–1; the latter two are 0–2, with the
+obligations counting distinct IDs and completions no greater than obligations.
+The union is bounded by the maximum and sum of the two boundary counts.
+Evidence is null before PostgreSQL admission and may be partial after admission
+if another baseline check fails. A passed baseline requires nonnull evidence,
+and a passed whole operation requires all obligations completed. Producer and
+controller use this same closed shape; eighteen-field historical receipts are
+retained evidence of their original revision, not accepted new receipts.
+Zero counts do not prove the boundary path ran. A fresh signed trial and nonzero
+boundary evidence remain separate from controlled tests and diagnostic hashes.
 
 Controlled README dirtiness, launcher status 1 and retained selection establish
 the refusal case by comparison with the clean baseline. Those observations do

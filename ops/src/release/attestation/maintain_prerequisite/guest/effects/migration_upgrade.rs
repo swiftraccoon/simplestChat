@@ -9,11 +9,16 @@ use super::super::{
 };
 use super::*;
 
-fn admitted(fixture: &Fixture, ctx: &Context, baseline: &Baseline) -> Result<()> {
+pub(super) fn admitted(
+    fixture: &Fixture,
+    request: &protocol::Request,
+    first: Option<Error>,
+    baseline: &Baseline,
+) -> Result<()> {
     require(
-        ctx.request.is_host()
-            && ctx.request.scenario == "host-migration-upgrade"
-            && ctx.control.first.is_none()
+        request.is_host()
+            && request.scenario == "host-migration-upgrade"
+            && first.is_none()
             && policy::digest(&baseline.pg)
             && fixture.pg.as_deref() == Some(baseline.pg.as_str())
             && fixture.image == baseline.image
@@ -33,7 +38,7 @@ impl Fixture {
         ctx.control.checkpoint = "host-migration-prepare";
         let result: Result<Value> = async {
             ctx.check()?;
-            admitted(self, ctx, baseline)?;
+            admitted(self, &ctx.request, ctx.control.first, baseline)?;
             let sources = SourceLedger::from_sources(&ctx.sources)?;
             self.unknown_effect = true;
             self.sql(ctx, "host-migration-prepare", &sources.preparation_sql())
@@ -64,7 +69,7 @@ impl Fixture {
         ctx.control.checkpoint = "host-migration-after";
         let result: Result<Value> = async {
             ctx.check()?;
-            admitted(self, ctx, baseline)?;
+            admitted(self, &ctx.request, ctx.control.first, baseline)?;
             let sources = SourceLedger::from_sources(&ctx.sources)?;
             let bytes = self
                 .sql(ctx, "host-migration-after", &migration::observation_sql())
