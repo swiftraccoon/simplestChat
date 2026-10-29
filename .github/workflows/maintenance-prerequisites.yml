@@ -63,7 +63,7 @@ jobs:
             --guest-finalization-seconds 60
       - name: Preserve only the completed sanitized prerequisite summary
         if: ${{ success() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: maintenance-prerequisites-summary
           path: ${{ runner.temp }}/maintenance-prerequisites/summary.json
@@ -71,7 +71,7 @@ jobs:
           retention-days: 14
       - name: Preserve only closed prerequisite failure metadata when available
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: maintenance-prerequisites-failure-summary
           path: ${{ runner.temp }}/maintenance-prerequisites/failure-summary.json
@@ -118,7 +118,7 @@ jobs:
             --output "$RUNNER_TEMP/maintain-namespace-probe"
       - name: Preserve only the completed namespace prerequisite summary
         if: ${{ success() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: maintenance-namespace-summary
           path: ${{ runner.temp }}/maintain-namespace-probe/summary.json
@@ -126,7 +126,7 @@ jobs:
           retention-days: 14
       - name: Preserve only closed prerequisite failure metadata when available
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: maintenance-namespace-failure-summary
           path: ${{ runner.temp }}/maintain-namespace-probe/failure-summary.json
