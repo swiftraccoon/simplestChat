@@ -6,7 +6,6 @@ use super::{
     files::{self, Original},
 };
 use crate::owned_process::{Group, exited_now, finish_before, reserved};
-#[cfg(target_os = "linux")]
 use std::os::fd::AsRawFd;
 use std::{
     collections::BTreeMap,
@@ -25,6 +24,87 @@ use std::{
 };
 
 const MAX: usize = 2 * 1024 * 1024;
+// All guest child creation passes this gate. Only an owned deploy duplicate
+// ever loses CLOEXEC; no other spawn may overlap that short inheritance window.
+static SPAWN_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+enum SpawnInput {
+    Empty,
+    Bulk(File),
+    NativeWitness,
+}
+struct CommandPolicy<'a> {
+    cap: Duration,
+    accepted: &'a [i32],
+}
+struct Inherited {
+    file: Option<File>,
+    flags: rustix::io::FdFlags,
+}
+impl Inherited {
+    fn new(original: &Original, control: &mut Control) -> Result<Self> {
+        original.check(control)?;
+        let file = original.file()?.try_clone().map_err(|_| Error::Io)?;
+        let mut owned = Self {
+            file: Some(file),
+            flags: rustix::io::FdFlags::CLOEXEC,
+        };
+        let admitted = (|| {
+            let file = owned.file.as_ref().ok_or(Error::Close)?;
+            owned.flags = rustix::io::fcntl_getfd(file).map_err(|_| Error::Io)?;
+            if !owned.flags.contains(rustix::io::FdFlags::CLOEXEC) {
+                return Err(Error::Refused);
+            }
+            if !files::same(
+                &original.file()?.metadata().map_err(|_| Error::Io)?,
+                &file.metadata().map_err(|_| Error::Io)?,
+            ) {
+                return Err(Error::Changed);
+            }
+            control.check()
+        })();
+        if let Err(error) = admitted {
+            control.record(error);
+            let _ = owned.finish(control);
+            return Err(error);
+        }
+        Ok(owned)
+    }
+    fn number(&self) -> Result<i32> {
+        let number = self.file.as_ref().ok_or(Error::Close)?.as_raw_fd();
+        if number <= 2 {
+            return Err(Error::Refused);
+        }
+        Ok(number)
+    }
+    fn enable(&self) -> Result<()> {
+        rustix::io::fcntl_setfd(
+            self.file.as_ref().ok_or(Error::Close)?,
+            self.flags - rustix::io::FdFlags::CLOEXEC,
+        )
+        .map_err(|_| Error::Io)
+    }
+    fn finish(&mut self, control: &mut Control) -> Result<()> {
+        self.finish_with(control, |file, flags| {
+            rustix::io::fcntl_setfd(file, flags).map_err(|_| Error::Close)
+        })
+    }
+    fn finish_with(
+        &mut self,
+        control: &mut Control,
+        restore: impl FnOnce(&File, rustix::io::FdFlags) -> Result<()>,
+    ) -> Result<()> {
+        let Some(file) = self.file.take() else {
+            return Ok(());
+        };
+        let restored = restore(&file, self.flags);
+        if let Err(error) = restored {
+            control.cleanup_failed = true;
+            control.record(error);
+        }
+        let closed = files::close(file, control);
+        restored.and(closed)
+    }
+}
 fn retained_executable(original: &Original) -> Result<PathBuf> {
     #[cfg(target_os = "linux")]
     let path = PathBuf::from(format!(
@@ -356,6 +436,8 @@ enum Actor {
     Capture,
     Native,
     HostNative,
+    DeployPositive,
+    DeployNegative,
 }
 impl Actor {
     fn parse(role: &str, tool: Option<&String>) -> Result<Self> {
@@ -364,6 +446,8 @@ impl Actor {
             ("wire-capture", Some("tcpdump")) => Ok(Self::Capture),
             ("native", Some("ops")) => Ok(Self::Native),
             ("host-native", Some("ops")) => Ok(Self::HostNative),
+            ("deploy-positive", Some("ops")) => Ok(Self::DeployPositive),
+            ("deploy-negative", Some("unshare")) => Ok(Self::DeployNegative),
             _ => Err(Error::Input),
         }
     }
@@ -373,6 +457,8 @@ impl Actor {
             Self::Capture => 1,
             Self::Native => 2,
             Self::HostNative => 3,
+            Self::DeployPositive => 4,
+            Self::DeployNegative => 5,
         }
     }
 }
@@ -380,7 +466,7 @@ pub(super) struct Commands {
     tools: BTreeMap<String, Tool>,
     count: u16,
     ordinary: u16,
-    actors: [bool; 4],
+    actors: [bool; 6],
     ordinary_limit: u16,
     failed: Vec<Running>,
     monitor: Option<Monitor>,
@@ -391,7 +477,7 @@ impl Commands {
             tools: BTreeMap::new(),
             count: 0,
             ordinary: 0,
-            actors: [false; 4],
+            actors: [false; 6],
             ordinary_limit: 128,
             failed: Vec::new(),
             monitor: None,
@@ -401,6 +487,17 @@ impl Commands {
         let mut value = Self::new();
         value.ordinary_limit = 256;
         value
+    }
+    pub fn new_deploy() -> Self {
+        let mut value = Self::new();
+        value.ordinary_limit = 384;
+        value
+    }
+    pub fn original(&self, role: &str) -> Result<&Original> {
+        self.tools
+            .get(role)
+            .map(|tool| &tool.original)
+            .ok_or(Error::Input)
     }
     pub fn admit(&mut self, role: &str, path: &Path, control: &mut Control) -> Result<()> {
         control.check()?;
@@ -454,6 +551,12 @@ impl Commands {
             .ok_or(Error::Refused)
     }
     pub fn check(&self, control: &mut Control) -> Result<()> {
+        self.check_inputs(control, self.ordinary_limit != 384)
+    }
+    pub fn check_full(&self, control: &mut Control) -> Result<()> {
+        self.check_inputs(control, true)
+    }
+    fn check_inputs(&self, control: &mut Control, full: bool) -> Result<()> {
         for tool in self.tools.values() {
             control.check()?;
             let now = fs::symlink_metadata(&tool.alias).map_err(|_| Error::Changed)?;
@@ -483,13 +586,22 @@ impl Commands {
             {
                 return Err(Error::Changed);
             }
-            tool.original.check(control)?;
+            if full {
+                tool.original.check(control)?;
+            } else {
+                tool.original.check_metadata(control)?;
+            }
         }
         control.check()
     }
     fn account(&mut self, actor: Option<Actor>) -> Result<()> {
         if let Some(actor) = actor {
             if matches!(actor, Actor::HostNative) && self.ordinary_limit != 256 {
+                return Err(Error::Input);
+            }
+            if matches!(actor, Actor::DeployPositive | Actor::DeployNegative)
+                && self.ordinary_limit != 384
+            {
                 return Err(Error::Input);
             }
             let used = &mut self.actors[actor.index()];
@@ -514,17 +626,42 @@ impl Commands {
         end: Instant,
         actor: Option<Actor>,
     ) -> Result<Running> {
-        self.check(control)?;
-        if args.is_empty()
-            || role.is_empty()
-            || role.len() > 48
-            || !role
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-        {
-            return Err(Error::Input);
+        self.spawn_at_options(control, role, args, end, actor, SpawnInput::Empty)
+    }
+    fn spawn_at_options(
+        &mut self,
+        control: &mut Control,
+        role: &str,
+        args: &[String],
+        end: Instant,
+        actor: Option<Actor>,
+        source: SpawnInput,
+    ) -> Result<Running> {
+        let (inherit_ops, mut input) = match source {
+            SpawnInput::Empty => (false, None),
+            SpawnInput::Bulk(file) => (false, Some(file)),
+            SpawnInput::NativeWitness => (true, None),
+        };
+        let admitted = (|| {
+            self.check(control)?;
+            if args.is_empty()
+                || role.is_empty()
+                || role.len() > 48
+                || !role
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            {
+                return Err(Error::Input);
+            }
+            self.account(actor)
+        })();
+        if let Err(error) = admitted {
+            if let Some(file) = input.take() {
+                control.record(error);
+                let _ = files::close(file, control);
+            }
+            return Err(error);
         }
-        self.account(actor)?;
         let mut running = Running {
             group: None,
             pipes: [None, None],
@@ -540,6 +677,8 @@ impl Commands {
             limits: [MAX, MAX],
             grace: Duration::from_secs(5),
         };
+        let mut inherited = None;
+        let mut gate = None;
         let result = (|| {
             for (index, suffix) in ["stdout", "stderr"].iter().enumerate() {
                 running.logs[index] = Some(
@@ -559,10 +698,35 @@ impl Commands {
             // The retained parent owns this descriptor through interpreter startup and
             // finalization. A shebang interpreter cannot use a child CLOEXEC descriptor.
             let executable = retained_executable(&tool.original)?;
+            let mut arguments = args[1..].to_vec();
+            if inherit_ops {
+                inherited = Some(Inherited::new(
+                    &self.tools.get("ops").ok_or(Error::Input)?.original,
+                    control,
+                )?);
+                let descriptor = inherited
+                    .as_ref()
+                    .ok_or(Error::Close)?
+                    .number()?
+                    .to_string();
+                if arguments
+                    .iter()
+                    .filter(|arg| *arg == "__SC_DEPLOY_FD__")
+                    .count()
+                    != 1
+                {
+                    return Err(Error::Input);
+                }
+                for argument in &mut arguments {
+                    if argument == "__SC_DEPLOY_FD__" {
+                        *argument = descriptor.clone();
+                    }
+                }
+            }
             let mut command = Command::new(executable);
             command
                 .arg0(&tool.original.path)
-                .args(&args[1..])
+                .args(&arguments)
                 .env_clear()
                 .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
                 .env("LC_ALL", "C")
@@ -572,25 +736,53 @@ impl Commands {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .process_group(0);
+            if let Some(input) = input.take() {
+                // Transfer this duplicate to the mature SDK's stdin adapter.
+                // Its internal close is opaque; the caller's original stays held.
+                command.stdin(Stdio::from(input));
+            }
             control.check()?;
+            gate = Some(SPAWN_GATE.lock().map_err(|_| Error::Close)?);
+            control.check()?;
+            if let Some(inherited) = &inherited {
+                inherited.enable()?;
+            }
             running.group = Some(Group::new(command.spawn().map_err(|_| Error::Io)?));
             let child = running.group.as_mut().ok_or(Error::Close)?.child();
             let files = [
                 child.stdout.take().map(|p| File::from(OwnedFd::from(p))),
                 child.stderr.take().map(|p| File::from(OwnedFd::from(p))),
             ];
+            let mut missing = false;
             for (index, file) in files.into_iter().enumerate() {
                 if let Some(file) = file {
                     running.pipes[index] = Some(Pipe::open(file));
                 } else {
-                    return Err(Error::Close);
+                    missing = true;
                 }
+            }
+            if missing {
+                return Err(Error::Close);
             }
             for pipe in running.pipes.iter_mut().flatten() {
                 pipe.configure()?;
             }
             control.check()
         })();
+        if let Err(error) = result {
+            control.record(error);
+        }
+        let restored = inherited
+            .as_mut()
+            .map_or(Ok(()), |value| value.finish(control));
+        let input_closed = input
+            .take()
+            .map_or(Ok(()), |file| files::close(file, control));
+        drop(gate.take());
+        let result = result
+            .and(restored)
+            .and(input_closed)
+            .and_then(|()| control.check());
         if let Err(error) = result {
             running.first = Some(error);
             control.record(error);
@@ -613,6 +805,22 @@ impl Commands {
             args,
             (Instant::now() + cap).min(control.end()),
             Some(actor),
+        )
+    }
+    pub fn spawn_deploy_negative(
+        &mut self,
+        control: &mut Control,
+        args: &[String],
+        cap: Duration,
+    ) -> Result<Running> {
+        let actor = Actor::parse("deploy-negative", args.first())?;
+        self.spawn_at_options(
+            control,
+            "deploy-negative",
+            args,
+            (Instant::now() + cap).min(control.body_end()),
+            Some(actor),
+            SpawnInput::NativeWitness,
         )
     }
     async fn settle_failed_start<F>(
@@ -643,9 +851,32 @@ impl Commands {
     where
         F: FnOnce(&[u8]) -> Result<()>,
     {
-        let end = (Instant::now() + cap).min(control.phase_end());
+        self.execute_adopt_input(
+            control,
+            role,
+            args,
+            CommandPolicy { cap, accepted },
+            adopt,
+            None,
+        )
+        .await
+    }
+    async fn execute_adopt_input<F>(
+        &mut self,
+        control: &mut Control,
+        role: &str,
+        args: &[String],
+        policy: CommandPolicy<'_>,
+        adopt: F,
+        input: Option<File>,
+    ) -> Result<Output>
+    where
+        F: FnOnce(&[u8]) -> Result<()>,
+    {
+        let end = (Instant::now() + policy.cap).min(control.phase_end());
         let failed_before = self.failed.len();
-        let mut child = match self.spawn_at(control, role, args, end, None) {
+        let source = input.map_or(SpawnInput::Empty, SpawnInput::Bulk);
+        let mut child = match self.spawn_at_options(control, role, args, end, None, source) {
             Ok(child) => child,
             Err(error) => {
                 self.settle_failed_start(control, failed_before, adopt)
@@ -672,7 +903,7 @@ impl Commands {
         // Adopt actual completed effects before any fallible sink close or post-hash.
         // The reservation remains held until settlement; output is complete only with EOF.
         let output = child.finish_adopting(control, adopt).await?;
-        if !accepted.contains(&output.status) {
+        if !policy.accepted.contains(&output.status) {
             return Err(Error::Command);
         }
         self.check(control)?;
@@ -688,6 +919,36 @@ impl Commands {
     ) -> Result<Output> {
         self.execute_adopt(control, role, args, cap, accepted, |_| Ok(()))
             .await
+    }
+    pub async fn execute_input(
+        &mut self,
+        control: &mut Control,
+        role: &str,
+        args: &[String],
+        input: &File,
+        cap: Duration,
+    ) -> Result<Output> {
+        use std::io::{Seek, SeekFrom};
+        control.check()?;
+        let mut duplicate = input.try_clone().map_err(|_| Error::Io)?;
+        let prepared = duplicate.seek(SeekFrom::Start(0)).map_err(|_| Error::Io);
+        if let Err(error) = prepared {
+            control.record(error);
+            let _ = files::close(duplicate, control);
+            return Err(error);
+        }
+        self.execute_adopt_input(
+            control,
+            role,
+            args,
+            CommandPolicy {
+                cap,
+                accepted: &[0],
+            },
+            |_| Ok(()),
+            Some(duplicate),
+        )
+        .await
     }
     pub async fn call(
         &mut self,
@@ -731,6 +992,10 @@ impl Commands {
         first.map_or(Ok(()), Err)
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "process_deploy_tests.rs"]
+mod deploy_tests;
 
 #[cfg(test)]
 mod tests {
@@ -847,7 +1112,7 @@ mod tests {
         assert!(commands.failed.is_empty());
         assert!(commands.tools.is_empty());
         assert_eq!(owner.end(), original_end);
-        assert_eq!(commands.actors, [false; 4]);
+        assert_eq!(commands.actors, [false; 6]);
         for actor in [Actor::Events, Actor::Capture, Actor::Native] {
             commands.account(Some(actor)).unwrap();
             assert_eq!(commands.account(Some(actor)), Err(Error::Input));

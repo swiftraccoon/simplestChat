@@ -71,10 +71,12 @@ jobs:
         run: |
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
-            openssh-client curl acl
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-utils cloud-image-utils seabios ipxe-qemu \
+            openssh-client curl ca-certificates acl
           test -c /dev/kvm
-          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          # KVM change events can flush named-user access between the two boots.
+          sudo setfacl -m "g:$(id -g):rw" /dev/kvm
           python3 -m venv "$RUNNER_TEMP/deploy-controller"
           "$RUNNER_TEMP/deploy-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
@@ -102,7 +104,7 @@ jobs:
           DEPLOY_PREVIOUS_ARTIFACT_ID: ${{ inputs.previous_artifact_id }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          python3 -B build/security_vm_deploy.py \
+          ./target/debug/xtask ops-artifact deploy-runtime \
             --run-id "$DEPLOY_RUN_ID" --run-attempt "$DEPLOY_RUN_ATTEMPT" \
             --artifact-id "$DEPLOY_ARTIFACT_ID" \
             --server-artifact-id "$DEPLOY_SERVER_ARTIFACT_ID" \

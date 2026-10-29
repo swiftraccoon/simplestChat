@@ -55,11 +55,78 @@ pub(super) struct Original {
     before: Metadata,
     parent_before: Metadata,
 }
+#[derive(Clone, Copy)]
 enum Profile {
     Private { uid: u32, gid: u32, mode: u32 },
     Tool { uid: u32 },
+    Observation { uid: u32, gid: u32 },
+}
+#[derive(Clone, Copy)]
+pub(super) enum ObservedFile {
+    InjectionAlias,
+    NativeStream,
 }
 impl Original {
+    pub fn observe(path: &Path, role: ObservedFile, control: &mut Control) -> Result<Self> {
+        let maximum = match role {
+            ObservedFile::InjectionAlias => {
+                if path
+                    != Path::new("/root/simplestchat-vm-fixture/deploy-injection-original-docker")
+                {
+                    return Err(Error::Input);
+                }
+                0
+            }
+            ObservedFile::NativeStream => {
+                let parent = path.parent().ok_or(Error::Input)?;
+                let attempt = parent
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or(Error::Input)?;
+                let name = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or(Error::Input)?;
+                let (number, stream) = name.split_once('.').ok_or(Error::Input)?;
+                if parent.parent() != Some(Path::new("/srv/simplestchat-public/results"))
+                    || !attempt
+                        .strip_prefix("release.")
+                        .is_some_and(|suffix| super::protocol::digest(suffix, 32))
+                    || number.len() != 3
+                    || !number.bytes().all(|byte| byte.is_ascii_digit())
+                    || !number
+                        .parse::<u16>()
+                        .is_ok_and(|number| (1..=192).contains(&number))
+                    || !["stdout", "stderr"].contains(&stream)
+                {
+                    return Err(Error::Input);
+                }
+                2 * 1024 * 1024
+            }
+        };
+        Self::open_role(
+            path,
+            maximum,
+            Profile::Observation { uid: 0, gid: 0 },
+            control,
+        )
+    }
+    #[cfg(test)]
+    pub(super) fn fixture_observation(
+        path: &Path,
+        maximum: u64,
+        control: &mut Control,
+    ) -> Result<Self> {
+        Self::open_role(
+            path,
+            maximum,
+            Profile::Observation {
+                uid: rustix::process::getuid().as_raw(),
+                gid: rustix::process::getgid().as_raw(),
+            },
+            control,
+        )
+    }
     pub fn open(
         path: &Path,
         maximum: u64,
@@ -175,6 +242,7 @@ impl Original {
             parent_before,
         };
         let admitted = (|| {
+            let allow_empty = matches!(profile, Profile::Observation { .. });
             let role = match profile {
                 Profile::Private { uid, gid, mode } => {
                     value.before.uid() == uid
@@ -188,8 +256,18 @@ impl Original {
                         && value.before.mode() & 0o111 != 0
                         && value.before.mode() & 0o022 == 0
                 }
+                Profile::Observation { uid, gid } => {
+                    value.before.uid() == uid
+                        && value.before.gid() == gid
+                        && value.before.nlink() == 1
+                        && value.before.mode() & 0o7777 == 0o600
+                }
             };
-            if !value.before.is_file() || !role || value.bytes == 0 || value.bytes > maximum {
+            if !value.before.is_file()
+                || !role
+                || (!allow_empty && value.bytes == 0)
+                || value.bytes > maximum
+            {
                 return Err(Error::Refused);
             }
             value.sha256 = value.hash(control)?;
@@ -312,6 +390,9 @@ impl Original {
         closed
     }
     pub fn retire_exact(mut self, expected: &[u8], control: &mut Control) -> Result<()> {
+        self.retire_owned(expected, control)
+    }
+    pub fn retire_owned(&mut self, expected: &[u8], control: &mut Control) -> Result<()> {
         let result = (|| {
             if self.data(expected.len() as u64, control)? != expected {
                 return Err(Error::Changed);
@@ -344,6 +425,23 @@ impl Original {
         let closed = self.release(control);
         result.and(closed)
     }
+}
+pub(super) fn injection_alias(control: &mut Control) -> Result<Original> {
+    let path = Path::new("/root/simplestchat-vm-fixture/deploy-injection-original-docker");
+    control.check()?;
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags((rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC).bits() as i32)
+        .open(path)
+        .map_err(|_| Error::Io)?;
+    let written = file.sync_all().map_err(|_| Error::Io);
+    if let Err(error) = written {
+        control.record(error);
+    }
+    written.and(close(file, control))?;
+    Original::observe(path, ObservedFile::InjectionAlias, control)
 }
 pub(super) fn write_new(
     path: &Path,

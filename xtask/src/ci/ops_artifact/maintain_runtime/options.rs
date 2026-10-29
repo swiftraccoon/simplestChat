@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub(super) const REPOSITORY: &str = "swiftraccoon/simplestChat";
 pub(super) const WORKFLOW: &str = "Signed musl maintenance launcher prerequisite KVM runtime";
 pub(super) const HOST_WORKFLOW: &str = "Signed musl prepared-host maintenance KVM runtime";
+pub(super) const DEPLOY_WORKFLOW: &str = "Signed musl host deploy KVM runtime";
 pub(super) const HOST_CASES: [&str; 4] = [
     "host-success",
     "host-launcher-refusal",
@@ -29,36 +30,42 @@ pub(super) fn host_success(scenario: &str) -> bool {
 pub(super) enum Purpose {
     Prerequisite,
     Host,
+    Deploy,
 }
 impl Purpose {
     pub fn workflow(self) -> &'static str {
         match self {
             Self::Prerequisite => WORKFLOW,
             Self::Host => HOST_WORKFLOW,
+            Self::Deploy => DEPLOY_WORKFLOW,
         }
     }
     pub fn cases(self) -> &'static [&'static str] {
         match self {
             Self::Prerequisite => &CASES,
             Self::Host => &HOST_CASES,
+            Self::Deploy => &["deploy-rollback"],
         }
     }
     pub fn usage(self) -> &'static str {
         match self {
             Self::Prerequisite => USAGE,
             Self::Host => HOST_USAGE,
+            Self::Deploy => super::deploy_options::USAGE,
         }
     }
     pub fn summary_scope(self) -> &'static str {
         match self {
             Self::Prerequisite => "SignedMuslMaintenanceLauncherPrerequisiteKvm",
             Self::Host => "SignedMuslPreparedHostMaintenanceKvm",
+            Self::Deploy => "SignedMuslHostDeployKvm",
         }
     }
     pub fn proof_key(self) -> &'static str {
         match self {
             Self::Prerequisite => "maintainProof",
             Self::Host => "hostProof",
+            Self::Deploy => "deployProof",
         }
     }
 }

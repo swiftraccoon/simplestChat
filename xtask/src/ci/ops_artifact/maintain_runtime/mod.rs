@@ -3,6 +3,12 @@
 mod auth;
 mod catalog;
 mod control;
+mod deploy_capture;
+mod deploy_execute;
+mod deploy_options;
+mod deploy_projection;
+#[cfg(test)]
+mod deploy_workflow_tests;
 mod execute;
 mod files;
 mod host_projection;
@@ -22,14 +28,35 @@ pub(super) fn run(arguments: &[String]) -> std::process::ExitCode {
 pub(super) fn run_host(arguments: &[String]) -> std::process::ExitCode {
     run_for(arguments, options::Purpose::Host)
 }
+pub(super) fn run_deploy(arguments: &[String]) -> std::process::ExitCode {
+    run_for(arguments, options::Purpose::Deploy)
+}
+enum Selection {
+    Maintenance(options::Options),
+    Deploy(deploy_options::DeployOptions),
+}
+impl Selection {
+    fn options(&self) -> &options::Options {
+        match self {
+            Self::Maintenance(options) => options,
+            Self::Deploy(options) => &options.common,
+        }
+    }
+}
 fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::ExitCode {
     use std::{io::Write, time::Instant};
     let started = Instant::now();
     let parsed = match purpose {
-        options::Purpose::Prerequisite => options::Options::parse(arguments),
-        options::Purpose::Host => options::Options::parse_host(arguments),
+        options::Purpose::Prerequisite => {
+            options::Options::parse(arguments).map(|value| value.map(Selection::Maintenance))
+        }
+        options::Purpose::Host => {
+            options::Options::parse_host(arguments).map(|value| value.map(Selection::Maintenance))
+        }
+        options::Purpose::Deploy => deploy_options::DeployOptions::parse(arguments)
+            .map(|value| value.map(Selection::Deploy)),
     };
-    let options = match parsed {
+    let selection = match parsed {
         Ok(None) => {
             println!("{}", purpose.usage());
             return std::process::ExitCode::SUCCESS;
@@ -40,6 +67,7 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
             return std::process::ExitCode::from(2);
         }
     };
+    let options = selection.options();
     let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
     let mut control = match control::Control::for_purpose(started, purpose) {
         Ok(value) => value,
@@ -54,7 +82,14 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
         .build();
     let mut report = match runtime {
         Ok(runtime) => {
-            let report = runtime.block_on(execute::run(&options, &mut control));
+            let report = match &selection {
+                Selection::Maintenance(options) => {
+                    runtime.block_on(execute::run(options, &mut control))
+                }
+                Selection::Deploy(options) => {
+                    runtime.block_on(deploy_execute::run(options, &mut control))
+                }
+            };
             drop(runtime);
             report
         }

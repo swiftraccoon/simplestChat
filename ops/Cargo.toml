@@ -13,7 +13,7 @@ workspace = true
 default = []
 # Only the authenticated distributed Ops artifact needs the native fixture guest.
 # Default xtask/bootstrap builds must not acquire an OpenSSL dependency.
-maintain-guest = ["dep:asn1-rs", "dep:openssl", "dep:x509-parser"]
+maintain-guest = ["dep:asn1-rs", "dep:openssl", "dep:x509-parser", "rustix/mount"]
 
 [dependencies]
 asn1-rs = { version = "=0.7.2", default-features = false, features = ["bigint"], optional = true }

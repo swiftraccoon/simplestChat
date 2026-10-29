@@ -18,6 +18,8 @@ pub(super) struct Control {
     end: Instant,
     phase: Option<Instant>,
     host: bool,
+    deploy: bool,
+    deploy_configured: bool,
     host_post: Option<Instant>,
     signals: CompletionSignals,
 }
@@ -28,6 +30,30 @@ impl Control {
     }
     pub fn new_host(start: Instant) -> Result<Self> {
         Self::new_role(start, true)
+    }
+    /// Separate deploy fixture: the frozen original body and final tail.
+    pub fn new_deploy(start: Instant) -> Result<Self> {
+        let mut owner = Self::new_role(start, false)?;
+        owner.deploy = true;
+        owner.setup_end = start + Duration::from_secs(600);
+        owner.body = start + Duration::from_secs(4320);
+        owner.end = start + Duration::from_secs(4350);
+        Ok(owner)
+    }
+    pub fn configure_deploy(&mut self, setup: u64, body: u64) -> Result<()> {
+        self.check()?;
+        if !self.deploy
+            || self.deploy_configured
+            || !(1..=600).contains(&setup)
+            || !(3720..=4320).contains(&body)
+        {
+            return Err(Error::Input);
+        }
+        self.setup_end = self.start + Duration::from_secs(setup);
+        self.body = self.start + Duration::from_secs(body);
+        self.end = self.body + Duration::from_secs(30);
+        self.deploy_configured = true;
+        self.check()
     }
     /// The separate pre-guest upgrade helper has its own fixed 120/15 scope.
     pub fn new_upgrade(start: Instant) -> Result<Self> {
@@ -52,18 +78,29 @@ impl Control {
             end: start + Duration::from_secs(if host { 3690 } else { 1710 }),
             phase: None,
             host,
+            deploy: false,
+            deploy_configured: false,
             host_post: None,
             signals: CompletionSignals::new().map_err(|_| Error::Io)?,
         })
     }
     pub fn monitor_limit(&self) -> Duration {
-        Duration::from_secs(if self.host { 3780 } else { 1800 })
+        Duration::from_secs(if self.deploy {
+            4500
+        } else if self.host {
+            3780
+        } else {
+            1800
+        })
     }
     pub fn record(&mut self, error: Error) {
         self.first.get_or_insert(error);
     }
     pub fn configure(&mut self, request: &Request) -> Result<()> {
         self.check()?;
+        if self.deploy {
+            return Err(Error::Input);
+        }
         if self.host != request.is_host() {
             return Err(Error::Input);
         }
@@ -83,6 +120,9 @@ impl Control {
     }
     pub fn is_recovering(&self) -> bool {
         self.recovering
+    }
+    pub fn is_settling(&self) -> bool {
+        self.settling
     }
     pub fn phase_end(&self) -> Instant {
         let end = if self.settling {
@@ -170,6 +210,9 @@ impl Control {
         checked
     }
     pub fn advance(&mut self) -> Result<()> {
+        if self.deploy {
+            return Err(Error::Input);
+        }
         self.advance_with_debt(1170)
     }
     pub fn advance_host(&mut self) -> Result<()> {
@@ -177,6 +220,12 @@ impl Control {
             return Err(Error::Input);
         }
         self.advance_with_debt(2040)
+    }
+    pub fn advance_deploy(&mut self) -> Result<()> {
+        if !self.deploy {
+            return Err(Error::Input);
+        }
+        self.advance_with_debt(3720)
     }
     /// Clamp the new host purpose's entire post-native response, including all
     /// recovery, stream joins and explicit closes. Reentry never resets it.

@@ -32,6 +32,13 @@ impl Profile {
                 // Whole maintain1800 + post-observation120 + VM cleanup120.
                 debt: Duration::from_secs(2040),
             },
+            Purpose::Deploy => Self {
+                whole: Duration::from_secs(4500),
+                finalization: Duration::from_secs(180),
+                setup: Duration::from_secs(600),
+                // Both native1800 envelopes and the original observation120.
+                debt: Duration::from_secs(3720),
+            },
         }
     }
 }
@@ -90,6 +97,7 @@ impl Control {
         match self.purpose {
             Purpose::Prerequisite => DEBT,
             Purpose::Host => Duration::from_secs(1920),
+            Purpose::Deploy => Duration::from_secs(3720),
         }
     }
     pub fn body_end(&self) -> Instant {
@@ -216,5 +224,31 @@ mod tests {
         assert_eq!(host.purpose(), Purpose::Host);
         assert_eq!(original.finish(), Ok(()));
         assert_eq!(host.finish(), Ok(()));
+    }
+    #[test]
+    fn deploy_reserves_two_complete_native_calls_without_borrowing_setup() {
+        let start = Instant::now();
+        let mut deploy = Control::for_purpose(start, Purpose::Deploy).unwrap();
+        assert_eq!(deploy.end() - start, Duration::from_secs(4500));
+        assert_eq!(deploy.whole_body_end() - start, Duration::from_secs(4320));
+        assert_eq!(deploy.body_end() - start, Duration::from_secs(600));
+        assert_eq!(deploy.debt(), Duration::from_secs(3720));
+        assert_eq!(deploy.response_debt(), Duration::from_secs(3720));
+        deploy.advance().unwrap();
+        assert_eq!(deploy.body_end(), deploy.whole_body_end());
+        let repeated = deploy.advance().unwrap_err();
+        assert_eq!(repeated, Error::Deadline);
+        deploy.record(repeated);
+        deploy.settle();
+        assert_eq!(deploy.finish(), Err(Error::Deadline));
+
+        let mut expired =
+            Control::for_purpose(Instant::now() - Duration::from_secs(600), Purpose::Deploy)
+                .unwrap();
+        assert_eq!(expired.advance(), Err(Error::Deadline));
+        assert!(expired.setup);
+        expired.settle();
+        assert_eq!(expired.end() - expired.start, Duration::from_secs(4500));
+        assert_eq!(expired.finish(), Err(Error::Deadline));
     }
 }

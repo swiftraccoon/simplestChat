@@ -1,0 +1,104 @@
+---
+- name: Prepare only the marked fixed native deploy and rollback guest
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - group_vars/benchmark_hosts.yml
+  pre_tasks:
+    - name: Require the exact disposable guest and authenticated source inputs
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.service_mgr == 'systemd'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+          - vm_maintain_bundle_path is match('^/')
+          - vm_maintain_bundle_sha256 is match('^[a-f0-9]{64}$')
+          - vm_current_artifact_dir is match('^/')
+          - vm_previous_artifact_dir is match('^/')
+          - vm_previous_revision is match('^[a-f0-9]{40}$')
+          - vm_previous_revision != vm_fixture_revision
+    - name: Read only the original cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: maintain_fixture_marker
+      no_log: true
+    - name: Require its exact original bytes
+      ansible.builtin.assert:
+        that:
+          - maintain_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+  tasks:
+    - name: Install only the fixed launcher fixture prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - jq
+          - nftables
+          - tcpdump
+          - iproute2
+          - util-linux
+          - coreutils
+        state: present
+        update_cache: true
+        install_recommends: false
+        fail_on_autoremove: true
+    - name: Reuse the unchanged pinned engine and CLI provisioning closure
+      ansible.builtin.import_tasks: tasks/docker.yml
+    - name: Create only the fixed private source and fixture namespaces
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /root/simplestchat-vm-fixture/maintain-prerequisite
+        - /root/simplestchat-vm-fixture/maintain-prerequisite/server-input
+        - /root/simplestchat-vm-fixture/deploy-runtime
+        - /root/simplestchat-vm-fixture/deploy-runtime/previous-input
+        - /srv/simplestchat-public
+        - /srv/simplestchat-public/results
+        - /srv/simplestchat-public/backups
+        - /srv/simplestchat-public/releases
+        - /etc/simplestchat-public
+        - /run/simplestchat-bench
+        - /srv/simplestchat-bench/sources
+    - name: Admit only the operational bench helper directory profile
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-bench
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Copy one retained original source bundle
+      ansible.builtin.copy:
+        src: "{{ vm_maintain_bundle_path }}"
+        dest: /root/simplestchat-vm-fixture/maintain-source.bundle
+        owner: root
+        group: root
+        mode: '0600'
+    - name: Copy only the authenticated current server payload
+      ansible.builtin.copy:
+        src: "{{ vm_current_artifact_dir }}/{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/maintain-prerequisite/server-input/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]
+    - name: Copy only the authenticated previous server payload
+      ansible.builtin.copy:
+        src: "{{ vm_previous_artifact_dir }}/{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/deploy-runtime/previous-input/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]

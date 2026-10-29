@@ -53,6 +53,7 @@ fn watchdog_seconds_for(
     let maximum = match purpose {
         super::options::Purpose::Prerequisite => 1800,
         super::options::Purpose::Host => 3780,
+        super::options::Purpose::Deploy => 4500,
     };
     let seconds = end.saturating_duration_since(now).as_secs().min(maximum);
     if seconds == 0 {
@@ -1435,6 +1436,7 @@ fn qemu_arguments_for(
         || !(1..=match purpose {
             super::options::Purpose::Prerequisite => 1800,
             super::options::Purpose::Host => 3780,
+            super::options::Purpose::Deploy => 4500,
         })
             .contains(&seconds)
         || !files::safe_path(work)
@@ -2659,6 +2661,8 @@ mod host_profile_tests {
         assert!(arguments(Purpose::Prerequisite, 1801).is_err());
         assert!(arguments(Purpose::Host, 3780).is_ok());
         assert!(arguments(Purpose::Host, 3781).is_err());
+        assert!(arguments(Purpose::Deploy, 4500).is_ok());
+        assert!(arguments(Purpose::Deploy, 4501).is_err());
         let now = Instant::now();
         let end = now + Duration::from_secs(4000);
         assert_eq!(
@@ -2666,6 +2670,11 @@ mod host_profile_tests {
             Ok(1800)
         );
         assert_eq!(watchdog_seconds_for(Purpose::Host, end, now), Ok(3780));
+        assert_eq!(watchdog_seconds_for(Purpose::Deploy, end, now), Ok(4000));
+        assert_eq!(
+            watchdog_seconds_for(Purpose::Deploy, now + Duration::from_secs(5000), now),
+            Ok(4500)
+        );
         assert_eq!(
             watchdog_seconds_for(Purpose::Host, end, end),
             Err(Error::Deadline)

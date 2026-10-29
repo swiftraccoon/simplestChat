@@ -58,6 +58,12 @@ ops/src/release/attestation/maintain_prerequisite/**
 !ops/src/release/attestation/maintain_prerequisite/guest/
 ops/src/release/attestation/maintain_prerequisite/guest/**
 !ops/src/release/attestation/maintain_prerequisite/guest/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/deploy/
+ops/src/release/attestation/maintain_prerequisite/guest/deploy/**
+!ops/src/release/attestation/maintain_prerequisite/guest/deploy/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/deploy/injection_client/
+ops/src/release/attestation/maintain_prerequisite/guest/deploy/injection_client/**
+!ops/src/release/attestation/maintain_prerequisite/guest/deploy/injection_client/*.rs
 !ops/src/release/attestation/maintain_prerequisite/guest/host/
 ops/src/release/attestation/maintain_prerequisite/guest/host/**
 !ops/src/release/attestation/maintain_prerequisite/guest/host/*.rs

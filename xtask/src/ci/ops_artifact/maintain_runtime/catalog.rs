@@ -1,6 +1,26 @@
 //! Exact source and frozen guest-role catalog; no Python imports select this roster.
 
+use super::options::Purpose;
 use std::collections::BTreeSet;
+
+pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
+    let mut names = sources();
+    if purpose == Purpose::Deploy {
+        for name in [
+            ".github/workflows/release-deploy-runtime.yml",
+            "build/security_vm_deploy.py",
+            "build/security_vm_deploy_guest.py",
+            "build/security_vm_deploy_injection.py",
+            "ops/ansible/security-vm-native-deploy.yml",
+            "ops/ansible/tests/test_security_vm_deploy.py",
+            "ops/ansible/tests/test_security_vm_deploy_injection.py",
+            "xtask/src/ci/ops_artifact.rs",
+        ] {
+            names.insert(name.into());
+        }
+    }
+    names
+}
 pub(super) const HELPERS: [&str; 15] = [
     "bounded_process.py",
     "release-public.py",
@@ -147,6 +167,13 @@ pub(super) fn sources() -> BTreeSet<String> {
         "auth",
         "catalog",
         "control",
+        "deploy_capture",
+        "deploy_execute",
+        "deploy_options",
+        "deploy_options_tests",
+        "deploy_projection",
+        "deploy_projection_tests",
+        "deploy_workflow_tests",
         "execute",
         "files",
         "host_baseline",
@@ -322,6 +349,23 @@ pub(super) fn sources() -> BTreeSet<String> {
     }
     for name in [
         "control",
+        "deploy/mod",
+        "deploy/protocol",
+        "deploy/files",
+        "deploy/payload",
+        "deploy/probe",
+        "deploy/effects",
+        "deploy/operation",
+        "deploy/history",
+        "deploy/injection",
+        "deploy/injection_client",
+        "deploy/injection_client/context",
+        "deploy/injection_client/wire",
+        "deploy/injection_client/namespace",
+        "deploy/injection_client/tests",
+        "deploy/native_report",
+        "deploy/validation",
+        "deploy/tests",
         "effects/actors",
         "effects/cold_pg",
         "effects/cold_pg/tests",
@@ -349,6 +393,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "native",
         "observation",
         "process",
+        "process_deploy_tests",
         "protocol",
         "render",
         "render_tests",

@@ -108,7 +108,7 @@ fn require(value: bool) -> Result<()> {
     if value { Ok(()) } else { Err(Error::Refused) }
 }
 pub(super) async fn prepare_trust(ctx: &mut Context, root: &[u8]) -> Result<()> {
-    require(ctx.request.is_host())?;
+    require(ctx.request.is_host() || ctx.request.is_deploy())?;
     files::trust_install(ctx, root).await
 }
 struct Run {
