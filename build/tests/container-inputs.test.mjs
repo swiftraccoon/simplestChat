@@ -273,6 +273,11 @@ test('context excludes local-only descendants while retaining production inputs'
     '!ops/src/release/attestation/stage/reentry/',
     'ops/src/release/attestation/stage/reentry/**',
     '!ops/src/release/attestation/stage/reentry/*.rs',
+    '!xtask/src/ci/automation/reference/',
+    'xtask/src/ci/automation/reference/**',
+    '!xtask/src/ci/automation/reference/maintenance-python.yml',
+    '!xtask/src/ci/automation/reference/source-python.yml',
+    '!xtask/src/ci/automation/reference/ci-python.yml',
   ]) assert.ok(ignoreRules.includes(rule), 'the fixed Rust controller needs narrow traversal');
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
@@ -341,6 +346,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/apt_mirror/retained/artifact.zip',
     'xtask/src/ci/automation/private.env',
     'xtask/src/ci/automation/retained/artifact.zip',
+    'xtask/src/ci/automation/reference/private.env',
+    'xtask/src/ci/automation/reference/other.yml',
     'xtask/src/ci_evidence/private.env',
     'xtask/src/ci_retention/private.env',
     'xtask/src/ci/codeql_cache/private.env',

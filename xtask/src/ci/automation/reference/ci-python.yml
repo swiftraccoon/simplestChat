@@ -1,0 +1,1571 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  OPENSSL_DIR: ${{ github.workspace }}/target/openssl-4.1.0
+  PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+  AWS_LC_SYS_SYSTEM_DIR: ${{ github.workspace }}/target/aws-lc-5.11.0
+  AWS_LC_SYS_STATIC: '1'
+  AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  security:
+    name: Security
+    uses: ./.github/workflows/security.yml
+
+  codeql:
+    name: CodeQL
+    permissions:
+      contents: read
+      security-events: write # Passed only to the reusable SARIF upload jobs.
+    uses: ./.github/workflows/codeql.yml
+
+  automation:
+    name: Operations automation lint and safety checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Include the PR head beneath GitHub's synthetic merge commit.
+          fetch-depth: 2
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
+      - name: Select the pinned Python Unicode oracle
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Subject/key/receipt checks use xtask before native setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Check the branch tip commit subject
+        env:
+          COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: cargo run --locked -q -p xtask -- ci commit-subject
+
+      - name: Fingerprint the exact automation inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: automation
+        run: |
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+      - name: Restore a verified automation result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-automation
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored automation receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: automation
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
+        run: |
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
+      - name: Install isolated controller checks
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv shellcheck jq postgresql
+          python3 -m venv "${RUNNER_TEMP}/ansible-controller"
+          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
+          cargo run --locked -q -p xtask -- ci controller-path
+      - name: Validate automation without contacting any host
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
+          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
+        run: cargo run --locked -q -p xtask -- ci automation --checks
+
+      - name: Verify operational alert history in disposable PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- ci database-check monitoring
+
+      - name: Verify isolated backup restoration with pinned PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          RESTORE_CONTAINER_E2E: "1"
+        run: cargo run --locked -q -p xtask -- ci database-check restore
+
+      - name: Verify server migration data preservation in disposable PostgreSQL
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- ci database-check migration
+
+      - name: Preserve isolated restore failure diagnostics
+        if: ${{ failure() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: restore-container
+          path: ${{ runner.temp }}/simplestchat-restore-container.*/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify production alert rule behavior with pinned Prometheus
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- ci validate-config promtool
+
+      - name: Preserve promtool validation metadata
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-validation-promtool
+          path: ${{ runner.temp }}/simplestchat-config-validation-promtool-*/config-validation.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record the successful automation verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: automation
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
+        run: |
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact automation success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-automation
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
+  automation-references:
+    name: Operations whole-reference comparisons (${{ matrix.group }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        group: [foundation, fetch, host, deploy]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the pinned Python Unicode oracle
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install the pinned Rust toolchain for reference comparisons
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+          # Complete the additive rust-toolchain.toml request before any Cargo proxy.
+          components: rustfmt, clippy, rust-analyzer
+      - name: Install the isolated pinned reference environment
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/ansible-controller"
+          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
+          cargo run --locked -q -p xtask -- ci controller-path
+      - name: Compare every complete operation with its unchanged reference
+        env:
+          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
+          REFERENCE_GROUP: ${{ matrix.group }}
+        run: cargo run --locked -q -p xtask -- ci automation --references "$REFERENCE_GROUP"
+      - name: Record successful local reference coverage
+        if: ${{ env.ACT }}
+        env:
+          LOCAL_REFERENCE_GROUP: ${{ matrix.group }}
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id "reference-$LOCAL_REFERENCE_GROUP"
+
+  rust-lint:
+    name: Rust format, lints and documentation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Fingerprint the exact rust-lint inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: rust-lint
+        run: |
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+      - name: Restore a verified rust-lint result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-lint
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored rust-lint receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: rust-lint
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
+        run: |
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-check
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
+      - name: Check helper syntax, safety and cleanup
+        run: cargo run --locked -q -p xtask -- check --helpers
+
+      - name: Check Rust formatting, lints and documentation
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- check --rust
+
+      - name: Audit Rust dependencies
+        run: cargo run --locked -q -p xtask -- ci audit-rust
+
+      - name: Record the successful rust-lint verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: rust-lint
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
+        run: |
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact rust-lint success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-lint
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
+  rust-test:
+    name: Rust build, native and PostgreSQL tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        # Official image, pinned to the verified PostgreSQL 18.6 manifest.
+        image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # mediasoup-sys invokes pip from its Cargo build script.
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
+      CI_LOCAL_POSTGRES_PORT: "5432"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select the pinned Python Unicode oracle
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+
+      # setup-python exports its own PKG_CONFIG_PATH. Each Rust/native consumer
+      # below restores the pinned OpenSSL path at step scope.
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Fingerprint the exact rust-test inputs
+        id: verified-inputs
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+          CI_CACHE_SCOPE: rust-test
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+      - name: Restore a verified rust-test result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-test
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored rust-test receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+          CI_CACHE_SCOPE: rust-test
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
+        run: |
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
+      - uses: ./.github/actions/native-toolchain
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        with:
+          # Test dependencies produce a different graph from browser binaries.
+          # An immutable browser cache cannot acquire these missing artifacts.
+          cache-key: rust-test
+
+      - name: Connect the isolated local runner to its disposable database
+        if: ${{ env.ACT && steps.verified.outputs.cache-hit != 'true' }}
+        run: build/ci-local-postgres.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.verified.outputs.cache-hit != 'true'
+        with:
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
+      # Include development dependencies from the first build so cargo test
+      # reuses the same feature graph and native worker. Explicitly use its
+      # profile too; every test still executes in the test step below.
+      - name: Build server, load generator and test harnesses
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo build --locked --workspace --all-targets --all-features --profile test
+
+      - name: Verify readiness and graceful shutdown
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: ./target/debug/load_test bench shutdown-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/shutdown-smoke"
+
+      - name: Verify bounded local operation diagnostics
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: ./target/debug/load_test bench diagnostics-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/diagnostics-smoke"
+
+      - name: Verify native security patches
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- ci native-security
+
+      - name: Migrate disposable test database with the real server
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo run --locked -q -p xtask -- test-server true
+
+      # Include all PostgreSQL tests, not only the default unit suite.
+      # Serialize native media-worker and room-session integration tests.
+      # Child fixtures need their parent; pinned Python oracles run in automation.
+      - name: Test (including PostgreSQL recovery, refresh and moderation)
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: >-
+          cargo test --locked --workspace --all-features -- --include-ignored --test-threads=1
+          --skip capacity_vps::process::tests::inert_child_signal_mask
+          --skip capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle
+          --skip ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas
+          --skip release::build::tests::whole_reference_scenarios_match_unchanged_python
+          --skip release::build::process::tests::signal_worker
+          --skip release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python
+          --skip release::attestation::prepare::signal_tests::retained_hash_signal_child
+          --skip whole_verify_scenarios_match_unchanged_python
+          --skip whole_fresh_release_matches_unchanged_python
+          --skip whole_fetch_controller_matches_unchanged_python
+          --skip whole_host_receiver_matches_unchanged_python
+          --skip whole_stage_matches_unchanged_python
+          --skip whole_deploy_matches_unchanged_python
+          --skip whole_restore_matches_unchanged_python
+
+      - name: Synthetic media delivery correctness smoke
+        if: steps.verified.outputs.cache-hit != 'true'
+        timeout-minutes: 2
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+          RUST_LOG: warn
+          E2E_ARTIFACTS: ${{ runner.temp }}/media-smoke
+        run: |
+          cargo run --locked -q -p xtask -- test-server target/debug/load_test \
+            --server ws://127.0.0.1:3119/ws --clients 4 --rooms 1 --mode conference \
+            --ramp-up 2 --warmup 10 --duration 8 --deadline-grace 20 \
+            --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
+            --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
+
+      # !env.ACT: xtask ci-local runs jobs with act, whose artifact server does
+      # not speak the upload-artifact v7 protocol; retained files stay on its runner.
+      - name: Preserve media smoke diagnostics
+        if: ${{ !cancelled() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: media-smoke
+          path: |
+            ${{ runner.temp }}/media-smoke
+            ${{ runner.temp }}/shutdown-smoke
+            ${{ runner.temp }}/diagnostics-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record the successful rust-test verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+          CI_CACHE_SCOPE: rust-test
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
+        run: |
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact rust-test success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-rust-test
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
+  native-dtls:
+    name: Native worker DTLS closure and media diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The check compiles the vendored worker and its test binary from scratch,
+      # historically about nine minutes. The source key also binds its Rust
+      # controller/toolchain and this workflow; cold Cargo compile time has not
+      # been measured inside the unchanged 12-minute verification budget.
+      # Lookup-only reuse never restores executable output or native artifacts.
+      - name: Look up a passing verification of these native inputs
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/native-dtls-verified
+          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', 'xtask/**', 'load_tests/Cargo.toml', 'ops/Cargo.toml', 'ops/ops-build-inputs.lock.json', 'ops/src/**', '.github/workflows/ci.yml') }}
+          lookup-only: true
+
+      - name: Install the pinned Rust toolchain for native regression policy
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Install native build dependencies
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang python3-pip cmake curl perl pkg-config
+
+      - name: Restore checksum-pinned OpenSSL
+        if: steps.verified.outputs.cache-hit != 'true'
+        id: openssl
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/simplestchat-openssl-4.1.0
+          key: openssl-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build/install-openssl.sh') }}
+
+      - name: Build checksum-pinned OpenSSL
+        if: steps.verified.outputs.cache-hit != 'true' && steps.openssl.outputs.cache-hit != 'true'
+        env:
+          OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.1.0
+        run: build/install-openssl.sh "${OPENSSL_DIR}"
+
+      - name: Verify native DTLS closure and media diagnostic context
+        if: steps.verified.outputs.cache-hit != 'true'
+        timeout-minutes: 12
+        env:
+          OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.1.0
+        run: cargo run --locked -q -p xtask -- ci native-dtls --record-success
+
+      - name: Preserve native media failure diagnostics
+        if: ${{ failure() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-dtls-failure
+          path: ${{ runner.temp }}/simplestchat-native-dtls.*/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.verified.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/native-dtls-verified
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
+  browser:
+    name: Browser integration (${{ matrix.group }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      # One job definition, three runners: every group repeats the same
+      # two-minute build and browser setup, then runs under two minutes of
+      # suites instead of five and a half minutes in one sequence.
+      #   accounts: sign-in, passkeys, room controls, chat retry, accessibility
+      #   media: community and real-media regressions, continuity, call outcomes
+      #   stress: homepage layout, restart recovery, the UI stress harness
+      matrix:
+        group: [accounts, media, stress]
+        include:
+          - {group: accounts, postgres_port: 5433}
+          - {group: media, postgres_port: 5434}
+          - {group: stress, postgres_port: 5435}
+    services:
+      postgres:
+        # Official image, pinned to the verified PostgreSQL 18.6 manifest.
+        image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - "${{ matrix.postgres_port }}:5432"
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # mediasoup-sys invokes pip from its Cargo build script.
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:${{ matrix.postgres_port }}/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:${{ matrix.postgres_port }}/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
+      CI_LOCAL_POSTGRES_PORT: ${{ matrix.postgres_port }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Fingerprint the exact backend inputs
+        id: verified-inputs
+        env:
+          CI_CACHE_SCOPE: backend
+        run: |
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+      - name: Restore a verified backend result
+        id: verified
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-backend
+          key: ${{ steps.verified-inputs.outputs.key }}
+      - name: Validate the restored backend receipt
+        if: steps.verified.outputs.cache-hit == 'true'
+        env:
+          CI_CACHE_SCOPE: backend
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+        run: |
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+
+      - uses: ./.github/actions/native-toolchain
+        if: steps.verified.outputs.cache-hit != 'true'
+        with:
+          cache-key: rust-build
+
+      - name: Connect the isolated local runner to its disposable database
+        if: ${{ env.ACT }}
+        run: build/ci-local-postgres.sh
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
+      # One feature set for every Rust target in CI. Distinct feature sets
+      # (default for the server, load-test for the generator, all for the
+      # tests) each rebuilt the native worker, three minutes apiece. The
+      # load-test feature only adds the generator's dependencies and binary;
+      # the server code is identical.
+      - name: Build server and load generator
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: cargo build --locked --workspace --bins
+
+      - name: Record the successful backend verification
+        if: steps.verified.outputs.cache-hit != 'true'
+        env:
+          CI_CACHE_SCOPE: backend
+          CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
+          CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
+        run: |
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+            --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
+      - name: Save the exact backend success
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-verified-backend
+          key: ${{ steps.verified.outputs.cache-primary-key }}
+
+      - name: Migrate disposable test database with the real server
+        run: cargo run --locked -q -p xtask -- test-server true
+
+      - name: Prefer official Ubuntu archive mirrors for browser dependencies
+        if: ${{ !env.ACT }}
+        timeout-minutes: 1
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
+            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+
+      - name: Build UI and install pinned browser tooling
+        id: browser-tooling
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+          npm --prefix web/e2e ci --ignore-scripts
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium firefox
+          npm --prefix web/e2e audit --audit-level=moderate
+
+      - name: Authentication dialog and diagnostic privacy in Chromium and Firefox
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          AUTH_LIFECYCLE_E2E: "1"
+        run: cargo run --locked -q -p xtask -- ci browser-suite auth-lifecycle
+
+      - name: Preserve authentication lifecycle diagnostics
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auth-lifecycle
+          path: ${{ runner.temp }}/auth-lifecycle-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Shared account state and room navigation in Chromium and Firefox
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          AUTH_CROSS_TAB_E2E: "1"
+        run: cargo run --locked -q -p xtask -- ci browser-suite auth-cross-tab
+
+      - name: Confirm room controls and retain failed edits
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          ROOM_CONTROL_E2E: "1"
+        run: cargo run --locked -q -p xtask -- ci browser-suite room-control-confirmation
+
+      - name: Real passkey registration and discoverable authentication
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          PASSKEY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/passkey
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/passkey.cjs
+
+      - name: Preserve passkey verification diagnostics
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: passkey
+          path: ${{ runner.temp }}/passkey
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Passkey management and recovery with native credentials
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          PASSKEY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/passkey-management
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/passkey-management.cjs
+
+      - name: Preserve passkey management diagnostics
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: passkey-management
+          path: ${{ runner.temp }}/passkey-management
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Homepage containment and responsive layout
+        if: matrix.group == 'stress'
+        timeout-minutes: 3
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/homepage-layout
+        run: npm --prefix web/e2e run test:layout
+
+      - name: Frontend lifecycle and degraded-browser regressions
+        if: matrix.group == 'stress'
+        timeout-minutes: 3
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/frontend-resilience
+        run: npm --prefix web/e2e run test:resilience
+
+      - name: Automatic room recovery after an owned server restart
+        if: matrix.group == 'stress'
+        timeout-minutes: 3
+        run: |
+          ./target/debug/load_test bench restart-browser-smoke --binary "$PWD/target/debug/simplestChat" \
+            --browser chromium --output "${RUNNER_TEMP}/restart-browser"
+
+      - name: Preserve browser restart diagnostics
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: restart-browser
+          path: ${{ runner.temp }}/restart-browser
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve homepage layout diagnostics
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: homepage-layout
+          path: ${{ runner.temp }}/homepage-layout
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve frontend lifecycle diagnostics
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-resilience
+          path: ${{ runner.temp }}/frontend-resilience
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Community and real-media browser regressions
+        if: matrix.group == 'media'
+        timeout-minutes: 8
+        env:
+          E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
+        run: cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e test
+
+      - name: Media continuity and device controls in Chromium and Firefox
+        if: matrix.group == 'media'
+        timeout-minutes: 4
+        env:
+          MEDIA_CONTINUITY_E2E: "1"
+        # The command selects one owned non-loopback announcement for Firefox;
+        # HTTP and the disposable database remain on loopback.
+        run: cargo run --locked -q -p xtask -- ci browser-suite media-continuity
+
+      - name: Reconcile interrupted chat sends without duplicate delivery
+        if: matrix.group == 'accounts'
+        timeout-minutes: 4
+        env:
+          CHAT_RETRY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/chat-retry
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/chat-retry.cjs
+
+      - name: Read presentations through constrained and recovered browser media
+        if: ${{ !cancelled() && matrix.group == 'media' && steps.browser-tooling.outcome == 'success' }}
+        timeout-minutes: 6
+        env:
+          PRESENTATION_E2E: "1"
+          PRESENTATION_IMPAIRMENT: "1"
+        run: cargo run --locked -q -p xtask -- ci browser-suite presentation
+
+      - name: Preserve presentation quality diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: presentation-quality
+          path: ${{ runner.temp }}/presentation-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve product continuity diagnostics
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: product-continuity
+          path: |
+            ${{ runner.temp }}/account-tabs-*
+            ${{ runner.temp }}/room-controls-*
+            ${{ runner.temp }}/chat-retry
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve media continuity diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: media-continuity
+          path: ${{ runner.temp }}/media-continuity-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Received call outcomes with real browser media
+        if: matrix.group == 'media'
+        timeout-minutes: 4
+        env:
+          CALL_OUTCOME_E2E: "1"
+          IMPAIR_SCRIPT: none
+          IMPAIRED_PROFILES: baseline
+          E2E_ARTIFACTS: ${{ runner.temp }}/call-outcomes
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/impaired-network.cjs
+
+      - name: Preserve call outcome diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: call-outcomes
+          path: ${{ runner.temp }}/call-outcomes
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Chat delivery and UI stress harness smoke
+        if: matrix.group == 'stress'
+        timeout-minutes: 4
+        env:
+          UI_STRESS_E2E: "1"
+          UI_STRESS_PROFILE: smoke
+          E2E_ARTIFACTS: ${{ runner.temp }}/ui-stress
+          SERVER_REVISION: ${{ github.sha }}
+          FRONTEND_REVISION: ${{ github.sha }}
+        run: cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e run test:stress
+
+      - name: Preserve UI stress diagnostics
+        if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-stress
+          path: ${{ runner.temp }}/ui-stress
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Accessibility rules and keyboard smoke
+        if: matrix.group == 'accounts'
+        timeout-minutes: 5
+        env:
+          ACCESSIBILITY_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/accessibility-e2e
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/accessibility.cjs
+
+      - name: Preserve accessibility diagnostics
+        if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: accessibility-e2e
+          path: ${{ runner.temp }}/accessibility-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Preserve browser diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: community-e2e
+          path: ${{ runner.temp }}/community-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record successful local browser coverage
+        if: ${{ env.ACT }}
+        env:
+          LOCAL_BROWSER_GROUP: ${{ matrix.group }}
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id "browser-$LOCAL_BROWSER_GROUP"
+
+  web:
+    name: Web lint + format + tests + typecheck + build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Node is build/test-only; deployment runs Rust, not Node.
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the pinned Rust toolchain for the quality gate
+        run: rustup toolchain install --profile minimal
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
+      - run: npm ci --ignore-scripts
+      - run: cargo run --locked -q -p xtask -- check --web
+      - name: Audit web dependencies
+        # Build-time packages execute against trusted source and are part of the
+        # supply chain, so audit the complete lockfile rather than omitting dev.
+        run: npm audit --audit-level=moderate
+
+  image-database:
+    name: Prepare fresh image vulnerability database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for CI database cache policy
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
+      - name: Fingerprint the vulnerability database download cache
+        id: image-database-inputs
+        run: cargo run --locked -q -p xtask -- ci image-cache hint
+      - name: Restore vulnerability database download bytes
+        id: image-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.image-database-inputs.outputs.key }}
+          restore-keys: ${{ steps.image-database-inputs.outputs.prefix }}
+      # This runner owns a different engine from the image/release fixture.
+      # Only data bytes are published. The image gate still updates and scans.
+      - name: Prepare fresh checked database bytes
+        id: prepared-image-database
+        timeout-minutes: 20
+        run: |
+          python3 build/security_image.py prepare-database \
+            --output "${RUNNER_TEMP}/image-database-preparation" \
+            --tools-directory "${RUNNER_TEMP}/image-database-preparation/tools" \
+            --database-cache "${RUNNER_TEMP}/image-database-cache"
+          cargo run --locked -q -p xtask -- ci image-cache status preparation
+      - name: Save refreshed vulnerability database download bytes
+        if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.prepared-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.prepared-image-database.outputs.key }}
+      - name: Preserve local database preparation evidence
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: cargo run --locked -q -p xtask -- ci copy-evidence image-database
+      - name: Preserve bounded database preparation evidence
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-database-preparation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/image-database-preparation/database-preparation.json
+            ${{ runner.temp }}/image-database-preparation/database-status.json
+            ${{ runner.temp }}/image-database-preparation/scanner-result-*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  deployment:
+    name: Production image + deployment config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      PRODUCTION_IMAGE: simplestchat-ci:production
+      # Caddy 2.11.7, published and attested by the reviewed project workflow.
+      # The complete digest selects the tested AMD64/ARM64 image index.
+      CADDY_IMAGE: ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain for CI image policy
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Prepare the source-built native release controller
+        timeout-minutes: 6
+        run: |
+          cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
+            --target-dir "$RUNNER_TEMP/release-builder-build"
+
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
+
+      - name: Install checksum-pinned production Compose
+        timeout-minutes: 3
+        shell: bash
+        run: cargo run --locked -q -p xtask -- ci install-compose
+
+      - name: Validate Compose rendering
+        env:
+          # Reserved example values only; no deployment secret enters CI.
+          ALLOWED_ORIGINS: https://chat.example.test
+          TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
+        run: docker compose --file docker-compose.yml config --quiet
+
+      - name: Validate Caddyfile
+        env:
+          TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
+        run: cargo run --locked -q -p xtask -- ci validate-config caddy
+
+      - name: Preserve caddy validation metadata
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-validation-caddy
+          path: ${{ runner.temp }}/simplestchat-config-validation-caddy-*/config-validation.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Keep the fixed apt/venv/pip bootstrap after configuration validation.
+      # It can overlap the image build; the later collector checks its result.
+      # The launcher hands off before returning; it makes no worker-exit claim.
+      - name: Start the isolated release-container controller build
+        run: cargo run --locked -q -p xtask -- ci release-controller start
+
+      # Publish newly compiled application layers when build inputs change.
+      # A dependency-only immutable key otherwise keeps restoring the first
+      # application revision forever. Fallback layers remain build inputs;
+      # BuildKit validates every dependency and all image checks still run.
+      - name: Restore image layer cache
+        id: production-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'ops/Cargo.toml', 'ops/ops-build-inputs.lock.json', 'ops/src/**', 'src/**', 'load_tests/**', 'xtask/**', 'migrations/**', 'vendor/**', 'build/install-openssl.sh', 'build/install-aws-lc.sh', 'build/install-npm.mjs', 'build/pip-constraints.txt', 'build/security_tools.py', 'build/security-tools.lock.json', 'build/security_vendor.py', 'build/security_native.py', 'build/security_awslc.py', 'build/security_elf.py', 'ops/ansible/files/bounded_process.py', 'ops/ansible/files/release_json.py', 'security/exceptions.json', 'security/image-policy.json', 'security/runtime/**', 'web/package*.json', 'web/tsconfig*.json', 'web/vite.config.ts', 'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/public/**', 'web/src/**') }}
+          restore-keys: |
+            buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+            buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build production container
+        shell: bash
+        env:
+          CACHE_PRIMARY_HIT: ${{ steps.production-cache.outputs.cache-hit }}
+        run: cargo run --locked -q -p xtask -- ci production-image build
+
+      # Persist completed layers before later checks can fail. This cache is
+      # build input only; image verification and release gates still run below.
+      - name: Save completed image layer cache
+        if: ${{ success() && steps.production-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/buildx-cache
+          key: ${{ steps.production-cache.outputs.cache-primary-key }}
+
+      - name: Verify production image contents and user
+        shell: bash
+        run: cargo run --locked -q -p xtask -- ci production-image verify
+
+      - name: Production startup, migration and database-backed API smoke
+        timeout-minutes: 5
+        env:
+          CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
+        run: cargo run --locked -q -p xtask -- ci container-smoke
+
+      - name: Export the tested immutable production image
+        timeout-minutes: 6
+        run: |
+          "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \
+            --image-id "${PRODUCTION_IMAGE}" \
+            --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"
+
+      - name: Install isolated release-container checks
+        timeout-minutes: 5
+        run: cargo run --locked -q -p xtask -- ci release-controller wait
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
+      - name: Restore pinned rollover Chromium download bytes
+        id: rollover-chromium
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rollover-playwright
+          key: rollover-chromium-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('web/e2e/package-lock.json') }}
+
+      - name: Prefer official Ubuntu archive mirrors for rollover dependencies
+        if: ${{ !env.ACT }}
+        timeout-minutes: 1
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
+            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+
+      - name: Install pinned rollover browser tooling
+        timeout-minutes: 10
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
+        run: |
+          npm --prefix web/e2e ci --ignore-scripts
+          # Reconcile the pinned revision and system dependencies even on cache hits.
+          # The application comes from the already-tested production image.
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+
+      - name: Save pinned rollover Chromium download bytes
+        if: steps.rollover-chromium.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rollover-playwright
+          key: ${{ steps.rollover-chromium.outputs.cache-primary-key }}
+
+      - name: Verify the guest checker against pinned Compose JSON
+        env:
+          VM_COMPOSE_REQUIRED: "1"
+        run: |
+          "${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover \
+            -s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+          # The job's pinned prefixes belong to other native builds. This optional
+          # host TLS owner uses the installed headers in a separate target tree.
+          env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
+            -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
+            cargo build --locked -p xtask --features release-http-policy \
+              --target-dir "$RUNNER_TEMP/release-http-policy-build"
+
+      - name: App-only release and rollback on a disposable host
+        timeout-minutes: 20
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
+        run: |
+          "$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \
+            --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"
+
+      - name: Preserve private local release-container diagnostics
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: cargo run --locked -q -p xtask -- ci copy-evidence release-container
+
+      - name: Preserve private local release-check preparation diagnostics
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: cargo run --locked -q -p xtask -- ci copy-evidence release-checks
+
+      - name: Fingerprint the vulnerability database download cache
+        id: image-database-inputs
+        run: cargo run --locked -q -p xtask -- ci image-cache hint
+
+      - name: Restore vulnerability database download bytes
+        id: image-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.image-database-inputs.outputs.key }}
+          restore-keys: ${{ steps.image-database-inputs.outputs.prefix }}
+
+      - name: Scan the same exported production image
+        id: scanned-image-database
+        timeout-minutes: 25
+        run: |
+          build/check-security.sh image "${PRODUCTION_IMAGE}" \
+            --artifact-dir "${RUNNER_TEMP}/simplestchat-release" \
+            --image-tools "${RUNNER_TEMP}/release-checks/tools" \
+            --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
+            --output "${RUNNER_TEMP}/production-security"
+          cargo run --locked -q -p xtask -- ci image-cache status production
+
+      # The scanner always checks upstream updates and current age/hash before
+      # running the full image policy. This stores data, never scan success.
+      - name: Save refreshed vulnerability database download bytes
+        if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.scanned-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.scanned-image-database.outputs.key }}
+
+      - name: Retain the verified production release
+        # Export precedes the root-owned fixture; publication requires every
+        # deployment check above to pass. Fetching also requires whole-CI success.
+        if: ${{ success() && github.event_name == 'push' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/simplestchat-release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Preserve allowlisted production security evidence
+        if: ${{ !cancelled() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-security-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/production-security/image/outcome.json
+            ${{ runner.temp }}/production-security/image/checks.json
+            ${{ runner.temp }}/production-security/image/elf.json
+            ${{ runner.temp }}/production-security/image/runtime-proof.json
+            ${{ runner.temp }}/production-security/image/vex.openvex.json
+            ${{ runner.temp }}/production-security/image/runtime-license-evidence.json
+            ${{ runner.temp }}/production-security/image/native.json
+            ${{ runner.temp }}/production-security/image/database-status.json
+            ${{ runner.temp }}/production-security/image/scanner-result-*.json
+            ${{ runner.temp }}/production-security/image/secret-paths.json
+            ${{ runner.temp }}/production-security/image/sbom/sbom.syft.json
+            ${{ runner.temp }}/production-security/image/spdx/sbom.spdx.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve sanitized release-container report
+        if: ${{ !cancelled() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-container
+          # Private fixture data and helper logs may contain credentials or DB data.
+          path: ${{ runner.temp }}/release-container/report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Preserve container diagnostics
+        if: ${{ !cancelled() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-smoke
+          path: ${{ runner.temp }}/container-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+  required:
+    name: Required security and correctness checks
+    if: ${{ always() }}
+    needs:
+      - automation
+      - automation-references
+      - rust-lint
+      - rust-test
+      - native-dtls
+      - browser
+      - web
+      - image-database
+      - deployment
+      - security
+      - codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+      security-events: read # Validate stored analyses, including read-only fork PR tokens.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for required workflow policy
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Require every declared gate to finish successfully
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: cargo run --locked -q -p xtask -- ci required
+      - name: Require healthy stored CodeQL analyses for this exact revision
+        if: ${{ !env.ACT }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 build/security_codeql_triage.py health \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --ref "$GITHUB_REF" \
+            --output "$RUNNER_TEMP/codeql-analysis-health"
+      - name: Retain bounded CodeQL analysis health evidence
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-analysis-health-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/codeql-analysis-health/report.json
+            ${{ runner.temp }}/codeql-analysis-health/failure.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Require complete local execution evidence
+        if: ${{ env.ACT }}
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: cargo run --locked -q -p xtask -- ci-evidence complete
+
+  release-prepare:
+    name: Prepare the verified production signing inputs
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [required]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for signing-input preparation
+        timeout-minutes: 2
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Compile the signing-input controller without signing credentials
+        timeout-minutes: 6
+        run: |
+          cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
+            --target-dir "$RUNNER_TEMP/release-prepare-build"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: simplestchat-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/prepared-release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-security-${{ github.sha }}
+          path: ${{ runner.temp }}/image-security
+      - name: Bind the successful image policy and exact archive bytes
+        timeout-minutes: 6
+        run: |
+          "$RUNNER_TEMP/release-prepare-build/release/simplestchat-ops" release attestation prepare \
+            --artifact-dir "$RUNNER_TEMP/prepared-release" \
+            --security-dir "$RUNNER_TEMP/image-security" \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --timeout-seconds 300 --finalization-seconds 30
+      - name: Retain only the prepared signing metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-signing-metadata-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/prepared-release/sbom.spdx.json
+            ${{ runner.temp }}/prepared-release/image-security.json
+            ${{ runner.temp }}/prepared-release/runtime-proof.json
+            ${{ runner.temp }}/prepared-release/vex.openvex.json
+            ${{ runner.temp }}/prepared-release/release-predicate.json
+          if-no-files-found: error
+          retention-days: 14
+
+  release-security:
+    name: Attest the verified production release
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [required, release-prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # Only the trusted main release signer can request an OIDC identity.
+      attestations: write # Publish exact image, SBOM and runtime-disposition evidence.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: simplestchat-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/signed-release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-signing-metadata-${{ github.sha }}
+          path: ${{ runner.temp }}/signed-release
+      - name: Sign the archive, SPDX and runtime disposition evidence
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/signed-release/image.tar
+            ${{ runner.temp }}/signed-release/sbom.spdx.json
+            ${{ runner.temp }}/signed-release/runtime-proof.json
+            ${{ runner.temp }}/signed-release/vex.openvex.json
+          predicate-path: ${{ runner.temp }}/signed-release/release-predicate.json
+          predicate-type: https://github.com/swiftraccoon/simplestChat/attestations/release/v1
+          create-storage-record: false
+      - name: Retain the signed verification bundle
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          test -f "$ATTESTATION_BUNDLE"
+          cp -- "$ATTESTATION_BUNDLE" "$RUNNER_TEMP/signed-release/release-attestation.jsonl"
+      - name: Publish only the signed release contract
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-production-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/signed-release/image.tar
+            ${{ runner.temp }}/signed-release/release.json
+            ${{ runner.temp }}/signed-release/outcome.json
+            ${{ runner.temp }}/signed-release/source.json
+            ${{ runner.temp }}/signed-release/sbom.spdx.json
+            ${{ runner.temp }}/signed-release/runtime-proof.json
+            ${{ runner.temp }}/signed-release/vex.openvex.json
+            ${{ runner.temp }}/signed-release/image-security.json
+            ${{ runner.temp }}/signed-release/release-predicate.json
+            ${{ runner.temp }}/signed-release/release-attestation.jsonl
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  ops-build:
+    name: Produce the authenticated-input Ops artifact
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for the hosted Ops owner
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Prepare the fixed source, registry, kit and unsigned Ops bytes
+        # The owner has one 60-minute invocation watchdog. Job setup consumes
+        # this external 65-minute budget; cold completion is not guaranteed.
+        run: cargo run --locked -q -p xtask -- ops-artifact hosted --output "$RUNNER_TEMP/ops-hosted"
+      - name: Retain only the unsigned Ops assembly
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-ops-unsigned-${{ github.sha }}-x86_64-unknown-linux-musl
+          path: |
+            ${{ runner.temp }}/ops-hosted/unsigned/simplestchat-ops
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-release.json
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence.json
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-predicate.json
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-preparation.json
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-00.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-01.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-02.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-03.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-04.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-05.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-06.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-07.bin
+            ${{ runner.temp }}/ops-hosted/unsigned/ops-evidence-08.bin
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  ops-release-security:
+    name: Attest the prepared Ops artifact
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [required, ops-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # Only this trusted job signs the three fixed Ops subjects.
+      attestations: write # Publish only the fixed Ops preparation/manifest/executable statement.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for Ops signing admission
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: simplestchat-ops-unsigned-${{ github.sha }}-x86_64-unknown-linux-musl
+          path: ${{ runner.temp }}/ops-unsigned
+      - name: Admit the exact same-run Ops signer inputs
+        run: >-
+          cargo run --locked -q -p xtask -- ops-artifact signing-inputs
+          --directory "$RUNNER_TEMP/ops-unsigned" --output "$RUNNER_TEMP/ops-signed"
+      - name: Attest the original Ops preparation, manifest and executable
+        id: ops-attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/ops-signed/ops-preparation.json
+            ${{ runner.temp }}/ops-signed/ops-release.json
+            ${{ runner.temp }}/ops-signed/simplestchat-ops
+          predicate-path: ${{ runner.temp }}/ops-signed/ops-predicate.json
+          predicate-type: https://github.com/swiftraccoon/simplestChat/attestations/ops-artifact/v1
+          create-storage-record: false
+      - name: Retain the Ops attestation bundle beside its original subjects
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.ops-attest.outputs.bundle-path }}
+        run: install -m 600 -- "$ATTESTATION_BUNDLE" "$RUNNER_TEMP/ops-signed/ops-attestation.jsonl"
+      - name: Publish only the signed Ops payload graph
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simplestchat-ops-${{ github.sha }}-x86_64-unknown-linux-musl
+          path: |
+            ${{ runner.temp }}/ops-signed/simplestchat-ops
+            ${{ runner.temp }}/ops-signed/ops-release.json
+            ${{ runner.temp }}/ops-signed/ops-evidence.json
+            ${{ runner.temp }}/ops-signed/ops-predicate.json
+            ${{ runner.temp }}/ops-signed/ops-preparation.json
+            ${{ runner.temp }}/ops-signed/ops-evidence-00.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-01.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-02.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-03.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-04.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-05.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-06.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-07.bin
+            ${{ runner.temp }}/ops-signed/ops-evidence-08.bin
+            ${{ runner.temp }}/ops-signed/ops-attestation.jsonl
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

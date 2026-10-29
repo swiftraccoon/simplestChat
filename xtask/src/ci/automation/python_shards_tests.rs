@@ -41,16 +41,42 @@ impl Fixture {
         ] {
             fixture.test_file(name, "");
         }
-        fs::write(
-            fixture
-                .root
-                .join("ops/ansible/tests/test_release_playbook.py"),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../ops/ansible/tests/test_release_playbook.py"
-            )),
-        )
-        .unwrap();
+        for (name, bytes) in [
+            (
+                "test_release_playbook.py",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../ops/ansible/tests/test_release_playbook.py"
+                ))
+                .as_slice(),
+            ),
+            (
+                "test_python_quality.py",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../ops/ansible/tests/test_python_quality.py"
+                ))
+                .as_slice(),
+            ),
+            (
+                "test_ci_verified.py",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../ops/ansible/tests/test_ci_verified.py"
+                ))
+                .as_slice(),
+            ),
+            (
+                "test_support.py",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../ops/ansible/tests/test_support.py"
+                ))
+                .as_slice(),
+            ),
+        ] {
+            fs::write(fixture.root.join("ops/ansible/tests").join(name), bytes).unwrap();
+        }
         let reference = fixture.root.join("xtask/src/ci/automation/reference");
         fs::create_dir_all(&reference).unwrap();
         fs::write(
@@ -61,6 +87,11 @@ impl Fixture {
         fs::write(
             reference.join("source-python.yml"),
             include_bytes!("reference/source-python.yml"),
+        )
+        .unwrap();
+        fs::write(
+            reference.join("ci-python.yml"),
+            include_bytes!("reference/ci-python.yml"),
         )
         .unwrap();
         fixture
@@ -177,14 +208,24 @@ fn flat_inventory_covers_each_module_once_and_preserves_the_discovery_contract()
     assert_eq!(
         groups,
         [
-            vec!["test_alpha", "test_gamma", "test_zeta"],
-            vec!["test_beta", "test_release_playbook"]
+            vec![
+                "test_alpha",
+                "test_ci_verified",
+                "test_python_quality",
+                "test_support"
+            ],
+            vec![
+                "test_beta",
+                "test_gamma",
+                "test_release_playbook",
+                "test_zeta"
+            ]
         ]
     );
     let first: BTreeSet<_> = groups[0].iter().collect();
     let second: BTreeSet<_> = groups[1].iter().collect();
     assert!(first.is_disjoint(&second));
-    assert_eq!(first.union(&second).count(), 5);
+    assert_eq!(first.union(&second).count(), 8);
     assert_eq!(Profile::Parallel.roles().len(), 3);
     assert_eq!(commands.len(), 3);
     for (role, command) in &commands {
@@ -712,7 +753,7 @@ fn legacy_original_and_copy_pins_are_observed_and_all_known_closes_are_attempted
     owner.inject_close_refusal(0);
     assert_eq!(owner.close(&mut control), Err(Cause::Inventory));
     assert!(owner.all_known_handles_closed());
-    assert_eq!(owner.close_attempts(), 11);
+    assert_eq!(owner.close_attempts(), 22);
     assert!(!private.exists());
     assert!(control.finish().is_ok());
 }
@@ -771,7 +812,7 @@ fn checked_close_refusal_still_closes_every_known_file_and_keeps_prior_cause() {
     assert_eq!(closed, Err(Cause::Close));
     control.remember(closed);
     assert!(owner.all_known_handles_closed());
-    assert_eq!(owner.close_attempts(), 11);
+    assert_eq!(owner.close_attempts(), 22);
     assert!(!private.exists());
     assert_eq!(
         control.finish(),
@@ -806,5 +847,97 @@ fn symlink_and_hardlinked_frozen_sources_refuse_without_a_child() {
         assert!(!fixture.path.join("0.started").exists());
         assert!(fixture.captures_removed());
         assert!(control.finish().is_ok());
+    }
+}
+
+#[test]
+fn workflow_reference_copies_support_and_yaml_and_owns_results_until_checked_close() {
+    let fixture = Fixture::new();
+    let mut control = fixture.control();
+    let mut owner = LegacyMaintenance::empty();
+    owner
+        .prepare(&fixture.root, &fixture.environment(), &mut control)
+        .unwrap();
+    let private = owner.private_root().unwrap().to_owned();
+    for (source, copied) in [
+        (
+            "ops/ansible/tests/test_python_quality.py",
+            "ops/ansible/tests/test_python_quality.py",
+        ),
+        (
+            "ops/ansible/tests/test_ci_verified.py",
+            "ops/ansible/tests/test_ci_verified.py",
+        ),
+        (
+            "ops/ansible/tests/test_support.py",
+            "ops/ansible/tests/test_support.py",
+        ),
+        (
+            "xtask/src/ci/automation/reference/ci-python.yml",
+            ".github/workflows/ci.yml",
+        ),
+    ] {
+        assert_eq!(
+            fs::read(fixture.root.join(source)).unwrap(),
+            fs::read(private.join(copied)).unwrap()
+        );
+    }
+    assert!(private.join("results").is_dir());
+    let environment = owner.environment(&fixture.environment()).unwrap();
+    assert_eq!(
+        environment[std::ffi::OsStr::new("KEEP_LITERAL")],
+        "literal value with spaces"
+    );
+    let paths =
+        std::env::split_paths(&environment[std::ffi::OsStr::new("PYTHONPATH")]).collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        [
+            private.join("ops/ansible/tests"),
+            fixture.root.join("ops/ansible/tests"),
+            fixture.root.join("build"),
+            fixture.root.join("ops/ansible/files"),
+            fixture.root.join("ops/ansible/callback_plugins"),
+            fixture.root.join("ops/ansible/filter_plugins"),
+        ]
+    );
+    let path = private.join(".github/workflows/ci.yml");
+    let mut bytes = fs::read(&path).unwrap();
+    bytes[0] ^= 1;
+    fs::write(path, bytes).unwrap();
+    assert_eq!(owner.current(&mut control), Err(Cause::Inventory));
+    assert_eq!(owner.close(&mut control), Err(Cause::Inventory));
+    assert!(owner.all_known_handles_closed());
+    assert_eq!(owner.close_attempts(), 22);
+    assert!(!private.exists());
+    assert!(control.finish().is_ok());
+}
+
+#[test]
+fn every_added_reference_source_pin_refuses_before_any_child() {
+    for source in [
+        "ops/ansible/tests/test_python_quality.py",
+        "ops/ansible/tests/test_ci_verified.py",
+        "ops/ansible/tests/test_support.py",
+        "xtask/src/ci/automation/reference/ci-python.yml",
+    ] {
+        let fixture = Fixture::new();
+        let path = fixture.root.join(source);
+        let mut bytes = fs::read(&path).unwrap();
+        bytes[0] ^= 1;
+        fs::write(path, bytes).unwrap();
+        let (control, admitted) = fixture.observed_control();
+        assert_eq!(
+            run_with(
+                &fixture.root,
+                &fixture.environment(),
+                control,
+                &mut Vec::new()
+            ),
+            Err(Cause::Inventory),
+            "{source}"
+        );
+        assert!(originals_reaped(&admitted, 0));
+        assert!(fixture.captures_removed());
     }
 }

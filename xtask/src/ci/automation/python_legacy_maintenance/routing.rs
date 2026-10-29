@@ -1,8 +1,14 @@
-//! Fixed class routing within the existing regression owner.
+//! Fixed class and exact method routing within the existing regression owner.
 //! No custom Python loader or independent child owner is introduced.
 use super::super::Role;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, ffi::OsString, path::Path};
+#[path = "workflow_routing.rs"]
+mod workflow_routing;
+pub(super) use workflow_routing::{
+    QUALITY_BYTES, QUALITY_SHA256, SUPPORT_BYTES, SUPPORT_SHA256, VERIFIED_BYTES, VERIFIED_SHA256,
+    WORKFLOW_BYTES, WORKFLOW_SHA256,
+};
 
 const MODULE: &str = "test_release_playbook";
 const CURRENT_CLASSES: [&str; 2] = ["ReleasePlaybookTests", "PublicPlaybookSelectionTests"];
@@ -29,13 +35,15 @@ fn select(module: &str, arguments: &mut Vec<OsString>) {
         for class in CURRENT_CLASSES {
             arguments.extend(["-k".into(), format!("{MODULE}.{class}.*").into()]);
         }
+    } else if workflow_routing::MODULES.contains(&module) {
+        workflow_routing::select(module, arguments);
     } else {
         arguments.extend(["-k".into(), format!("{module}.*").into()]);
     }
 }
 
 /// The existing admitted two groups remain the authoritative module roster.
-/// Pin the special module's actual bytes BEFORE calling this function.
+/// Pin all three specially routed modules BEFORE calling this function.
 pub(in super::super) fn current_arguments(
     groups: &[Vec<String>; 2],
     database: bool,
@@ -43,11 +51,16 @@ pub(in super::super) fn current_arguments(
     let modules = groups.iter().flatten().collect::<Vec<_>>();
     let unique = modules.iter().copied().collect::<BTreeSet<_>>();
     if unique.len() != modules.len()
-        || modules
-            .iter()
-            .filter(|module| module.as_str() == MODULE)
-            .count()
-            != 1
+        || [MODULE]
+            .into_iter()
+            .chain(workflow_routing::MODULES)
+            .any(|expected| {
+                modules
+                    .iter()
+                    .filter(|module| module.as_str() == expected)
+                    .count()
+                    != 1
+            })
     {
         return Err(());
     }
@@ -87,7 +100,7 @@ pub(in super::super) fn current_arguments(
 pub(in super::super) fn legacy_arguments() -> Vec<OsString> {
     // Import through stdlib unittest. Executing the file directly would reach
     // its __main__ block BEFORE MaintenancePlaybookTests is defined.
-    [
+    let mut arguments: Vec<OsString> = [
         "-B",
         "-m",
         "unittest",
@@ -96,7 +109,9 @@ pub(in super::super) fn legacy_arguments() -> Vec<OsString> {
     ]
     .into_iter()
     .map(OsString::from)
-    .collect()
+    .collect();
+    arguments.extend(workflow_routing::LEGACY.into_iter().map(OsString::from));
+    arguments
 }
 pub(in super::super) fn legacy_pythonpath(
     private_root: &Path,
@@ -107,6 +122,15 @@ pub(in super::super) fn legacy_pythonpath(
         private_root.join("ops/ansible/tests"),
         original_root.join("ops/ansible/tests"),
     ];
+    paths.extend(
+        [
+            "build",
+            "ops/ansible/files",
+            "ops/ansible/callback_plugins",
+            "ops/ansible/filter_plugins",
+        ]
+        .map(|name| original_root.join(name)),
+    );
     if let Some(inherited) = inherited {
         paths.extend(std::env::split_paths(inherited));
     }
@@ -176,8 +200,12 @@ mod tests {
     #[test]
     fn both_profiles_route_all_twelve_known_tests_exactly_once() {
         let groups = [
-            vec!["test_alpha".into(), MODULE.into()],
-            vec!["test_beta".into()],
+            vec![
+                "test_alpha".into(),
+                MODULE.into(),
+                "test_ci_verified".into(),
+            ],
+            vec!["test_beta".into(), "test_python_quality".into()],
         ];
         for database in [false, true] {
             let jobs = current_arguments(&groups, database).unwrap();
@@ -195,7 +223,13 @@ mod tests {
                 let full = format!("{MODULE}.{id}");
                 let current = selectors
                     .iter()
-                    .filter(|pattern| full.starts_with(pattern.strip_suffix('*').unwrap()))
+                    .filter(|pattern| {
+                        pattern
+                            .strip_suffix('*')
+                            .map_or(full.as_str() == pattern.as_str(), |prefix| {
+                                full.starts_with(prefix)
+                            })
+                    })
                     .count();
                 let legacy = usize::from(id.starts_with("MaintenancePlaybookTests."));
                 assert_eq!(current + legacy, 1, "{database}: {id}");

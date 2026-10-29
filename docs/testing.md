@@ -1647,6 +1647,17 @@ matching artifact hash cannot admit an input outside its role, and receipt
 serialization grants no release or execution authority. The existing file,
 process, error and explicit-finalization contracts retain their prior scope.
 
+Three historical CI-shape methods run against a byte-pinned workflow reference
+without changing their Python source. The other 42 methods in those two modules
+continue to inspect current inputs. Current Rust tests preserve the complete
+restart ownership/evidence checks, workflow projection changes and refusals, and
+locked workspace test graph with its exact skip list. The existing reference
+child shares the original 600/30 owner and captures; no child or timer is added.
+Its unchanged test/support copies and original helper paths retain checked file
+and directory custody. Copies do not isolate imports from privileged same-UID
+mutation. These reference results cannot substitute for current browser suites
+or release provenance.
+
 The test job separately primes all targets with
 `cargo build --locked --workspace --all-targets --all-features --profile test`,
 including development dependencies and test harnesses; it then runs the complete

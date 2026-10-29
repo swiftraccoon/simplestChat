@@ -1,4 +1,4 @@
-//! Two current discovery shards and one fixed frozen maintenance-class child.
+//! Two current discovery shards and one fixed frozen-reference child.
 //!
 //! One N600 interval begins before inventory/setup, reserves30 seconds for
 //! retirement/log completion/replay and remains authoritative through runtime

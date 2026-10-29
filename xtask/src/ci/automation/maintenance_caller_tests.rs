@@ -1514,6 +1514,7 @@ fn reference_context_contract(text: &str) -> Check<()> {
         "xtask/src/ci/automation/reference/**",
         "!xtask/src/ci/automation/reference/maintenance-python.yml",
         "!xtask/src/ci/automation/reference/source-python.yml",
+        "!xtask/src/ci/automation/reference/ci-python.yml",
     ];
     let positions = rules
         .windows(expected.len())
@@ -1558,7 +1559,7 @@ fn reference_context_contract(text: &str) -> Check<()> {
 }
 
 #[test]
-fn docker_context_admits_only_the_two_fixed_legacy_yaml_inputs() {
+fn docker_context_admits_only_the_three_fixed_legacy_yaml_inputs() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();

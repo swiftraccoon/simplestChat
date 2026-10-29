@@ -131,10 +131,12 @@ All existing Python files stay frozen. The
 [operator sequence](../ops/ansible/RELEASES.md#prepare-the-controller-before-credentials)
 documents the breaking migration from the frozen maintenance wrapper.
 
-The unchanged Python maintenance class remains an executable reference against
-its byte-pinned original YAML. The Rust regression owner creates only private
-byte-identical copies of that existing module and two fixed YAML references;
-the other classes still inspect current source. Three process roles in the
+The unchanged Python maintenance class and three historical CI-shape methods
+remain executable references against byte-pinned original YAML. The Rust
+regression owner creates only private byte-identical copies of four existing
+test/support modules and three fixed YAML references. The other 42 methods in
+the two affected CI modules retain current inputs; all other existing reference
+classifications remain unchanged. Three process roles in the
 ordinary profile, or one database discovery plus that readonly reference, share
 the existing original 600/30 owner, bounded captures, first cause, all-peer
 retirement and checked closes. Held files and content hashes detect observed
@@ -142,7 +144,9 @@ changes; they do not isolate Python imports from privileged same-UID swaps.
 `C-DTOR-FAIL`, `C-DTOR-BLOCK` and `C-RW-VALUE` retain their explicit finalization
 and borrowed-output decisions. No Python loader, dependency or renewed timer is
 introduced. Rust contracts cover current caller wiring and negative handoffs;
-those source checks do not execute Ansible, SSH or signature verification.
+they also retain all current restart, projection and complete-test-graph
+assertions displaced by the three historical methods. Those source checks do
+not execute Ansible, SSH or signature verification.
 
 Local transaction tests execute real files, backup publication and flock
 handoffs with finite synthetic daemon/launcher responses. They cover migration
