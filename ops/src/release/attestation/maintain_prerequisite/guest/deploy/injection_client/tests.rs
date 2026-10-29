@@ -96,7 +96,7 @@ fn acknowledgement_requires_matching_completion_and_actual_eof() {
         let (mut input, mut output) = UnixStream::pair().unwrap();
         let worker = std::thread::spawn(move || {
             let mut fence = Fence::fixture(2.0).unwrap();
-            let body = (|| {
+            let body: Result<()> = (|| {
                 let ack = wire::receive(&mut output, &fence)?;
                 require(
                     ack == json!({"action":"received","nonce":"a".repeat(32),
