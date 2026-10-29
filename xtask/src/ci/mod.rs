@@ -48,6 +48,7 @@ mod release_controller;
 #[cfg(feature = "release-http-policy")]
 mod release_http_policy;
 mod required;
+mod rpm_diagnostic;
 mod runner;
 mod selected_executable;
 mod session_soak;
@@ -62,6 +63,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci production-image build|verify\n\
        cargo run --locked -q -p xtask -- ci install-compose\n\
        xtask ci apt-mirror\n\
+       xtask ci rpm-diagnostic --root ABSOLUTE_SCAN_OUTPUT --output ABSOLUTE_NEW_DIRECTORY\n\
        cargo run --locked -q -p xtask -- ci audit-rust\n\
        cargo run --locked -q -p xtask -- ci release-checks \
        --http-policy-binary ABSOLUTE_FEATURE_BINARY\n\
@@ -377,6 +379,12 @@ pub(crate) fn run_vps_capacity(arguments: &[String]) -> Result<ExitCode> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "rpm-diagnostic")
+    {
+        return rpm_diagnostic::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "apt-mirror")

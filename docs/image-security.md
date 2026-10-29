@@ -597,6 +597,20 @@ files. Publish only the explicit reviewed evidence set: `outcome.json`,
 release attestation must bind those successful results to the original archive
 bytes; a broad upload of the working directory is unsafe.
 
+For an RPM-database finding that cannot be classified from the sanitized report,
+an operator may temporarily set the repository variable
+`SCPUB_RPM_DIAGNOSTIC_RECIPIENT` to a single canonical PEM X.509 certificate.
+Keep its RSA private key outside GitHub and remove the variable after collecting
+the evidence. On a trusted main-push image-scan failure, the Rust
+`xtask ci rpm-diagnostic` command encrypts only the retained RPM SQLite database
+using the runner's OpenSSL CMS AES-256-GCM and RSA-OAEP with SHA-256. Its bounded
+children, retained file identities, source hashes and explicit finalization must
+all succeed before the workflow uploads the ciphertext and a revision/run-bound
+hash manifest. The artifact expires after one day. No raw database or candidate
+secret is uploaded. This optional diagnostic does not change the failed scan,
+grant an exception or permit signing; classify the decrypted bytes privately
+before proposing any exact review record.
+
 The trusted `ci.yml` main-push signing job runs
 `build/release_attestation.py prepare` against those exact directories after all
 required gates pass. It emits `release-predicate.json` and copies the SPDX SBOM,
