@@ -1553,6 +1553,16 @@
     },
     {
       "scanner": "image-license",
+      "fingerprint": "license:bb3f33b374637fdc1c0f31661b684339a87dd1dcb6096980313eb8ddaa14b0c5",
+      "scope": "pkg:rpm/fedora/util-linux-core@2.41.6-1.fc44?arch=x86_64&distro=fedora-44&upstream=util-linux-2.41.6-1.fc44.src.rpm",
+      "owner": "swiftraccoon",
+      "rationale": "Official Koji build 3125685 binds util-linux-2.41.6-1.fc44 to Fedora commit 976ba3962840960381a9e0e3122613043a0ba44f; RPM 49196089 identifies the inspected x86_64 util-linux-core output. Its actual LICENSE header and the core subpackage spec retain the complete reviewed aggregate. All ten binary-RPM notice hashes match the earlier N15 set; source-archive COPYING, include/xalloc.h and lib/colors.c match S055-S057 exactly and retain their GPL 2 and public-domain context. The ten Fedora source-RPM patches do not alter those files or license notices. Additional copied notices, including EUPL, do not alone establish that their corresponding components are shipped. Preserve the complete declaration and this specific helper context (reviewed 2026-10-29).",
+      "reachability": "This exact scanner matcher is supported by inspected official binary/source RPM identities; a refreshed canonical image has not yet been observed under this review. Before image admission, require its actual inventory PURL and ordered declaration plus runtime notice evidence to agree with the reviewed package and notice context. Only scanner, exact PURL and fingerprint match automatically; source and notice comparison remains explicit review work. The retained 2.41.5 license-context row supports frozen reference evidence and does not waive either version's vulnerability findings or any other release gate.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+    },
+    {
+      "scanner": "image-license",
       "fingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0",
       "scope": "pkg:rpm/fedora/vim-data@9.2.1202-1.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1202-1.fc44.src.rpm",
       "owner": "swiftraccoon",
