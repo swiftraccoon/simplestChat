@@ -2147,6 +2147,19 @@ future hosted run passes.
 
 Bare `--references` still runs every comparison. Matrix failure does not cancel the
 other groups. Reference comparisons always run and use no result cache.
+Both Python setup steps cache pip download bytes, keyed by the checker and
+controller requirement files. Each job still creates its own environment and
+installs the complete hash-pinned wheel requirements; a download-cache hit never
+skips installation or checks. This uses the pinned setup action's
+[dependency cache](https://github.com/actions/setup-python/blob/ece7cb06caefa5fff74198d8649806c4678c61a1/docs/advanced-usage.md#caching-packages).
+In run `40803995276`, downloading the 61.1 MB Node wheel took 199–217 seconds,
+versus 0.607 seconds in run `40799322008`. Setup consumed most of the ten-minute
+automation and host-reference limits, and both jobs were cancelled during their
+checks. Those cancellations are failures to complete, not passing comparisons.
+Download reuse reduces repeated network work; a cold cache remains dependent on
+the package service and does not establish a runtime guarantee. Job and workload
+limits are unchanged.
+
 Local CI also requires a successful execution receipt for each of the four
 reference matrix groups. Missing, duplicate, unknown or filtered groups fail
 completion even if an aggregate job result says success.
