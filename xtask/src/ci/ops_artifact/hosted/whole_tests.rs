@@ -524,7 +524,7 @@ impl Executor for FakeCli {
             .clone()
             .expect("only fixed material/probe roles");
         proof.begin(&command)?;
-        let (directory, _) = proof.context(command.program, &command.arguments)?;
+        let (directory, environment) = proof.context(command.program, &command.arguments)?;
         let mut stderr = Vec::new();
         let (kind, stdout) = match command.program {
             Program::OpsMaterialCurl => {
@@ -627,6 +627,7 @@ impl Executor for FakeCli {
                 ("cc", stdout)
             }
             Program::OpsKitShell => {
+                assert!(!environment.contains_key(std::ffi::OsStr::new("SOURCE_DATE_EPOCH")));
                 assert_eq!(directory.file_name().unwrap(), "build-musl");
                 let work = directory.parent().unwrap();
                 assert_eq!(
@@ -637,6 +638,10 @@ impl Executor for FakeCli {
                 ("native-shell", b"inert configure stdout\n".to_vec())
             }
             Program::OpsKitPerl => {
+                assert_eq!(
+                    environment[std::ffi::OsStr::new("SOURCE_DATE_EPOCH")].as_os_str(),
+                    std::ffi::OsStr::new("0")
+                );
                 assert_eq!(directory.file_name().unwrap(), "build-openssl");
                 let work = directory.parent().unwrap();
                 assert_eq!(
@@ -654,6 +659,12 @@ impl Executor for FakeCli {
             Program::OpsKitMake => {
                 let work = directory.parent().unwrap();
                 let musl = directory.file_name().unwrap() == "build-musl";
+                assert_eq!(
+                    environment
+                        .get(std::ffi::OsStr::new("SOURCE_DATE_EPOCH"))
+                        .map(|value| value.as_os_str()),
+                    (!musl).then_some(std::ffi::OsStr::new("0"))
+                );
                 let target = command.arguments.last().unwrap().to_str().unwrap();
                 let target = if target.starts_with("SHELL=") {
                     "build"
@@ -933,6 +944,10 @@ async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publica
     )
     .unwrap();
     let native = &hosted_kit["native"];
+    assert_eq!(
+        native["opensslBuildRecipe"],
+        json!({"profile":"ops-openssl-build-v1","sourceDateEpoch":0})
+    );
     assert_eq!(native["outputInventory"]["files"], 20);
     assert_eq!(native["libraries"].as_object().unwrap().len(), 16);
     assert_eq!(

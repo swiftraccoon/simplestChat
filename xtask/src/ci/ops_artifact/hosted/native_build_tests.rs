@@ -113,8 +113,17 @@ fn fixed_build_commands_keep_out_of_tree_sources_two_jobs_and_cleared_native_env
         assert!(steps[3].args.iter().any(|arg| arg == option));
     }
     assert!(!steps[3].args.iter().any(|arg| arg == "no-engine"));
+    assert_eq!(
+        native::openssl_recipe(),
+        serde_json::json!({"profile":"ops-openssl-build-v1","sourceDateEpoch":0})
+    );
     for musl in [true, false] {
         let env = native::environment(root, work, musl).unwrap();
+        assert_eq!(
+            env.get(OsStr::new("SOURCE_DATE_EPOCH"))
+                .map(|value| value.as_os_str()),
+            (!musl).then_some(OsStr::new("0"))
+        );
         assert_eq!(
             env[OsStr::new("CC")].as_os_str(),
             if musl {

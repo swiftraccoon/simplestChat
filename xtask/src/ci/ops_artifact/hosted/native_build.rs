@@ -59,6 +59,12 @@ const MUSL_LIBS: [&str; 14] = [
     "libdl.a",
 ];
 const DISABLED: [&str; 4] = ["shared", "dso", "module", "engine"];
+// Normalize only OpenSSL's generated build-date input; this is not a release date.
+const OPENSSL_SOURCE_DATE_EPOCH: u64 = 0;
+
+pub(super) fn openssl_recipe() -> Value {
+    json!({"profile":"ops-openssl-build-v1","sourceDateEpoch":OPENSSL_SOURCE_DATE_EPOCH})
+}
 
 fn fence(plan: &Plan, end: Instant) -> Result<()> {
     plan.check()?;
@@ -105,6 +111,12 @@ pub(super) fn environment(root: &Path, work: &Path, musl: bool) -> Result<Enviro
     );
     env.insert("HOME".into(), work.join("build-home").into_os_string());
     env.insert("TMPDIR".into(), work.join("build-tmp").into_os_string());
+    if !musl {
+        env.insert(
+            "SOURCE_DATE_EPOCH".into(),
+            OPENSSL_SOURCE_DATE_EPOCH.to_string().into(),
+        );
+    }
     Ok(env)
 }
 
@@ -795,7 +807,8 @@ fn import_outputs(
     Ok(json!({
         "schemaVersion":1,"scope":"OpsMuslStaticNativeBuild",
         "target":"x86_64-unknown-linux-musl","muslSourceCommit":MUSL_COMMIT,
-        "opensslVersion":"4.1.0","sourceArchivePins":pins,
+        "opensslVersion":"4.1.0","opensslBuildRecipe":openssl_recipe(),
+        "sourceArchivePins":pins,
         "configdataSha256":super::super::sha(&configdata),"disabled":disabled,
         "stockMuslSpecsSha256":super::super::sha(&stock_specs),
         "outputInventory":inventory(kit)?,"libraries":libraries,

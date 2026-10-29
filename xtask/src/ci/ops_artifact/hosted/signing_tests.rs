@@ -76,6 +76,7 @@ fn native_observation(catalog: &Catalog) -> Value {
     json!({
         "schemaVersion":1,"scope":"OpsMuslStaticNativeBuild","target":super::context::TARGET,
         "muslSourceCommit":super::catalog::MUSL_COMMIT,"opensslVersion":"4.1.0",
+        "opensslBuildRecipe":{"profile":"ops-openssl-build-v1","sourceDateEpoch":0},
         "sourceArchivePins":pins,"configdataSha256":"b".repeat(64),
         "stockMuslSpecsSha256":"c".repeat(64),
         "disabled":{"shared":true,"dso":true,"module":true,"engine":true},
@@ -343,6 +344,16 @@ fn signer_rejects_wrong_native_catalog_build_or_output_facts_after_valid_assembl
         ("/native/target", json!("x86_64-unknown-linux-gnu")),
         ("/native/muslSourceCommit", json!("b".repeat(40))),
         ("/native/opensslVersion", json!("4.0.0")),
+        ("/native/opensslBuildRecipe/profile", json!("wall-clock")),
+        ("/native/opensslBuildRecipe/sourceDateEpoch", json!(1)),
+        ("/native/opensslBuildRecipe/sourceDateEpoch", json!("0")),
+        ("/native/opensslBuildRecipe/sourceDateEpoch", json!(0.0)),
+        ("/native/opensslBuildRecipe/sourceDateEpoch", json!(true)),
+        ("/native/opensslBuildRecipe/sourceDateEpoch", Value::Null),
+        (
+            "/native/opensslBuildRecipe",
+            json!({"profile":"ops-openssl-build-v1","sourceDateEpoch":0,"extra":true}),
+        ),
         (
             "/native/sourceArchivePins/openssl/sha256",
             json!("e".repeat(64)),
@@ -494,6 +505,7 @@ fn missing_native_roles_and_paired_null_license_hashes_never_supply_signing_auth
     for (name, parent, key) in [
         ("hosted-kit.json", "", "native"),
         ("hosted-kit.json", "/native", "licenseNotices"),
+        ("hosted-kit.json", "/native", "opensslBuildRecipe"),
         ("hosted-kit.json", "/native/sourceArchivePins", "openssl"),
         (
             "hosted-kit.json",
