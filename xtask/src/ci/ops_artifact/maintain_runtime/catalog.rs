@@ -363,6 +363,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "deploy/probe",
         "deploy/effects",
         "deploy/readiness",
+        "deploy/grants",
         "deploy/operation",
         "deploy/history",
         "deploy/injection",

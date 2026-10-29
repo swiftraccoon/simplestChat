@@ -456,3 +456,15 @@ Summary artifact `12876474702` had ZIP SHA256
 checked against its fresh API length and digest before parsing. Its summary
 SHA256 is `0e588cd26c30d571f64470e9ee3cc9a188e313a351818011ae241e7c0733806f`.
 No production operation was performed.
+
+Before the next signed runtime, review found another concrete baseline transport
+mismatch: the rendered grants file starts with psql's `\set` meta-command, but
+the Rust baseline sent its complete contents through SQL `--command`. The frozen
+baseline streams the file to psql on stdin. The correction restores that exact
+transport through the existing retained-file stdin owner and interactive Docker
+exec. The grants bytes and PostgreSQL configuration remain unchanged. This was
+identified by source review; the second trial's coarse capture does not identify
+an observed grants failure. Fresh signed qualification remains required.
+The same parity review restores the baseline app readiness cap from the new
+adapter's 120 seconds to the frozen fixture's 45 seconds; the original total
+setup clock and the separate 15-second continuity observation remain unchanged.

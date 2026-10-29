@@ -378,3 +378,17 @@ readiness subprocesses and explicit descriptor/process settlement. The
 [second trial record](release-deploy-runtime-proof.md#second-signed-rust-trial-baseline-setup-deadline)
 keeps the actual coarse deadline observation separate from the source diagnosis
 and does not attribute measured time to an unrecorded subcommand.
+
+Further baseline review found that the grants input contains both SQL and a psql
+meta-command. It must reach psql on stdin, as in the frozen fixture; `--command`
+cannot represent that input. The correction uses the existing retained-file stdin
+owner and an interactive Docker exec with the fixed PostgreSQL actor. It keeps
+the exact input bytes, error-stop setting, child deadline, original-file checks
+and checked child settlement. As with the existing dump-list input, the standard
+library owns the transferred stdin duplicate and its close status is opaque;
+the retained original's checks and explicit close remain observable. This is a
+source-parity correction before another signed trial, not a diagnosis from an
+observed grants failure.
+The baseline app readiness call also uses the frozen 45-second cap instead of
+the adapter's 120-second local allowance. This narrows that phase without changing
+the original setup clock or the separate continuity profile.
