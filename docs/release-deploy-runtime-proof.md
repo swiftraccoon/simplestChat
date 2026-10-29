@@ -420,3 +420,39 @@ checked against its fresh API length and digest before parsing. The retained
 summary SHA256 is
 `5294c5eeb29dfe83103347bad8625f3e0a15dacd48fb7502492f6a92bdd21e45`.
 No production operation was performed by this disposable fixture trial.
+
+## Second signed Rust trial: baseline setup deadline
+
+The corrected request was admitted in [40825833248 / attempt 1](https://github.com/swiftraccoon/simplestChat/actions/runs/40825833248),
+using `f27ac076a3615e5c2f7a9c53cf9da695251af977`, successful full CI
+`40824121139 / attempt 1`, signed Ops artifact `12876761055` and current server
+artifact `12876099505`. The previous selection remained revision
+`67e6b3b476541d90cf044593063406de5084edd4`, CI `40806549629 / attempt 1`,
+server artifact `12868269710`. This trial also failed and qualifies neither
+transaction.
+
+Its negative result captured `baseline` with failure `deadline`, before either
+native trial or an ordinary native report/outcome was observed. The SSH session
+recorded raw exit 124 with complete group, reap, stream, EOF and close outcomes.
+Both VM epochs recorded QEMU exit zero and complete independent finalization
+outcomes. All 33 prerequisite cases and the 6/8/8 authentication plus 2/2 metadata
+roles passed. The whole `passed` and `cleanupPassed` fields remain false.
+The cumulative `fixture-setup` observation was 471.341 seconds on the original
+clock, leaving at most 118 seconds for the guest setup request after its reserve.
+The capture identifies no individual baseline command or per-command duration.
+
+Source review found a concrete ordering defect within that baseline. The
+maintenance `migrate` service starts the normal, long-running server with startup
+migrations enabled. The Rust fixture waited for that container to exit before
+issuing its stop. The frozen fixture instead waits for `/ready` in the migration
+container's network namespace, stops it and verifies exit zero before removal.
+The correction restores that readiness-to-stop sequence with the original
+45-second readiness cap and unchanged total setup and finalization clocks.
+This source diagnosis does not establish which baseline subcommand consumed the
+actual remaining time. A fresh signed execution must qualify the correction.
+
+Summary artifact `12876474702` had ZIP SHA256
+`215448dee53c189b5207803fc917f4681801a9c825c9be010ce712fb2a123ea2`,
+checked against its fresh API length and digest before parsing. Its summary
+SHA256 is `0e588cd26c30d571f64470e9ee3cc9a188e313a351818011ae241e7c0733806f`.
+No production operation was performed.

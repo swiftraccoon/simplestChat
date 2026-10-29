@@ -367,3 +367,14 @@ maintenance request semantics, source ownership and all clocks retain their
 previous contracts. The [runtime proof record](release-deploy-runtime-proof.md#first-signed-rust-trial-request-profile-refused-before-a-prepared-result)
 separates the actual failed trial, independent finalization facts and joined
 source diagnosis from the fresh signed execution still required after correction.
+
+The second signed trial admitted that request but captured a baseline setup
+deadline before either native transaction. Review found that the new baseline
+waited for the long-running migration server to exit before stopping it. The
+correction restores the frozen readiness, stop, zero-exit and removal sequence
+under its original clocks. `C-VALIDATE`, `C-DTOR-FAIL` and `C-DTOR-BLOCK` apply to
+the held migration network namespace, revalidated container identity, bounded
+readiness subprocesses and explicit descriptor/process settlement. The
+[second trial record](release-deploy-runtime-proof.md#second-signed-rust-trial-baseline-setup-deadline)
+keeps the actual coarse deadline observation separate from the source diagnosis
+and does not attribute measured time to an unrecorded subcommand.

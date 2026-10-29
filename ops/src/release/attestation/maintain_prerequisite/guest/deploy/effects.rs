@@ -6,6 +6,9 @@ use super::super::deploy::{payload, validation};
 use super::*;
 use serde_json::json;
 
+#[path = "readiness.rs"]
+mod readiness;
+
 pub(in super::super) struct Baseline {
     pub dependencies: Value,
     pub seed: Vec<u8>,
@@ -312,35 +315,7 @@ impl Fixture {
                 && row["Config"]["Labels"]["com.docker.compose.service"] == "migrate",
         )?;
         self.actors.insert(id.clone());
-        require(
-            Self::docker(
-                ctx,
-                "deploy-migrate-wait",
-                &["wait".into(), id.clone()],
-                120,
-            )
-            .await?
-            .trim_ascii()
-                == b"0",
-        )?;
-        Self::compose(
-            ctx,
-            "deploy-migrate-stop",
-            &[
-                "--profile".into(),
-                "maintenance".into(),
-                "stop".into(),
-                "--timeout".into(),
-                "30".into(),
-                "migrate".into(),
-            ],
-            45,
-        )
-        .await?;
-        let row = self.deploy_inspect(ctx, &id).await?;
-        require(row["State"]["Running"] == false && row["State"]["ExitCode"].as_i64() == Some(0))?;
-        Self::docker(ctx, "deploy-migrate-remove", &["rm".into(), id.clone()], 15).await?;
-        self.actors.remove(&id);
+        readiness::complete(self, ctx, &id, &image).await?;
         let path = Path::new(CONFIG).join("runtime-grants.sql");
         let source = ctx
             .originals
