@@ -1500,7 +1500,17 @@ compiles patched musl commit `7813e9119eb5fe681b6750b8a033a0490bca0941`
 and OpenSSL 4.1.0 out of tree using the measured compiler, make, Perl and shell
 roles. The musl revision includes the upstream CVE-2026-107891 repair. Selected
 headers, static archives and startup objects enter the immutable kit only after
-bounded readback and ELF/archive admission. Its fixed musl compiler adapter uses
+bounded readback and ELF/archive admission. Only the three OpenSSL commands receive
+`SOURCE_DATE_EPOCH=0` in their cleared environment. This explicitly normalizes
+OpenSSL's generated build-date input to the Unix epoch; it is not a release or
+actual build date and does not establish broader binary reproducibility. The
+fixed `opensslBuildRecipe` in native evidence records that value, and the signer
+requires an exact match, including refusal of older evidence without the recipe.
+The hosted owner builds the native kit fresh and measures all its bytes; it has
+no compiled-kit restore path. Downloaded archives retain their original pins,
+and the Cargo and musl environments are unchanged. A future native-kit cache
+would need to bind this recipe and the measured kit digest before reuse.
+Its fixed musl compiler adapter uses
 those target inputs for static PIE, with Rust's bundled target CRT disabled.
 Its generated GCC specs preserve upstream musl's two blank lines after each
 empty `esp` specification, including the final one. Removing a separator can
@@ -1780,6 +1790,9 @@ invocation/witness types carry their distinct roles; external IDs, digests,
 sizes, paths and JSON shapes are checked before use. Serialization is deliberate
 for requests and observations; process owners and credential-bearing contexts
 are not deserializable authority.
+The normalized OpenSSL build recipe is a closed observation under `C-SERDE`
+and `C-VALIDATE`: the signer requires the exact profile and integer epoch zero,
+while build authority still comes from the fresh owner and measured kit.
 
 `C-DTOR-FAIL` and `C-DTOR-BLOCK` apply to owned files, subprocess I/O and workers.
 Checked finalizers attempt acquired peers and retain the primary failure;

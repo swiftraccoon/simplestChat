@@ -2,7 +2,7 @@
 
 use super::{
     catalog::{Catalog, Format, MUSL_COMMIT},
-    context, failure, shim,
+    context, failure, native_build, shim,
 };
 use crate::tooling::Result;
 use serde_json::{Value, json};
@@ -198,6 +198,7 @@ fn native(value: &Value, catalog: &Catalog) -> Result<u64> {
             "target",
             "muslSourceCommit",
             "opensslVersion",
+            "opensslBuildRecipe",
             "sourceArchivePins",
             "configdataSha256",
             "disabled",
@@ -213,6 +214,7 @@ fn native(value: &Value, catalog: &Catalog) -> Result<u64> {
             && value["target"] == context::TARGET
             && value["muslSourceCommit"] == MUSL_COMMIT
             && value["opensslVersion"] == "4.1.0"
+            && value["opensslBuildRecipe"] == native_build::openssl_recipe()
             && value["disabled"] == json!({"shared":true,"dso":true,"module":true,"engine":true}),
     )?;
     digest(&value["configdataSha256"])?;
