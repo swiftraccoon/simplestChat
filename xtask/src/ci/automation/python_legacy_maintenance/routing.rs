@@ -6,8 +6,8 @@ use std::{collections::BTreeSet, ffi::OsString, path::Path};
 #[path = "workflow_routing.rs"]
 mod workflow_routing;
 pub(super) use workflow_routing::{
-    QUALITY_BYTES, QUALITY_SHA256, SUPPORT_BYTES, SUPPORT_SHA256, VERIFIED_BYTES, VERIFIED_SHA256,
-    WORKFLOW_BYTES, WORKFLOW_SHA256,
+    CONTAINER_BYTES, CONTAINER_SHA256, QUALITY_BYTES, QUALITY_SHA256, SUPPORT_BYTES,
+    SUPPORT_SHA256, VERIFIED_BYTES, VERIFIED_SHA256, WORKFLOW_BYTES, WORKFLOW_SHA256,
 };
 
 const MODULE: &str = "test_release_playbook";
@@ -43,7 +43,7 @@ fn select(module: &str, arguments: &mut Vec<OsString>) {
 }
 
 /// The existing admitted two groups remain the authoritative module roster.
-/// Pin all three specially routed modules BEFORE calling this function.
+/// Pin all four specially routed modules BEFORE calling this function.
 pub(in super::super) fn current_arguments(
     groups: &[Vec<String>; 2],
     database: bool,
@@ -204,6 +204,7 @@ mod tests {
                 "test_alpha".into(),
                 MODULE.into(),
                 "test_ci_verified".into(),
+                "test_release_container_ci".into(),
             ],
             vec!["test_beta".into(), "test_python_quality".into()],
         ];

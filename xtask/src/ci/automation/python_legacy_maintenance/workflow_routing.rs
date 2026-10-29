@@ -1,5 +1,5 @@
-//! Exact method routing for two unchanged, byte-pinned Python modules.
-//! Only three historical workflow assertions move to the fixed YAML reference.
+//! Exact method routing for three unchanged, byte-pinned Python modules.
+//! Only four historical workflow assertions move to the fixed YAML reference.
 
 use std::ffi::OsString;
 
@@ -12,12 +12,19 @@ pub(in super::super) const VERIFIED_SHA256: &str =
 pub(in super::super) const SUPPORT_BYTES: usize = 2574;
 pub(in super::super) const SUPPORT_SHA256: &str =
     "ae56c5e0254594f61c0ff242c5bb55d642f36d3c9b9bb4ddf366a00d56e10ce7";
+pub(in super::super) const CONTAINER_BYTES: usize = 26087;
+pub(in super::super) const CONTAINER_SHA256: &str =
+    "0e3d83ce7814a33c9bf2fc8ac9c41b821aca488ffdf7c726929fd685a87b221a";
 pub(in super::super) const WORKFLOW_BYTES: usize = 73398;
 pub(in super::super) const WORKFLOW_SHA256: &str =
     "fb9b55ab8772bcbb1d23553f66dc4767ac4b1e7a65eb0595c1bb961a132b3aed";
 
-pub(super) const MODULES: [&str; 2] = ["test_python_quality", "test_ci_verified"];
-pub(super) const LEGACY: [&str; 3] = [
+pub(super) const MODULES: [&str; 3] = [
+    "test_python_quality",
+    "test_ci_verified",
+    "test_release_container_ci",
+];
+pub(super) const LEGACY: [&str; 4] = [
     concat!(
         "test_python_quality.PythonPolicyTests.",
         "test_restart_browser_keeps_the_three_minute_owner_and_guarded_evidence",
@@ -30,8 +37,12 @@ pub(super) const LEGACY: [&str; 3] = [
         "test_ci_verified.VerifiedWorkflowTests.",
         "test_rust_tests_prime_their_own_complete_graph_before_executing_every_test",
     ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_only_sanitized_report_is_retained_even_on_failure",
+    ),
 ];
-const METHODS: [&str; 45] = [
+const METHODS: [&str; 62] = [
     concat!(
         "test_python_quality.PythonPolicyTests.",
         "test_restart_browser_keeps_the_three_minute_owner_and_guarded_evidence",
@@ -212,6 +223,74 @@ const METHODS: [&str; 45] = [
         "test_ci_verified.RestoreCiIntegrationTests.",
         "test_restore_has_one_exact_host_owner_and_an_explicit_broad_skip",
     ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_fresh_host_and_job_deadline_include_the_existing_build",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_existing_image_is_built_and_smoked_once_before_release_integration",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_one_revision_labeled_immutable_image_feeds_all_smokes_and_export",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_image_policy_has_pinned_rust_on_hosted_and_disposable_ci",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_push_export_never_rebuilds_and_publication_waits_for_required_checks",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_compose_is_verified_before_install_and_matches_both_execution_users",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_guest_compose_contract_runs_with_required_pinned_renderer",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_optional_http_owner_is_built_once_with_explicit_system_tls_and_separate_target",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_dependencies_use_existing_pinned_controller_requirements_in_an_isolated_venv",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_controller_setup_follows_validation_and_still_overlaps_image_work",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_root_disposable_opt_in_is_explicit_bounded_and_preserves_failure",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_pinned_rollover_browser_runs_after_image_build_without_an_extra_app_build",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_only_sanitized_report_is_retained_even_on_failure",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_completed_layers_are_saved_before_later_checks_can_fail",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_local_failed_fixture_uses_the_compiled_private_evidence_policy",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_pinned_compiler_precedes_image_policy_and_all_guarded_local_evidence",
+    ),
+    concat!(
+        "test_release_container_ci.ReleaseContainerCiTests.",
+        "test_read_only_permissions_pinned_actions_and_no_remote_deployment",
+    ),
 ];
 
 pub(super) fn select(module: &str, arguments: &mut Vec<OsString>) {
@@ -245,6 +324,15 @@ mod tests {
                 )),
                 VERIFIED_BYTES,
                 VERIFIED_SHA256,
+            ),
+            (
+                MODULES[2],
+                include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../ops/ansible/tests/test_release_container_ci.py"
+                )),
+                CONTAINER_BYTES,
+                CONTAINER_SHA256,
             ),
         ];
         let mut observed = Vec::new();
@@ -288,7 +376,7 @@ mod tests {
         assert!(LEGACY.iter().all(|method| METHODS.contains(method)));
         let groups = [
             vec!["test_release_playbook".into(), MODULES[0].into()],
-            vec![MODULES[1].into(), "test_other".into()],
+            vec![MODULES[1].into(), MODULES[2].into(), "test_other".into()],
         ];
         for database in [false, true] {
             let jobs = super::super::current_arguments(&groups, database).unwrap();
