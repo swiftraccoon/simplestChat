@@ -3,6 +3,8 @@
 use super::{Error, Result, catalog, options, projection};
 use serde_json::{Value, json};
 
+#[path = "host_baseline.rs"]
+mod baseline_evidence;
 #[path = "host_diagnostic.rs"]
 mod diagnostic;
 #[path = "host_upgrade.rs"]
@@ -221,6 +223,7 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             "sourcePins",
             "upgradeEvidence",
             "hostDiagnostic",
+            "baselinePgEvidence",
         ],
     )?;
     if expected["scope"] != "PreparedHostMaintenanceRequest"
@@ -301,6 +304,13 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             return Err(Error::Refused);
         }
     }
+    baseline_evidence::validate(
+        &value["baselinePgEvidence"],
+        positive,
+        value["observations"]["baselinePassed"]
+            .as_bool()
+            .ok_or(Error::Refused)?,
+    )?;
     upgrade_evidence::validate(
         &value["upgradeEvidence"],
         expected,
@@ -426,7 +436,7 @@ mod tests {
             "hostRawExit":if success {0} else {1},"hostReport":report,"observations":observations,
             "sourcePins":expected["sourcePins"],
             "upgradeEvidence":upgrade_evidence::fixture(scenario, &expected),
-            "hostDiagnostic":null});
+            "hostDiagnostic":null,"baselinePgEvidence":baseline_evidence::fixture()});
         (receipt, expected)
     }
     fn fixture(success: bool) -> (Value, Value) {
@@ -453,9 +463,10 @@ mod tests {
             assert_eq!(request.as_object().unwrap().len(), 18);
             assert_eq!(request["sourcePins"].as_object().unwrap().len(), 52);
             assert_eq!(request["helperPins"].as_object().unwrap().len(), 15);
-            assert_eq!(receipt.as_object().unwrap().len(), 18);
+            assert_eq!(receipt.as_object().unwrap().len(), 19);
             assert_eq!(receipt["observations"].as_object().unwrap().len(), 28);
             assert_eq!(receipt["upgradeEvidence"].as_object().unwrap().len(), 3);
+            assert_eq!(receipt["baselinePgEvidence"].as_object().unwrap().len(), 4);
             for facts in [
                 &receipt["bootstrapFrame"]["facts"],
                 &receipt["hostReport"]["nativeLauncher"]["facts"],
@@ -485,6 +496,89 @@ mod tests {
             assert!(super::super::auth::encoded(&oversized).unwrap().len() > 16384);
             assert!(guest(oversized, &request).is_err());
         }
+    }
+    #[test]
+    fn baseline_health_evidence_is_required_without_turning_zero_counts_into_coverage() {
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
+            let mut missing = receipt.clone();
+            missing
+                .as_object_mut()
+                .unwrap()
+                .remove("baselinePgEvidence");
+            assert!(guest(missing, &expected).is_err());
+            let mut absent = receipt.clone();
+            absent["baselinePgEvidence"] = Value::Null;
+            assert!(guest(absent, &expected).is_err());
+            let mut unfinished = receipt.clone();
+            unfinished["baselinePgEvidence"]["coldHealthCompletions"] = 1.into();
+            assert!(guest(unfinished, &expected).is_err());
+            let mut impossible = receipt.clone();
+            impossible["baselinePgEvidence"]["coldHealthObligations"] = 0.into();
+            assert!(guest(impossible, &expected).is_err());
+            let mut zero = receipt;
+            for name in [
+                "openingHealthSeeded",
+                "trailingHealthDeferred",
+                "coldHealthObligations",
+                "coldHealthCompletions",
+            ] {
+                zero["baselinePgEvidence"][name] = 0.into();
+            }
+            let admitted = guest(zero, &expected).unwrap();
+            assert_eq!(admitted["baselinePgEvidence"]["coldHealthObligations"], 0);
+            assert_eq!(admitted["baselinePgEvidence"]["coldHealthCompletions"], 0);
+        }
+    }
+    #[test]
+    fn baseline_failures_preserve_null_admission_and_valid_partial_boundary_counts() {
+        // Synthetic parser fixtures only: these do not establish a guest execution.
+        let (mut receipt, expected) = fixture_case("host-success");
+        receipt["passed"] = false.into();
+        receipt["failure"] = "refused".into();
+        receipt["checkpoint"] = "daemon-pg-history".into();
+        receipt["finalStatus"] = 1.into();
+        receipt["cleanupPassed"] = false.into();
+        receipt["hostRawExit"] = Value::Null;
+        receipt["hostReport"] = Value::Null;
+        receipt["baselinePgEvidence"] = Value::Null;
+        for name in OBSERVATIONS {
+            receipt["observations"][name] = false.into();
+        }
+        for name in ["distributionPublished", "authenticatedOpsUpgradeObserved"] {
+            receipt["observations"][name] = true.into();
+        }
+        receipt["observations"]["daemonEffectsUncertain"] = true.into();
+        for class in [
+            "pg-source-missing",
+            "pg-source-utf8",
+            "pg-query-count",
+            "pg-missing-create",
+        ] {
+            receipt["hostDiagnostic"] = json!({"schemaVersion":1,
+                "scope":"PreparedHostObservationDiagnostic","stage":"daemon-pg-history",
+                "failureClass":class,"rowIndex":null,"rows":0,
+                "expectedCommandSha256":null,"observedCommandSha256":null,
+                "expectedCount":null,"observedCount":null});
+            if class == "pg-missing-create" {
+                receipt["hostDiagnostic"]["rowIndex"] = 0.into();
+                receipt["hostDiagnostic"]["rows"] = 51.into();
+            } else if class == "pg-query-count" {
+                receipt["hostDiagnostic"]["expectedCount"] = 2.into();
+                receipt["hostDiagnostic"]["observedCount"] = 0.into();
+            }
+            guest(receipt.clone(), &expected).unwrap();
+        }
+        // Successful PG admission may precede a later failed baseline observation.
+        receipt["hostDiagnostic"] = Value::Null;
+        receipt["checkpoint"] = "host-trust".into();
+        receipt["baselinePgEvidence"] = json!({"openingHealthSeeded":1,
+            "trailingHealthDeferred":1,"coldHealthObligations":2,"coldHealthCompletions":1});
+        guest(receipt.clone(), &expected).unwrap();
+        receipt["observations"]["baselinePassed"] = true.into();
+        guest(receipt.clone(), &expected).unwrap();
+        receipt["baselinePgEvidence"] = Value::Null;
+        assert!(guest(receipt, &expected).is_err());
     }
     #[test]
     fn diagnostics_cannot_change_a_positive_verdict_or_outlive_the_first_failure_checkpoint() {

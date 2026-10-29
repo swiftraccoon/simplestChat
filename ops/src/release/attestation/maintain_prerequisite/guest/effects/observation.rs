@@ -602,16 +602,18 @@ impl Fixture {
             if ctx.request.is_host() {
                 let mut audit = Auditor::new(&self.native_rows);
                 audit.begin_cold_pg();
+                let opening = self.cold_opening.take();
                 let result = self
                     .expected_pg_commands_observed(ctx, Some(&mut audit))
                     .and_then(|commands| {
-                        policy::pg_exec_history_observed(
+                        super::cold_pg::ColdPg::admit(
+                            opening.ok_or(Error::Refused)?,
                             &pg_rows,
                             &commands,
-                            &self.pg_health,
                             &mut audit,
                         )
                     });
+                let result = result.map(|cold| self.cold_pg = Some(cold));
                 retain_pg_failure(
                     ctx.request.is_host(),
                     earlier,
@@ -1074,6 +1076,11 @@ impl Fixture {
         close_phase(result, ended)?;
         ctx.observed.set("externalGuardRetained", true)
     }
+    pub(super) fn daemon_effects_uncertain(&self) -> bool {
+        self.unknown_effect
+            || self.create_uncertain
+            || self.cold_pg.as_ref().is_some_and(|cold| !cold.complete())
+    }
     pub async fn finish_body(&mut self, ctx: &mut Context) -> Result<()> {
         if self.body_finished {
             return Ok(());
@@ -1101,10 +1108,8 @@ impl Fixture {
             first.get_or_insert(error);
             ctx.control.record(error);
         }
-        ctx.observed.set(
-            "daemonEffectsUncertain",
-            self.unknown_effect || self.create_uncertain,
-        )?;
+        ctx.observed
+            .set("daemonEffectsUncertain", self.daemon_effects_uncertain())?;
         first.map_or(Ok(()), Err)
     }
     pub fn primary_capture_checkpoint(&self) -> Option<&'static str> {

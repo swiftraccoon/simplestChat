@@ -452,7 +452,13 @@ async fn body(ctx: &mut Context, fixture: &mut Fixture, run: &mut Run) -> Result
     result.and(fence)?;
     ctx.check()
 }
-fn receipt(ctx: &Context, run: &Run, checkpoint: &str, cleanup: bool) -> Value {
+fn receipt(
+    ctx: &Context,
+    run: &Run,
+    checkpoint: &str,
+    cleanup: bool,
+    baseline_pg_evidence: Option<Value>,
+) -> Value {
     let passed = ctx.control.first.is_none() && ctx.control.status == 0 && cleanup;
     let final_status = if ctx.control.status != 0 {
         ctx.control.status
@@ -478,12 +484,13 @@ fn receipt(ctx: &Context, run: &Run, checkpoint: &str, cleanup: bool) -> Value {
         "hostReport":run.report,
         "observations":run.observed.0,
         "hostDiagnostic":ctx.host_diagnostic,
+        "baselinePgEvidence":baseline_pg_evidence,
         "upgradeEvidence":run.upgrade_evidence,
         "sourcePins":ctx.request.source_pins
     })
 }
 pub(super) fn failed_receipt(ctx: &Context) -> Value {
-    receipt(ctx, &Run::new(), "input", false)
+    receipt(ctx, &Run::new(), "input", false, None)
 }
 pub(super) async fn transaction(ctx: &mut Context) -> Value {
     let mut fixture = Fixture::new(&ctx.request);
@@ -539,5 +546,11 @@ pub(super) async fn transaction(ctx: &mut Context) -> Value {
     {
         ctx.control.record(e);
     }
-    receipt(ctx, &run, checkpoint, cleanup)
+    receipt(
+        ctx,
+        &run,
+        checkpoint,
+        cleanup,
+        fixture.baseline_pg_evidence(),
+    )
 }

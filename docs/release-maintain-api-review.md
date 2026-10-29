@@ -199,11 +199,41 @@ Source failures have no event-row index, and command material remains hashes.
 
 The diagnostic sink is enabled only for the complete prepared-host fixture and
 cannot replace an earlier error, checkpoint or diagnostic. The older launcher
-prerequisite keeps its output and uses the same strict checked implementation
-without that sink. All predicates, their evaluation order, original clocks,
-event limits and required cleanup observations remain unchanged. In particular,
-health executions cut by either snapshot boundary still refuse. Controlled
-branch tests establish attribution and unchanged rejection, not the cause of
-an earlier hosted failure or successful new signed execution. The previous two
-`daemon-pg-history` setup failures retained no branch detail; their exact causes
-remain unknown until an applicable fresh observation provides it.
+prerequisite keeps its output and strict snapshot predicates: an incomplete
+health execution at either edge still refuses there. The complete host fixture
+has a separate boundary adapter. It seeds at most one unfinished execution from
+a unique retained create for the same PostgreSQL container and exact inspected
+health command. It retains at most one trailing health execution and reconciles
+the intervening events before the final host epoch. Every distinct cold-boundary
+obligation must subsequently have an actual die event with string exit code
+`"0"`; the final observer cannot leave one unfinished. Ambiguous or absent
+origins, reused IDs, other commands, nonzero exits and missing bootstrap commands
+still refuse. Original clocks, limits and all other observations remain required.
+Cold completion debt is separate from mutational uncertainty. A completed
+baseline audit can admit the existing migration preparation while a witnessed
+read-only health execution is still pending. Terminal daemon uncertainty includes
+that debt even if a preparation audit clears its own mutation latch. Completing
+the health reconciliation never clears a mutational latch; the existing audits
+retain their own requirements for doing so.
+
+`C-VALIDATE`, `C-CUSTOM-TYPE` and `C-SERDE` apply to the private witness state and
+the mandatory nineteenth host-proof field, `baselinePgEvidence`. Its closed
+integer fields are `openingHealthSeeded` and `trailingHealthDeferred` (each 0–1),
+`coldHealthObligations` (the distinct union, 0–2), and `coldHealthCompletions`
+(distinct observed zero exits, at most the obligations). The union is between
+the maximum and sum of the two boundary counts: one ID at both edges counts
+once. Evidence stays null until successful PostgreSQL baseline admission and
+can remain partial if a later check fails. A passed baseline requires nonnull
+evidence; a passed whole operation also requires every obligation completed.
+Zero counts report no boundary encounter and do not establish boundary-path
+coverage. Raw commands and IDs remain private. The producer and strict
+controller decoder must be updated together; old eighteen-field receipts do
+not satisfy this new fixture contract.
+
+The fresh diagnostic run on `4d2433c` observed an opening `exec_start` whose
+command hash matches the exact configured health command in the migration
+case. The launcher-refusal case retained no command hash, so its missing-create
+origin remains unidentified. Earlier receipts without branch detail retain
+their original uncertainty. Controlled tests cover the guarded adapter and
+strict prerequisite rejection; successful fresh signed execution and a nonzero
+boundary count are separate evidence obligations.

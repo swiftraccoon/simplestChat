@@ -39,6 +39,9 @@ fn pending_health(rows: &[Value], pg: &str, health: &str) -> Result<BTreeMap<Str
     Ok(pending)
 }
 impl Fixture {
+    pub(in super::super) fn baseline_pg_evidence(&self) -> Option<Value> {
+        self.cold_pg.as_ref().map(super::cold_pg::ColdPg::evidence)
+    }
     pub(in super::super) fn host_boundary(
         &mut self,
         ctx: &mut Context,
@@ -52,14 +55,40 @@ impl Fixture {
             &baseline.pg,
             &baseline.health,
         )?;
-        Ok(())
+        let raw = &collector.rows[..collector.native_start];
+        let mut audit = super::super::host::events::Auditor::new(raw);
+        audit.begin_cold_pg();
+        let result = self.cold_pg.as_mut().ok_or(Error::Refused)?.reconcile(
+            raw,
+            &baseline.health_pending,
+            &mut audit,
+        );
+        if result.is_err() && ctx.control.first.is_none() {
+            ctx.control.checkpoint = "daemon-pg-history";
+        }
+        super::observation::retain_pg_failure(
+            true,
+            None,
+            ctx.control.first,
+            &mut ctx.host_diagnostic,
+            &result,
+            audit,
+        );
+        result
     }
     pub(in super::super) async fn host_baseline(&mut self, ctx: &mut Context) -> Result<Baseline> {
         require(ctx.request.is_host())?;
+        require(self.cold_opening.is_none() && self.cold_pg.is_none())?;
         self.check_monitors(ctx)?;
         {
             let monitors = self.monitors.lock().map_err(|_| Error::Io)?;
             let collector = monitors.collector.as_ref().ok_or(Error::Refused)?;
+            self.cold_opening = Some(super::cold_pg::Opening::capture(
+                &collector.rows[..collector.native_start],
+                collector.rows.len(),
+                self.pg.as_deref().ok_or(Error::Refused)?,
+                &self.pg_health,
+            )?);
             self.native_rows = collector.rows[collector.native_start..].to_vec();
         }
         let attempt = self.attempt(ctx).await?.ok_or(Error::Refused)?;
@@ -383,6 +412,25 @@ impl Fixture {
             ctx.host_diagnostic = failed.diagnostic;
             return Err(failed.cause);
         }
+        let mut audit = super::super::host::events::Auditor::new(&self.native_rows);
+        audit.begin_cold_pg();
+        let result = self
+            .cold_pg
+            .as_mut()
+            .ok_or(Error::Refused)?
+            .finish(&self.native_rows, &mut audit);
+        if result.is_err() && ctx.control.first.is_none() {
+            ctx.control.checkpoint = "daemon-pg-history";
+        }
+        super::observation::retain_pg_failure(
+            true,
+            None,
+            ctx.control.first,
+            &mut ctx.host_diagnostic,
+            &result,
+            audit,
+        );
+        result?;
         observed.set("finiteDaemonHistoryObserved", true)?;
         observed.set("backupListPassed", true)?;
         // Only an independently bounded global inventory plus closed histories
