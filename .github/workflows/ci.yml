@@ -1240,6 +1240,40 @@ jobs:
             --output "${RUNNER_TEMP}/production-security"
           cargo run --locked -q -p xtask -- ci image-cache status production
 
+      - name: Encrypt the optional failed-image RPM diagnostic
+        id: encrypted-rpm-diagnostic
+        if: >-
+          ${{ failure() && github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              github.repository == 'swiftraccoon/simplestChat' && !env.ACT &&
+              steps.scanned-image-database.outcome == 'failure' &&
+              vars.SCPUB_RPM_DIAGNOSTIC_RECIPIENT != '' }}
+        timeout-minutes: 1
+        shell: bash
+        env:
+          RPM_DIAGNOSTIC_RECIPIENT: ${{ vars.SCPUB_RPM_DIAGNOSTIC_RECIPIENT }}
+        run: |
+          cargo run --locked -q -p xtask -- ci rpm-diagnostic \
+            --root "${RUNNER_TEMP}/production-security" \
+            --output "${RUNNER_TEMP}/encrypted-rpm-diagnostic"
+
+      - name: Preserve only the encrypted RPM diagnostic
+        if: >-
+          ${{ failure() && github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              github.repository == 'swiftraccoon/simplestChat' && !env.ACT &&
+              steps.encrypted-rpm-diagnostic.outcome == 'success' &&
+              steps.encrypted-rpm-diagnostic.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: encrypted-rpm-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/encrypted-rpm-diagnostic/rpmdb.cms.der
+            ${{ runner.temp }}/encrypted-rpm-diagnostic/manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
       # The scanner always checks upstream updates and current age/hash before
       # running the full image policy. This stores data, never scan success.
       - name: Save refreshed vulnerability database download bytes

@@ -217,6 +217,8 @@ pub(super) fn sources() -> BTreeSet<String> {
         "xtask/src/ci/apt_mirror.rs",
         "xtask/src/ci/release_controller_files.rs",
         "xtask/src/ci/release_controller_plan.rs",
+        "xtask/src/ci/rpm_diagnostic.rs",
+        "xtask/src/ci/rpm_diagnostic_tests.rs",
         "xtask/src/ci/ops_artifact.rs",
         "xtask/src/ci/ops_artifact/fixture.rs",
         "xtask/src/ci/ops_artifact/fixture_driver.rs",
