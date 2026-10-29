@@ -374,3 +374,49 @@ all selector bindings, bounded preparation, exact original payload paths and
 strict malformed neighbors. Those tests do not execute Ansible, a guest,
 a daemon, authentication services or production operations. Their results and
 any later CI/signed runtime results must be recorded separately.
+
+## First signed Rust trial: request profile refused before a prepared result
+
+The first Rust replacement run, [40821631253 / attempt 1](https://github.com/swiftraccoon/simplestChat/actions/runs/40821631253),
+used published `fcdf30d6dba236ce7d63dfffdb4e3d912ea18b5d` and its successful full
+CI `40819916105 / attempt 1`. It selected signed Ops artifact `12874846714`,
+current server artifact `12873874407`, and explicit previous revision
+`67e6b3b476541d90cf044593063406de5084edd4`, CI `40806549629 / attempt 1`,
+server artifact `12868269710`. This manual trial failed; it does not qualify
+either transaction or the replacement as a whole.
+
+The retained summary reached `deploy-guest-prepare` with no admitted prepared or
+result frame and a null `failureCapture`. The SSH session's actual raw status
+was 1; its process group, reaping, returned streams, EOFs and closes were all
+recorded complete. All 33 prerequisite Ops cases passed, authentication completed
+6 Ops and 8 current plus 8 previous server verification roles, and both server
+metadata pairs completed. Both VM epochs recorded QEMU exit zero and complete
+QMP, drainer, stream and close outcomes. The whole `passed` and `cleanupPassed`
+fields remained false. Those independent observations do not override the
+failed guest operation or imply that the deploy/rollback trials ran.
+
+The hash-bound source identifies an incompatible request predicate. The
+controller takes PostgreSQL's exact pinned reference from the retained current
+`benchmark_hosts.yml`: `docker.io/library/postgres:18.6-bookworm` with its fixed
+digest. The unchanged frozen deploy harness selects that same reference. The new
+guest decoder instead required a `postgres:17-alpine` prefix. Therefore the real
+producer value necessarily refuses before construction of the guest state that
+can emit a result. The summary's source hashes match the producer, decoder and
+configuration files; this is a joined source diagnosis, not a captured internal
+error message or independent observation of an empty stdout stream.
+
+The correction binds this closed deploy fixture to the actual fixed PostgreSQL
+profile and tests its request against the current configuration and frozen
+reference. Obsolete references and altered or malformed digests remain refused.
+It changes no PostgreSQL version, dependency digest, native deadline, finalization
+reserve, artifact-verification requirement or shared maintenance request profile.
+A corrected source check is separate from the required fresh signed runtime.
+The historical `47094af` failed rollback and its unknown fatal boundary remain
+negative evidence; this request-admission failure does not explain that trial.
+
+Summary artifact `12874399567` had ZIP SHA256
+`e1d387f09e0ec1c5028be2cbe65f8d7f87766841daa08074a9b2021bbf462d4a`,
+checked against its fresh API length and digest before parsing. The retained
+summary SHA256 is
+`5294c5eeb29dfe83103347bad8625f3e0a15dacd48fb7502492f6a92bdd21e45`.
+No production operation was performed by this disposable fixture trial.

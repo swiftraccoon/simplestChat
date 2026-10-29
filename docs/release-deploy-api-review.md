@@ -357,3 +357,13 @@ finalization retain full hash replays. Existing maintenance profiles keep their
 full boundary checks. The distinction avoids adding repeated whole-archive
 hashing to the unchanged 20-second inspection service; it is source parity,
 not a measured speedup or an explanation of any historical failed trial.
+
+The first signed Rust trial exposed a request-profile mismatch before guest
+state construction: a newly hard-coded PostgreSQL 17 prefix rejected the actual
+configured and frozen-reference PostgreSQL 18.6 pin. `C-VALIDATE` applies to the
+corrected fixed-profile predicate and its configuration-backed request regression,
+including obsolete reference and malformed/altered digest refusals. Existing
+maintenance request semantics, source ownership and all clocks retain their
+previous contracts. The [runtime proof record](release-deploy-runtime-proof.md#first-signed-rust-trial-request-profile-refused-before-a-prepared-result)
+separates the actual failed trial, independent finalization facts and joined
+source diagnosis from the fresh signed execution still required after correction.
