@@ -50,6 +50,53 @@
           with an explicit host, user, absolute private key, and root or passwordless sudo.
       when: scpub_release_artifact_id is defined
 
+    - name: Require exact native deployment inputs before any remote preflight
+      ansible.builtin.assert:
+        that:
+          - scpub_release_repository == 'swiftraccoon/simplestChat'
+          - scpub_release_artifact_id is integer
+          - scpub_release_artifact_id > 0
+          - scpub_release_artifact_id <= 9007199254740991
+          - scpub_release_ci_run is integer
+          - scpub_release_ci_run > 0
+          - scpub_release_ci_run <= 9007199254740991
+          - scpub_ops_artifact_id is defined
+          - scpub_ops_artifact_id is integer
+          - scpub_ops_artifact_id > 0
+          - scpub_ops_artifact_id <= 9007199254740991
+          - scpub_ops_selection is defined
+          - scpub_ops_selection is mapping
+          - >-
+            scpub_ops_selection.keys() | list | sort ==
+            ['buildRunId', 'packageVersion', 'protocolVersion', 'repository',
+             'revision', 'runAttempt', 'target']
+          - scpub_ops_selection.repository == scpub_release_repository
+          - scpub_ops_selection.revision == scpub_release_expected_revision
+          - scpub_ops_selection.packageVersion == '0.1.0'
+          - scpub_ops_selection.protocolVersion is integer
+          - scpub_ops_selection.protocolVersion == 1
+          - scpub_ops_selection.target == 'x86_64-unknown-linux-musl'
+          - scpub_ops_selection.buildRunId is integer
+          - scpub_ops_selection.buildRunId == scpub_release_ci_run
+          - scpub_ops_selection.runAttempt is integer
+          - scpub_ops_selection.runAttempt > 0
+          - scpub_ops_selection.runAttempt <= 9007199254740991
+          - scpub_ops_xtask is defined
+          - scpub_ops_xtask is string
+          - scpub_ops_xtask is match('^/')
+          - scpub_ops_gh_executable is defined
+          - scpub_ops_gh_executable is string
+          - scpub_ops_gh_executable is match('^/')
+          - scpub_ops_gh_executable | realpath | basename == 'gh'
+          - scpub_release_quiet_seconds | default(600) is integer
+          - scpub_release_quiet_seconds | default(600) >= 0
+          - scpub_release_quiet_seconds | default(600) <= 600
+        fail_msg: >-
+          Explicit deployment requires the typed same-revision signed application and Ops
+          selections, trusted absolute controller paths, and integer quiet seconds in 0..600.
+          Use the direct signed Ansible operation documented in RELEASES.md.
+      when: scpub_release_deploy | default(false) | bool
+
     - name: Verify the signed release on the controller before any remote preflight
       ansible.builtin.command:
         argv:
@@ -329,6 +376,12 @@
         fail_msg: The transferred predicate must retain its original verified bytes.
       when: not ansible_check_mode
 
+    - name: Deliver the signed current Ops executable through native policy
+      ansible.builtin.import_tasks: tasks/signed-ops.yml
+      when:
+        - not ansible_check_mode
+        - scpub_release_deploy | default(false) | bool
+
     - name: Replace only the application when deployment was explicitly selected
       vars:
         ansible_python_interpreter: /usr/bin/python3
@@ -340,13 +393,21 @@
           - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=240
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/release-public.py
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
           - deploy
+          - --revision
           - "{{ scpub_release_revision }}"
           - --quiet-seconds
-          - "{{ scpub_release_quiet_seconds | default(600) | int }}"
+          - "{{ scpub_release_quiet_seconds | default(600) }}"
+          - --timeout-seconds
+          - '1800'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: true
       when:
         - not ansible_check_mode

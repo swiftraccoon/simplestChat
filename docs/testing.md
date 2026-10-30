@@ -438,12 +438,14 @@ The shared `ci automation --checks` command preserves quality, syntax and
 standalone Ops checks. Its complete suite uses two current discovery children
 plus one frozen maintenance-class child. Disjoint module selectors come from
 the sorted, alternating flat inventory. The unchanged release-playbook module
-has twelve tests: its ten release cases and one public-selection case run against
-current YAML; its one legacy maintenance case runs unchanged against explicitly
-byte-pinned old YAML in a private runtime copy. No Python source or loader is
-added. Current native caller policy is checked by Rust YAML contract and mutation
-tests. The module's full content pin prevents future classes from being silently
-omitted by this explicit class split.
+has twelve tests: eight unaffected release cases and one public-selection case
+run against current YAML. Its two old Python-deploy/flat-task assertions and one
+legacy maintenance case run unchanged against explicitly byte-pinned old YAML
+in a private runtime copy. Exact method selectors keep the current and historical
+sets disjoint. No Python source, loader, process role or additional deadline is
+added. Current native routine and maintenance caller policy is checked by Rust
+YAML contract and mutation tests, including their actual shared delivery import.
+The module's full content pin prevents future methods from being silently omitted.
 
 With inherited `DISPOSABLE_TEST_DATABASE=1`, there is one current discovery
 child with explicit module/class selectors plus the read-only legacy child.
@@ -451,7 +453,7 @@ Database-mutating cases still share one current process. Unsupported names,
 packages, symlinks, byte-pin changes and observed inventory changes refuse.
 The separate workflow database checks keep their existing owners. Direct raw
 `python -m unittest discover` is no longer the complete current suite: it would
-apply the frozen old-launcher assertion to the new native caller. Focused
+apply frozen old-launcher assertions to the new native callers. Focused
 unchanged modules may still be run directly; use the Rust driver for the complete
 current/reference contract.
 
@@ -506,9 +508,9 @@ for values that callers must validate.
 CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
 directory to select both its pinned tools and its Python import environment.
 The checks do not install packages, contact deployment hosts, or start services.
-Updating a host helper requires `build/deploy.py --install-helpers` once so that
-the complete wrapper/module set is reconciled; subsequent releases retain the
-prepared-helper hash checks and app-only replacement flow.
+Updating a staging helper requires reviewed reconciliation through the direct
+release playbook with `scpub_release_prepared: false`; subsequent releases retain
+the prepared-helper hash checks and app-only replacement flow.
 
 ### Readiness and shutdown
 
@@ -1581,13 +1583,17 @@ mutations. See the [passive response-policy check](response-policy.md) for scope
 limits and existing complementary coverage.
 
 Push CI retains that same immutable production image for deployment. Offline
-operations tests cover export without rebuilding, commit/run/artifact identity,
-bounded CI waiting, single-host selection and stopping after a failed deployment
-or verification. Deploying a retained image does not rerun the full suite; it
-checks artifact integrity, runtime compatibility and readiness, then runs the
-bounded anonymous HTTP checks of `/health`, `/ready` and `/`. The separate
-`--public-chat-smoke` option explicitly opts into creating guests and sending a
-public chat message; it is disabled by default. The supported `--force` path
+reference operations tests cover export without rebuilding, commit/run/artifact
+identity, bounded CI waiting, single-host selection and stopping after a failed
+deployment or verification. The current signed routine caller is the direct
+typed release playbook. Current Rust mutation contracts cover its stage-only
+default, exact explicit deploy inputs, shared authenticated Ops delivery,
+canonical native invocation and failure propagation. Deploying a retained image
+does not rerun the full suite; it checks artifact integrity, runtime compatibility
+and readiness. After actual Ansible success, the operator separately checks
+anonymous `/health`, `/ready`, `/app-version.json` and `/`. The optional public
+protocol smoke creates guests and writes a public message; it requires that
+write's authorization. The supported `--force` path
 accepts an exact-revision unsigned build without waiting for CI, while retaining
 the runtime safeguards and recording that override. See the
 [release workflow](../ops/ansible/RELEASES.md).
@@ -3079,8 +3085,12 @@ cargo run --locked -q -p xtask -- ops-artifact deploy-runtime --help
 ```
 
 Source and local checks do not establish signed runtime qualification. The
-deploy proof record preserves the earlier
-failed rollback trials and the distinction from production caller adoption.
+signed `ebf8564b` fixture succeeded with actual native exits 0/1, successful
+rollback to B and terminal owner checks. Backups were listed, not restored; native-validator isolation
+and guest-client whole-group independence remain independently uninspected.
+That fixture binds its exact executable/source/artifacts and does not qualify
+the changed routine Ansible caller or a later revision. Actual caller delivery,
+installation and invocation require their own runtime evidence.
 
 ## Native standalone restore verification
 

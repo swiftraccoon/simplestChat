@@ -98,6 +98,11 @@ impl Fixture {
         )
         .unwrap();
         fs::write(
+            reference.join("release-python.yml"),
+            include_bytes!("reference/release-python.yml"),
+        )
+        .unwrap();
+        fs::write(
             reference.join("ci-python.yml"),
             include_bytes!("reference/ci-python.yml"),
         )
@@ -762,7 +767,7 @@ fn legacy_original_and_copy_pins_are_observed_and_all_known_closes_are_attempted
     owner.inject_close_refusal(0);
     assert_eq!(owner.close(&mut control), Err(Cause::Inventory));
     assert!(owner.all_known_handles_closed());
-    assert_eq!(owner.close_attempts(), 24);
+    assert_eq!(owner.close_attempts(), 26);
     assert!(!private.exists());
     assert!(control.finish().is_ok());
 }
@@ -821,7 +826,7 @@ fn checked_close_refusal_still_closes_every_known_file_and_keeps_prior_cause() {
     assert_eq!(closed, Err(Cause::Close));
     control.remember(closed);
     assert!(owner.all_known_handles_closed());
-    assert_eq!(owner.close_attempts(), 24);
+    assert_eq!(owner.close_attempts(), 26);
     assert!(!private.exists());
     assert_eq!(
         control.finish(),
@@ -889,6 +894,10 @@ fn workflow_reference_copies_support_and_yaml_and_owns_results_until_checked_clo
             "xtask/src/ci/automation/reference/ci-python.yml",
             ".github/workflows/ci.yml",
         ),
+        (
+            "xtask/src/ci/automation/reference/release-python.yml",
+            "ops/ansible/release.yml",
+        ),
     ] {
         assert_eq!(
             fs::read(fixture.root.join(source)).unwrap(),
@@ -921,7 +930,7 @@ fn workflow_reference_copies_support_and_yaml_and_owns_results_until_checked_clo
     assert_eq!(owner.current(&mut control), Err(Cause::Inventory));
     assert_eq!(owner.close(&mut control), Err(Cause::Inventory));
     assert!(owner.all_known_handles_closed());
-    assert_eq!(owner.close_attempts(), 24);
+    assert_eq!(owner.close_attempts(), 26);
     assert!(!private.exists());
     assert!(control.finish().is_ok());
 }
@@ -934,6 +943,7 @@ fn every_added_reference_source_pin_refuses_before_any_child() {
         "ops/ansible/tests/test_release_container_ci.py",
         "ops/ansible/tests/test_support.py",
         "xtask/src/ci/automation/reference/ci-python.yml",
+        "xtask/src/ci/automation/reference/release-python.yml",
     ] {
         let fixture = Fixture::new();
         let path = fixture.root.join(source);

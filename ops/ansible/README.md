@@ -13,8 +13,9 @@ to run alongside the public service.
 
 For an existing public site, use [prebuilt app-only releases](RELEASES.md).
 They stage an image while chat is live and leave PostgreSQL/Caddy running during
-application replacement. The routine `build/deploy.py` command selects the image
-normal CI already tested; no second image build or manual artifact IDs are needed.
+application replacement. The direct routine playbook requires the exact signed
+application and Ops artifact IDs from one successful CI run and attempt. It uses
+the image normal CI already tested, without a second image build.
 The same guide covers explicit, ordered host reboots.
 Use [server migration](MIGRATION.md) to move an existing deployment and its data
 to a fresh VPS through one command, including optional deployment and canary

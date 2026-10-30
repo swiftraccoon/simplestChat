@@ -224,6 +224,7 @@ xtask/src/ci/automation/python_legacy_maintenance/**
 xtask/src/ci/automation/reference/**
 !xtask/src/ci/automation/reference/maintenance-python.yml
 !xtask/src/ci/automation/reference/source-python.yml
+!xtask/src/ci/automation/reference/release-python.yml
 !xtask/src/ci/automation/reference/ci-python.yml
 !xtask/src/ci/production_image/
 xtask/src/ci/production_image/**

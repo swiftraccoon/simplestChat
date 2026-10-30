@@ -30,9 +30,9 @@ cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/re
 
 This validates metadata only; it does not authenticate an image archive or
 signature and cannot authorize deployment. It starts no host operation.
-Application staging and routine app-only releases retain their Python
-runtime. Prepared-host maintenance uses the separately authenticated Ops
-executable described below; it is not part of the production image.
+Application staging retains its Python runtime. Explicit routine deployment and
+prepared-host maintenance use the separately authenticated Ops executable
+described below; it is not part of the production image.
 
 The same tool can inspect the original uncompressed image archive against that
 validated manifest without extracting, loading or running it:
@@ -130,59 +130,131 @@ Run the focused checks relevant to the change, then push the clean committed
 `main` revision directly under the
 [main branch policy](../../docs/security.md#main-branch-rules). A pull request is
 optional. The [complete local CI gate](../../docs/testing.md#run-ci-locally)
-remains available; running it before every push is not required. From a clean
-checkout at that exact published revision, run:
+remains available; running it before every push is not required. Use a clean
+caller-trusted checkout at that exact published revision and select its successful
+main-push CI run and attempt. Normal CI builds the production image once, tests
+it by immutable image ID, and retains that same image. Deployment does not
+rebuild it or rerun the test suite.
 
-```sh
-python3 build/deploy.py \
-  --inventory ops/ansible/inventory.local.yml \
-  --repository OWNER/REPOSITORY \
-  --origin https://chat.example.com
+This is a breaking routine caller change. `release.yml` still stages by default,
+but explicit deployment now requires both signed application and Ops coordinates.
+The frozen `build/deploy.py` / `build/release_deploy.py` ordinary signed route
+cannot supply them and is no longer a supported routine entry point. Keep it as
+the unchanged reference; automatic selection in a Rust frontend is separate work.
+The [explicit force app-only route](#explicit-force-deployment) retains its
+existing entry point and does not use this signed Ops bootstrap.
+
+First [build the trusted controller before credentials](#prepare-the-controller-before-credentials).
+Use the pinned Python/Ansible environment, the selected authenticated GitHub CLI
+and trusted key-based SSH. Then [select both signed artifacts](#select-both-signed-artifacts-explicitly)
+from one exact successful run and attempt. API listings select coordinates;
+fresh application and Ops signature verification remain mandatory. A failed CI,
+expired artifact or mismatched identity refuses the operation. The direct
+playbook does not wait for CI or automatically select a run.
+
+Create a private `routine-vars.json` outside version control. Replace every
+uppercase placeholder. IDs and protocol/run/attempt values must be unquoted JSON
+integers, never booleans or numeric strings. Artifact/run/attempt IDs must be
+positive and at most `9007199254740991`. The Ops selection has exactly the seven
+keys shown. This export profile requires the repository, target, protocol and
+package version shown below to match the selected signed Ops distribution:
+
+```json
+{
+  "scpub_release_repository": "swiftraccoon/simplestChat",
+  "scpub_release_artifact_id": APPLICATION_ARTIFACT_ID,
+  "scpub_release_expected_revision": "REVISION_40_LOWERCASE_HEX",
+  "scpub_release_ci_run": CI_RUN_ID,
+  "scpub_release_deploy": true,
+  "scpub_release_prepared": true,
+  "scpub_release_quiet_seconds": 600,
+  "scpub_ops_xtask": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask",
+  "scpub_ops_gh_executable": "/absolute/trusted/bin/gh",
+  "scpub_ops_artifact_id": OPS_ARTIFACT_ID,
+  "scpub_ops_selection": {
+    "repository": "swiftraccoon/simplestChat",
+    "revision": "REVISION_40_LOWERCASE_HEX",
+    "packageVersion": "0.1.0",
+    "protocolVersion": 1,
+    "target": "x86_64-unknown-linux-musl",
+    "buildRunId": CI_RUN_ID,
+    "runAttempt": RUN_ATTEMPT
+  }
+}
 ```
 
-Use your repository and public origin. The command selects the exact checkout
-revision's push CI run, waits for success, and finds its production artifact.
-Normal CI builds the production image once, tests it by immutable image ID, and
-retains that same image. Deployment does not rebuild it or rerun the test suite.
-The command does not commit, push, dispatch builds, or retry failed operations.
+Use a reviewed inventory selecting exactly one public host; the direct playbook
+does not freeze or choose that host for you. Review any `--limit HOST_ALIAS`
+selection with the same care as the inventory. Preserve its domain, host-key and
+SSH settings. Put the selected
+GitHub CLI's directory first on `PATH` for application staging, and run:
 
-The controller needs Python 3.12+, authenticated GitHub CLI, Ansible, curl,
-and trusted SSH access. Select exactly one inventory host; use `--limit` if needed.
-Its `scpub_domain` must match `--origin` so verification targets the deployed site.
-The default CI wait is one hour; `--wait-seconds` changes that bound. Changed
-checkout state, failed CI, expired/missing artifacts, or mismatched helpers stop
-the command before deployment. This default path requires the current trusted CI
-attestation. The explicit force path below admits a local build without it.
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
+  ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/release.yml \
+  -e @routine-vars.json
+```
 
-Prepared-host checks are enabled by default. After reviewing helper changes,
-`--install-helpers` explicitly installs the current helpers instead of requiring
-an exact existing match. It does not run host provisioning or database migrations.
+Prepared mode requires the exact current installed Python staging helpers. If
+reviewed helper changes need installation, set `scpub_release_prepared` to the
+JSON boolean `false`; this reconciles only those helpers, without provisioning or
+migrations. Omitting `scpub_release_deploy`, or setting it to `false`, remains
+stage-only and requires no Ops selectors or controller paths.
 
-The existing release playbook transfers and validates the image while chat stays
-online, takes the backup, and replaces only the application. After readiness,
-the command makes anonymous HTTPS GETs to `/health`, `/ready`, and `/`; it does
-not join guests or write chat messages. `--public-chat-smoke` explicitly opts into
-the Node 22.12+ smoke that joins two guests and writes one labeled message in
-`--room` (default `lobby`). Do not select that option without authorization to post.
-Private command logs and the selected revision/run/artifact identities are kept
-under `results/deploy.*`; remote deployment evidence remains on the VPS.
+The playbook rejects incomplete explicit deploy inputs before remote preflight.
+It verifies and stages the signed application while chat stays online, retaining
+the original verified predicate beside the manifest. Shared signed Ops delivery
+then joins repository/revision/run/attempt and the actual staged manifest,
+authenticates the selected Ops artifact, verifies transferred bytes and performs
+native install/upgrade before canonical `release deploy` runs. Its transport,
+privacy and retained bootstrap evidence are described in the
+[shared delivery sequence](#stage-then-run-native-maintenance). A saved receipt
+never replaces actual current verifier or process success. Delivery or native
+failure stops the playbook; there is no Python deployment fallback.
+
+The native transaction uses `systemd-run --wait`, runtime 1800 seconds and stop
+allowance 240 seconds, with native timeout 1800 and finalization reserve 60.
+These scheduling limits retain their existing scopes; they do not guarantee a
+hard wall-clock bound. It takes the protected backup and replaces only the app.
+Private controller/export/bootstrap evidence is retained at the operation's
+reported paths; native attempt evidence remains under
+`/srv/simplestchat-public/results/release.*`. This direct caller does not produce
+the frozen frontend's `results/deploy.*` report or run its post-deployment smoke.
+
+After successful Ansible completion, verify anonymous HTTPS against the reviewed
+inventory domain:
+
+```sh
+curl --fail --silent --show-error --max-time 15 https://chat.example.com/health
+curl --fail --silent --show-error --max-time 15 https://chat.example.com/ready
+curl --fail --silent --show-error --max-time 15 https://chat.example.com/app-version.json
+curl --fail --silent --show-error --max-time 15 https://chat.example.com/ -o /dev/null
+```
+
+Check the returned health/readiness status and exact selected revision. These
+anonymous requests create no account, guest or chat message. A failed public
+check remains a separate failure and does not authorize another restart or
+automatic rollback. The optional [public protocol smoke](../../docs/testing.md#manual-public-protocol-smoke)
+writes a labeled message; run it only when that write is authorized.
 
 Build and CI time are release latency, not service downtime. The interruption is
 limited to application replacement and startup; database and proxy stay running.
 Before taking the backup and replacing the app, the release waits up to
-`--quiet-seconds` (default 600, at most 600) for `simplestchat_rooms_active` to
-reach zero on the loopback metrics endpoint. Admission remains open, so a new call
+`scpub_release_quiet_seconds` (default 600, integer `0..600`) for
+`simplestchat_rooms_active` to reach zero on the loopback metrics endpoint.
+Admission remains open, so a new call
 may arrive during the backup and be interrupted; this is a quiet observation,
 not a zero-interruption guarantee. The report records `quietWaitSeconds` and
 `roomsActiveAtQuietCheck`, then samples again immediately before stopping the app
 as `roomsActiveBeforeStop` with `roomsObservedBeforeStopAt`. Even the final sample
 can race a join. A deadline reached with rooms still active proceeds. Missing
 `METRICS_TOKEN` or an unreadable endpoint records `null` rather than blocking the
-release. Pass `--quiet-seconds 0` to skip the wait; the final observation still runs.
-An unsuccessful deployment stops the command. Its existing bounded rollback and
+release. Set `scpub_release_quiet_seconds` to `0` to skip the wait; the final
+observation still runs.
+An unsuccessful deployment stops the playbook. Its existing bounded rollback and
 unfinished-operation checks remain authoritative; inspect evidence before retrying.
-A failed post-deployment smoke does not trigger another restart or rollback; the
-report distinguishes a successful release from failed public verification.
+A failed public check does not change the native attempt's recorded outcome.
 
 ## Explicit force deployment
 
@@ -410,8 +482,9 @@ operation at a time. Deployment identity changes still require the separate
 This is a breaking maintenance caller change. The frozen `build/deploy.py` /
 `build/release_deploy.py` wrapper supplies none of the new Ops inputs; its
 `--maintenance` and `--force --maintenance` routes cannot drive this contract.
-Use the direct playbooks below. Routine app-only and explicit force app-only
-releases keep their existing entry points. This maintenance path requires a
+Use the direct playbooks below. [Routine signed app-only deployment](#routine-update-use-the-image-ci-tested)
+also uses direct typed Ansible; explicit force app-only releases keep their
+existing entry point. This maintenance path requires a
 signed Ops artifact and has no unsigned force bootstrap fallback. Existing
 Python remains in application staging, Ansible and retained reference helpers.
 

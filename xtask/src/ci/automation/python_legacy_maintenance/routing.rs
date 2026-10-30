@@ -11,7 +11,19 @@ pub(super) use workflow_routing::{
 };
 
 const MODULE: &str = "test_release_playbook";
-const CURRENT_CLASSES: [&str; 2] = ["ReleasePlaybookTests", "PublicPlaybookSelectionTests"];
+const RELEASE_METHODS: [&str; 10] = [
+    "test_only_current_signed_github_artifacts_can_select_a_release",
+    "test_github_source_requires_exact_identities_and_explicit_supported_ssh",
+    "test_github_fetch_is_bounded_controller_only_and_precedes_common_stage",
+    "test_stage_is_default_and_deployment_is_an_explicit_separate_job",
+    "test_routine_release_has_no_host_maintenance_or_configuration_rendering",
+    "test_attestation_precedes_every_remote_preflight_and_cached_bytes_are_reverified",
+    "test_python_helper_and_shared_module_are_installed_together",
+    "test_prepared_mode_skips_helper_writes_but_keeps_local_release_storage",
+    "test_real_ansible_lookup_preserves_source_bytes_and_selects_complete_helper_sets",
+    "test_real_compose_preview_and_installed_selection_change_only_images_and_image_metadata",
+];
+const RELEASE_LEGACY: [&str; 2] = [RELEASE_METHODS[3], RELEASE_METHODS[4]];
 pub(super) const FROZEN_MODULE_BYTES: usize = 30653;
 pub(super) const FROZEN_MODULE_SHA256: &str =
     "da212cc2a423f6b5c8026f76ce52dc5057434c1bc0af989fdb1a458166799272";
@@ -21,6 +33,9 @@ pub(super) const OLD_PLAYBOOK_SHA256: &str =
 pub(super) const OLD_SOURCE_BYTES: usize = 585;
 pub(super) const OLD_SOURCE_SHA256: &str =
     "0f09ca96c071cce2d0ae04fcd845888fdf4181f39ba95968499ab70ee7e89c76";
+pub(super) const OLD_RELEASE_BYTES: usize = 15725;
+pub(super) const OLD_RELEASE_SHA256: &str =
+    "59b8289710b76b83bd8335a6665f2a62894d28e0a121d1a1780474c32804ae00";
 
 pub(super) fn source_matches(bytes: &[u8], length: usize, expected: &str) -> bool {
     bytes.len() == length
@@ -32,9 +47,18 @@ pub(super) fn source_matches(bytes: &[u8], length: usize, expected: &str) -> boo
 }
 fn select(module: &str, arguments: &mut Vec<OsString>) {
     if module == MODULE {
-        for class in CURRENT_CLASSES {
-            arguments.extend(["-k".into(), format!("{MODULE}.{class}.*").into()]);
+        for method in RELEASE_METHODS {
+            if !RELEASE_LEGACY.contains(&method) {
+                arguments.extend([
+                    "-k".into(),
+                    format!("{MODULE}.ReleasePlaybookTests.{method}").into(),
+                ]);
+            }
         }
+        arguments.extend([
+            "-k".into(),
+            format!("{MODULE}.PublicPlaybookSelectionTests.*").into(),
+        ]);
     } else if workflow_routing::MODULES.contains(&module) {
         workflow_routing::select(module, arguments);
     } else {
@@ -110,6 +134,11 @@ pub(in super::super) fn legacy_arguments() -> Vec<OsString> {
     .into_iter()
     .map(OsString::from)
     .collect();
+    arguments.extend(
+        RELEASE_LEGACY
+            .into_iter()
+            .map(|method| format!("{MODULE}.ReleasePlaybookTests.{method}").into()),
+    );
     arguments.extend(workflow_routing::LEGACY.into_iter().map(OsString::from));
     arguments
 }
@@ -232,7 +261,13 @@ mod tests {
                             })
                     })
                     .count();
-                let legacy = usize::from(id.starts_with("MaintenancePlaybookTests."));
+                let legacy = legacy_arguments()
+                    .iter()
+                    .filter_map(|argument| argument.to_str())
+                    .filter(|argument| {
+                        *argument == full || full.starts_with(&format!("{argument}."))
+                    })
+                    .count();
                 assert_eq!(current + legacy, 1, "{database}: {id}");
             }
         }
@@ -261,5 +296,23 @@ mod tests {
         );
         assert_eq!(Role::MaintenanceLegacy.maximum_log(), 1024 * 1024);
         assert_eq!(Role::MaintenanceLegacy.index(), 2);
+    }
+
+    #[test]
+    fn old_release_yaml_is_pinned_without_moving_unaffected_methods() {
+        let bytes = include_bytes!("../reference/release-python.yml");
+        assert!(source_matches(bytes, OLD_RELEASE_BYTES, OLD_RELEASE_SHA256));
+        let mut changed = bytes.to_vec();
+        changed[0] ^= 1;
+        assert!(!source_matches(
+            &changed,
+            OLD_RELEASE_BYTES,
+            OLD_RELEASE_SHA256
+        ));
+        let legacy = legacy_arguments();
+        for method in RELEASE_METHODS {
+            let full = OsString::from(format!("{MODULE}.ReleasePlaybookTests.{method}"));
+            assert_eq!(legacy.contains(&full), RELEASE_LEGACY.contains(&method));
+        }
     }
 }

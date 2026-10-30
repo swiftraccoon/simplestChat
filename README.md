@@ -50,13 +50,16 @@ sudo journalctl -fu simplestchat-public-deploy.service
 curl -s https://chat.example.com/ready
 ```
 
-Update after pushing to `main` ([releases](ops/ansible/RELEASES.md); add `--maintenance` for migrations or sizing changes):
+Update after pushing to `main`: prepare the exact signed application/Ops selectors
+in private `routine-vars.json` as shown in the [release guide](ops/ansible/RELEASES.md), then run:
 
 ```sh
-ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml --repository OWNER/REPO --origin https://chat.example.com
+ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/ansible/release.yml -e @routine-vars.json
 ```
 
-This default update waits for successful CI and verifies its signed artifact.
+Select a successful CI run first; this path verifies both signed artifacts.
+Use the separate [maintenance release](ops/ansible/RELEASES.md#schema-and-configuration-changes-the-maintenance-release)
+for migrations or sizing changes.
 An explicitly requested deployment without that wait uses
 [`--force`](ops/ansible/RELEASES.md#explicit-force-deployment).
 

@@ -22,7 +22,7 @@ struct Pin {
     bytes: usize,
     sha: &'static str,
 }
-const PINS: [Pin; 8] = [
+const PINS: [Pin; 9] = [
     Pin {
         source: "ops/ansible/tests/test_release_playbook.py",
         relative: "ops/ansible/tests/test_release_playbook.py",
@@ -40,6 +40,12 @@ const PINS: [Pin; 8] = [
         relative: "ops/ansible/tasks/source.yml",
         bytes: routing::OLD_SOURCE_BYTES,
         sha: routing::OLD_SOURCE_SHA256,
+    },
+    Pin {
+        source: "xtask/src/ci/automation/reference/release-python.yml",
+        relative: "ops/ansible/release.yml",
+        bytes: routing::OLD_RELEASE_BYTES,
+        sha: routing::OLD_RELEASE_SHA256,
     },
     Pin {
         source: "ops/ansible/tests/test_python_quality.py",

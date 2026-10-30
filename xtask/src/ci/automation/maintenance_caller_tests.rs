@@ -3,6 +3,9 @@
 //! authentication, candidate executable or maintenance runs here.
 use serde_json::{Value, json};
 
+#[path = "routine_caller_tests.rs"]
+mod routine_caller_tests;
+
 type Check<T> = Result<T, &'static str>;
 fn require(ok: bool, cause: &'static str) -> Check<()> {
     if ok { Ok(()) } else { Err(cause) }
@@ -126,7 +129,7 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
     }
     let (_, paths) = named(
         auth,
-        "Match the exact maintenance revision and trusted controller paths",
+        "Match the exact operation revision and trusted controller paths",
     )?;
     assertions(
         paths,
@@ -341,7 +344,7 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
 fn executable_bootstrap_contract(auth: &[Value]) -> Check<()> {
     let (selection_at, _) = named(
         auth,
-        "Match the exact maintenance revision and trusted controller paths",
+        "Match the exact operation revision and trusted controller paths",
     )?;
     let (parent_at, parent) = named(
         auth,
@@ -543,89 +546,7 @@ fn private_template(task: &Value, source: &str, destination: &str) -> Check<()> 
         "private-template",
     )
 }
-fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
-    let p = play(document)?;
-    require(
-        p["hosts"] == "benchmark_hosts"
-            && p["become"] == true
-            && p["gather_facts"] == true
-            && p["serial"] == 1,
-        "host-context",
-    )?;
-    require(
-        p["vars"]["scbench_revision"] == "{{ scpub_release_revision }}",
-        "source-revision",
-    )?;
-    let tasks = sequence(&p["tasks"])?;
-    rendering_contract(tasks)?;
-    require(
-        tasks[0]["ansible.builtin.import_tasks"] == "tasks/source.yml",
-        "source-first",
-    )?;
-    let source = sequence(source_document)?;
-    require(
-        source.len() == 2
-            && source[0]["ansible.builtin.git"]["force"] == false
-            && source[0]["ansible.builtin.git"]["recursive"] == false
-            && source[0]["ansible.builtin.git"]["accept_hostkey"] == false
-            && source[0]["ansible.builtin.git"]["version"] == "{{ scbench_revision }}",
-        "source-keeper",
-    )?;
-    require(
-        arguments(&source[1])? == ["git", "rev-parse", "HEAD"]
-            && source[1]["failed_when"] == "scbench_source_commit.stdout != scbench_revision",
-        "source-identity",
-    )?;
-    let (secret_at, secret) = named(
-        tasks,
-        "Read protected secrets for private configuration rendering",
-    )?;
-    require(secret["no_log"] == true, "secret-read")?;
-    let (_, facts) = named(
-        tasks,
-        "Keep secret values out of logs and persistent fact caches",
-    )?;
-    require(
-        facts["no_log"] == true
-            && facts["ansible.builtin.set_fact"]["cacheable"] == false
-            && facts["ansible.builtin.set_fact"]
-                .get("scpub_secrets")
-                .is_some(),
-        "secret-facts",
-    )?;
-    let (candidate_at, candidate) = named(
-        tasks,
-        "Render the candidate application configuration from the host's facts",
-    )?;
-    private_template(
-        candidate,
-        "public-app.env.j2",
-        "{{ scpub_config }}/app.env.candidate",
-    )?;
-    require(
-        candidate["no_log"] == true && secret_at < candidate_at,
-        "candidate-secret-order",
-    )?;
-    let (grants_at, grants) = named(
-        tasks,
-        "Render the runtime grants the launcher applies after migrating",
-    )?;
-    private_template(
-        grants,
-        "public-runtime-grants.sql.j2",
-        "{{ scpub_config }}/runtime-grants.sql",
-    )?;
-    require(candidate_at < grants_at, "grants-order")?;
-
-    let pre = sequence(&p["pre_tasks"])?;
-    let (_, delivery) = named(
-        pre,
-        "Deliver the signed current Ops executable through native policy",
-    )?;
-    require(
-        delivery["when"] == "not ansible_check_mode" && delivery.get("rescue").is_none(),
-        "delivery-scope",
-    )?;
+fn signed_delivery_contract(delivery: &Value) -> Check<()> {
     let auth = sequence(&delivery["block"])?;
     delivery_contract(auth)?;
     staged_identity_contract(auth)?;
@@ -797,6 +718,93 @@ fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
             && clear["ansible.builtin.set_fact"]["scpub_ops_credential"] == json!({}),
         "token-retirement",
     )?;
+    Ok(())
+}
+
+fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
+    let p = play(document)?;
+    require(
+        p["hosts"] == "benchmark_hosts"
+            && p["become"] == true
+            && p["gather_facts"] == true
+            && p["serial"] == 1,
+        "host-context",
+    )?;
+    require(
+        p["vars"]["scbench_revision"] == "{{ scpub_release_revision }}",
+        "source-revision",
+    )?;
+    let tasks = sequence(&p["tasks"])?;
+    rendering_contract(tasks)?;
+    require(
+        tasks[0]["ansible.builtin.import_tasks"] == "tasks/source.yml",
+        "source-first",
+    )?;
+    let source = sequence(source_document)?;
+    require(
+        source.len() == 2
+            && source[0]["ansible.builtin.git"]["force"] == false
+            && source[0]["ansible.builtin.git"]["recursive"] == false
+            && source[0]["ansible.builtin.git"]["accept_hostkey"] == false
+            && source[0]["ansible.builtin.git"]["version"] == "{{ scbench_revision }}",
+        "source-keeper",
+    )?;
+    require(
+        arguments(&source[1])? == ["git", "rev-parse", "HEAD"]
+            && source[1]["failed_when"] == "scbench_source_commit.stdout != scbench_revision",
+        "source-identity",
+    )?;
+    let (secret_at, secret) = named(
+        tasks,
+        "Read protected secrets for private configuration rendering",
+    )?;
+    require(secret["no_log"] == true, "secret-read")?;
+    let (_, facts) = named(
+        tasks,
+        "Keep secret values out of logs and persistent fact caches",
+    )?;
+    require(
+        facts["no_log"] == true
+            && facts["ansible.builtin.set_fact"]["cacheable"] == false
+            && facts["ansible.builtin.set_fact"]
+                .get("scpub_secrets")
+                .is_some(),
+        "secret-facts",
+    )?;
+    let (candidate_at, candidate) = named(
+        tasks,
+        "Render the candidate application configuration from the host's facts",
+    )?;
+    private_template(
+        candidate,
+        "public-app.env.j2",
+        "{{ scpub_config }}/app.env.candidate",
+    )?;
+    require(
+        candidate["no_log"] == true && secret_at < candidate_at,
+        "candidate-secret-order",
+    )?;
+    let (grants_at, grants) = named(
+        tasks,
+        "Render the runtime grants the launcher applies after migrating",
+    )?;
+    private_template(
+        grants,
+        "public-runtime-grants.sql.j2",
+        "{{ scpub_config }}/runtime-grants.sql",
+    )?;
+    require(candidate_at < grants_at, "grants-order")?;
+
+    let pre = sequence(&p["pre_tasks"])?;
+    let (_, delivery) = named(
+        pre,
+        "Deliver the signed current Ops executable through native policy",
+    )?;
+    require(
+        delivery["when"] == "not ansible_check_mode" && delivery.get("rescue").is_none(),
+        "delivery-scope",
+    )?;
+    signed_delivery_contract(delivery)?;
     let last = tasks.last().ok_or("last-task")?;
     default_failure(last)?;
     require(
@@ -862,7 +870,71 @@ fn original_documents() -> (Value, Value) {
             "/../ops/ansible/tasks/source.yml"
         ))
     );
-    (parse(&caller).unwrap(), parse(&source).unwrap())
+    (
+        expand_signed_delivery(
+            &parse(&caller).unwrap(),
+            &original_shared_delivery(),
+            "pre_tasks",
+            &json!("not ansible_check_mode"),
+        )
+        .unwrap(),
+        parse(&source).unwrap(),
+    )
+}
+
+const DELIVERY: &str = "Deliver the signed current Ops executable through native policy";
+
+fn original_shared_delivery() -> Value {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    let bytes = std::fs::read(root.join("ops/ansible/tasks/signed-ops.yml")).unwrap();
+    assert_eq!(
+        bytes,
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../ops/ansible/tasks/signed-ops.yml"
+        ))
+    );
+    parse(&bytes).unwrap()
+}
+
+/// Expand only the fixed static import after validating the real import and source.
+/// Mutation tests then exercise the imported actions without inventing a YAML interpreter.
+fn expand_signed_delivery(
+    document: &Value,
+    shared: &Value,
+    section: &str,
+    condition: &Value,
+) -> Check<Value> {
+    let caller = play(document)?;
+    let tasks = sequence(&caller[section])?;
+    let (at, import) = named(tasks, DELIVERY)?;
+    require(
+        import
+            == &json!({
+                "name": DELIVERY,
+                "ansible.builtin.import_tasks":"tasks/signed-ops.yml",
+                "when":condition,
+            }),
+        "exact-signed-import",
+    )?;
+    let shared = sequence(shared)?;
+    require(shared.len() == 1, "one-shared-delivery")?;
+    let mut delivery = shared[0].clone();
+    require(
+        delivery.as_object().is_some_and(|fields| {
+            fields.len() == 3
+                && fields.contains_key("block")
+                && fields.contains_key("always")
+                && fields.get("name") == Some(&json!(DELIVERY))
+        }),
+        "shared-delivery-scope",
+    )?;
+    delivery["when"] = condition.clone();
+    let mut expanded = document.clone();
+    expanded[0][section][at] = delivery;
+    Ok(expanded)
 }
 fn auth_task_mut<'a>(document: &'a mut Value, name: &str) -> &'a mut Value {
     let pre = sequence(&document[0]["pre_tasks"]).unwrap();
@@ -987,7 +1059,7 @@ const PREDICATE_CUSTODY_TASKS: [&str; 7] = [
 fn staged_identity_contract(auth: &[Value]) -> Check<()> {
     let (paths_at, _) = named(
         auth,
-        "Match the exact maintenance revision and trusted controller paths",
+        "Match the exact operation revision and trusted controller paths",
     )?;
     let (predicate_at, predicate) =
         named(auth, "Snapshot the retained signed application predicate")?;
@@ -1250,7 +1322,7 @@ fn staged_predicate_retention_follows_actual_signed_fetch_and_stage_success() {
 fn every_passive_identity_profile_and_byte_join_is_required() {
     let (caller, source) = original_documents();
     for name in [
-        "Match the exact maintenance revision and trusted controller paths",
+        "Match the exact operation revision and trusted controller paths",
         "Require protected original application identity files",
         "Join staged application bytes and exact Ops selection before export",
     ] {
@@ -1514,6 +1586,7 @@ fn reference_context_contract(text: &str) -> Check<()> {
         "xtask/src/ci/automation/reference/**",
         "!xtask/src/ci/automation/reference/maintenance-python.yml",
         "!xtask/src/ci/automation/reference/source-python.yml",
+        "!xtask/src/ci/automation/reference/release-python.yml",
         "!xtask/src/ci/automation/reference/ci-python.yml",
     ];
     let positions = rules
@@ -1559,7 +1632,7 @@ fn reference_context_contract(text: &str) -> Check<()> {
 }
 
 #[test]
-fn docker_context_admits_only_the_three_fixed_legacy_yaml_inputs() {
+fn docker_context_admits_only_the_four_fixed_legacy_yaml_inputs() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();

@@ -5,14 +5,15 @@ Docker/OCI image archives, and inspects local executable identities. Its product
 release builder can invoke the selected local Git and Docker tools to build or
 export an unsigned image. Local unsigned artifact preparation can write a new
 private directory, as described below. Python remains the reference implementation
-and retains application staging, routine app-only release and other keeper roles.
-Prepared-host maintenance has the explicit native caller described below.
+and retains application staging, explicit force app-only release and other keeper
+roles. Signed routine deployment and prepared-host maintenance have the explicit
+native callers described below.
 A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
 The separate Ops install/upgrade commands publish one original-pinned executable
-at its fixed helper path. The prepared maintenance caller authenticates its
+at its fixed helper path. Both signed host callers authenticate its
 delivery through the native controller before that executable runs. Existing
 Python files remain frozen; this is not a repository-wide runtime cutover.
 
@@ -2471,9 +2472,9 @@ late signal, descriptor, runtime, mask or original-deadline failures.
 Syntax errors return 2; operational refusals return 1. The public facade is
 intended for dedicated synchronous use outside an entered Tokio runtime.
 
-Python staging, routine deployment/force callers and prepared-helper preflight
-retain their roles. Prepared maintenance has the separate authenticated
-[native caller](#explicit-prepared-host-maintenance). First installation and
+Python staging, explicit force deployment and prepared-helper preflight
+retain their roles. Signed routine deployment and prepared maintenance have
+separate authenticated native callers. First installation and
 identical repeat remain distinct from an explicit Ops upgrade.
 Source implementation and inert fixtures do not establish Docker
 execution, signed musl readiness, measured caller budgets or a production switch.
@@ -2519,14 +2520,30 @@ failure can invalidate an earlier complete report or leave partial stdout.
 Private evidence remains protected and may contain command output/configuration;
 reports must be shared only under the existing operator privacy policy.
 
-The standalone app-only caller retains its Python runtime. Prepared maintenance
-and its authenticated bootstrap are described separately below. Source/oracle
-checks do not prove actual
-Docker/DB/Caddy/TLS or signed-musl host execution. The complete 97-case comparison
-against unchanged Python passed locally in 365.12 test seconds, using real private
+The supported signed routine caller is now the direct
+[release playbook](ansible/RELEASES.md#routine-update-use-the-image-ci-tested).
+Its default remains stage-only; explicit deployment requires the application
+and Ops artifacts from one successful main-push CI run and attempt, plus the
+trusted controller and GitHub CLI paths. The shared authenticated delivery runs
+after signed staging and original predicate retention, before the installed
+canonical `release deploy`. The caller explicitly supplies a quiet wait of
+600 seconds, native timeout 1800/finalization 60 and systemd runtime 1800/stop
+240. The native CLI's own quiet default remains zero. The frozen Python frontend
+cannot supply these inputs; its ordinary signed route is retained as a reference,
+with no fallback from the new caller. Automatic selection in a Rust frontend is
+separate work.
+
+Source/oracle checks alone do not prove Docker/DB/Caddy/TLS or signed-musl host
+execution. The complete 97-case comparison against unchanged Python passed
+locally in 365.12 test seconds, using real private
 files, locks and owned inert children with inert service replies. The corrected
 ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tests;
-its standalone app-only signed-musl host runtime remains unrun. See the
+these are historical local counts. The later signed fixture at
+`ebf8564ba646be944e2ebbd8398a9447829d812d` passed both actual native deployment
+and the deliberately stopped candidate's successful rollback; its
+exact proof and limits
+do not qualify a different caller or revision. Actual delivery and invocation of
+the changed routine Ansible caller require separate evidence. See the
 affected API review for ownership,
 accepted profiles, the inherited-stdio SDK close exception and validation scope.
 
@@ -2625,8 +2642,9 @@ The supported prepared-host caller is the direct maintenance playbook, after
 signed application staging and a caller-trusted controller build before
 credentials. The [operator sequence](ansible/RELEASES.md#prepare-the-controller-before-credentials)
 specifies the breaking typed-input migration; the frozen deployment wrapper
-cannot supply these Ops inputs. This caller transition does not replace the
-Python staging, app-only deployment or reference routes.
+cannot supply these Ops inputs. Python staging, explicit force app-only deployment
+and retained reference routes keep their existing roles; signed routine
+deployment uses the separate direct caller described above.
 
 `distribution install` retains its
 schema 1 first-install/exact-repeat contract. Explicit `distribution upgrade`
@@ -2667,7 +2685,8 @@ controller for this fixed request namespace; the former `/run` prefix is refused
 The thin Ansible caller keeps only existing transport operations: private
 nonce creation, SSH copy, pre-parser transfer and pre-execution binary byte
 joins, fixed-member extraction, candidate install/upgrade and canonical
-`release maintain` invocation. Signature, selection, request, installation,
+`release deploy` or `release maintain` invocation. Both import the same
+`tasks/signed-ops.yml` delivery block. Signature, selection, request, installation,
 deadline and cleanup policy remains in Rust. Expected-old host pins describe
 custody, never historical authentication. Ansible's separate stat/chmod/exec
 calls do not establish retained-FD atomic execution against an adversarial
