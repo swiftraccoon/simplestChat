@@ -329,6 +329,11 @@ fn environments(
         let value = all[3][OsStr::new(key)].clone();
         all[2].insert(key.into(), value);
     }
+    // Ansible validates the locale itself, independently of Python's UTF-8 mode.
+    for role in [2, 3] {
+        all[role].insert("LC_ALL".into(), "C.UTF-8".into());
+        all[role].insert("LANG".into(), "C.UTF-8".into());
+    }
     if let Some(value) = captured.get(OsStr::new("SSH_AUTH_SOCK")) {
         all[0].insert("SSH_AUTH_SOCK".into(), value.clone());
         all[3].insert("SSH_AUTH_SOCK".into(), value.clone());
