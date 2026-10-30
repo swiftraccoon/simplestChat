@@ -8,7 +8,7 @@ use super::*;
 const INPUTS: &str = "Require exact native deployment inputs before any remote preflight";
 const DEPLOY: &str = "Replace only the application when deployment was explicitly selected";
 const SELECTED: &str = "scpub_release_deploy | default(false) | bool";
-const INPUT_ASSERTIONS: [&str; 35] = [
+const INPUT_ASSERTIONS: [&str; 36] = [
     "scpub_release_repository == 'swiftraccoon/simplestChat'",
     "scpub_release_artifact_id is integer",
     "scpub_release_artifact_id > 0",
@@ -48,6 +48,10 @@ const INPUT_ASSERTIONS: [&str; 35] = [
     "scpub_release_quiet_seconds | default(600) is integer",
     "scpub_release_quiet_seconds | default(600) >= 0",
     "scpub_release_quiet_seconds | default(600) <= 600",
+    concat!(
+        "scpub_ops_artifact_zip is not defined or ",
+        "(scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))",
+    ),
 ];
 
 fn selected() -> Value {
@@ -416,4 +420,40 @@ fn routine_delivery_retains_all_authenticated_identity_and_transport_checks() {
     let mut changed = shared;
     changed[0]["always"][0]["ansible.builtin.set_fact"]["scpub_ops_credential"] = "retained".into();
     assert!(routine_contract(&caller, &changed).is_err());
+}
+
+#[test]
+fn optional_retained_zip_never_becomes_an_implicit_fallback_or_receipt_authority() {
+    let caller = original_release();
+    let shared = original_shared_delivery();
+    routine_contract(&caller, &shared).unwrap();
+    for (before, after) in [
+        (
+            "if scpub_ops_artifact_zip is defined else {}",
+            "if true else {}",
+        ),
+        (
+            "'artifactZip': scpub_ops_artifact_zip",
+            "'artifactZip': scpub_ops_artifact_zip | default('/tmp/cached-ops.zip')",
+        ),
+        (
+            "'artifactZip': scpub_ops_artifact_zip",
+            "'authenticated': true",
+        ),
+        (
+            "'artifactZip': scpub_ops_artifact_zip",
+            "'artifactZip': scpub_ops_receipt.transfer.path",
+        ),
+    ] {
+        let mut changed = shared.clone();
+        let request = &mut shared_task_mut(
+            &mut changed,
+            "Serialize one original request for the strict native decoder",
+        )["ansible.builtin.set_fact"]["scpub_ops_request"];
+        let original = request.as_str().unwrap();
+        let replacement = original.replace(before, after);
+        assert_ne!(replacement, original);
+        *request = replacement.into();
+        assert!(routine_contract(&caller, &changed).is_err(), "{after}");
+    }
 }

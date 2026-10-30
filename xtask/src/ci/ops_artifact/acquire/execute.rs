@@ -37,6 +37,7 @@ struct State {
     envelope: Option<Envelope>,
     files: usize,
     expanded: u64,
+    source_zip: Option<super::retained::Source>,
 }
 type Shared = Arc<Mutex<State>>;
 fn command_failure(mut error: Failure, index: usize) -> Failure {
@@ -92,6 +93,9 @@ fn prepare(
     state.original = Some(original);
     state.request = Some(request);
     let request = state.request.as_ref().unwrap();
+    if let Some(path) = &request.artifact_zip {
+        state.source_zip = Some(super::retained::Source::open(path, budget, checkpoint)?);
+    }
     state.output = Some(Output::new(&request.output, budget)?);
     state.tools = Some(Tools::open(caller, environment, request, budget)?);
     checkpoint.check()
@@ -263,9 +267,17 @@ async fn cleanup(state: &Shared) -> Result<()> {
         let mut state = state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source = state
+            .source_zip
+            .take()
+            .map(super::retained::Source::finish)
+            .transpose();
         let tools = state.tools.take().map(Tools::finish).transpose();
         let output = state.output.take().map(Output::finish).transpose();
-        tools.map(|_| ()).and(output.map(|_| ()))
+        source
+            .map(|_| ())
+            .and(tools.map(|_| ()))
+            .and(output.map(|_| ()))
     })
     .await
     .map_err(|_| failure(1))?
@@ -393,7 +405,34 @@ pub(super) async fn observation<E: Executor>(
                 state.request.as_ref().ok_or_else(|| failure(1))?,
             )?);
         }
-        call(&state, context, executor, &budget, 4).await?;
+        let artifact_zip = lock(&state)?
+            .request
+            .as_ref()
+            .ok_or_else(|| failure(1))?
+            .artifact_zip
+            .clone();
+        if artifact_zip.is_some() {
+            let transfer_state = state.clone();
+            super::retained::work(context, executor, move |checkpoint| {
+                let mut state = lock(&transfer_state)?;
+                let envelope = state.envelope.clone().ok_or_else(|| failure(1))?;
+                let State {
+                    source_zip, output, ..
+                } = &mut *state;
+                let output = output.as_mut().ok_or_else(|| failure(1))?;
+                let source = source_zip.take().ok_or_else(|| failure(1))?;
+                super::retained::copy(
+                    source,
+                    output,
+                    &envelope.zip_sha256,
+                    envelope.zip_bytes,
+                    &checkpoint,
+                )
+            })
+            .await?;
+        } else {
+            call(&state, context, executor, &budget, 4).await?;
+        }
         let worker_budget = budget.clone();
         let (verification_path, verification_sha) =
             stage(&state, context, executor, move |state, checkpoint| {

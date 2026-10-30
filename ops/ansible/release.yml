@@ -91,6 +91,9 @@
           - scpub_release_quiet_seconds | default(600) is integer
           - scpub_release_quiet_seconds | default(600) >= 0
           - scpub_release_quiet_seconds | default(600) <= 600
+          - >-
+            scpub_ops_artifact_zip is not defined or
+            (scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))
         fail_msg: >-
           Explicit deployment requires the typed same-revision signed application and Ops
           selections, trusted absolute controller paths, and integer quiet seconds in 0..600.

@@ -1604,21 +1604,35 @@ target/debug/xtask ops-artifact acquire \
   --request /absolute/acquire-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
-The closed request contains exactly `schemaVersion: 1`, `selection` with the
+The closed request requires `schemaVersion: 1`, `selection` with the
 existing seven identity fields, `artifactId`, a fresh absolute `output`, and
-`authentication: "gh-token"`. Artifact ID is a positive integer at most
+`authentication: "gh-token"`. Optional `artifactZip` selects an original retained
+Ops artifact ZIP; omission keeps the live download, while explicit null or a
+nonstring value refuses. Artifact ID is a positive integer at most
 9007199254740991. The original UTF-8 request is at most 16 KiB. Received request
 paths admit at most sixteen ordinary components; output admits fifteen so that
 derived verifier paths remain inside the existing sixteen-component limit.
 No URL or credential belongs in this JSON. Missing `GH_TOKEN` refuses before
 output/tool admission; alternative tokens and keyring fallback are unsupported.
 
-The selected caller-trusted gh 2.102.0 executes five fixed calls: version,
-repository API, exact run-attempt API, exact artifact API, then the artifact ZIP
-endpoint. Repository/run/attempt/revision checks match retained verification.
+The selected caller-trusted gh 2.102.0 executes version, repository API, exact
+run-attempt API and exact artifact API in both branches. Omitted `artifactZip`
+adds the fifth actual call to the artifact ZIP endpoint. Supplied `artifactZip`
+instead uses an owned local read/copy as the fifth transfer slot; there is no
+invented successful download command. Repository/run/attempt/revision checks
+match retained verification.
 Artifact metadata must additionally match its numeric ID, repository, run,
 revision, exact target-suffixed name, nonexpired status, SHA-256 and byte count.
-The API digest and size bind the downloaded ZIP before extraction.
+The fresh API digest and size bind either ZIP before strict parsing/extraction.
+The retained source must be canonical, absolute and outside the fresh output
+namespace, with no symlink component. Its immediate parent must be current-user
+owned with mode 0700. The source must be a current-user-owned regular 0600 file
+with one hard link under the existing bounded path profile. The owned
+source descriptor and ancestor custody are retained across fresh metadata and
+copying, so reopening cannot adopt an identical replacement inode. The source
+and destination close before strict parsing. Their checks retain the same
+original deadline and all-peer finalization. See the
+[candidate preparation sequence](ansible/RELEASES.md#optional-retained-artifact-inputs).
 
 The ZIP is at most 300 MiB, with at most 22 flat members and 281 MiB expanded.
 Only the fixed metadata, binary, bundle and contiguous indexed evidence names
@@ -1629,8 +1643,9 @@ Admission checks the complete structure before creating payload sinks; decoding
 checks final stream termination, exact sizes and CRCs. The extracted graph must
 match the existing Ops metadata before the retained verifier is invoked.
 
-Acquisition has a 1,440-second entry profile retaining five command settlement
-slots, an aggregate archive/hash budget, the existing 600-second verifier,
+Acquisition has a 1,440-second entry profile retaining all five ordered transfer
+allowances, including the unchanged 180-second ZIP transfer slot, an aggregate
+archive/hash budget, the existing 600-second verifier,
 bounded replay and final file checks. Filesystem workers are always joined.
 Original request, outer output and verified file witnesses remain bound through
 final replay; reopening cannot adopt identical bytes at a replacement inode.
@@ -1638,7 +1653,16 @@ An observation file records progress. Only final CLI zero includes owner
 settlement, replay and the final signal/deadline/file fences.
 
 Private paired captures and work directories remain under the new output leaf.
-Fixed errors reveal no tokens, private paths or payload JSON. The gh runtime
+Fixed errors reveal no tokens, private paths or payload JSON. Both branches
+invoke the retained verifier's four actual `gh` roles: version, repository API,
+run-attempt API and one `gh attestation verify` for `ops-preparation.json`.
+That verified signed statement binds exactly the preparation, manifest and
+binary subjects; separate pair/evidence checks validate their retained payload
+relationships. Complete acquisition therefore has eight actual `gh` roles
+with retained input and nine with live input, including one fresh cryptographic
+attestation verification in either case. A retained ZIP or saved receipt cannot
+reconstruct that authority. These counts do not describe the KVM fixture's
+separate repeated-verification profile. On the live branch, gh
 handles GitHub's archive redirect; its normal redirect and trust-provider policy
 remains part of the selected client trust boundary. This operation authenticates
 retained bytes. It does not execute a candidate or install or replace a host tool.
@@ -2659,7 +2683,10 @@ an exact three-member tar plus a pinned installer request. Its closed request
 adds `remoteInput` under the fixed executable namespace
 `/usr/local/libexec/simplestchat-ops-bootstrap/<32 lowercase hex>/input`
 and optionally the expected installed binary pin to the existing exact Ops
-selection/artifact/authentication fields. The separate 1,860-second controller
+selection/artifact/authentication fields. Optional `artifactZip` is forwarded
+unchanged to acquisition as candidate bytes, never as a verification marker.
+Both signed Ansible callers expose it as `scpub_ops_artifact_zip`. The separate
+1,860-second controller
 profile includes the unchanged full acquisition allowance, export, replay and
 final custody checks. Actual exit 0, current verification and original files must
 all agree; saved JSON does not construct authentication authority. The transfer's

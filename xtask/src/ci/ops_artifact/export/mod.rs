@@ -1,6 +1,8 @@
 //! Complete authenticated three-member export for a trusted host installer.
 //! The opaque acquisition stays owned through publication, replay and final
 //! witnesses. Expected installed pins select custody, never signature authority.
+//! An explicitly retained ZIP replaces transport bytes only; fresh acquisition
+//! metadata, opaque verification and final witnesses remain mandatory.
 //! No candidate, SSH command or installed host operation is executed here.
 
 mod execute;

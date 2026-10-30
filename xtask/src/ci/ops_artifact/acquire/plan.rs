@@ -40,6 +40,7 @@ pub(super) struct Context {
     archive_used: Cell<Duration>,
     verified: Cell<bool>,
     replayed: Cell<bool>,
+    retained_transfer: Cell<Option<(Instant, Instant)>>,
 }
 impl Context {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
@@ -53,6 +54,7 @@ impl Context {
             archive_used: Cell::new(Duration::ZERO),
             verified: Cell::new(false),
             replayed: Cell::new(false),
+            retained_transfer: Cell::new(None),
         }
     }
     pub(super) fn bounded(clock: Arc<dyn Clock>, end: Instant) -> Self {
@@ -101,7 +103,10 @@ impl Context {
         }
     }
     pub fn command(&self, index: usize) -> Result<Duration> {
-        if self.calls.get() != index || index >= CAPS.len() {
+        if self.calls.get() != index
+            || index >= CAPS.len()
+            || self.retained_transfer.get().is_some()
+        {
             return Err(failure(1));
         }
         self.admit()?;
@@ -119,10 +124,32 @@ impl Context {
         Ok((now, latest))
     }
     pub fn complete_command(&self, index: usize) -> Result<()> {
-        if self.calls.get() != index {
+        if self.calls.get() != index || self.retained_transfer.get().is_some() {
             return Err(failure(1));
         }
         self.calls.set(index + 1);
+        self.admit()
+    }
+    /// A caller-retained ZIP earns the fifth transfer slot by completed owned
+    /// file work, without constructing a gh dispatch or capture observation.
+    pub fn retained_transfer_window(&self) -> Result<(Instant, Instant)> {
+        if self.calls.get() != 4 || self.retained_transfer.get().is_some() {
+            return Err(failure(1));
+        }
+        let start = self.now()?;
+        if self.end().saturating_duration_since(start) < self.tail()? {
+            return Err(failure(124));
+        }
+        let end = start + CAPS[4];
+        self.retained_transfer.set(Some((start, end)));
+        Ok((start, end))
+    }
+    pub fn complete_retained_transfer(&self) -> Result<()> {
+        let (_, end) = self.retained_transfer.take().ok_or_else(|| failure(1))?;
+        if self.calls.get() != 4 || self.now()? >= end {
+            return Err(failure(124));
+        }
+        self.calls.set(5);
         self.admit()
     }
     pub fn archive_window(&self) -> Result<(Instant, Duration)> {

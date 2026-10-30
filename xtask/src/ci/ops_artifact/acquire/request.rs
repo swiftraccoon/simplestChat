@@ -2,7 +2,7 @@
 
 use super::failure;
 use crate::tooling::{Environment, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use simplestchat_ops::distribution::manifest::Selection;
 use std::{
@@ -18,6 +18,17 @@ const SAFE: u64 = 9_007_199_254_740_991;
 enum Authentication {
     GhToken,
 }
+#[derive(Default)]
+enum ArtifactZip {
+    #[default]
+    Absent,
+    Retained(PathBuf),
+}
+impl<'de> Deserialize<'de> for ArtifactZip {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        PathBuf::deserialize(deserializer).map(Self::Retained)
+    }
+}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct Wire {
@@ -26,11 +37,14 @@ struct Wire {
     artifact_id: u64,
     output: PathBuf,
     authentication: Authentication,
+    #[serde(default)]
+    artifact_zip: ArtifactZip,
 }
 pub(super) struct Request {
     pub selection: Selection,
     pub artifact_id: u64,
     pub output: PathBuf,
+    pub artifact_zip: Option<PathBuf>,
     pub sha256: String,
     pub bytes: usize,
 }
@@ -73,10 +87,23 @@ impl Request {
             return Err(failure(1));
         }
         let Authentication::GhToken = wire.authentication;
+        let artifact_zip = match wire.artifact_zip {
+            ArtifactZip::Absent => None,
+            ArtifactZip::Retained(source) => {
+                if !path(&source)
+                    || source.starts_with(&wire.output)
+                    || wire.output.starts_with(&source)
+                {
+                    return Err(failure(1));
+                }
+                Some(source)
+            }
+        };
         Ok(Self {
             selection,
             artifact_id: wire.artifact_id,
             output: wire.output,
+            artifact_zip,
             sha256: selected.into(),
             bytes: bytes.len(),
         })

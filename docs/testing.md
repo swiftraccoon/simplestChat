@@ -1598,6 +1598,23 @@ accepts an exact-revision unsigned build without waiting for CI, while retaining
 the runtime safeguards and recording that override. See the
 [release workflow](../ops/ansible/RELEASES.md).
 
+Signed Ops acquisition/export also accept optional original ZIP candidate data,
+exposed as `scpub_ops_artifact_zip` by both signed Ansible callers. The omitted
+branch retains five actual `gh` calls; the supplied branch retains four actual
+version/metadata calls and owns a local read/copy in the existing fifth transfer
+slot. The fresh API digest and size precede strict ZIP parsing. The retained
+verifier performs its four actual `gh` roles, including one fresh cryptographic
+attestation verification of `ops-preparation.json`; it validates the verified
+statement's preparation/manifest/binary subjects and the bound pair/evidence
+graph. Complete acquisition has eight actual `gh` roles with retained input or
+nine with live input. These counts are distinct from the KVM fixture's repeated
+verification profile. This does not reuse a saved verification result
+or change the 180-second transfer, 1440-second acquisition or 1860-second export
+limits. The application candidate directory remains the separate original-ZIP
+plus-ten-members contract with four fresh subject checks. Current Rust and
+inert file/process checks for these branches do not establish a completed actual
+routine caller; that requires its own final Ansible/native and host evidence.
+
 Run it only as root on a fresh, disposable Linux AMD64 or ARM64 host with a local
 Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,
 `update-ca-certificates`, and the

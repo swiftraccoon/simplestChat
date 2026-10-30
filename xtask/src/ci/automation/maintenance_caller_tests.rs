@@ -144,6 +144,10 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
             "scpub_ops_xtask is match('^/')",
             "scpub_ops_gh_executable is match('^/')",
             "scpub_ops_gh_executable | realpath | basename == 'gh'",
+            concat!(
+                "scpub_ops_artifact_zip is not defined or ",
+                "(scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))",
+            ),
         ],
     )?;
     let (temporary_at, temporary) = named(auth, "Create a private controller evidence directory")?;
@@ -199,7 +203,9 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
                     "scpub_ops_nonce ~ '/input' ",
                     "} | combine({'installedBinary': { 'sha256': scpub_ops_old.stat.checksum, ",
                     "'bytes': scpub_ops_old.stat.size }} ",
-                    "if scpub_ops_old.stat.exists else {}) | to_json }}"
+                    "if scpub_ops_old.stat.exists else {}) ",
+                    "| combine({'artifactZip': scpub_ops_artifact_zip} ",
+                    "if scpub_ops_artifact_zip is defined else {}) | to_json }}"
                 ),
             ),
         "typed-original-request",

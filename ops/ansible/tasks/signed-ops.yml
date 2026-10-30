@@ -15,6 +15,9 @@
           - scpub_ops_xtask is match('^/')
           - scpub_ops_gh_executable is match('^/')
           - scpub_ops_gh_executable | realpath | basename == 'gh'
+          - >-
+            scpub_ops_artifact_zip is not defined or
+            (scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))
 
     - name: Inspect the fixed executable bootstrap ancestor without following links
       ansible.builtin.stat:
@@ -153,7 +156,9 @@
                            scpub_ops_nonce ~ '/input'
           } | combine({'installedBinary': {
             'sha256': scpub_ops_old.stat.checksum, 'bytes': scpub_ops_old.stat.size
-          }} if scpub_ops_old.stat.exists else {}) | to_json }}
+          }} if scpub_ops_old.stat.exists else {})
+          | combine({'artifactZip': scpub_ops_artifact_zip}
+                    if scpub_ops_artifact_zip is defined else {}) | to_json }}
         cacheable: false
 
     - name: Retain the original controller request privately

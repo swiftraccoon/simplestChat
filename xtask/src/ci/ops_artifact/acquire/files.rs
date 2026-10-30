@@ -429,6 +429,64 @@ impl Output {
         self.check()?;
         Ok(stdout)
     }
+    /// Copy only data from the original retained read-only source. Fresh API
+    /// identity must match before a record can reach the ZIP parser.
+    pub fn copy_zip(
+        &mut self,
+        source: &File,
+        expected_sha: &str,
+        expected_bytes: u64,
+        checkpoint: &Checkpoint,
+    ) -> Result<()> {
+        self.check()?;
+        checkpoint.check()?;
+        if expected_bytes == 0
+            || expected_bytes > super::ZIP
+            || io(source.metadata())?.len() != expected_bytes
+            || self.records.contains_key("artifact.zip")
+        {
+            return Err(failure(1));
+        }
+        let file = Held::create(self.run.file(), "artifact.zip", false, self.run.budget())?;
+        let copied = (|| {
+            let mut target = file.file();
+            let observed_sha = consume(source, expected_bytes, checkpoint, |part| {
+                checkpoint.check()?;
+                io(target.write_all(part))?;
+                checkpoint.check()
+            })?;
+            if observed_sha != expected_sha {
+                return Err(failure(1));
+            }
+            io(file.file().sync_all())?;
+            checkpoint.check()?;
+            let stamp = namespace::private_file(&file, false)?;
+            if stamp.len() != expected_bytes {
+                return Err(failure(1));
+            }
+            let record = Record {
+                name: "artifact.zip".into(),
+                stamp,
+                sha256: observed_sha,
+                bytes: expected_bytes,
+            };
+            check_record(
+                self.run.file(),
+                &record,
+                self.run.budget(),
+                checkpoint,
+                false,
+            )?;
+            io(self.run.file().sync_all())?;
+            self.check()?;
+            checkpoint.check()?;
+            Ok(record)
+        })();
+        let closed = file.finish();
+        let record = copied.and_then(|record| closed.map(|()| record))?;
+        self.records.insert("artifact.zip".into(), record);
+        checkpoint.check()
+    }
     pub fn extract(
         &mut self,
         expected_sha: &str,

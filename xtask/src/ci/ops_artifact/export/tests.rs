@@ -241,6 +241,134 @@ fn request_closes_optional_custody_remote_namespace_and_all_numeric_and_path_nei
     );
     assert!(request::Request::decode(&raw, &"0".repeat(64)).is_err());
 }
+
+#[test]
+fn retained_zip_is_omitted_by_default_and_only_the_explicit_original_path_propagates() {
+    let fixture = Fixture::new(0);
+    let mut original = wire(&fixture);
+    let raw = bytes(&original);
+    let decoded = request::Request::decode(&raw, &super::super::sha(&raw)).unwrap();
+    let acquired: Value = serde_json::from_slice(&decoded.acquire().unwrap()).unwrap();
+    assert!(acquired.get("artifactZip").is_none());
+
+    let source = fixture.root.join("PRIVATE-retained-ops.zip");
+    original["artifactZip"] = json!(source);
+    let raw = bytes(&original);
+    let decoded = request::Request::decode(&raw, &super::super::sha(&raw)).unwrap();
+    let acquired: Value = serde_json::from_slice(&decoded.acquire().unwrap()).unwrap();
+    assert_eq!(acquired["artifactZip"], original["artifactZip"]);
+    assert_eq!(acquired["selection"], original["selection"]);
+    assert_eq!(acquired["artifactId"], original["artifactId"]);
+    assert_eq!(acquired["authentication"], "gh-token");
+    assert_eq!(format!("{decoded:?}"), "PinnedOpsDistributionExportRequest");
+
+    for value in [
+        Value::Null,
+        json!(true),
+        json!(123),
+        json!({"path":source,"authenticated":true}),
+        json!("relative.zip"),
+        json!("/"),
+        json!("/private/../ops.zip"),
+        json!("/private//ops.zip"),
+        json!("/private/unsafe\u{0085}ops.zip"),
+        original["output"].clone(),
+        json!(fixture.root.join("exported/inside.zip")),
+        json!(fixture.root),
+    ] {
+        let mut changed = original.clone();
+        changed["artifactZip"] = value;
+        let raw = bytes(&changed);
+        assert!(request::Request::decode(&raw, &super::super::sha(&raw)).is_err());
+    }
+    let raw = String::from_utf8(bytes(&original)).unwrap();
+    let duplicate = raw.replacen(
+        "\"artifactZip\":",
+        "\"artifactZip\":null,\"artifactZip\":",
+        1,
+    );
+    assert!(
+        request::Request::decode(
+            duplicate.as_bytes(),
+            &super::super::sha(duplicate.as_bytes())
+        )
+        .is_err()
+    );
+}
+
+fn retain_zip(fixture: &Fixture, wire: &mut Value, fake: &mut Fake) -> PathBuf {
+    let source = fixture.root.join("PRIVATE-retained-ops.zip");
+    fs::write(&source, &fixture.outputs[4]).unwrap();
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
+    wire["artifactZip"] = json!(source);
+    // Only the download body is replaced by actual local data. Every fresh
+    // metadata and opaque-verifier invocation still owns its real capture.
+    fake.outputs.remove(4);
+    source
+}
+
+#[tokio::test]
+async fn retained_zip_still_requires_every_fresh_metadata_and_opaque_verifier_result() {
+    for failed in std::iter::once(None).chain((0..8).map(Some)) {
+        let fixture = Fixture::new(1);
+        let mut wire = wire(&fixture);
+        let mut fake = Fake::new(&fixture);
+        let source = retain_zip(&fixture, &mut wire, &mut fake);
+        fake.fail = failed.map(|index| (index, 23));
+        let result = run(&fixture, &wire, &mut fake).await;
+        if let Some(index) = failed {
+            assert!(result.is_err(), "fresh result {index}");
+            assert_eq!(fake.calls, index + 1);
+            assert!(fake.replays.is_empty());
+            assert!(!fixture.root.join("exported/install-request.json").exists());
+        } else {
+            result.unwrap();
+            assert_eq!(fake.calls, 8);
+            assert_eq!(fake.replays.len(), 1);
+            let report: Value = serde_json::from_slice(&fake.replays[0]).unwrap();
+            assert_eq!(report["selection"], wire["selection"]);
+            assert_eq!(report["artifactId"], wire["artifactId"]);
+            assert!(report.get("artifactZip").is_none());
+            let text = String::from_utf8(fake.replays[0].clone()).unwrap();
+            assert!(!text.contains(source.to_str().unwrap()));
+            assert!(!text.contains("PRIVATE-retained-ops"));
+            let acquisition: Value = serde_json::from_slice(
+                &fs::read(fixture.root.join("exported/acquire-request.json")).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(acquisition["artifactZip"], wire["artifactZip"]);
+            assert_eq!(acquisition["authentication"], "gh-token");
+            assert_eq!(fs::read(&source).unwrap(), fixture.outputs[4]);
+        }
+    }
+}
+
+#[tokio::test]
+async fn changed_or_replaced_retained_zip_during_fresh_metadata_cannot_publish_delivery() {
+    for replace in [false, true] {
+        let fixture = Fixture::new(0);
+        let mut wire = wire(&fixture);
+        let mut fake = Fake::new(&fixture);
+        let source = retain_zip(&fixture, &mut wire, &mut fake);
+        fake.mutate = Some(Box::new(move |index| {
+            if index == 3 {
+                let mut raw = fs::read(&source).unwrap();
+                if replace {
+                    fs::rename(&source, source.with_extension("original")).unwrap();
+                } else {
+                    raw[0] ^= 1;
+                }
+                fs::write(&source, raw).unwrap();
+                fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
+            }
+        }));
+        assert!(run(&fixture, &wire, &mut fake).await.is_err());
+        assert_eq!(fake.calls, 4);
+        assert!(fake.replays.is_empty());
+        assert!(!fixture.root.join("exported/install-request.json").exists());
+    }
+}
+
 #[tokio::test]
 async fn every_acquisition_child_refusal_withholds_export_and_attempts_all_owner_closes() {
     for index in 0..9 {

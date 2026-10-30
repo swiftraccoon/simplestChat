@@ -16,6 +16,7 @@ mod metadata;
 mod native_tests;
 mod plan;
 mod request;
+mod retained;
 #[cfg(test)]
 mod tests;
 pub(in crate::ci) mod tools;

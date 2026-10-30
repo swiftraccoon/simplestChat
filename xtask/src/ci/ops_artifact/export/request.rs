@@ -34,6 +34,15 @@ impl<'de> Deserialize<'de> for Installed {
 enum Authentication {
     GhToken,
 }
+
+/// An omitted source keeps live downloading; a supplied value is candidate data,
+/// never a cached verification result. Explicit null is not omission.
+fn artifact_zip<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<PathBuf>, D::Error> {
+    PathBuf::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct Wire {
@@ -45,6 +54,8 @@ struct Wire {
     remote_input: PathBuf,
     #[serde(default)]
     installed_binary: Installed,
+    #[serde(default, deserialize_with = "artifact_zip")]
+    artifact_zip: Option<PathBuf>,
 }
 pub(super) struct Request {
     pub selection: Selection,
@@ -52,6 +63,7 @@ pub(super) struct Request {
     pub output: PathBuf,
     pub remote_input: PathBuf,
     pub installed: Option<BinaryPin>,
+    pub artifact_zip: Option<PathBuf>,
     pub sha256: String,
 }
 impl std::fmt::Debug for Request {
@@ -108,6 +120,9 @@ impl Request {
             || !path(&wire.output)
             || wire.output.components().count() > 14
             || !remote(&wire.remote_input)
+            || wire.artifact_zip.as_ref().is_some_and(|source| {
+                !path(source) || source.starts_with(&wire.output) || wire.output.starts_with(source)
+            })
         {
             return Err(failure(1));
         }
@@ -130,15 +145,17 @@ impl Request {
             output: wire.output,
             remote_input: wire.remote_input,
             installed,
+            artifact_zip: wire.artifact_zip,
             sha256: selected.into(),
         })
     }
     pub fn acquire(&self) -> Result<Vec<u8>> {
-        serde_json::to_vec(
-            &json!({"schemaVersion":1,"selection":self.selection.identity(),
+        let mut request = json!({"schemaVersion":1,"selection":self.selection.identity(),
             "artifactId":self.artifact_id,"output":self.output.join("acquired"),
-            "authentication":"gh-token"}),
-        )
-        .map_err(|_| failure(1))
+            "authentication":"gh-token"});
+        if let Some(source) = &self.artifact_zip {
+            request["artifactZip"] = json!(source);
+        }
+        serde_json::to_vec(&request).map_err(|_| failure(1))
     }
 }

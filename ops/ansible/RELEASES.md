@@ -202,6 +202,12 @@ JSON boolean `false`; this reconciles only those helpers, without provisioning o
 migrations. Omitting `scpub_release_deploy`, or setting it to `false`, remains
 stage-only and requires no Ops selectors or controller paths.
 
+For a separately retained input, add the optional
+[`scpub_ops_artifact_zip`](#optional-retained-artifact-inputs) absolute ZIP path.
+Application staging has the separate `scpub_release_verified_directory` input;
+these fields select different artifact contracts. Both candidates are freshly
+verified during the actual operation.
+
 The playbook rejects incomplete explicit deploy inputs before remote preflight.
 It verifies and stages the signed application while chat stays online, retaining
 the original verified predicate beside the manifest. Shared signed Ops delivery
@@ -571,6 +577,93 @@ Do not combine a newer caller with an older signed Ops executable lacking it.
 The expected installed binary's digest and length are collected from the fixed
 host path only as custody for a possible replacement; they do not authenticate
 the old binary or establish its signing history.
+
+### Optional retained artifact inputs
+
+Both signed callers accept `scpub_ops_artifact_zip`, an absolute path to one
+original GitHub Ops artifact ZIP on the controller. The exporter passes it as
+optional `artifactZip` to Rust acquisition. Omit the variable for the live
+download path; an empty string, explicit null or another JSON type is refused.
+This is candidate data, not a saved verification result. Rebuild the trusted
+controller before credentials when adopting this input.
+
+The source must be a canonical absolute path under the existing bounded path
+profile, outside the fresh export/output namespace, with no symlink component.
+Its immediate parent must be owned by the invoking controller user with mode
+0700. The source must be an existing regular file owned by that user, mode
+0600, with one hard link, and at most 300 MiB. Rust still obtains current
+repository, exact run-attempt and artifact metadata. The fresh API size and
+SHA256 must match before strict ZIP parsing. The retained verifier then performs
+one fresh `gh attestation verify` for `ops-preparation.json`, validates the
+returned signed statement's preparation/manifest/binary subjects and checks
+the bound binary, manifest and evidence graph. Original-custody/finalization
+checks remain mandatory.
+
+To prepare candidate bytes separately, use the selected mature GitHub CLI after
+the trusted controller build. Replace every uppercase placeholder below and
+choose an existing canonical private parent. Keep the directory and both files
+outside version control; do not print credentials or signed download URLs:
+
+```sh
+set -eu
+umask 077
+ops_zip_dir="$(mktemp -d /absolute/private-parent/ops-zip.XXXXXXXX)"
+gh api --hostname github.com --method GET \
+  -H 'Accept-Encoding: identity' \
+  repos/swiftraccoon/simplestChat/actions/artifacts/OPS_ARTIFACT_ID \
+  > "$ops_zip_dir/artifact-api.json"
+jq -e --argjson artifact OPS_ARTIFACT_ID --argjson run CI_RUN_ID \
+  --arg revision REVISION_40_LOWERCASE_HEX '
+    .id == $artifact and .expired == false and
+    .workflow_run.id == $run and .workflow_run.head_sha == $revision and
+    .name == ("simplestchat-ops-" + $revision + "-x86_64-unknown-linux-musl") and
+    (.size_in_bytes | type == "number") and
+    .size_in_bytes > 0 and .size_in_bytes <= 314572800 and
+    (.digest | test("^sha256:[a-f0-9]{64}$"))
+  ' "$ops_zip_dir/artifact-api.json" > /dev/null
+gh api --hostname github.com --method GET \
+  -H 'Accept-Encoding: identity' \
+  repos/swiftraccoon/simplestChat/actions/artifacts/OPS_ARTIFACT_ID/zip \
+  > "$ops_zip_dir/artifact.zip"
+ops_zip_bytes="$(wc -c < "$ops_zip_dir/artifact.zip" | tr -d '[:space:]')"
+test "$ops_zip_bytes" -eq "$(jq -er '.size_in_bytes' "$ops_zip_dir/artifact-api.json")"
+ops_zip_digest="$(shasum -a 256 "$ops_zip_dir/artifact.zip")"
+ops_zip_digest="${ops_zip_digest%% *}"
+test "sha256:$ops_zip_digest" = "$(jq -er '.digest' "$ops_zip_dir/artifact-api.json")"
+```
+
+Check the actual transfer exit and both comparisons before parsing the archive,
+extracting members or executing a candidate. A failed download or comparison stays
+failed; preserve its partial file instead of automatically retrying or promoting
+it. This separate data acquisition neither authenticates the Ops executable nor
+changes the native invocation's deadline. The subsequent exporter repeats fresh
+metadata and signature verification; this metadata file grants no authority.
+
+Add the absolute `artifact.zip` path as `scpub_ops_artifact_zip` to the private
+routine or maintenance variables. Rust copies and checks the original file
+inside the existing 180-second transfer slot. The omitted-input branch performs
+five actual `gh` calls: version, repository, run-attempt, artifact metadata and
+ZIP download. The retained-input branch performs the first four actual calls
+and an owned file read/copy as the fifth transfer slot; it does not invent a
+completed download command. Retained verification adds four actual `gh` roles:
+version, repository API, exact run-attempt API and the single preparation
+attestation verification. Complete native acquisition therefore has eight actual
+`gh` roles with retained input or nine with live input. These counts are separate from
+the KVM fixture's different repeated-verification profile.
+Acquisition keeps its original 1440-second entry and export its 1860-second entry,
+with the existing verifier and final reserves.
+
+Application staging's optional `scpub_release_verified_directory` is different:
+it expects `artifact.zip` plus all ten original application members listed in
+the [signed release contract](#trusted-artifact-requirements), rather than an Ops ZIP
+or a reconstructed success envelope. An existing complete candidate from prior
+verification can be supplied there. If preparing application bytes separately,
+check the fresh API ZIP size/digest before any parsing and retain the unchanged
+receiver's strict directory/member extraction checks. The actual application
+verifier always refreshes API/CI identity, rejoins the ZIP and all original
+members and verifies all four signed subjects. The fetch controller rechecks
+that candidate before SSH. The host still performs its own bounded download;
+neither retained-input option enlarges that limit.
 
 ### Stage, then run native maintenance
 
