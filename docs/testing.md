@@ -1585,18 +1585,29 @@ limits and existing complementary coverage.
 Push CI retains that same immutable production image for deployment. Offline
 reference operations tests cover export without rebuilding, commit/run/artifact
 identity, bounded CI waiting, single-host selection and stopping after a failed
-deployment or verification. The current signed routine caller is the direct
-typed release playbook. Current Rust mutation contracts cover its stage-only
-default, exact explicit deploy inputs, shared authenticated Ops delivery,
-canonical native invocation and failure propagation. Deploying a retained image
-does not rerun the full suite; it checks artifact integrity, runtime compatibility
-and readiness. After actual Ansible success, the operator separately checks
-anonymous `/health`, `/ready`, `/app-version.json` and `/`. The optional public
-protocol smoke creates guests and writes a public message; it requires that
-write's authorization. The supported `--force` path
-accepts an exact-revision unsigned build without waiting for CI, while retaining
-the runtime safeguards and recording that override. See the
-[release workflow](../ops/ansible/RELEASES.md).
+deployment or verification. The primary signed routine entry point is now
+[`xtask release deploy`](../ops/ansible/RELEASES.md#automatic-signed-routine-deployment).
+It admits clean published `main`, freezes one host, waits within the configured
+bound for one exact CI run/attempt and selects both signed artifact candidates.
+It invokes the current typed release playbook once; API coordinates do not skip
+fresh application/Ops authentication. After actual successful Ansible completion,
+it freshly observes the pinned run/attempt and checks anonymous `/health`,
+`/ready`, `/` and `/app-version.json`, including the selected revision. A failed
+public check fails the frontend while retaining the known successful deployment;
+it does not trigger automatic rollback.
+A successful Ansible observation requires normal body completion, raw exit zero
+and settled ownership. A timeout followed by a trapped zero remains failure with
+an uncertain remote outcome.
+
+The direct typed playbook remains available. Rust mutation contracts cover its
+stage-only default, exact explicit deploy inputs, shared authenticated Ops
+delivery, canonical native invocation and failure propagation. Deploying a
+retained image does not rerun the full suite; it checks artifact integrity,
+runtime compatibility and readiness. The frozen Python frontend retains the
+separate explicit `--force` app-only route for an exact-revision unsigned build,
+with its runtime safeguards and recorded override. The optional public protocol
+smoke creates guests and writes a public message; it requires that write's
+authorization. Neither is part of the Rust signed routine command.
 
 Signed Ops acquisition/export also accept optional original ZIP candidate data,
 exposed as `scpub_ops_artifact_zip` by both signed Ansible callers. The omitted
@@ -1611,9 +1622,18 @@ nine with live input. These counts are distinct from the KVM fixture's repeated
 verification profile. This does not reuse a saved verification result
 or change the 180-second transfer, 1440-second acquisition or 1860-second export
 limits. The application candidate directory remains the separate original-ZIP
-plus-ten-members contract with four fresh subject checks. Current Rust and
-inert file/process checks for these branches do not establish a completed actual
-routine caller; that requires its own final Ansible/native and host evidence.
+plus-ten-members contract with four fresh subject checks. The direct Ansible
+seam was qualified at `94a84694`.
+Parser, selector, inventory, file and owned-process tests for the complete Rust
+frontend use pure policy, actual private files and inert selected processes.
+They do not establish live GitHub/cryptographic/SSH behavior or production
+deployment. Hosted CI and actual frontend/host/public qualification remain
+pending; prior seam proof does not qualify that new composition.
+Publication remains inside the original bounded runtime and signal owner.
+Saved `outcome.json` and `candidatePassed` describe pre-close observations;
+complete positive stdout can still precede runtime, mask or unregister failure.
+Actual CLI exit zero remains necessary. Source and inert publication checks do
+not qualify hosted or production execution.
 
 Run it only as root on a fresh, disposable Linux AMD64 or ARM64 host with a local
 Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,

@@ -131,16 +131,114 @@ Run the focused checks relevant to the change, then push the clean committed
 [main branch policy](../../docs/security.md#main-branch-rules). A pull request is
 optional. The [complete local CI gate](../../docs/testing.md#run-ci-locally)
 remains available; running it before every push is not required. Use a clean
-caller-trusted checkout at that exact published revision and select its successful
-main-push CI run and attempt. Normal CI builds the production image once, tests
-it by immutable image ID, and retains that same image. Deployment does not
+caller-trusted checkout at that exact published revision. Normal CI builds the
+production image once, tests it by immutable image ID, and retains that same
+image. Deployment does not
 rebuild it or rerun the test suite.
+
+### Automatic signed routine deployment
+
+Build the default Rust controller using the
+[pinned controller setup](#prepare-the-controller-before-credentials) before
+supplying GitHub credentials. Then use its absolute executable path:
+
+```sh
+/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask \
+  release deploy \
+  --inventory /absolute/private/inventory.yml \
+  --repository swiftraccoon/simplestChat \
+  --origin https://chat.example.com
+```
+
+The command requires the clean checkout's `main` revision to equal published
+GitHub `main`. It admits one exact same-revision main-push CI run and keeps that
+run and attempt throughout bounded waiting. Missing, ambiguous, mismatched or
+failed CI refuses instead of selecting an older successful run. It selects the
+unique unexpired signed application and Ops artifact candidates from that run,
+retaining their separate IDs, API lengths and digests. API metadata supplies
+coordinates; the current playbook's fresh application/Ops cryptography must
+still prove the payloads and selected attempt before execution.
+
+Inventory expansion must select exactly one host. `--limit HOST_ALIAS` selects
+one exact inventory alias, not an Ansible group, pattern or list. The command
+checks the configured domain against `--origin`, retains the selected complete
+host variables privately, rechecks them before dispatch and writes a one-host
+inventory for the actual playbook. Changes to the admitted checkout, tools,
+inventory or selected identity refuse. The caller does not install controller
+tools, commit, push, dispatch builds or automatically retry a failed operation.
+
+All supplied filesystem paths must be absolute and lexically canonical; actual
+file, executable, canonical-path and ownership checks belong to the runtime
+owner. HTTPS origins require a lowercase ASCII hostname or canonical IPv4
+address and default port 443. An omitted port or explicit `:443`, with an optional
+root slash, normalizes to `https://HOST`. Credentials, queries, fragments,
+nonroot paths, other ports and host spellings that URL parsing would normalize
+are refused.
+
+The options are:
+
+| Option | Contract |
+| --- | --- |
+| `--wait-seconds N` | CI waiting, integer `0..7200`, default 3600. Zero permits the current state check without waiting for pending CI. |
+| `--quiet-seconds N` | Native room observation, integer `0..600`, default 600. |
+| `--install-helpers` | Explicitly reconcile the current Python staging helpers; otherwise require an exact prepared-host match. |
+| `--ansible-playbook ABS` | Select a caller-trusted executable and its sibling inventory tool. |
+| `--gh ABS` | Select the caller-trusted GitHub CLI. |
+| `--application-artifact-dir ABS` | Supply the original application ZIP and ten original members as candidate data. |
+| `--ops-artifact-zip ABS` | Supply one original Ops ZIP as candidate data. |
+
+Use separate flag/value arguments, canonical ASCII decimal numbers and each
+flag at most once. Abbreviations, `--flag=value`, signs, digit separators and
+numeric coercion are not supported. The
+[retained-input preparation](#optional-retained-artifact-inputs) rules apply to
+both candidate options. They do not skip current API or cryptographic checks.
+
+The frontend invokes the current typed routine playbook once, including
+authenticated Ops export/install and canonical native application replacement.
+After actual successful completion, the pinned CI run/attempt is freshly
+re-observed before anonymous HTTPS GETs to `/health`, `/ready`, `/` and
+`/app-version.json`; the version must identify the selected revision. No guest,
+account or chat message is created. Public-check failure
+keeps the already completed deployment and its remote outcome recorded while
+the overall command fails; it triggers no restart or automatic rollback.
+Deployment success requires normal Ansible body completion, raw exit zero and
+settled ownership. A timeout followed by a trapped zero exit still fails and
+leaves the remote outcome uncertain.
+
+The controller uses one original monotonic budget across preparation, CI
+selection/waiting, rechecks, the complete playbook, public checks and finalization.
+Its scheduling envelope is 9120 seconds plus the configured CI wait. The new
+complete-playbook body allows 7200 seconds, with separate 240-second child
+settlement grace, 20-second capture completion and 30-second dispatch/setup
+allowances. It covers the current authenticated Ops delivery and application
+deployment seam; the frozen app-only controller's old 4500-second ceiling is
+not used for that larger composition. Existing playbook, download, native
+deployment and recovery leaf limits keep their own scopes. These are maximum
+scheduling allowances, not measured runtime or service downtime. They do not
+guarantee that blocked OS I/O or reaping completes. Local controller interruption
+cannot prove that an already started remote systemd unit stopped; inspect the
+private evidence and remote
+release journal before another operation. A saved `outcome.json` and its
+`candidatePassed` field are observations made before final closure. Structured
+stdout can also precede a runtime, mask or signal-unregistration failure. Require
+the actual CLI exit zero as well as the complete successful summary; earlier
+positive output cannot replace that result.
+
+The frozen Python frontend retains its reference and explicit force app-only
+roles. The Rust `release deploy` operation does not accept force, maintenance or
+chat-posting options; those operations keep their separate entry points.
+Source, parser and inert process checks do not themselves establish a new
+authenticated production run of this complete frontend.
+
+### Direct typed Ansible deployment
 
 This is a breaking routine caller change. `release.yml` still stages by default,
 but explicit deployment now requires both signed application and Ops coordinates.
 The frozen `build/deploy.py` / `build/release_deploy.py` ordinary signed route
 cannot supply them and is no longer a supported routine entry point. Keep it as
-the unchanged reference; automatic selection in a Rust frontend is separate work.
+the unchanged reference. The Rust frontend above supplies the complete current
+selection and caller operation; the direct interface below selects all inputs
+explicitly and remains available for staging and reviewed operator use.
 The [explicit force app-only route](#explicit-force-deployment) retains its
 existing entry point and does not use this signed Ops bootstrap.
 

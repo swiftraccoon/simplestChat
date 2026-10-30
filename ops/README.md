@@ -2544,18 +2544,25 @@ failure can invalidate an earlier complete report or leave partial stdout.
 Private evidence remains protected and may contain command output/configuration;
 reports must be shared only under the existing operator privacy policy.
 
-The supported signed routine caller is now the direct
-[release playbook](ansible/RELEASES.md#routine-update-use-the-image-ci-tested).
-Its default remains stage-only; explicit deployment requires the application
-and Ops artifacts from one successful main-push CI run and attempt, plus the
-trusted controller and GitHub CLI paths. The shared authenticated delivery runs
-after signed staging and original predicate retention, before the installed
-canonical `release deploy`. The caller explicitly supplies a quiet wait of
-600 seconds, native timeout 1800/finalization 60 and systemd runtime 1800/stop
-240. The native CLI's own quiet default remains zero. The frozen Python frontend
-cannot supply these inputs; its ordinary signed route is retained as a reference,
-with no fallback from the new caller. Automatic selection in a Rust frontend is
-separate work.
+The primary signed routine entry point is
+[`xtask release deploy`](ansible/RELEASES.md#automatic-signed-routine-deployment).
+It selects the exact clean published `main` revision, freezes one inventory host,
+waits within its configured bound for one CI run/attempt and selects both signed
+artifact candidates. It invokes the current typed playbook once, then freshly
+observes the pinned run and checks four anonymous HTTPS responses after actual
+successful completion. GitHub metadata selects coordinates; fresh application
+and Ops cryptography still authenticate the payloads. Build the trusted default
+controller before supplying credentials, as the operator guide requires.
+
+The [direct typed playbook](ansible/RELEASES.md#direct-typed-ansible-deployment)
+remains available with explicit inputs and a stage-only default. Authenticated
+Ops delivery follows signed application staging, before the installed canonical
+`release deploy`. The routine caller defaults to quiet observation 600 seconds,
+configurable within `0..600`; native timeout 1800/finalization 60 and systemd
+runtime 1800/stop 240 remain unchanged. The native CLI's own quiet default remains
+zero. The frozen Python frontend retains its reference and explicit force
+app-only roles; its ordinary signed route cannot supply the current Ops inputs,
+and there is no fallback to it from the Rust frontend.
 
 Source/oracle checks alone do not prove Docker/DB/Caddy/TLS or signed-musl host
 execution. The complete 97-case comparison against unchanged Python passed
@@ -2564,12 +2571,12 @@ files, locks and owned inert children with inert service replies. The corrected
 ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tests;
 these are historical local counts. The later signed fixture at
 `ebf8564ba646be944e2ebbd8398a9447829d812d` passed both actual native deployment
-and the deliberately stopped candidate's successful rollback; its
-exact proof and limits
-do not qualify a different caller or revision. Actual delivery and invocation of
-the changed routine Ansible caller require separate evidence. See the
-affected API review for ownership,
-accepted profiles, the inherited-stdio SDK close exception and validation scope.
+and the deliberately stopped candidate's successful rollback; that proof
+does not qualify a different caller or revision. The direct Ansible seam was
+subsequently qualified at `94a84694`.
+The complete automatic Rust frontend still needs its own hosted CI and actual
+caller/host/public qualification; prior seam proof and inert controller tests do
+not establish that operation.
 
 
 ### Native standalone release-backup restore verification

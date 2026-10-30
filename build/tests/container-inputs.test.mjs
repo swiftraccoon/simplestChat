@@ -383,6 +383,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/ops_artifact/private.env',
     'xtask/src/ci/ops_artifact/maintain_runtime/private.env',
     'xtask/src/ci/ops_artifact/export/private.env',
+    'xtask/src/ci/ops_artifact/deploy_frontend/private.env',
     'xtask/src/ci/ops_artifact/export/retained.json',
     'xtask/src/ci/ops_artifact/maintain_runtime/retained/artifact.zip',
     'xtask/src/ci/ops_artifact/capacity_vps/private.env',

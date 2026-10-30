@@ -55,6 +55,10 @@ mod session_soak;
 #[cfg(test)]
 mod tests;
 
+pub(crate) fn run_release_frontend(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    Ok(ops_artifact::run_release_frontend(root, arguments))
+}
+
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify \
 --scope SCOPE [--github-output] [--key KEY --directory PATH] [--root CHECKOUT]\n\
        cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required\n\

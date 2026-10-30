@@ -5,6 +5,7 @@
 
 pub(super) mod acquire;
 pub(in crate::ci) mod capacity_vps;
+pub(in crate::ci) mod deploy_frontend;
 mod execute;
 mod export;
 #[cfg(test)]
@@ -33,6 +34,13 @@ use crate::tooling::{Failure, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
+
+pub(super) fn run_release_frontend(
+    root: &std::path::Path,
+    arguments: &[String],
+) -> std::process::ExitCode {
+    deploy_frontend::run(root, arguments)
+}
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
 build|source|registry|verify-retained|acquire|export|runtime \

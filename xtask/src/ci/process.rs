@@ -86,6 +86,11 @@ impl<'a> Native<'a> {
         let hosted_ops = request.hosted_ops.clone();
         let ops_runtime = request.ops_runtime.clone();
         let ops_vps = request.ops_vps.clone();
+        let frontend = request.frontend.clone();
+        let frontend_admission = frontend
+            .as_ref()
+            .map(|proof| proof.begin(&request))
+            .transpose();
         let vps_admission = ops_vps
             .as_ref()
             .map(|proof| proof.begin(&request))
@@ -135,6 +140,7 @@ impl<'a> Native<'a> {
             .and(hosted_admission.map(|_| ()))
             .and(runtime_admission.map(|_| ()))
             .and(vps_admission.map(|_| ()))
+            .and(frontend_admission.map(|_| ()))
             .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
             .and({
@@ -172,6 +178,9 @@ impl<'a> Native<'a> {
         if let Some(proof) = ops_vps {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
+        if let Some(proof) = &frontend {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
         if let Some(mdns) = mdns {
             mdns.closed(closed.is_ok());
         }
@@ -179,6 +188,9 @@ impl<'a> Native<'a> {
         closed?;
         if owned_io && !cleanup {
             self.ready().await?;
+        }
+        if let Some(proof) = frontend {
+            proof.completed()?;
         }
         Ok(output)
     }
@@ -229,6 +241,8 @@ impl<'a> Native<'a> {
         } else if let Some(proof) = &request.ops_runtime {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.ops_vps {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.frontend {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.source_git {
             proof.context()?.unwrap_or((self.root, self.environment))
@@ -310,6 +324,10 @@ impl<'a> Native<'a> {
             proof.validate(request.program, &request.arguments)?;
         }
         if let Some(proof) = &request.ops_vps {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.frontend {
             self.ready().await?;
             proof.validate(request.program, &request.arguments)?;
         }
@@ -463,6 +481,18 @@ impl<'a> Native<'a> {
                         .or_else(|| status.signal().map(|signal| -signal))
                 }),
                 cleaned && reaped.is_ok(),
+            );
+        }
+        if let Some(proof) = &request.frontend {
+            use std::os::unix::process::ExitStatusExt;
+            proof.observed_exit(
+                reaped.as_ref().ok().and_then(|status| {
+                    status
+                        .code()
+                        .or_else(|| status.signal().map(|signal| -signal))
+                }),
+                cleaned && reaped.is_ok(),
+                outcome.is_ok(),
             );
         }
         if cleaned && reaped.is_ok() {
@@ -674,6 +704,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.hosted_ops.is_some(),
         request.ops_runtime.is_some(),
         request.ops_vps.is_some(),
+        request.frontend.is_some(),
         request.benchmark.is_some(),
         request.release_checks.is_some(),
         #[cfg(feature = "release-http-policy")]
@@ -703,6 +734,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsVpsGit
             | Program::OpsVpsSsh
             | Program::OpsVpsAnsible
+            | Program::FrontendGit
+            | Program::FrontendGh
+            | Program::FrontendInventory
+            | Program::FrontendAnsible
+            | Program::FrontendCurl
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
@@ -740,6 +776,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .map(|path| path.as_os_str());
     }
     if let Some(proof) = &request.ops_vps {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|path| path.as_os_str());
+    }
+    if let Some(proof) = &request.frontend {
         return proof
             .validate(request.program, &request.arguments)
             .map(|path| path.as_os_str());

@@ -327,6 +327,9 @@ xtask/src/ci/performance_compare/**
 !xtask/src/ci/ops_artifact/
 xtask/src/ci/ops_artifact/**
 !xtask/src/ci/ops_artifact/*.rs
+!xtask/src/ci/ops_artifact/deploy_frontend/
+xtask/src/ci/ops_artifact/deploy_frontend/**
+!xtask/src/ci/ops_artifact/deploy_frontend/*.rs
 !xtask/src/ci/ops_artifact/maintain_runtime/
 xtask/src/ci/ops_artifact/maintain_runtime/**
 !xtask/src/ci/ops_artifact/maintain_runtime/*.rs

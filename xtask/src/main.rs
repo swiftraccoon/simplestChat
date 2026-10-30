@@ -30,6 +30,8 @@ Commands:
   ci-local      Run all required local workflow jobs, or one explicitly partial job,
                 against only an owned disposable engine; see `ci-local --help`.
   run           Build and run the local UI; --skip-web reuses web/dist.
+  release       Select signed application and Ops artifacts, deploy once and verify HTTPS;
+                prepared routine host only; see `release deploy --help`.
   public-smoke  Check an explicitly authorized HTTPS origin; writes ONE PUBLIC TEST MESSAGE.
                 Requires --features public-smoke; private summary only; see public-smoke --help.
   ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
@@ -114,6 +116,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     let root = repository_root()?;
     match command.as_str() {
         "run" => run_local::run(&root, rest),
+        "release" => ci::run_release_frontend(&root, rest),
         "check" => check::run(&root, rest),
         "ci" => ci::run(&root, rest),
         "container-smoke" => ci::run_container_smoke(&root, rest),
