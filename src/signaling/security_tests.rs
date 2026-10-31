@@ -88,7 +88,12 @@ async fn profile_reads_nest_beside_the_auth_router_on_their_own_guard() {
         .unwrap();
     let address = listener.local_addr().unwrap();
     let task = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
     let request = |line: &'static str| async move {
         let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
@@ -154,7 +159,12 @@ async fn http_metrics_include_outer_timeouts_and_guard_rejections() {
         .unwrap();
     let address = listener.local_addr().unwrap();
     let task = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        axum::serve(
+            listener,
+            router.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
     let result = tokio::time::timeout(Duration::from_secs(2), async {
         for status in [408, 429] {
@@ -317,7 +327,12 @@ async fn stalled_json_body_does_not_hold_operation_concurrency() {
         .unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
@@ -353,9 +368,13 @@ async fn static_fallback_is_wrapped_in_security_headers() {
         .unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        axum::serve(listener, with_static_fallback_and_security(Router::new()))
-            .await
-            .unwrap();
+        axum::serve(
+            listener,
+            with_static_fallback_and_security(Router::new())
+                .into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     let mut connection = tokio::net::TcpStream::connect(address).await.unwrap();
@@ -414,15 +433,14 @@ async fn handler_download_sandbox_survives_global_http_security_headers() {
             )
         }),
     ));
-    let response = router
-        .oneshot(
-            Request::builder()
-                .uri("/owned-download-fixture")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+    let mut request = Request::builder()
+        .uri("/owned-download-fixture")
+        .body(Body::empty())
         .unwrap();
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([192, 0, 2, 1], 43210))));
+    let response = router.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         response.headers()[header::CONTENT_SECURITY_POLICY],
@@ -468,27 +486,7 @@ async fn database_membership_handler_always_returns_a_private_cursor_page() {
         .execute(&pool)
         .await
         .unwrap();
-    let mut media = crate::media::config::MediaConfig::default();
-    media.worker_config.num_workers = 1;
-    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
-    let metrics = ServerMetrics::new();
-    let manager = Arc::new(
-        RoomManager::new(
-            crate::room::ManagerSettings::default(),
-            media,
-            metrics.clone(),
-            None,
-        )
-        .await
-        .unwrap(),
-    );
-    let mut server = SignalingServer::new(
-        manager,
-        metrics,
-        Some(pool.clone()),
-        &crate::config::Config::for_tests(),
-    )
-    .unwrap();
+    let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     let secret = "disposable-membership-handler-secret-at-least-32-bytes";
     server.jwt_secret = Some(secret.into());
     let session_id = crate::auth::session::create_session(
@@ -559,27 +557,7 @@ async fn database_password_and_passkey_signup_share_taken_email_budget() {
         .execute(&pool)
         .await
         .unwrap();
-    let mut media = crate::media::config::MediaConfig::default();
-    media.worker_config.num_workers = 1;
-    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
-    let metrics = ServerMetrics::new();
-    let manager = Arc::new(
-        RoomManager::new(
-            crate::room::ManagerSettings::default(),
-            media,
-            metrics.clone(),
-            None,
-        )
-        .await
-        .unwrap(),
-    );
-    let mut server = SignalingServer::new(
-        manager,
-        metrics,
-        Some(pool.clone()),
-        &crate::config::Config::for_tests(),
-    )
-    .unwrap();
+    let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     server.registration_enabled = true;
     server.jwt_secret = Some(crate::auth::jwt::JwtSecret::from(
         format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()).as_str(),
@@ -674,27 +652,7 @@ async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
         sid,
     )
     .unwrap();
-    let mut media = crate::media::config::MediaConfig::default();
-    media.worker_config.num_workers = 1;
-    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
-    let metrics = ServerMetrics::new();
-    let manager = Arc::new(
-        RoomManager::new(
-            crate::room::ManagerSettings::default(),
-            media,
-            metrics.clone(),
-            None,
-        )
-        .await
-        .unwrap(),
-    );
-    let mut server = SignalingServer::new(
-        manager,
-        metrics,
-        Some(pool.clone()),
-        &crate::config::Config::for_tests(),
-    )
-    .unwrap();
+    let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     server.jwt_secret = Some(secret.into());
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
@@ -884,6 +842,181 @@ fn forwarded_ip_requires_an_authenticated_proxy() {
         ),
         loopback_peer.ip()
     );
+}
+
+#[tokio::test]
+async fn forwarded_headers_are_ignored_without_a_peer_address() {
+    use tower::ServiceExt;
+    let guard = AuthGuard::new(
+        10,
+        1,
+        Arc::new(None),
+        Arc::new(Vec::new()),
+        ServerMetrics::new(),
+    );
+    let router = Router::new()
+        .route(
+            "/address",
+            get(
+                |axum::Extension(ClientIp(address)): axum::Extension<ClientIp>| async move {
+                    address.to_string()
+                },
+            ),
+        )
+        .layer(middleware::from_fn_with_state(guard, guarded_api_request));
+    let request = |peer: Option<SocketAddr>| {
+        let mut request = Request::get("/address")
+            .header("x-forwarded-for", "203.0.113.9")
+            .body(Body::empty())
+            .unwrap();
+        if let Some(peer) = peer {
+            request.extensions_mut().insert(ConnectInfo(peer));
+        }
+        request
+    };
+    // With no proxy secret configured, a loopback peer vouches for the header.
+    let loopback_peer = SocketAddr::from(([127, 0, 0, 1], 43210));
+    let response = router
+        .clone()
+        .oneshot(request(Some(loopback_peer)))
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "a loopback peer without a proxy secret is served"
+    );
+    let body = axum::body::to_bytes(response.into_body(), 64)
+        .await
+        .unwrap();
+    assert_eq!(body, "203.0.113.9");
+    // A request without any peer has no one to vouch for it.
+    let response = router.clone().oneshot(request(None)).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a request without a peer address was attributed to its X-Forwarded-For"
+    );
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    // The peer is checked before the Origin, so a peerless cross-site request
+    // is refused like any other peerless request rather than with 403.
+    let mut cross_site = request(None);
+    cross_site.headers_mut().insert(
+        header::ORIGIN,
+        HeaderValue::from_static("https://elsewhere.example"),
+    );
+    let response = router.oneshot(cross_site).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "a peerless cross-site request was judged by its Origin first"
+    );
+}
+
+/// A server on one media worker (reserved ports) whose room manager has no
+/// database; `db_pool` serves the HTTP handlers, and `None` leaves it guest-only.
+async fn test_server(db_pool: Option<PgPool>, config: &crate::config::Config) -> SignalingServer {
+    let mut media = crate::media::config::MediaConfig::default();
+    media.worker_config.num_workers = 1;
+    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+    let metrics = ServerMetrics::new();
+    let manager = RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        media,
+        metrics.clone(),
+        None,
+    )
+    .await
+    .unwrap();
+    SignalingServer::new(Arc::new(manager), metrics, db_pool, config).unwrap()
+}
+
+#[tokio::test]
+async fn requests_without_a_peer_address_are_refused() {
+    use tower::ServiceExt;
+    use tracing::instrument::WithSubscriber;
+    let router = test_server(None, &crate::config::Config::for_tests())
+        .await
+        .router();
+    // Nothing is answered without the listener's peer address: plain and
+    // rate-guarded API routes, the WebSocket upgrade and the static fallback.
+    let requests = [
+        ("/api/capabilities", Request::get("/api/capabilities")),
+        (
+            "/ws",
+            Request::get("/ws")
+                .header(header::HOST, "localhost")
+                .header(header::UPGRADE, "websocket")
+                .header(header::CONNECTION, "Upgrade")
+                .header(header::SEC_WEBSOCKET_KEY, "dGhlIHNhbXBsZSBub25jZQ==")
+                .header(header::SEC_WEBSOCKET_VERSION, "13")
+                .header(header::SEC_WEBSOCKET_PROTOCOL, "simplestchat"),
+        ),
+        ("/api/rooms", Request::get("/api/rooms")),
+        ("/", Request::get("/")),
+    ];
+    let message = "Request carried no peer address; the router must be served with connect info";
+    let capture = crate::security_canary_tests::Capture::default();
+    let refusals_logged = || {
+        capture
+            .text()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .filter(|record| record["level"] == "ERROR" && record["fields"]["message"] == message)
+            .count()
+    };
+    for (path, request) in requests {
+        let logged = refusals_logged();
+        let response = router
+            .clone()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .with_subscriber(capture.subscriber())
+            .await
+            .unwrap();
+        let value_of = |name| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value: &HeaderValue| value.to_str().ok())
+        };
+        assert_eq!(
+            response.status(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "{path}: status"
+        );
+        assert_eq!(
+            value_of(header::CACHE_CONTROL),
+            Some("no-store"),
+            "{path}: cache-control"
+        );
+        // The gate sits inside the security headers, so its refusal carries them.
+        assert_eq!(
+            value_of(header::X_CONTENT_TYPE_OPTIONS),
+            Some("nosniff"),
+            "{path}: x-content-type-options"
+        );
+        assert_eq!(
+            refusals_logged(),
+            logged + 1,
+            "{path}: exactly one error record for the refusal"
+        );
+    }
+}
+
+#[tokio::test]
+async fn requests_with_a_peer_address_are_served() {
+    use tower::ServiceExt;
+    let router = test_server(None, &crate::config::Config::for_tests())
+        .await
+        .router();
+    let mut request = Request::get("/api/capabilities")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([192, 0, 2, 1], 43210))));
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[test]

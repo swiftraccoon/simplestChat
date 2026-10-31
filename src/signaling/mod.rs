@@ -40,7 +40,7 @@ use std::{
 use tokio::sync::Semaphore;
 use tower_http::services::ServeDir;
 use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
-use tracing::{Instrument, info, warn};
+use tracing::{Instrument, error, info, warn};
 
 pub(crate) use connection::GracePeriodMap;
 
@@ -626,7 +626,8 @@ impl SignalingServer {
         let drain = self.room_manager.drain_signal();
         let app = self.router();
 
-        // with_connect_info exposes the peer SocketAddr to ws_handler (guest ban IPs)
+        // Every request needs its peer address (`require_peer_address`): it is
+        // the client identity for rate limits and guest bans.
         axum::serve(
             listener,
             app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
@@ -658,10 +659,13 @@ async fn drain_admission(
 
 fn with_static_fallback_and_security(router: Router) -> Router {
     // Router::layer only wraps routes and fallbacks that already exist, so the
-    // static fallback must be installed before the security middleware.
+    // static fallback must be installed before the security middleware. The
+    // peer-address gate sits inside the security headers, so its refusal
+    // carries them too.
     router
         .fallback_service(ServeDir::new("web/dist"))
         .layer(DefaultBodyLimit::max(64 * 1024))
+        .layer(middleware::from_fn(require_peer_address))
         .layer(middleware::from_fn(security_headers))
 }
 
@@ -1069,10 +1073,14 @@ async fn guarded_api_request(
     mut request: Request<Body>,
     next: Next,
 ) -> Response {
+    // The peer first, as at the router-wide gate: a peerless request is
+    // refused and logged the same way whatever its Origin.
+    let Some(client_ip) = request_client_ip(&request, guard.trusted_proxy_secret.as_deref()) else {
+        return missing_peer_address();
+    };
     if !origin_allowed(request.headers(), &guard.allowed_origins) {
         return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
     }
-    let client_ip = request_client_ip(&request, guard.trusted_proxy_secret.as_deref());
     if !guard.allow(client_ip) {
         guard.metrics.inc_api_request_rejected();
         return (
@@ -1098,13 +1106,50 @@ async fn guarded_api_request(
     response
 }
 
-fn request_client_ip(request: &Request<Body>, trusted_proxy_secret: Option<&str>) -> IpAddr {
-    let peer = request
+/// The peer address the listener attached to the request. `None` when the
+/// router is served without connect info; `serve` always attaches one.
+fn peer_address(request: &Request<Body>) -> Option<SocketAddr> {
+    request
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|connect_info| connect_info.0)
-        .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 0)));
-    trusted_client_ip(peer, request.headers(), trusted_proxy_secret)
+}
+
+/// The request's client address: its peer, or the address a trusted proxy
+/// appended (`trusted_client_ip`). `None` when the request carries no peer
+/// address (`peer_address`); no forwarded header is read then.
+fn request_client_ip(
+    request: &Request<Body>,
+    trusted_proxy_secret: Option<&str>,
+) -> Option<IpAddr> {
+    let peer = peer_address(request)?;
+    Some(trusted_client_ip(
+        peer,
+        request.headers(),
+        trusted_proxy_secret,
+    ))
+}
+
+/// Refuses every request that carries no peer address, before any route,
+/// upgrade or static file answers it. A missing peer means the router is
+/// served without connect info; a guessed address would merge every client
+/// into one rate and ban identity, and a guessed loopback peer would trust
+/// each client's own `X-Forwarded-For`.
+async fn require_peer_address(request: Request<Body>, next: Next) -> Response {
+    if peer_address(&request).is_none() {
+        return missing_peer_address();
+    }
+    next.run(request).await
+}
+
+/// The refusal of a request without a peer address; each one logs an error.
+fn missing_peer_address() -> Response {
+    error!("Request carried no peer address; the router must be served with connect info");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CACHE_CONTROL, "no-store")],
+    )
+        .into_response()
 }
 
 fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
