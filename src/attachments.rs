@@ -87,9 +87,39 @@ fn filename(encoded: &str) -> Result<String, AuthError> {
     })
 }
 
+/// Whether a PNG declares an `acTL` chunk, which makes it an animation
+/// (APNG). The walk reads each chunk header (length and type) from offset 8
+/// and skips the chunk's data and CRC. It answers true at an `acTL` header
+/// even when that chunk's body runs past the end, failing closed so the file
+/// is served as a download, and false at `IEND`, at a header that does not
+/// fit, or at any other chunk whose body would run past the end. The bytes
+/// `acTL` inside another chunk's data never count.
+fn png_is_animated(bytes: &[u8]) -> bool {
+    let mut offset: usize = 8;
+    while let Some(header) = offset.checked_add(8).and_then(|end| bytes.get(offset..end)) {
+        let (length, kind) = header.split_at(4);
+        if kind == b"acTL" {
+            return true;
+        }
+        if kind == b"IEND" {
+            return false;
+        }
+        let Some(next) = <[u8; 4]>::try_from(length)
+            .ok()
+            .and_then(|length| usize::try_from(u32::from_be_bytes(length)).ok())
+            .and_then(|length| offset.checked_add(12)?.checked_add(length))
+            .filter(|&next| next <= bytes.len())
+        else {
+            return false;
+        };
+        offset = next;
+    }
+    false
+}
+
 fn content_type(bytes: &[u8]) -> &'static str {
     for mime in ["image/png", "image/jpeg", "image/webp"] {
-        if mime == "image/png" && bytes.windows(4).any(|chunk| chunk == b"acTL") {
+        if mime == "image/png" && png_is_animated(bytes) {
             continue;
         }
         if crate::auth::account::image_dimensions(mime, bytes).is_some_and(|(width, height)| {
@@ -450,6 +480,36 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
     Ok(())
 }
 
+/// The `Content-Disposition` value for a stored attachment name: a quoted
+/// ASCII fallback (ASCII letters and digits, space, `.`, `-` and `_` kept,
+/// anything else `_`) and the exact UTF-8 name as RFC 8187 `filename*`.
+fn content_disposition(disposition: &str, name: &str) -> Result<HeaderValue, AuthError> {
+    use std::fmt::Write as _;
+    let ascii: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    // RFC 8187 keeps attr-char as is and percent-encodes every other byte.
+    let mut encoded = String::with_capacity(name.len() * 3);
+    for byte in name.bytes() {
+        if byte.is_ascii_alphanumeric() || b"!#$&+-.^_`|~".contains(&byte) {
+            encoded.push(char::from(byte));
+        } else {
+            let _ = write!(encoded, "%{byte:02X}");
+        }
+    }
+    HeaderValue::from_str(&format!(
+        "{disposition}; filename=\"{ascii}\"; filename*=UTF-8''{encoded}"
+    ))
+    .map_err(|_| unavailable())
+}
+
 pub(crate) async fn download(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
@@ -481,16 +541,6 @@ pub(crate) async fn download(
         "content-security-policy",
         HeaderValue::from_static("default-src 'none'; sandbox"),
     );
-    let ascii: String = name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '-' | '_') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
     let disposition = if content_type.starts_with("image/") {
         "inline"
     } else {
@@ -498,8 +548,7 @@ pub(crate) async fn download(
     };
     response.insert(
         "content-disposition",
-        HeaderValue::from_str(&format!("{disposition}; filename=\"{ascii}\""))
-            .map_err(|_| unavailable())?,
+        content_disposition(disposition, &name)?,
     );
     response.insert("content-length", HeaderValue::from(data.len()));
     let body = futures_util::stream::unfold(

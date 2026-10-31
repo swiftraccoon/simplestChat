@@ -136,6 +136,56 @@ fn one_upload_per_account_at_a_time() {
     drop(other);
 }
 
+/// The quoted fallback keeps the ASCII letters, digits, space, `.`, `-` and
+/// `_` of a stored name; `filename*` carries the exact UTF-8 name (RFC 8187).
+#[test]
+fn content_disposition_carries_a_utf8_filename() {
+    assert_eq!(
+        content_disposition("inline", "résumé 2026.png").unwrap(),
+        "inline; filename=\"r_sum_ 2026.png\"; filename*=UTF-8''r%C3%A9sum%C3%A9%202026.png"
+    );
+}
+
+/// APNG detection reads chunk types: the bytes `acTL` inside a `tEXt` chunk's
+/// data leave a still PNG an image, an `acTL` chunk makes it an animation, an
+/// `acTL` header whose body runs past the end still counts (failing closed),
+/// and any other chunk running past the end stops the walk without a panic.
+#[test]
+fn apng_is_detected_by_chunk_type_only() {
+    // A chunk is its length, type, data and a CRC the walk never checks.
+    let chunk = |kind: &[u8; 4], data: &[u8]| {
+        let mut bytes = u32::try_from(data.len()).unwrap().to_be_bytes().to_vec();
+        bytes.extend_from_slice(kind);
+        bytes.extend_from_slice(data);
+        bytes.extend_from_slice(&[0; 4]);
+        bytes
+    };
+    let png = |middle: Vec<u8>| {
+        [
+            b"\x89PNG\r\n\x1a\n".to_vec(),
+            chunk(b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]),
+            middle,
+            chunk(b"IDAT", b"pixels"),
+            chunk(b"IEND", b""),
+        ]
+        .concat()
+    };
+    let still = png(chunk(b"tEXt", b"Comment\0acTL"));
+    let animated = png(chunk(b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0]));
+    assert!(!png_is_animated(&still));
+    assert!(png_is_animated(&animated));
+    assert_eq!(content_type(&still), "image/png");
+    assert_eq!(content_type(&animated), "application/octet-stream");
+    let mut hostile = u32::MAX.to_be_bytes().to_vec();
+    hostile.extend_from_slice(b"tEXtacTL");
+    assert!(!png_is_animated(&png(hostile)));
+    // A declared `acTL` counts even when its body runs past the end: the walk
+    // fails closed, and the file is served as a download.
+    let mut declared = u32::MAX.to_be_bytes().to_vec();
+    declared.extend_from_slice(b"acTL");
+    assert!(png_is_animated(&png(declared)));
+}
+
 struct Database {
     pool: PgPool,
     users: Vec<Uuid>,
