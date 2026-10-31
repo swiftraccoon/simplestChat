@@ -3,6 +3,8 @@
 //! authentication, candidate executable or maintenance runs here.
 use serde_json::{Value, json};
 
+#[path = "native_verification_caller_tests.rs"]
+mod native_verification_caller_tests;
 #[path = "routine_caller_tests.rs"]
 mod routine_caller_tests;
 
@@ -1167,20 +1169,7 @@ fn release_contract(document: &Value) -> Check<()> {
         p["hosts"] == "benchmark_hosts" && p["become"] == true && p["serial"] == 1,
         "release-context",
     )?;
-    let (_, verify) = named(
-        sequence(&p["pre_tasks"])?,
-        "Verify the signed release on the controller before any remote preflight",
-    )?;
-    local(verify)?;
-    default_failure(verify)?;
-    require(
-        verify["register"] == "scpub_validated_release"
-            && verify["check_mode"] == false
-            && verify["timeout"] == 660
-            && arguments(verify)?.get(2)
-                == Some(&"{{ playbook_dir }}/../../build/verify-release.py"),
-        "current-verifier",
-    )?;
+    native_verification_caller_tests::contract(document)?;
     let tasks = sequence(&p["tasks"])?;
     let (fetch_at, fetch) = named(
         tasks,

@@ -278,6 +278,44 @@ fn disposable_database_keeps_one_current_discovery_and_one_frozen_legacy_class()
 }
 
 #[test]
+fn only_three_changed_release_methods_use_the_original_reference_in_both_profiles() {
+    let fixture = Fixture::new();
+    let mut inventory = Inventory::read(&fixture.root).unwrap();
+    let prefix = "test_release_playbook.ReleasePlaybookTests.";
+    let historical = [
+        "test_stage_is_default_and_deployment_is_an_explicit_separate_job",
+        "test_routine_release_has_no_host_maintenance_or_configuration_rendering",
+        "test_attestation_precedes_every_remote_preflight_and_cached_bytes_are_reverified",
+    ];
+    for profile in [Profile::Parallel, Profile::Database] {
+        let commands = profile.arguments(&inventory).unwrap();
+        let current = commands
+            .iter()
+            .filter(|(role, _)| *role != Role::MaintenanceLegacy)
+            .flat_map(|(_, args)| args.windows(2))
+            .filter(|pair| pair[0] == "-k")
+            .filter_map(|pair| pair[1].to_str())
+            .filter_map(|selector| selector.strip_prefix(prefix))
+            .collect::<BTreeSet<_>>();
+        let legacy = commands
+            .iter()
+            .find(|(role, _)| *role == Role::MaintenanceLegacy)
+            .unwrap()
+            .1
+            .iter()
+            .filter_map(|argument| argument.to_str())
+            .filter_map(|selector| selector.strip_prefix(prefix))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(current.len(), 7);
+        assert_eq!(legacy, historical.into_iter().collect());
+        assert!(current.is_disjoint(&legacy));
+        assert_eq!(current.union(&legacy).count(), 10);
+        assert!(current.iter().all(|method| !method.contains('*')));
+    }
+    inventory.close().unwrap();
+}
+
+#[test]
 fn symlink_fifo_invalid_names_and_importable_directories_are_refused() {
     for case in 0..5 {
         let fixture = Fixture::new();

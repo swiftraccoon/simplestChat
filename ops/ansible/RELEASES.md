@@ -159,6 +159,15 @@ retaining their separate IDs, API lengths and digests. API metadata supplies
 coordinates; the current playbook's fresh application/Ops cryptography must
 still prove the payloads and selected attempt before execution.
 
+The frontend explicitly selects native controller-side application verification.
+The trusted default `xtask release verify` bridge runs the existing complete Ops
+verification owner synchronously, before remote preflight. Its 600-second whole
+budget includes a 60-second final reserve within the unchanged 660-second Ansible
+guard. Supplied application candidates still require fresh API observations and
+all four signature checks. Native refusal stops the playbook without a Python
+verification fallback; fetching, receiving and host staging retain their Python
+keeper roles.
+
 Inventory expansion must select exactly one host. `--limit HOST_ALIAS` selects
 one exact inventory alias, not an Ansible group, pattern or list. The command
 checks the configured domain against `--origin`, retains the selected complete
@@ -228,7 +237,9 @@ The frozen Python frontend retains its reference and explicit force app-only
 roles. The Rust `release deploy` operation does not accept force, maintenance or
 chat-posting options; those operations keep their separate entry points.
 Source, parser and inert process checks do not themselves establish a new
-authenticated production run of this complete frontend.
+authenticated production run. The preceding frontend at `66219eaa` was qualified
+before the native verification caller change. The new application-verification
+branch requires its own current-head authentication and actual caller evidence.
 
 ### Direct typed Ansible deployment
 
@@ -263,6 +274,7 @@ package version shown below to match the selected signed Ops distribution:
   "scpub_release_artifact_id": APPLICATION_ARTIFACT_ID,
   "scpub_release_expected_revision": "REVISION_40_LOWERCASE_HEX",
   "scpub_release_ci_run": CI_RUN_ID,
+  "scpub_release_native_verification": true,
   "scpub_release_deploy": true,
   "scpub_release_prepared": true,
   "scpub_release_quiet_seconds": 600,
@@ -298,7 +310,37 @@ Prepared mode requires the exact current installed Python staging helpers. If
 reviewed helper changes need installation, set `scpub_release_prepared` to the
 JSON boolean `false`; this reconciles only those helpers, without provisioning or
 migrations. Omitting `scpub_release_deploy`, or setting it to `false`, remains
-stage-only and requires no Ops selectors or controller paths.
+stage-only and requires no signed Ops selectors. Controller paths are required
+when opting into native verification, even for stage-only use.
+
+`scpub_release_native_verification` accepts only a JSON boolean. Omission means
+`false` and retains the Python verification reference; the automatic Rust
+frontend always supplies `true`. Explicit null, strings and numeric coercion
+refuse before verification or remote work. Native mode requires absolute trusted
+`scpub_ops_xtask` and `scpub_ops_gh_executable` paths. The declared and canonical
+GitHub CLI basenames must be `gh`, with no colon in its path. A controller-side
+check requires its canonical target to be a regular executable without a final
+symlink. The verifier's `PATH` is that selected directory followed by
+`/usr/bin:/bin:/usr/sbin:/sbin`.
+When authentication uses a selected `GH_CONFIG_DIR`, export it before starting
+the controller. The native verifier preserves it for GitHub CLI calls, alongside
+the existing permitted authentication environment; curl does not receive it.
+The native command receives the same repository/artifact/revision/CI identities,
+output parent and optional application candidate directory, plus
+`--timeout-seconds 600 --finalization-seconds 60`. Both verifier branches retain
+localhost delegation, no privilege escalation, actual execution in check mode
+and the 660-second task guard.
+
+The native task registers a separate result. Before normalization, it must have
+actually succeeded without skipping and returned integer status zero. Its JSON
+must contain exactly `directory`, `image.tar`, `release.json` and `revision`,
+with the selected revision, an absolute directory string and two lowercase
+64-digit hex digests. This result-shape check supplies no new authentication
+authority. The checked native result is normalized into the existing
+`scpub_validated_release` variable after the Python branch skips, so a skipped
+result cannot overwrite verified output. A native failure never triggers the
+reference branch. Omitted/false native mode keeps the original Python task and
+downstream result contract without decoding an absent native result.
 
 For a separately retained input, add the optional
 [`scpub_ops_artifact_zip`](#optional-retained-artifact-inputs) absolute ZIP path.

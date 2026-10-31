@@ -1983,9 +1983,10 @@ Same-UID writable-filesystem/check-read races remain outside that claim.
 `simplestchat-ops release attestation verify` verifies an already downloaded
 candidate with four fresh maintained `gh attestation verify` invocations. It
 performs no API selection, download, extraction, signing, SSH, engine or host
-operation. The original Python `verify_directory` and installed callers remain
-available; caller migration requires the separate recorded authentication and
-before-SSH gates.
+operation. The original Python `verify_directory` remains available as a frozen
+reference. Routine deployment uses this verifier through the complete fresh
+verification owner described below, which acquires current API metadata before
+cached verification. No saved selection or receipt replaces that observation.
 
 ```sh
 target/release/simplestchat-ops release attestation verify \
@@ -2065,8 +2066,11 @@ use checked native arithmetic. Parsed JSON uses the existing byte-aware
 profile; original encodings and successful verifier stdout hashes are preserved.
 These native resource/encoding boundaries are not a full Python-domain claim.
 
-Only the inherited `PATH`, `HOME`, `USER`, `LOGNAME`, `GH_TOKEN`, `GITHUB_TOKEN`
-and `XDG_CONFIG_HOME` reach the verifier, with `LC_ALL=C`. Use the controller's
+Only the inherited `PATH`, `HOME`, `USER`, `LOGNAME`, `GH_TOKEN`, `GITHUB_TOKEN`,
+`GH_CONFIG_DIR` and `XDG_CONFIG_HOME` reach the verifier, with `LC_ALL=C`.
+The selected GitHub configuration directory remains part of the mature `gh`
+authentication keeper; export its intended value before invoking the controller.
+It is passed only to GitHub CLI roles, never to curl. Use the controller's
 trusted maintained `gh` installation and configuration. Proxy/tracing/SSH
 variables are omitted, credentials never enter arguments or public output, and
 no candidate value selects a command or flag. The tool and original file
@@ -2112,9 +2116,14 @@ Ops three-subject contracts remain unchanged.
 `build/verify-release.py`: select an explicitly pinned release through fresh
 GitHub API observations, download and extract it or reverify a supplied cache,
 then run the four maintained cryptographic verifiers. It returns the local
-directory and two verified file digests before contacting a deployment host. The Python
-reference and existing deployment/Ansible callers retain their operational
-roles; this command introduces no installer, signing or host callsite switch.
+directory and two verified file digests before contacting a deployment host.
+The default `xtask release verify` entry point delegates directly to this same
+synchronous Ops library operation before the ordinary xtask router creates a
+Tokio runtime or looks up a repository root. It adds no
+second parser, nested Cargo command, dependency or verifier implementation.
+The routine Rust deployment frontend selects it for controller-side application
+verification; Python fetching, receiving, host staging, explicit force and other
+documented keeper roles remain unchanged.
 
 ```sh
 target/release/simplestchat-ops release verify \
@@ -2133,6 +2142,16 @@ Cached mode still fetches current artifact/workflow metadata and runs all four
 verifiers; it requests no token or download grant and does not resolve curl.
 Neither mode accepts a stored success receipt or caller-supplied API envelope
 as evidence of a fresh selection.
+
+The routine Ansible caller opts into native verification with the strict boolean
+`scpub_release_native_verification`. Omission means false and retains the Python
+reference route; the Rust deployment frontend supplies true. Native mode requires
+trusted absolute controller/GitHub CLI paths and uses 600 seconds including a
+60-second final reserve, inside the existing 660-second Ansible guard. A distinct
+native result is normalized into the existing downstream verification variable
+only after actual success. Refusal stops before host preflight; it never retries
+through Python. The [operator contract](ansible/RELEASES.md#direct-typed-ansible-deployment)
+records the exact inputs and retained stage-only behavior.
 
 The public selectors are the repository, lowercase 40-character revision and
 positive artifact/CI identifiers below `2^53`. Every full flag occurs once;
@@ -2213,7 +2232,10 @@ API and 15 seconds for the blob, plus the original 20/240-second role windows.
 It imposes no minimum throughput or pipe-progress watchdog. A quiet blob gap
 longer than 15 seconds can therefore remain valid here if the complete transfer
 fits its whole window, while the reference would refuse it. This is a scoped
-timing difference that must be reviewed before a caller switch. A pipe timer
+timing difference accepted for the routine native verification caller. The
+platform CA store and HTTP framing profile are also retained explicitly rather
+than claimed identical to Python. No transfer, verifier or caller limit is
+increased. A pipe timer
 would measure curl buffering rather than socket activity; a different HTTP
 adapter would require its own TLS, cancellation and resource-lifetime evidence.
 

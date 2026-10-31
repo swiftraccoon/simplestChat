@@ -5,6 +5,7 @@
 //! exit with the status the shell helpers they replaced reported.
 
 use anyhow::{Context, Result, bail};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -32,6 +33,7 @@ Commands:
   run           Build and run the local UI; --skip-web reuses web/dist.
   release       Select signed application and Ops artifacts, deploy once and verify HTTPS;
                 prepared routine host only; see `release deploy --help`.
+                `release verify --help` checks explicit signed application inputs without a host.
   public-smoke  Check an explicitly authorized HTTPS origin; writes ONE PUBLIC TEST MESSAGE.
                 Requires --features public-smoke; private summary only; see public-smoke --help.
   ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
@@ -144,6 +146,12 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
 }
 
 fn main() -> ExitCode {
+    let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if arguments.len() >= 2 && arguments[0] == "release" && arguments[1] == "verify" {
+        // The Ops entry owns its runtime and original completion signals.
+        // Forward native path arguments before the existing UTF-8 router.
+        return simplestchat_ops::release::verify::run(&arguments[2..]);
+    }
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match run(&arguments) {
         Ok(code) => code,

@@ -26,6 +26,7 @@ pub(in crate::release::attestation) fn restricted(
                 "LOGNAME",
                 "GH_TOKEN",
                 "GITHUB_TOKEN",
+                "GH_CONFIG_DIR",
                 "XDG_CONFIG_HOME",
             ]
             .iter()

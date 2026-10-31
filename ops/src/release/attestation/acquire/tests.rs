@@ -62,6 +62,83 @@ fn whole_fresh_and_cached_paths_keep_secrets_and_curl_in_their_original_roles() 
         assert_eq!(attempts.unwrap().len(), usize::from(!cached));
     }
 }
+
+#[test]
+fn custom_gh_config_reaches_each_gh_role_without_curl_or_output_leaks() {
+    for cached in [false, true] {
+        let fixture = fixture::Fixture::new();
+        let config = fixture.home.join("PRIVATE-GH-CONFIG-SENTINEL");
+        fs::create_dir(&config).unwrap();
+        let gh = String::from_utf8(fs::read(fixture.bin.join("gh")).unwrap()).unwrap();
+        fixture::write(
+            &fixture.bin.join("gh"),
+            gh.replacen(
+                "#!/bin/sh\n",
+                concat!(
+                    "#!/bin/sh\n",
+                    "[ \"${GH_CONFIG_DIR-}\" = \"$HOME/PRIVATE-GH-CONFIG-SENTINEL\" ] || exit 96\n",
+                    "[ \"${GH_TOKEN+x}${GITHUB_TOKEN+x}\" = '' ] || exit 97\n"
+                ),
+                1,
+            )
+            .as_bytes(),
+            0o700,
+        )
+        .unwrap();
+        let curl = String::from_utf8(fs::read(fixture.bin.join("curl")).unwrap()).unwrap();
+        fixture::write(
+            &fixture.bin.join("curl"),
+            curl.replacen(
+                "#!/bin/sh\n",
+                "#!/bin/sh\n[ \"${GH_CONFIG_DIR+x}\" = '' ] || exit 98\n",
+                1,
+            )
+            .as_bytes(),
+            0o700,
+        )
+        .unwrap();
+        if cached {
+            fs::remove_file(fixture.bin.join("curl")).unwrap();
+        }
+        let mut environment = fixture.environment();
+        environment.remove(OsStr::new("GH_TOKEN"));
+        environment.remove(OsStr::new("GITHUB_TOKEN"));
+        environment.insert("GH_CONFIG_DIR".into(), config.as_os_str().to_owned());
+        let mut options = options(&fixture, cached);
+        options.environment = Some(environment);
+        let before = fixture.snapshot().unwrap();
+        let runtime = runtime();
+        let (result, cause, closes) = runtime.block_on(async {
+            let mut owner = owner();
+            files::start_probe(None);
+            let result = execute(&options, &mut owner).await;
+            (result, owner.error(), files::take_probe())
+        });
+        drop(runtime);
+        let after = fixture.snapshot().unwrap();
+        let argv = String::from_utf8(fixture.read("argv").unwrap()).unwrap();
+        let attempts = fixture.attempts().unwrap();
+        let config_text = config.to_string_lossy().into_owned();
+        drop(fixture);
+        assert_eq!(cause, None, "fixed operation phase {}", LAST_PHASE.get());
+        assert!(closes.0 > 0 && closes.1 == 0);
+        assert_eq!(before, after);
+        assert_eq!(argv.matches("--call--").count(), if cached { 6 } else { 7 });
+        assert_eq!(argv.matches("\napi\n").count(), 2);
+        assert_eq!(argv.matches("\nattestation\nverify\n").count(), 4);
+        assert_eq!(argv.contains("auth\ntoken"), !cached);
+        assert_eq!(attempts.len(), usize::from(!cached));
+        let bytes = result.unwrap();
+        let result: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(result.as_object().unwrap().len(), 4);
+        let output = String::from_utf8(bytes).unwrap();
+        for private in [config_text.as_str(), "INERT_TOKEN"] {
+            assert!(!output.contains(private));
+            assert!(!argv.contains(private));
+        }
+    }
+}
+
 #[test]
 fn grant_and_raw_headers_preserve_reference_values_without_httparse_trimming() {
     let runtime = runtime();

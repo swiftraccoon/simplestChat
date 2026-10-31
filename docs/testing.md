@@ -438,13 +438,16 @@ The shared `ci automation --checks` command preserves quality, syntax and
 standalone Ops checks. Its complete suite uses two current discovery children
 plus one frozen maintenance-class child. Disjoint module selectors come from
 the sorted, alternating flat inventory. The unchanged release-playbook module
-has twelve tests: eight unaffected release cases and one public-selection case
-run against current YAML. Its two old Python-deploy/flat-task assertions and one
-legacy maintenance case run unchanged against explicitly byte-pinned old YAML
-in a private runtime copy. Exact method selectors keep the current and historical
+has twelve tests: seven unaffected release cases and one public-selection case
+run against current YAML. Its three old Python-verifier/deploy/flat-task
+assertions and one legacy maintenance case run unchanged against explicitly
+byte-pinned old YAML in a private runtime copy. Exact method selectors keep the current and historical
 sets disjoint. No Python source, loader, process role or additional deadline is
 added. Current native routine and maintenance caller policy is checked by Rust
 YAML contract and mutation tests, including their actual shared delivery import.
+The verifier branch requires an explicit strict boolean, unchanged outer guard,
+separate native registration and success-only normalization before remote work.
+Every Python test ID remains in exactly one current or historical owner.
 The module's full content pin prevents future methods from being silently omitted.
 
 With inherited `DISPOSABLE_TEST_DATABASE=1`, there is one current discovery
@@ -1627,8 +1630,10 @@ seam was qualified at `94a84694`.
 Parser, selector, inventory, file and owned-process tests for the complete Rust
 frontend use pure policy, actual private files and inert selected processes.
 They do not establish live GitHub/cryptographic/SSH behavior or production
-deployment. Hosted CI and actual frontend/host/public qualification remain
-pending; prior seam proof does not qualify that new composition.
+deployment. The preceding frontend qualified at `66219eaa` with Python application
+verification. Hosted CI and actual authentication/frontend/host/public
+qualification of the new native-verification caller remain pending; that earlier
+success does not exercise the new branch.
 Publication remains inside the original bounded runtime and signal owner.
 Saved `outcome.json` and `candidatePassed` describe pre-close observations;
 complete positive stdout can still precede runtime, mask or unregister failure.
@@ -2888,6 +2893,16 @@ cargo test --locked -p simplestchat-ops --lib release::attestation::acquire::
 cargo test --locked -p simplestchat-ops --test release_fresh_verify_cli
 ```
 
+The routine deployment frontend now selects the same operation through the thin
+default `xtask release verify` bridge. This dispatch is synchronous before Tokio;
+it adds neither nested Cargo nor another verification implementation. Ansible
+native mode uses N600/M60 inside its unchanged 660-second guard and runs before
+remote preflight, including check mode. Omission selects the frozen Python
+reference; wrong boolean types refuse. Native failure stops the operation without
+fallback. Current Rust mutation contracts and offline Ansible cases must check
+both branches, skipped-result isolation, exact arguments and failure ordering;
+their execution is separate from actual cryptographic and deployment proof.
+
 These checks own inert local GH/curl fixtures, actual pipes and process groups,
 signals, retained files, output faults and cleanup. Lifecycle/umask assertions
 run in an owned exact subprocess rather than changing the unit-test process's
@@ -2937,7 +2952,9 @@ Prove completion before constructing Receiver/SSH or contacting the deployment
 host. An API-shaped fixture, copied metadata, source-built binary or successful
 compiler check alone does not establish authenticated distribution or bootstrap
 on a different target. Existing Python callers remain available until that
-separate migration is complete.
+separate migration is complete. The native curl CA/framing profile and the
+read-idle timing difference below are accepted for the routine native caller;
+their documented resource/deadline bounds remain unchanged.
 
 On 2026-10-24, a source-built Darwin executable freshly acquired and verified
 signed artifact `12559686976` from successful CI run `40091336563` at
@@ -2949,6 +2966,25 @@ two current API calls and four distinct signature verifications; cached mode
 succeeded with curl unavailable and requested no token or grant. This is real
 platform transport and authentication evidence, separate from authenticated
 binary distribution, Linux musl execution and deployment-host integration.
+
+Those GH 2.103.0 measurements are historical primitive evidence. Before the
+`GH_CONFIG_DIR` preservation fix, fresh and cached verification with the caller's
+selected GH 2.102.0 subsequently both exited zero
+on 2026-10-31 UTC: cached 21.30 seconds with curl excluded from `PATH`, fresh
+150.07 seconds under N600/M60, with all eleven new originals equal to the cache
+and exact four-key result/hash joins. That probe bound the pre-fix source-built
+Ops executable and selected signed inputs. It does
+not qualify the configuration-preservation fix or the changed routine Ansible path.
+The corrected bridge was subsequently rebuilt before credentials and verified
+the same signed inputs with the selected GH and a separate `GH_CONFIG_DIR`:
+cached exit zero in 20.14 seconds without curl on `PATH`, fresh exit zero in
+138.39 seconds, both N600/M60 with all eleven original bytes and four-key results
+joined. Nineteen offline Ansible cases and all 2108 unique frozen Python test IDs
+completed with their expected results and existing skips. Actual current-head
+deployment qualification remains pending; different signed Ops executable bytes
+require fresh authenticated component proof before a host caller switch.
+The preceding complete frontend qualified at `66219eaa` before this verifier
+caller change; its success does not exercise the newly selected native branch.
 
 ## SSH release fetch checks
 

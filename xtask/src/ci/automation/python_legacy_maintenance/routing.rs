@@ -23,7 +23,7 @@ const RELEASE_METHODS: [&str; 10] = [
     "test_real_ansible_lookup_preserves_source_bytes_and_selects_complete_helper_sets",
     "test_real_compose_preview_and_installed_selection_change_only_images_and_image_metadata",
 ];
-const RELEASE_LEGACY: [&str; 2] = [RELEASE_METHODS[3], RELEASE_METHODS[4]];
+const RELEASE_LEGACY: [&str; 3] = [RELEASE_METHODS[3], RELEASE_METHODS[4], RELEASE_METHODS[5]];
 pub(super) const FROZEN_MODULE_BYTES: usize = 30653;
 pub(super) const FROZEN_MODULE_SHA256: &str =
     "da212cc2a423f6b5c8026f76ce52dc5057434c1bc0af989fdb1a458166799272";
@@ -310,6 +310,8 @@ mod tests {
             OLD_RELEASE_SHA256
         ));
         let legacy = legacy_arguments();
+        assert_eq!(RELEASE_LEGACY.len(), 3);
+        assert_eq!(RELEASE_METHODS.len() - RELEASE_LEGACY.len(), 7);
         for method in RELEASE_METHODS {
             let full = OsString::from(format!("{MODULE}.ReleasePlaybookTests.{method}"));
             assert_eq!(legacy.contains(&full), RELEASE_LEGACY.contains(&method));

@@ -526,6 +526,7 @@ fn variables(
         "scpub_release_artifact_id":app.id.get(),
         "scpub_release_expected_revision":revision.as_str(),
         "scpub_release_ci_run":run.id.get(),"scpub_release_deploy":true,
+        "scpub_release_native_verification":true,
         "scpub_release_prepared":!options.install_helpers,
         "scpub_release_quiet_seconds":options.quiet_seconds,
         "scpub_ops_xtask":tools.xtask_path()?,"scpub_ops_gh_executable":tools.gh_path()?,
