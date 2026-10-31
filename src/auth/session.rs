@@ -14,6 +14,9 @@ const ENCODED_REFRESH_SECRET_LEN: usize = 43;
 // Permit an immediately concurrent request to lose the rotation race without
 // treating it as theft. It receives no token and cannot extend this window.
 pub(crate) const CONCURRENT_REFRESH_GRACE_SECONDS: i64 = 2;
+/// Days after sign-in when a session ends, however often it refreshes: a
+/// refresh keeps it for seven more days, never past this point.
+pub(crate) const SESSION_ABSOLUTE_LIFETIME_DAYS: i64 = 30;
 
 pub(crate) struct RefreshToken {
     pub(crate) raw: String,
@@ -175,6 +178,25 @@ where
     .map_err(crate::auth::routes::database_error)
 }
 
+/// Rotates the refresh session `raw_token` belongs to inside the caller's
+/// transaction, taking the account row lock before the session row lock.
+///
+/// The current token gives way to a successor of the same family, and the
+/// session then expires seven days from now but never later than
+/// `SESSION_ABSOLUTE_LIFETIME_DAYS` after sign-in (`Rotated`). The immediate
+/// predecessor presented within `CONCURRENT_REFRESH_GRACE_SECONDS` of its
+/// rotation is refused without revoking anything (`ConcurrentRequest`); any
+/// other token of a live family deletes that session (`ReuseDetected`). Every
+/// outcome takes effect only when the caller commits.
+///
+/// # Errors
+/// Returns `AuthError::InvalidToken`, changing no row, for a malformed, unknown
+/// or expired token, a token whose family does not match its session, a session
+/// whose account no longer exists, and a session signed in more than
+/// `SESSION_ABSOLUTE_LIFETIME_DAYS` ago. Returns the `AuthError::DatabaseError`
+/// built by `routes::database_error` when a query fails, and an
+/// `AuthError::DatabaseError` when the system random generator cannot mint the
+/// successor.
 pub(crate) async fn rotate_refresh_token_with(
     transaction: &mut Transaction<'_, Postgres>,
     raw_token: &str,
@@ -237,22 +259,32 @@ pub(crate) async fn rotate_refresh_token_with(
         }
 
         let successor = build_refresh_token(&family_secret)?;
-        sqlx::query(
+        // A session signed in more than `SESSION_ABSOLUTE_LIFETIME_DAYS` ago
+        // rotates nothing and is refused like an expired one.
+        let rotated = sqlx::query(
             "UPDATE sessions
              SET refresh_token_hash = $1,
                  refresh_token_family_hash = $2,
                  previous_refresh_token_hash = $3,
                  refresh_token_rotated_at = clock_timestamp(),
-                 expires_at = clock_timestamp() + interval '7 days'
-             WHERE id = $4",
+                 expires_at = LEAST(
+                     clock_timestamp() + interval '7 days',
+                     created_at + make_interval(days => $5::integer)
+                 )
+             WHERE id = $4
+               AND created_at + make_interval(days => $5::integer) > clock_timestamp()",
         )
         .bind(&successor.token_hash)
         .bind(&successor.family_hash)
         .bind(&token_hash)
         .bind(session_id)
+        .bind(SESSION_ABSOLUTE_LIFETIME_DAYS)
         .execute(&mut **transaction)
         .await
         .map_err(crate::auth::routes::database_error)?;
+        if rotated.rows_affected() == 0 {
+            return Err(AuthError::InvalidToken);
+        }
 
         return Ok(RefreshRotation::Rotated {
             user_id: candidate_user_id,

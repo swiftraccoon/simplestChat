@@ -67,6 +67,41 @@ async fn rotate_and_commit(pool: &PgPool, raw_token: &str) -> Result<RefreshRota
     Ok(outcome)
 }
 
+/// The migrated disposable database the ignored tests require.
+async fn pool() -> PgPool {
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+        .await
+        .unwrap()
+}
+
+/// A new account with a unique address; `delete_accounts` removes it.
+async fn account(pool: &PgPool, display_name: &str) -> Uuid {
+    sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")
+        .bind(format!("session-{}@example.test", Uuid::new_v4()))
+        .bind(display_name)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// A committed sign-in: the session's first refresh token and its id.
+async fn new_session(pool: &PgPool, user_id: Uuid) -> (RefreshToken, Uuid) {
+    let refresh = generate_refresh_token().unwrap();
+    let session = create_session(pool, &user_id, &refresh).await.unwrap();
+    (refresh, session)
+}
+
+/// Remove test accounts; their sessions cascade.
+async fn delete_accounts(pool: &PgPool, user_ids: &[Uuid]) {
+    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
+        .bind(user_ids)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 #[test]
 fn generated_tokens_are_high_entropy_opaque_and_hash_only() {
     let first = generate_refresh_token().unwrap();
@@ -128,9 +163,7 @@ fn unsupported_or_malformed_tokens_have_no_family_capability() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_current_session_migration_preserves_accounts_and_requires_families() {
-    let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
-        .await
-        .unwrap();
+    let pool = pool().await;
     let mut transaction = pool.begin().await.unwrap();
     // Shadow the current schema only within this rolled-back transaction.
     // The nullable fixture recreates the pre-022 invariant without changing
@@ -220,31 +253,13 @@ async fn database_current_session_migration_preserves_accounts_and_requires_fami
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_logout_retires_the_access_token_issued_with_its_session() {
     use crate::auth::jwt::{create_session_token, validate_current_claims, validate_token};
-    let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(4)
-        .connect(&database_url)
-        .await
-        .unwrap();
-    let user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name)
-             VALUES ($1, 'logout test') RETURNING id",
-    )
-    .bind(format!("logout-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let pool = pool().await;
+    let user_id = account(&pool, "logout test").await;
     let secret =
         crate::auth::jwt::JwtSecret::from("logout-revocation-test-secret-with-enough-bytes");
     let mut sessions = Vec::new();
     for _ in 0..2 {
-        let refresh = generate_refresh_token().unwrap();
-        let mut transaction = pool.begin().await.unwrap();
-        let session = create_session_with(&mut transaction, &user_id, &refresh)
-            .await
-            .unwrap();
-        transaction.commit().await.unwrap();
-        sessions.push((refresh, session));
+        sessions.push(new_session(&pool, user_id).await);
     }
     let subject = user_id.to_string();
     let token = |session: Uuid| {
@@ -274,13 +289,7 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
             .await
             .is_err()
     );
-    let other_user: Uuid = sqlx::query_scalar(
-        "INSERT INTO users(email,display_name) VALUES($1,'Other account') RETURNING id",
-    )
-    .bind(format!("session-owner-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let other_user = account(&pool, "Other account").await;
     let mut wrong_account = second.clone();
     wrong_account.sub = other_user.to_string();
     assert!(
@@ -311,34 +320,17 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
         validate_current_claims(&pool, &second).await.is_err(),
         "an expired session cannot authorize an unexpired JWT"
     );
-    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind(&[user_id, other_user][..])
-        .execute(&pool)
-        .await
-        .unwrap();
+    delete_accounts(&pool, &[user_id, other_user]).await;
 }
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_rotation_replay_grace_and_session_cap() {
-    let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(8)
-        .connect(&database_url)
-        .await
-        .unwrap();
+    let pool = pool().await;
 
-    let cap_user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name)
-             VALUES ($1, 'cap test') RETURNING id",
-    )
-    .bind(format!("cap-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cap_user_id = account(&pool, "cap test").await;
     for _ in 0..=MAX_ACTIVE_SESSIONS_PER_USER {
-        let token = generate_refresh_token().unwrap();
-        create_session(&pool, &cap_user_id, &token).await.unwrap();
+        new_session(&pool, cap_user_id).await;
     }
     let capped_count: i64 = sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id = $1")
         .bind(cap_user_id)
@@ -347,18 +339,8 @@ async fn database_rotation_replay_grace_and_session_cap() {
         .unwrap();
     assert_eq!(capped_count, MAX_ACTIVE_SESSIONS_PER_USER);
 
-    let replay_user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name)
-             VALUES ($1, 'replay test') RETURNING id",
-    )
-    .bind(format!("replay-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let predecessor = generate_refresh_token().unwrap();
-    create_session(&pool, &replay_user_id, &predecessor)
-        .await
-        .unwrap();
+    let replay_user_id = account(&pool, "replay test").await;
+    let (predecessor, _) = new_session(&pool, replay_user_id).await;
 
     // Two requests racing with the same bearer serialize: one rotates and
     // one is rejected under grace without authenticating or revoking.
@@ -416,18 +398,8 @@ async fn database_rotation_replay_grace_and_session_cap() {
 
     // Grace applies only to the immediate predecessor. An older consumed
     // token revokes the family even when the latest rotation was recent.
-    let older_user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name)
-             VALUES ($1, 'older replay test') RETURNING id",
-    )
-    .bind(format!("older-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let oldest = generate_refresh_token().unwrap();
-    create_session(&pool, &older_user_id, &oldest)
-        .await
-        .unwrap();
+    let older_user_id = account(&pool, "older replay test").await;
+    let (oldest, _) = new_session(&pool, older_user_id).await;
     let middle = match rotate_and_commit(&pool, &oldest.raw).await.unwrap() {
         RefreshRotation::Rotated { refresh_token, .. } => refresh_token,
         _ => panic!("oldest token did not rotate"),
@@ -442,18 +414,8 @@ async fn database_rotation_replay_grace_and_session_cap() {
     ));
 
     // A random token cannot identify or revoke an unrelated family.
-    let oracle_user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name)
-             VALUES ($1, 'oracle test') RETURNING id",
-    )
-    .bind(format!("oracle-{}@example.test", Uuid::new_v4()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let current = generate_refresh_token().unwrap();
-    create_session(&pool, &oracle_user_id, &current)
-        .await
-        .unwrap();
+    let oracle_user_id = account(&pool, "oracle test").await;
+    new_session(&pool, oracle_user_id).await;
     let random = generate_refresh_token().unwrap();
     assert!(matches!(
         rotate_and_commit(&pool, &random.raw).await,
@@ -466,9 +428,108 @@ async fn database_rotation_replay_grace_and_session_cap() {
         .unwrap();
     assert_eq!(oracle_count, 1);
 
-    sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-        .bind(&[cap_user_id, replay_user_id, older_user_id, oracle_user_id][..])
-        .execute(&pool)
+    delete_accounts(
+        &pool,
+        &[cap_user_id, replay_user_id, older_user_id, oracle_user_id],
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn database_refresh_is_refused_after_the_absolute_lifetime() {
+    let pool = pool().await;
+    let user_id = account(&pool, "lifetime test").await;
+    let (refresh, session_id) = new_session(&pool, user_id).await;
+    // Signed in 31 days ago yet unexpired, as the uncapped sliding window allowed.
+    sqlx::query(
+        "UPDATE sessions
+         SET created_at = clock_timestamp() - interval '31 days',
+             expires_at = clock_timestamp() + interval '6 days'
+         WHERE id = $1",
+    )
+    .bind(session_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            rotate_and_commit(&pool, &refresh.raw).await,
+            Err(AuthError::InvalidToken)
+        ),
+        "a session signed in more than 30 days ago is refused like an expired one"
+    );
+    delete_accounts(&pool, &[user_id]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn database_refresh_expiry_is_capped_at_the_absolute_lifetime() {
+    let pool = pool().await;
+    let user_id = account(&pool, "lifetime cap test").await;
+    let (refresh, session_id) = new_session(&pool, user_id).await;
+    sqlx::query(
+        "UPDATE sessions SET created_at = clock_timestamp() - interval '29 days' WHERE id = $1",
+    )
+    .bind(session_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            rotate_and_commit(&pool, &refresh.raw).await.unwrap(),
+            RefreshRotation::Rotated { .. }
+        ),
+        "a session signed in 29 days ago still rotates"
+    );
+    let (expires_at, cap): (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) =
+        sqlx::query_as(
+            "SELECT expires_at, created_at + interval '30 days' FROM sessions WHERE id = $1",
+        )
+        .bind(session_id)
+        .fetch_one(&pool)
         .await
         .unwrap();
+    assert_eq!(
+        expires_at.timestamp(),
+        cap.timestamp(),
+        "a refresh never extends a session past 30 days after sign-in"
+    );
+    delete_accounts(&pool, &[user_id]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn database_refresh_keeps_a_young_session_seven_more_days() {
+    let pool = pool().await;
+    let user_id = account(&pool, "lifetime young test").await;
+    let (refresh, session_id) = new_session(&pool, user_id).await;
+    assert!(
+        matches!(
+            rotate_and_commit(&pool, &refresh.raw).await.unwrap(),
+            RefreshRotation::Rotated { .. }
+        ),
+        "a fresh session rotates"
+    );
+    let (extension, seven_days, before_cap): (String, bool, bool) = sqlx::query_as(
+        "SELECT (expires_at - refresh_token_rotated_at)::text,
+                expires_at - refresh_token_rotated_at
+                    BETWEEN interval '7 days' - interval '1 second'
+                        AND interval '7 days' + interval '1 second',
+                expires_at < created_at + interval '30 days'
+         FROM sessions WHERE id = $1",
+    )
+    .bind(session_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        seven_days,
+        "a refresh keeps a young session seven more days, not {extension}"
+    );
+    assert!(
+        before_cap,
+        "a young session's refreshed expiry stays before its 30-day cap"
+    );
+    delete_accounts(&pool, &[user_id]).await;
 }

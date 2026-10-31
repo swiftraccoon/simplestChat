@@ -447,7 +447,9 @@ and [development](development.md) for native build requirements.
 - Access tokens are bound to the refresh session they were issued with, so
   logging that session out retires them: HTTP requests fail on the next call and
   authenticated sockets within their revalidation interval (about 5 s). A logout
-  affects only its own session; other devices stay signed in. Refresh-token replay outside the multi-tab race
+  affects only its own session; other devices stay signed in. Each refresh keeps
+  a session for seven more days but never past 30 days after sign-in, when that
+  device must sign in again. Refresh-token replay outside the multi-tab race
   window revokes the token family. Password changes and saved-key recovery revoke
   existing tokens and active account connections. Ordinary logout relies on
   the socket revalidation interval rather than an immediate disconnect broadcast.
