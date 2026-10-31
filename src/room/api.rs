@@ -392,7 +392,7 @@ pub(crate) async fn create_room(
     if let Err(message) = settings::validate_create_request(&req) {
         return Err((StatusCode::BAD_REQUEST, message).into_response().into());
     }
-    let password_hash = match req.password.clone() {
+    let password_hash = match &req.password {
         Some(password) => Some(
             server
                 .room_manager()

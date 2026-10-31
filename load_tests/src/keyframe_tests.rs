@@ -114,7 +114,7 @@ impl Fixture {
             .await
             .create_send_transport(
                 send.id.to_string(),
-                send.ice_parameters,
+                send.ice_parameters.into_inner(),
                 send.ice_candidates,
                 send.dtls_parameters,
             )
@@ -144,7 +144,7 @@ impl Fixture {
             .await
             .create_recv_transport(
                 receive.id.to_string(),
-                receive.ice_parameters,
+                receive.ice_parameters.into_inner(),
                 receive.ice_candidates,
                 receive.dtls_parameters,
             )

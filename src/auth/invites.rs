@@ -4,6 +4,7 @@
 
 use super::{account::authenticated_claims, routes, types::AuthError};
 use crate::invite_codes;
+use crate::secret::SecretString;
 use crate::signaling::SignalingServer;
 use axum::{
     Json,
@@ -32,7 +33,7 @@ pub(crate) struct RegistrationInvite {
 pub(crate) struct CreatedRegistrationInvite {
     #[serde(flatten)]
     pub details: RegistrationInvite,
-    pub code: String,
+    pub code: SecretString,
 }
 
 async fn live_invites(pool: &PgPool, user: Uuid) -> Result<Vec<RegistrationInvite>, sqlx::Error> {
@@ -129,7 +130,7 @@ pub(crate) async fn create(
         routes::no_store_headers(),
         Json(CreatedRegistrationInvite {
             details: invite,
-            code,
+            code: code.into(),
         }),
     ))
 }

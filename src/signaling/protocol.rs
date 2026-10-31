@@ -116,6 +116,37 @@ impl std::fmt::Debug for AuthenticationToken {
     }
 }
 
+/// A transport's ICE parameters from where mediasoup hands them to the media layer
+/// (`TransportInfo`, an ICE restart) to the wire. The password authenticates the
+/// connectivity checks, so debug output shows only the username fragment and ICE Lite.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct IceCredentials(IceParameters);
+
+impl IceCredentials {
+    /// The parameters, password included, for a client's ICE agent.
+    pub fn into_inner(self) -> IceParameters {
+        self.0
+    }
+}
+
+impl From<IceParameters> for IceCredentials {
+    fn from(parameters: IceParameters) -> Self {
+        Self(parameters)
+    }
+}
+
+impl std::fmt::Debug for IceCredentials {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("IceCredentials")
+            .field("username_fragment", &self.0.username_fragment)
+            .field("password", &format_args!("[REDACTED]"))
+            .field("ice_lite", &self.0.ice_lite)
+            .finish()
+    }
+}
+
 /// Client-to-Server messages
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
@@ -483,7 +514,7 @@ pub enum ServerMessage {
     /// Transport created
     TransportCreated {
         transport_id: TransportId,
-        ice_parameters: IceParameters,
+        ice_parameters: IceCredentials,
         ice_candidates: Vec<IceCandidate>,
         dtls_parameters: DtlsParameters,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -562,7 +593,7 @@ pub enum ServerMessage {
     /// the ones minted at transport creation expire after `TURN_TTL`.
     IceRestarted {
         transport_id: TransportId,
-        ice_parameters: IceParameters,
+        ice_parameters: IceCredentials,
         ice_servers: Vec<IceServer>,
     },
     /// Connection quality stats
@@ -997,7 +1028,7 @@ pub enum SocialResponse {
         message: ChatEntry,
     },
     GetAttachmentAccess {
-        token: String,
+        token: SecretString,
         expires_at: DateTime<Utc>,
     },
     GetPinnedMessages {
@@ -1418,8 +1449,10 @@ mod tests {
         assert_eq!(wire["type"], "iceRestarted");
         assert_eq!(wire["transportId"], "00000000-0000-4000-8000-00000000c0de");
         assert_eq!(wire["iceParameters"]["usernameFragment"], "u");
+        assert_eq!(wire["iceParameters"]["password"], "p");
         assert_eq!(wire["iceServers"][0]["urls"][0], "turn:relay.example:3478");
         assert_eq!(wire["iceServers"][0]["username"], "1700000000:credential");
+        assert_eq!(wire["iceServers"][0]["credential"], "mac");
     }
 
     #[test]

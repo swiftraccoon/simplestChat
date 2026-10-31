@@ -29,7 +29,7 @@ fn boundary_properties_ticket_validity_requires_both_deadlines_and_exactly_one_u
                 assert_eq!(issued.expires_in, remaining.min(30));
                 let at = now + Duration::from_millis(monotonic_ms);
                 let epoch = EPOCH.checked_add_signed(wall_delta).unwrap();
-                let actual = store.take_at(&issued.ticket, at, epoch);
+                let actual = store.take_at(issued.ticket.expose_secret(), at, epoch);
                 let expected = monotonic_ms < remaining.min(30) * 1000 && epoch < EPOCH + remaining;
                 assert_eq!(
                     actual.is_ok(),
@@ -41,7 +41,11 @@ fn boundary_properties_ticket_validity_requires_both_deadlines_and_exactly_one_u
                     assert_eq!(ticket.claims.sid, uuid::Uuid::from_u128(1));
                 }
                 assert!(store.entries.lock().is_empty());
-                assert!(store.take_at(&issued.ticket, at, epoch).is_err());
+                assert!(
+                    store
+                        .take_at(issued.ticket.expose_secret(), at, epoch)
+                        .is_err()
+                );
             }
         }
     }

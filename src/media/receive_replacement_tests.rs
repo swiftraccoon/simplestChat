@@ -370,3 +370,37 @@ async fn receive_replacement_rejects_wrong_resource_and_failed_candidate_without
     );
     f.finish().await;
 }
+
+/// The ICE password a worker hands over stays out of debug output from the media
+/// layer on, both in a new transport's description and after an ICE restart.
+#[tokio::test]
+async fn transport_info_and_ice_restarts_redact_the_ice_password() {
+    let f = Fixture::new().await;
+    let (sent, received) = f.member("redacted").await;
+    let restarted = f.manager.restart_ice("redacted", sent.id).await.unwrap();
+    for (debug, parameters) in [
+        (
+            format!("{sent:?}"),
+            sent.ice_parameters.clone().into_inner(),
+        ),
+        (
+            format!("{received:?}"),
+            received.ice_parameters.clone().into_inner(),
+        ),
+        (format!("{restarted:?}"), restarted.clone().into_inner()),
+    ] {
+        assert!(
+            debug.contains("REDACTED"),
+            "debug output does not mark the ICE password as redacted"
+        );
+        assert!(
+            !debug.contains(&parameters.password),
+            "debug output shows the ICE password"
+        );
+        assert!(
+            debug.contains(&parameters.username_fragment),
+            "debug output no longer shows the username fragment"
+        );
+    }
+    f.finish().await;
+}

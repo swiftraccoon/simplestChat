@@ -200,27 +200,29 @@ async fn enforce_user_capacity(
     Ok(())
 }
 
+/// Hashes an account password on the blocking pool; the secret is exposed only inside that job.
 pub(super) async fn hash_password_async(
-    password_value: String,
+    password_value: crate::secret::SecretString,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> Result<String, AuthError> {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        password::hash_account_password(&password_value)
+        password::hash_account_password(password_value.expose_secret())
     })
     .await
     .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
     .map_err(|error| AuthError::DatabaseError(format!("Hash error: {error}")))
 }
 
+/// Checks an account password against a hash on the blocking pool, exposing it only in that job.
 pub(super) async fn verify_password_async(
-    password_value: String,
+    password_value: crate::secret::SecretString,
     password_hash: String,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> Result<bool, AuthError> {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        password::verify_account_password(&password_value, &password_hash)
+        password::verify_account_password(password_value.expose_secret(), &password_hash)
     })
     .await
     .map_err(|error| AuthError::DatabaseError(format!("Password worker failed: {error}")))?
@@ -251,7 +253,11 @@ pub(crate) async fn register(
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     // A live invite code opens closed registration; an offered code is always
     // spent, so an inviter's allowance is not a free pass past an open door.
-    let invite_code = match req.invite_code.as_deref().map(str::trim) {
+    let invite_code = match req
+        .invite_code
+        .as_ref()
+        .map(|code| code.expose_secret().trim())
+    {
         Some(code) if !code.is_empty() => Some(
             crate::invite_codes::normalize(code)
                 .ok_or(AuthError::InvalidInput("Invalid invite code"))?,
@@ -266,7 +272,7 @@ pub(crate) async fn register(
 
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
-    validate_new_password(&req.password)?;
+    validate_new_password(req.password.expose_secret())?;
     // The taken-email answer below is the only way to learn whether an address
     // has an account here, so each address gets a few answers an hour, not more.
     if !server.allow_registration(source_ip) {
@@ -322,7 +328,7 @@ pub(crate) async fn register(
     Ok((
         refresh_cookie_headers(&refresh_token.raw),
         Json(AuthResponse {
-            token,
+            token: token.into(),
             user: UserInfo {
                 id: user_id,
                 email: row.1,
@@ -346,7 +352,7 @@ pub(crate) async fn login(
     if let Some(wait) = server.sign_in_wait(source_ip, &email) {
         return Err(AuthError::TooManyFailures(wait));
     }
-    if req.password.len() > MAX_PASSWORD_BYTES {
+    if req.password.expose_secret().len() > MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
     let _request_permit = acquire_auth_request(&server)?;
@@ -405,7 +411,7 @@ pub(crate) async fn login(
     Ok((
         refresh_cookie_headers(&refresh_token.raw),
         Json(AuthResponse {
-            token,
+            token: token.into(),
             user: UserInfo {
                 id: user_id,
                 email: row.1,
@@ -466,7 +472,7 @@ pub(crate) async fn refresh(
     Ok((
         refresh_cookie_headers(&refresh_token.raw),
         Json(AuthResponse {
-            token,
+            token: token.into(),
             user: UserInfo {
                 id: user_id_string,
                 email: row.0,
@@ -608,7 +614,7 @@ pub(crate) async fn passkey_register_finish(
     Ok((
         refresh_cookie_headers(&refresh_token.raw),
         Json(AuthResponse {
-            token,
+            token: token.into(),
             user: UserInfo {
                 id: user_id,
                 email: registration.email,
@@ -743,7 +749,7 @@ pub(crate) async fn passkey_login_finish(
     Ok((
         refresh_cookie_headers(&refresh_token.raw),
         Json(AuthResponse {
-            token,
+            token: token.into(),
             user: UserInfo {
                 id: user_id,
                 email: user.0,

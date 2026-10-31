@@ -16,6 +16,7 @@ use super::{
         ReplacementRegistration,
     },
 };
+use crate::secret::SecretString;
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{Extension, Json, extract::State, http::HeaderMap};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -29,7 +30,7 @@ use webauthn_rs::prelude::{Passkey, PublicKeyCredential, RegisterPublicKeyCreden
 
 const MAX_PASSKEYS: i64 = 10;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum PasskeyAction {
     Add {},
@@ -38,11 +39,11 @@ pub(crate) enum PasskeyAction {
     RecoveryKey {},
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct StartRequest {
     pub operation: PasskeyAction,
-    pub current_password: Option<String>,
+    pub current_password: Option<SecretString>,
 }
 
 #[derive(Deserialize)]
@@ -87,14 +88,47 @@ pub(crate) enum ActionResponse {
     ReplaceRegistration {
         ceremony_id: String,
         options: Value,
-        recovery_key: String,
+        recovery_key: SecretString,
     },
     RecoveryKey {
-        recovery_key: String,
+        recovery_key: SecretString,
     },
     Removed,
     Added,
     Replaced,
+}
+
+/// Names the variant, its ceremony and the redacted recovery key. The WebAuthn options
+/// stay out: they carry the account's email, display name and user handle.
+impl std::fmt::Debug for ActionResponse {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Authenticate { ceremony_id, .. } => formatter
+                .debug_struct("Authenticate")
+                .field("ceremony_id", ceremony_id)
+                .finish_non_exhaustive(),
+            Self::Register { ceremony_id, .. } => formatter
+                .debug_struct("Register")
+                .field("ceremony_id", ceremony_id)
+                .finish_non_exhaustive(),
+            Self::ReplaceRegistration {
+                ceremony_id,
+                recovery_key,
+                ..
+            } => formatter
+                .debug_struct("ReplaceRegistration")
+                .field("ceremony_id", ceremony_id)
+                .field("recovery_key", recovery_key)
+                .finish_non_exhaustive(),
+            Self::RecoveryKey { recovery_key } => formatter
+                .debug_struct("RecoveryKey")
+                .field("recovery_key", recovery_key)
+                .finish(),
+            Self::Removed => formatter.write_str("Removed"),
+            Self::Added => formatter.write_str("Added"),
+            Self::Replaced => formatter.write_str("Replaced"),
+        }
+    }
 }
 
 #[derive(FromRow)]
@@ -286,7 +320,9 @@ async fn apply_action(
             .execute(&mut *transaction)
             .await
             .map_err(routes::database_error)?;
-            ActionResponse::RecoveryKey { recovery_key }
+            ActionResponse::RecoveryKey {
+                recovery_key: recovery_key.into(),
+            }
         }
         PasskeyAction::Remove { id: credential } => {
             let version = remove_credential(
@@ -380,7 +416,7 @@ async fn prepare_registration(
         Some(recovery_key) => ActionResponse::ReplaceRegistration {
             ceremony_id,
             options,
-            recovery_key,
+            recovery_key: recovery_key.into(),
         },
         None => ActionResponse::Register {
             ceremony_id,

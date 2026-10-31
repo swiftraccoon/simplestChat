@@ -380,7 +380,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     let mut headers = HeaderMap::new();
     headers.insert(
         "authorization",
-        HeaderValue::from_str(&format!("Attachment {}", access.token)).unwrap(),
+        HeaderValue::from_str(&format!("Attachment {}", access.token.expose_secret())).unwrap(),
     );
     let (response, body) = download(State(server.clone()), headers.clone(), Path(file.id))
         .await
@@ -463,7 +463,11 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     let mut owner_headers = HeaderMap::new();
     owner_headers.insert(
         "authorization",
-        HeaderValue::from_str(&format!("Attachment {}", owner_access.token)).unwrap(),
+        HeaderValue::from_str(&format!(
+            "Attachment {}",
+            owner_access.token.expose_secret()
+        ))
+        .unwrap(),
     );
     manager
         .handle_social_request(
@@ -544,7 +548,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     let mut headers = HeaderMap::new();
     headers.insert(
         "authorization",
-        HeaderValue::from_str(&format!("Attachment {}", own_access.token)).unwrap(),
+        HeaderValue::from_str(&format!("Attachment {}", own_access.token.expose_secret())).unwrap(),
     );
     assert!(
         download(State(server), headers, Path(private.id))

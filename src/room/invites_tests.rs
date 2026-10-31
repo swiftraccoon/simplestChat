@@ -64,7 +64,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .await
         .unwrap()
         .unwrap();
-    assert!(invite_codes::is_valid(&invite.code));
+    assert!(invite_codes::is_valid(invite.code.expose_secret()));
     assert_eq!(
         (invite.details.role, invite.details.uses_left),
         (Role::Member, 2)
@@ -80,11 +80,11 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(stored, invite_codes::digest(&invite.code));
-    assert_ne!(stored, invite.code);
+    assert_eq!(stored, invite_codes::digest(invite.code.expose_secret()));
+    assert_ne!(stored, invite.code.expose_secret());
     for _ in 0..2 {
         assert_eq!(
-            preview_room_invite(&pool, &invite.code, alice)
+            preview_room_invite(&pool, invite.code.expose_secret(), alice)
                 .await
                 .unwrap(),
             Some((room_id.clone(), "Invited room".into(), Role::Member))
@@ -102,7 +102,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
     );
 
     // Alice becomes a member; a lost-response retry must not spend twice.
-    let (redeemed_room, name, role) = redeem_room_invite(&pool, &invite.code, alice)
+    let (redeemed_room, name, role) = redeem_room_invite(&pool, invite.code.expose_secret(), alice)
         .await
         .unwrap()
         .unwrap();
@@ -116,7 +116,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
             .unwrap(),
         Role::Member
     );
-    let repeated = redeem_room_invite(&pool, &invite.code, alice)
+    let repeated = redeem_room_invite(&pool, invite.code.expose_secret(), alice)
         .await
         .unwrap()
         .unwrap();
@@ -129,13 +129,13 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         1
     );
     // Bob is already a moderator: the code never demotes him.
-    let (_, _, role) = redeem_room_invite(&pool, &invite.code, bob)
+    let (_, _, role) = redeem_room_invite(&pool, invite.code.expose_secret(), bob)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(role, Role::Moderator);
     assert!(
-        redeem_room_invite(&pool, &invite.code, alice)
+        redeem_room_invite(&pool, invite.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_some(),
@@ -148,7 +148,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .await
         .unwrap()
         .unwrap();
-    let (_, _, role) = redeem_room_invite(&pool, &expired.code, owner)
+    let (_, _, role) = redeem_room_invite(&pool, expired.code.expose_secret(), owner)
         .await
         .unwrap()
         .unwrap();
@@ -158,12 +158,12 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .unwrap()
         .unwrap();
     sqlx::query("UPDATE invites SET expires_at = now() - interval '1 minute' WHERE code_hash = $1")
-        .bind(invite_codes::digest(&fresh.code))
+        .bind(invite_codes::digest(fresh.code.expose_secret()))
         .execute(&pool)
         .await
         .unwrap();
     assert!(
-        redeem_room_invite(&pool, &fresh.code, alice)
+        redeem_room_invite(&pool, fresh.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_none()
@@ -206,13 +206,13 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .unwrap();
     assert!(list_room_invites(&pool, &room_id).await.unwrap().is_empty());
     assert!(
-        preview_room_invite(&pool, &bobs.code, carol)
+        preview_room_invite(&pool, bobs.code.expose_secret(), carol)
             .await
             .unwrap()
             .is_none()
     );
     assert!(
-        redeem_room_invite(&pool, &bobs.code, carol)
+        redeem_room_invite(&pool, bobs.code.expose_secret(), carol)
             .await
             .unwrap()
             .is_none()
@@ -230,7 +230,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         list_room_invites(&pool, &room_id).await.unwrap()[0].uses_left,
         3
     );
-    let (_, _, role) = redeem_room_invite(&pool, &bobs.code, carol)
+    let (_, _, role) = redeem_room_invite(&pool, bobs.code.expose_secret(), carol)
         .await
         .unwrap()
         .unwrap();
@@ -252,7 +252,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .await
         .unwrap();
     assert!(
-        redeem_room_invite(&pool, &bobs.code, dave)
+        redeem_room_invite(&pool, bobs.code.expose_secret(), dave)
             .await
             .unwrap()
             .is_none()
@@ -264,8 +264,8 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .unwrap()
         .unwrap();
     let (first, second) = tokio::join!(
-        redeem_room_invite(&pool, &retry.code, alice),
-        redeem_room_invite(&pool, &retry.code, alice),
+        redeem_room_invite(&pool, retry.code.expose_secret(), alice),
+        redeem_room_invite(&pool, retry.code.expose_secret(), alice),
     );
     let first = first
         .unwrap()
@@ -273,7 +273,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
     assert_eq!(first.2, Role::Member);
     assert_eq!(Some(first), second.unwrap());
     let remaining: i32 = sqlx::query_scalar("SELECT uses_left FROM invites WHERE code_hash = $1")
-        .bind(invite_codes::digest(&retry.code))
+        .bind(invite_codes::digest(retry.code.expose_secret()))
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -286,7 +286,7 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
         .await
         .unwrap();
     assert!(
-        redeem_room_invite(&pool, &retry.code, alice)
+        redeem_room_invite(&pool, retry.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_some()
@@ -301,29 +301,29 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
     assert_eq!(roles, 0);
     // Receipt retries survive expiry for seven days; new users cannot redeem them.
     sqlx::query("UPDATE invites SET expires_at = now() - interval '1 day' WHERE code_hash = $1")
-        .bind(invite_codes::digest(&retry.code))
+        .bind(invite_codes::digest(retry.code.expose_secret()))
         .execute(&pool)
         .await
         .unwrap();
     assert!(
-        redeem_room_invite(&pool, &retry.code, alice)
+        redeem_room_invite(&pool, retry.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_some()
     );
     assert!(
-        redeem_room_invite(&pool, &retry.code, bob)
+        redeem_room_invite(&pool, retry.code.expose_secret(), bob)
             .await
             .unwrap()
             .is_none()
     );
     sqlx::query("UPDATE invites SET expires_at = now() - interval '8 days' WHERE code_hash = $1")
-        .bind(invite_codes::digest(&retry.code))
+        .bind(invite_codes::digest(retry.code.expose_secret()))
         .execute(&pool)
         .await
         .unwrap();
     assert!(
-        redeem_room_invite(&pool, &retry.code, alice)
+        redeem_room_invite(&pool, retry.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_none()
@@ -335,14 +335,14 @@ async fn database_room_invites_grant_roles_once_each_without_demoting_anyone() {
             .unwrap()
     );
     assert!(
-        redeem_room_invite(&pool, &invite.code, alice)
+        redeem_room_invite(&pool, invite.code.expose_secret(), alice)
             .await
             .unwrap()
             .is_none()
     );
     let receipts: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM invite_redemptions WHERE invite_hash = $1")
-            .bind(invite_codes::digest(&invite.code))
+            .bind(invite_codes::digest(invite.code.expose_secret()))
             .fetch_one(&pool)
             .await
             .unwrap();

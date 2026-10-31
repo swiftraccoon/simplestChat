@@ -6,6 +6,7 @@ use super::{
     account, jwt, routes,
     types::{AuthError, Claims},
 };
+use crate::secret::SecretString;
 use crate::signaling::SignalingServer;
 use crate::sync::Mutex;
 use axum::{Json, extract::State, http::HeaderMap};
@@ -41,9 +42,9 @@ pub(crate) struct TicketStore {
 #[serde(deny_unknown_fields)]
 pub(crate) struct TicketRequest {}
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub(crate) struct TicketResponse {
-    ticket: String,
+    ticket: SecretString,
     expires_in: u64,
 }
 
@@ -122,7 +123,10 @@ impl TicketStore {
                 deadline: now + Duration::from_secs(expires_in),
             },
         );
-        Ok(TicketResponse { ticket, expires_in })
+        Ok(TicketResponse {
+            ticket: ticket.into(),
+            expires_in,
+        })
     }
 
     fn take_at(&self, token: &str, now: Instant, epoch: u64) -> Result<Ticket, AuthError> {
@@ -195,7 +199,7 @@ mod tests {
         let now = Instant::now();
         let identity = claims(1000);
         let first = store.issue_at(identity.clone(), now, 1000).unwrap();
-        assert!(valid_shape(&first.ticket));
+        assert!(valid_shape(first.ticket.expose_secret()));
         assert_eq!(first.expires_in, 30);
         let mut near_expiry = identity.clone();
         near_expiry.exp = 1004;
@@ -207,18 +211,47 @@ mod tests {
         ));
         assert!(
             store
-                .take_at(&second.ticket, now + Duration::from_secs(4), 1004)
+                .take_at(
+                    second.ticket.expose_secret(),
+                    now + Duration::from_secs(4),
+                    1004
+                )
                 .is_err()
         );
         let third = store.issue_at(identity.clone(), now, 1000).unwrap();
-        let used = store.take_at(&first.ticket, now, 1000).unwrap();
+        let used = store
+            .take_at(first.ticket.expose_secret(), now, 1000)
+            .unwrap();
         assert_eq!(used.claims.sub, identity.sub);
         assert_eq!(used.claims.sid, identity.sid);
-        assert!(store.take_at(&first.ticket, now, 1000).is_err());
         assert!(
             store
-                .take_at(&third.ticket, now + Duration::from_secs(30), 1030)
+                .take_at(first.ticket.expose_secret(), now, 1000)
                 .is_err()
+        );
+        assert!(
+            store
+                .take_at(
+                    third.ticket.expose_secret(),
+                    now + Duration::from_secs(30),
+                    1030
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn issued_tickets_serialize_in_full_and_redact_their_debug_output() {
+        let store = TicketStore::with_capacity(1);
+        let issued = store.issue_at(claims(1000), Instant::now(), 1000).unwrap();
+        let wire = serde_json::to_value(&issued).unwrap();
+        let ticket = wire["ticket"].as_str().unwrap_or_default();
+        assert!(valid_shape(ticket), "the response carries the whole ticket");
+        let debug = format!("{issued:?}");
+        assert!(!debug.contains(ticket), "debug output shows the ticket");
+        assert!(
+            debug.contains("REDACTED"),
+            "debug output does not mark the ticket as redacted"
         );
     }
 
@@ -235,7 +268,11 @@ mod tests {
                 .map(|_| {
                     scope.spawn(|| {
                         store
-                            .take_at(&ticket.ticket, now + Duration::from_secs(30), 1030)
+                            .take_at(
+                                ticket.ticket.expose_secret(),
+                                now + Duration::from_secs(30),
+                                1030,
+                            )
                             .is_ok()
                     })
                 })
@@ -285,15 +322,25 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            store.redeem(&pool, &first.ticket).await.is_err(),
+            store
+                .redeem(&pool, first.ticket.expose_secret())
+                .await
+                .is_err(),
             "logout after issuance invalidates ticket"
         );
         assert_eq!(
-            store.redeem(&pool, &second.ticket).await.unwrap().sid,
+            store
+                .redeem(&pool, second.ticket.expose_secret())
+                .await
+                .unwrap()
+                .sid,
             identities[1].0.sid
         );
         assert!(
-            store.redeem(&pool, &second.ticket).await.is_err(),
+            store
+                .redeem(&pool, second.ticket.expose_secret())
+                .await
+                .is_err(),
             "one-use even with live session"
         );
         let changed = store.issue(identities[1].0.clone()).unwrap();
@@ -303,7 +350,10 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            store.redeem(&pool, &changed.ticket).await.is_err(),
+            store
+                .redeem(&pool, changed.ticket.expose_secret())
+                .await
+                .is_err(),
             "credential revocation after issuance invalidates ticket"
         );
         sqlx::query("DELETE FROM users WHERE id=$1")

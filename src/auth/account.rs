@@ -18,6 +18,7 @@ use super::{
     sessions::lock_current_session,
     types::{AuthError, Claims},
 };
+use crate::secret::SecretString;
 use crate::signaling::protocol::{ChatStyle, deserialize_appearance_style};
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
@@ -428,30 +429,41 @@ async fn save_preferences(
     Ok((id, preferences))
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChangePasswordRequest {
-    pub current_password: String,
-    pub new_password: String,
+    pub current_password: SecretString,
+    pub new_password: SecretString,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RecoveryKeyRequest {
-    pub current_password: String,
+    pub current_password: SecretString,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub(crate) struct RecoveryKeyResponse {
-    pub recovery_key: String,
+    pub recovery_key: SecretString,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RedeemRecoveryRequest {
     pub email: String,
-    pub recovery_key: String,
-    pub new_password: String,
+    pub recovery_key: SecretString,
+    pub new_password: SecretString,
+}
+
+/// Names the redacted credentials and leaves the account email out.
+impl std::fmt::Debug for RedeemRecoveryRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RedeemRecoveryRequest")
+            .field("recovery_key", &self.recovery_key)
+            .field("new_password", &self.new_password)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Resolve an exact `Bearer ` authorization header into currently valid claims.
@@ -669,12 +681,14 @@ pub(crate) async fn public_profile(
     Ok((routes::no_store_headers(), Json(profile)))
 }
 
+/// Checks the signed-in account's current password and returns the stored hash it
+/// matched. The password is read only for its byte limit and inside the verification job.
 pub(super) async fn verified_password_hash(
     server: &SignalingServer,
     claims: &Claims,
-    password: String,
+    password: SecretString,
 ) -> Result<String, AuthError> {
-    if password.len() > password_policy::MAX_PASSWORD_BYTES {
+    if password.expose_secret().len() > password_policy::MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
     if !server.allow_auth_principal(&claims.sub) {
@@ -720,7 +734,7 @@ pub(crate) async fn change_password(
     headers: HeaderMap,
     Json(request): Json<ChangePasswordRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    password_policy::validate_new_password(&request.new_password)?;
+    password_policy::validate_new_password(request.new_password.expose_secret())?;
     let _permit = routes::acquire_auth_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let old_hash = verified_password_hash(&server, &claims, request.current_password).await?;
@@ -811,7 +825,9 @@ pub(crate) async fn create_recovery_key(
     }
     Ok((
         routes::no_store_headers(),
-        Json(RecoveryKeyResponse { recovery_key: key }),
+        Json(RecoveryKeyResponse {
+            recovery_key: key.into(),
+        }),
     ))
 }
 
@@ -863,8 +879,8 @@ pub(crate) async fn redeem_recovery(
     if let Some(wait) = server.sign_in_wait(source_ip, &email) {
         return Err(AuthError::TooManyFailures(wait));
     }
-    password_policy::validate_new_password(&request.new_password)?;
-    let hash = recovery_hash(request.recovery_key.trim())?;
+    password_policy::validate_new_password(request.new_password.expose_secret())?;
+    let hash = recovery_hash(request.recovery_key.expose_secret().trim())?;
     let _permit = routes::acquire_auth_request(&server)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let eligible: bool = sqlx::query_scalar(

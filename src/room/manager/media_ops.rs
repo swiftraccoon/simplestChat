@@ -852,14 +852,15 @@ impl RoomManager {
         Ok(written)
     }
 
-    /// Restarts ICE on a transport, returning new ICE parameters
+    /// Restarts ICE on a transport, returning its new ICE parameters as
+    /// `IceCredentials`, whose debug output redacts the password.
     pub(crate) async fn restart_ice(
         &self,
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: TransportId,
-    ) -> Result<IceParameters> {
+    ) -> Result<crate::signaling::protocol::IceCredentials> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;

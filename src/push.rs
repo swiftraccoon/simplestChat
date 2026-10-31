@@ -7,6 +7,7 @@ use crate::{
         sessions::lock_current_session,
         types::{AuthError, Claims},
     },
+    secret::SecretString,
     signaling::SignalingServer,
 };
 use aws_lc_rs::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair};
@@ -24,10 +25,10 @@ use sqlx::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SubscriptionRequest {
-    endpoint: String,
+    endpoint: SecretString,
 }
 
 #[derive(Serialize)]
@@ -201,7 +202,7 @@ pub(crate) async fn subscribe(
     save_subscription(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
         &claims,
-        &body.endpoint,
+        body.endpoint.expose_secret(),
     )
     .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))

@@ -2,6 +2,7 @@
 
 // Common types and error handling for the media module
 
+use crate::signaling::protocol::IceCredentials;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,7 +56,8 @@ pub type MediaResult<T> = Result<T, MediaError>;
 #[serde(rename_all = "camelCase")]
 pub struct TransportInfo {
     pub id: TransportId,
-    pub ice_parameters: IceParameters,
+    /// Wrapped where mediasoup hands it over, so debug output never shows the ICE password.
+    pub ice_parameters: IceCredentials,
     pub ice_candidates: Vec<IceCandidate>,
     pub dtls_parameters: DtlsParameters,
 }
@@ -64,7 +66,7 @@ impl From<&WebRtcTransport> for TransportInfo {
     fn from(transport: &WebRtcTransport) -> Self {
         Self {
             id: transport.id(),
-            ice_parameters: transport.ice_parameters().clone(),
+            ice_parameters: transport.ice_parameters().clone().into(),
             ice_candidates: transport.ice_candidates().clone(),
             dtls_parameters: transport.dtls_parameters(),
         }

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::secret::SecretString;
 use axum::{
     Json,
     http::{HeaderValue, StatusCode, header},
@@ -112,22 +113,22 @@ impl IntoResponse for AuthError {
 #[derive(Debug, Deserialize)]
 pub(crate) struct RegisterRequest {
     pub email: String,
-    pub password: String,
+    pub password: SecretString,
     pub display_name: String,
     /// A registration invitation; required while registration is closed.
     #[serde(default)]
-    pub invite_code: Option<String>,
+    pub invite_code: Option<SecretString>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginRequest {
     pub email: String,
-    pub password: String,
+    pub password: SecretString,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct AuthResponse {
-    pub token: String,
+    pub token: SecretString,
     pub user: UserInfo,
 }
 
@@ -150,3 +151,7 @@ pub(crate) struct Claims {
     /// live session to belong to the account, so logout retires the token.
     pub sid: uuid::Uuid,
 }
+
+#[cfg(test)]
+#[path = "types_tests.rs"]
+mod tests;

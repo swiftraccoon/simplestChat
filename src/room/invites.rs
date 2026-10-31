@@ -12,6 +12,7 @@ use crate::room::api::{
 };
 use crate::room::roles::{self, Role};
 use crate::room::settings;
+use crate::secret::SecretString;
 use crate::signaling::SignalingServer;
 use axum::{
     Json,
@@ -61,13 +62,13 @@ pub(crate) struct RoomInvite {
 pub(crate) struct CreatedRoomInvite {
     #[serde(flatten)]
     pub details: RoomInvite,
-    pub code: String,
+    pub code: SecretString,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct InviteCodeRequest {
-    pub code: String,
+    pub code: SecretString,
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,7 +147,7 @@ pub(crate) async fn create_room_invite(
     transaction.commit().await?;
     Ok(Some(CreatedRoomInvite {
         details: invite,
-        code,
+        code: code.into(),
     }))
 }
 
@@ -529,8 +530,8 @@ pub(crate) async fn redeem(
 ) -> Result<(HeaderMap, Json<InviteRedemption>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let code =
-        invite_codes::normalize(&request.code).ok_or_else(|| bad_request("Invalid invite code"))?;
+    let code = invite_codes::normalize(request.code.expose_secret())
+        .ok_or_else(|| bad_request("Invalid invite code"))?;
     let (room_id, display_name, role) = redeem_room_invite(&pool, &code, user)
         .await
         .map_err(room_database_error)?
@@ -561,8 +562,8 @@ pub(crate) async fn preview(
 ) -> Result<(HeaderMap, Json<InviteRedemption>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let code =
-        invite_codes::normalize(&request.code).ok_or_else(|| bad_request("Invalid invite code"))?;
+    let code = invite_codes::normalize(request.code.expose_secret())
+        .ok_or_else(|| bad_request("Invalid invite code"))?;
     let (room_id, display_name, role) = preview_room_invite(&pool, &code, user)
         .await
         .map_err(room_database_error)?

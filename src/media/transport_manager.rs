@@ -8,7 +8,7 @@ use crate::media::types::{
     ConsumerLayerState, MediaError, MediaResult, ParticipantMedia, ReceiveBandwidthEstimate,
     TransportInfo,
 };
-use crate::signaling::protocol::ServerMessage;
+use crate::signaling::protocol::{IceCredentials, ServerMessage};
 use crate::sync::RwLock;
 use anyhow::Result;
 use mediasoup::consumer::ConsumerType;
@@ -1018,12 +1018,13 @@ impl TransportManager {
         Ok(true)
     }
 
-    /// Restarts ICE on a transport, returning new ICE parameters
+    /// Restarts ICE on a transport, returning its new ICE parameters as [`IceCredentials`],
+    /// whose debug output redacts the password.
     pub async fn restart_ice(
         &self,
         participant_id: &str,
         transport_id: TransportId,
-    ) -> MediaResult<IceParameters> {
+    ) -> MediaResult<IceCredentials> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
 
@@ -1050,7 +1051,7 @@ impl TransportManager {
             "Restarted ICE for transport {} of participant {}",
             transport_id, participant_id
         );
-        Ok(ice_parameters)
+        Ok(ice_parameters.into())
     }
 
     /// Subscribes to BWE (bandwidth estimation) trace events on a participant's recv transport.

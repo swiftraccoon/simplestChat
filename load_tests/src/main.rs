@@ -2045,7 +2045,7 @@ async fn run_client_inner(
                     tracing::debug!("{}: Send transport created: {}", client_id, transport_id);
                     (
                         transport_id,
-                        ice_parameters,
+                        ice_parameters.into_inner(),
                         ice_candidates,
                         dtls_parameters,
                     )
@@ -2121,7 +2121,7 @@ async fn run_client_inner(
                 tracing::debug!("{}: Receive transport created: {}", client_id, transport_id);
                 (
                     transport_id,
-                    ice_parameters,
+                    ice_parameters.into_inner(),
                     ice_candidates,
                     dtls_parameters,
                 )
@@ -5696,7 +5696,7 @@ mod native_connect_order_tests {
                         .await
                         .create_send_transport(
                             info.id.to_string(),
-                            info.ice_parameters,
+                            info.ice_parameters.into_inner(),
                             info.ice_candidates,
                             info.dtls_parameters,
                         )
@@ -5707,7 +5707,7 @@ mod native_connect_order_tests {
                         .await
                         .create_recv_transport(
                             info.id.to_string(),
-                            info.ice_parameters,
+                            info.ice_parameters.into_inner(),
                             info.ice_candidates,
                             info.dtls_parameters,
                         )

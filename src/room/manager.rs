@@ -12,6 +12,7 @@ mod moderation_ops;
 mod settings_ops;
 
 use super::*;
+use crate::secret::SecretString;
 
 impl RoomManager {
     /// Creates a new room manager
@@ -167,15 +168,16 @@ impl RoomManager {
             + 1_usize.saturating_sub(self.password_hash_work.available_permits())
     }
 
-    pub(crate) async fn hash_room_password(&self, password: String) -> Result<String> {
+    pub(crate) async fn hash_room_password(&self, password: &SecretString) -> Result<String> {
         let permit = self
             .password_hash_work
             .clone()
             .try_acquire_owned()
             .map_err(|_| anyhow::anyhow!("Password service is busy; try again"))?;
+        let password = password.clone();
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            crate::auth::password::hash_password(&password)
+            crate::auth::password::hash_password(password.expose_secret())
         })
         .await
         .map_err(|error| {

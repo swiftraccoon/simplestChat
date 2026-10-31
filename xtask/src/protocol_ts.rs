@@ -68,6 +68,10 @@ const MEDIASOUP_TYPES: &[&str] = &[
     "IceCandidate",
 ];
 
+/// Server newtypes that serialize transparently as one of those contracts, so the
+/// browser imports the contract under its own name instead of a generated alias.
+const MEDIASOUP_NEWTYPES: &[(&str, &str)] = &[("IceCredentials", "IceParameters")];
+
 /// Limits the browser applies before the server does: each a `const` with an
 /// integer literal in the named source, emitted in this order with its doc comment.
 const CONSTANTS: &[(&str, &str)] = &[
@@ -254,6 +258,33 @@ struct Generator {
 }
 
 impl Generator {
+    /// The client contract a listed newtype stands for, once its definition is checked to
+    /// still be a `#[serde(transparent)]` wrapper of exactly that contract.
+    fn mediasoup_newtype(&self, name: &str) -> Result<Option<&'static str>> {
+        let Some(&(_, contract)) = MEDIASOUP_NEWTYPES
+            .iter()
+            .find(|(newtype, _)| *newtype == name)
+        else {
+            return Ok(None);
+        };
+        let Some(Definition::Struct(item)) = self.definitions.get(name) else {
+            bail!("`{name}` is listed as a newtype of `{contract}` but defines no struct");
+        };
+        let wraps_contract = match &item.fields {
+            syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                match &fields.unnamed[0].ty {
+                    syn::Type::Path(path) => Self::last_segment(path)?.0 == contract,
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+        if !serde_attributes(&item.attrs)?.transparent || !wraps_contract {
+            bail!("`{name}` must be a #[serde(transparent)] newtype of `{contract}`");
+        }
+        Ok(Some(contract))
+    }
+
     fn ts_name(name: &str) -> String {
         RENAMES
             .iter()
@@ -331,6 +362,10 @@ impl Generator {
                         Ok((other.to_owned(), false))
                     }
                     other => {
+                        if let Some(contract) = self.mediasoup_newtype(other)? {
+                            self.used_mediasoup.insert(contract.to_owned());
+                            return Ok((contract.to_owned(), false));
+                        }
                         if !self.definitions.contains_key(other) {
                             bail!("no wire definition for type `{other}`");
                         }

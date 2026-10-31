@@ -159,7 +159,7 @@ struct RoomRow {
 pub(crate) struct CreateRoomRequest {
     pub id: String,
     pub display_name: String,
-    pub password: Option<String>,
+    pub password: Option<crate::secret::SecretString>,
     pub require_registration: Option<bool>,
     pub max_participants: Option<i32>,
     pub max_broadcasters: Option<i32>,
@@ -206,7 +206,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(),
     if request
         .password
         .as_ref()
-        .is_some_and(|password| !valid_new_room_password(password))
+        .is_some_and(|password| !valid_new_room_password(password.expose_secret()))
     {
         return Err("Password must be 8-256 bytes without control characters");
     }
@@ -598,17 +598,20 @@ mod tests {
         assert!(validate_create_request(&request).is_err());
 
         request.topic = None;
-        request.password = Some("1234567".to_string());
+        request.password = Some("1234567".into());
         assert_eq!(
             validate_create_request(&request),
             Err("Password must be 8-256 bytes without control characters")
         );
-        request.password = Some("12345678".to_string());
+        request.password = Some("12345678".into());
         assert!(validate_create_request(&request).is_ok());
-        request.password = Some("éééé".to_string());
-        assert_eq!(request.password.as_ref().unwrap().len(), MIN_PASSWORD_LEN);
+        request.password = Some("éééé".into());
+        assert_eq!(
+            request.password.as_ref().unwrap().expose_secret().len(),
+            MIN_PASSWORD_LEN
+        );
         assert!(validate_create_request(&request).is_ok());
-        request.password = Some("password\n".to_string());
+        request.password = Some("password\n".into());
         assert!(validate_create_request(&request).is_err());
     }
 

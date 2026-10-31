@@ -2,6 +2,7 @@
 //! access follows the live or durable message, never knowledge of a file UUID.
 use crate::ids::{ParticipantId, RoomId};
 use crate::room::refusal::{Refusal, RoomError};
+use crate::secret::SecretString;
 use crate::{
     auth::{
         account::authenticated_claims,
@@ -266,10 +267,10 @@ struct Grant {
     account: Option<Claims>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AttachmentAccess {
-    pub token: String,
+    pub token: SecretString,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -332,7 +333,10 @@ pub(crate) async fn grant_access(
         &jsonwebtoken::EncodingKey::from_secret(&*GRANT_KEY),
     )
     .map_err(|_| unavailable())?;
-    Ok(AttachmentAccess { token, expires_at })
+    Ok(AttachmentAccess {
+        token: token.into(),
+        expires_at,
+    })
 }
 
 async fn validate_account(pool: &PgPool, claims: &Claims) -> Result<(), AuthError> {

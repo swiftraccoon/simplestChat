@@ -31,7 +31,7 @@ pub struct IceServer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub credential: Option<String>,
+    pub credential: Option<SecretString>,
 }
 
 /// Default and maximum `TURN_TTL`. Relay allocations are refreshed with the
@@ -112,7 +112,7 @@ impl TurnConfig {
         IceServer {
             urls: self.urls.clone(),
             username: Some(username),
-            credential: Some(credential),
+            credential: Some(credential.into()),
         }
     }
 }
@@ -167,7 +167,7 @@ mod tests {
         let expiry: u64 = username.split_once(':').unwrap().0.parse().unwrap();
         assert!((before + config.ttl_secs..=after + config.ttl_secs).contains(&expiry));
         assert_eq!(credentials.urls, config.urls);
-        let encoded = credentials.credential.as_deref().unwrap();
+        let encoded = credentials.credential.as_ref().unwrap().expose_secret();
         assert_eq!(encoded.len(), 28);
         assert!(encoded.ends_with('='), "coturn uses padded standard Base64");
         let signature = base64::engine::general_purpose::STANDARD
@@ -191,7 +191,10 @@ mod tests {
         assert!(credentials.username.is_some());
         assert!(credentials.credential.is_some());
         assert_ne!(
-            credentials.credential.as_deref(),
+            credentials
+                .credential
+                .as_ref()
+                .map(SecretString::expose_secret),
             Some(config.secret.expose_secret())
         );
         let username = credentials.username.as_deref().unwrap();
