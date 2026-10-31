@@ -461,6 +461,157 @@ fn compose_defaults_equal_the_servers_own() {
     assert!(checked >= 25, "only {checked} compose defaults compared");
 }
 
+/// The text of a source file outside the bodies of its inline test modules,
+/// or `None` when such a body is never closed. An inline test module is
+/// `#[cfg(test)]`, then (past any attributes, comments and blank lines) a line
+/// opening `mod name {`; its body ends at the first later line holding that
+/// line's indentation and `}`, followed by nothing but whitespace or a `//`
+/// comment, as rustfmt writes it, so no brace inside the body is counted. A
+/// `mod name;` declaration has no body here, so a file that declares its test
+/// modules above its own code is still read to the end.
+fn without_inline_test_modules(text: &str) -> Option<String> {
+    let mut kept = String::new();
+    let mut after_cfg_test = false;
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        let item = line.trim();
+        let annotation = item.is_empty() || item.starts_with("#[") || item.starts_with("//");
+        if after_cfg_test && !annotation {
+            after_cfg_test = false;
+            let mut words = item
+                .split_whitespace()
+                .skip_while(|word| word.starts_with("pub"));
+            if words.next() == Some("mod") && item.ends_with('{') {
+                let indent = &line[..line.len() - line.trim_start().len()];
+                let close = format!("{indent}}}");
+                lines.find(|later| {
+                    later.strip_prefix(close.as_str()).is_some_and(|rest| {
+                        rest.trim().is_empty() || rest.trim_start().starts_with("//")
+                    })
+                })?;
+                continue;
+            }
+        }
+        after_cfg_test |= item == "#[cfg(test)]";
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    Some(kept)
+}
+
+/// Whether a source file reads the environment outside its inline test
+/// modules; `None` when one of those modules is never closed.
+fn reads_the_environment(text: &str) -> Option<bool> {
+    let production = without_inline_test_modules(text)?;
+    Some(production.contains("env::var") || production.contains("env::vars"))
+}
+
+#[test]
+fn environment_scan_reads_past_a_test_module_holding_a_brace_literal() {
+    let source = r#"#[cfg(test)]
+mod tests {
+    #[test]
+    fn opens_a_brace() {
+        assert_eq!("{".len(), 1);
+    }
+}
+
+fn port() -> Option<String> {
+    std::env::var("PORT").ok()
+}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        Some(true),
+        "the read after the test module is reported"
+    );
+}
+
+#[test]
+fn environment_scan_closes_a_test_module_on_a_commented_brace() {
+    let source = r#"#[cfg(test)]
+mod tests {
+    #[test]
+    fn closes() {}
+} // mod tests
+
+fn port() -> Option<String> {
+    std::env::var("PORT").ok()
+}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        Some(true),
+        "the read after a commented closing brace is reported"
+    );
+}
+
+#[test]
+fn environment_scan_fails_on_an_unclosed_test_module() {
+    let source = r#"fn production() {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn unclosed() {}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        None,
+        "an unclosed test module fails the scan"
+    );
+}
+
+#[test]
+fn environment_scan_reads_past_a_declared_test_module() {
+    let source = r#"#[cfg(test)]
+#[path = "port_tests.rs"]
+mod tests;
+
+fn port() -> Option<String> {
+    std::env::var("PORT").ok()
+}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        Some(true),
+        "the read after the declaration is reported"
+    );
+}
+
+#[test]
+fn environment_scan_reads_test_only_functions() {
+    let source = r#"#[cfg(test)]
+fn port() -> Option<String> {
+    std::env::var("PORT").ok()
+}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        Some(true),
+        "the read inside a #[cfg(test)] function is reported"
+    );
+}
+
+#[test]
+fn environment_scan_skips_the_body_of_an_inline_test_module() {
+    let source = r#"fn production() {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn database() {
+        let _ = std::env::var("TEST_DATABASE_URL");
+    }
+}
+"#;
+    assert_eq!(
+        reads_the_environment(source),
+        Some(false),
+        "a read inside the test module is not reported"
+    );
+}
+
 #[test]
 fn no_other_module_reads_the_environment() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -478,8 +629,10 @@ fn no_other_module_reads_the_environment() {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap();
-            let production = text.split("#[cfg(test)]").next().unwrap_or("");
-            if production.contains("env::var") || production.contains("env::vars") {
+            let Some(reads) = reads_the_environment(&text) else {
+                panic!("{}: an inline test module is never closed", path.display());
+            };
+            if reads {
                 offenders.push(path.strip_prefix(&root).unwrap().display().to_string());
             }
         }

@@ -1071,3 +1071,37 @@ fn the_proxy_repeats_the_applications_fixed_security_headers() {
         );
     }
 }
+
+#[tokio::test]
+async fn build_info_reports_the_configured_source_revision() {
+    let token = "m".repeat(32);
+    let revision = "ab".repeat(20);
+    for (configured, reported) in [
+        (Some(revision.as_str()), revision.as_str()),
+        (None, "unknown"),
+    ] {
+        let mut config = crate::config::Config::for_tests();
+        config.observability.source_revision = configured.map(str::to_owned);
+        let mut server = test_server(None, &config).await;
+        server.metrics_token = Some(token.clone());
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+        );
+        let response = metrics_handler(State(server), headers).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let expected = format!(
+            "# HELP simplestchat_build_info Deployed server source revision\n\
+             # TYPE simplestchat_build_info gauge\n\
+             simplestchat_build_info{{revision=\"{reported}\"}} 1\n"
+        );
+        assert!(
+            String::from_utf8_lossy(&body).contains(&expected),
+            "expected build_info to report {reported}"
+        );
+    }
+}

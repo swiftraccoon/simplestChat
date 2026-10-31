@@ -317,6 +317,9 @@ pub(crate) struct SignalingServer {
     jwt_secret: Option<crate::auth::jwt::JwtSecret>,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
+    /// `SOURCE_REVISION`: the 40-hexadecimal commit validated by `config.rs`,
+    /// which `/metrics` renders unescaped as the `simplestchat_build_info` label.
+    source_revision: Option<Arc<str>>,
     media_diagnostics: Option<Arc<media_diagnostics::MediaDiagnostics>>,
     allowed_origins: Arc<Vec<String>>,
     trusted_proxy_secret: Arc<Option<String>>,
@@ -434,6 +437,11 @@ impl SignalingServer {
             jwt_secret,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
+            source_revision: config
+                .observability
+                .source_revision
+                .as_deref()
+                .map(Arc::from),
             media_diagnostics,
             allowed_origins,
             trusted_proxy_secret,
@@ -822,10 +830,7 @@ async fn metrics_handler(State(server): State<SignalingServer>, headers: HeaderM
     );
     use std::fmt::Write as _;
     crate::db::append_error_metrics(&mut body);
-    let revision = std::env::var("SOURCE_REVISION")
-        .ok()
-        .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .unwrap_or_else(|| "unknown".to_owned());
+    let revision = server.source_revision.as_deref().unwrap_or("unknown");
     let _ = writeln!(
         body,
         "# HELP simplestchat_build_info Deployed server source revision\n# TYPE simplestchat_build_info gauge\nsimplestchat_build_info{{revision=\"{revision}\"}} 1"
