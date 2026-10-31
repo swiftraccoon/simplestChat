@@ -48,6 +48,23 @@ fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
 }
 
 #[test]
+fn a_refused_chat_save_answers_with_its_own_code() {
+    let metrics = ServerMetrics::new();
+    let (sender, mut receiver) = mpsc::channel(1);
+    let refused = chat_persistence_failure(
+        &metrics,
+        &sender,
+        "refused",
+        Refusal::NotFound("Attachment unavailable".into()).into(),
+    )
+    .unwrap_err();
+    let failure = refused.downcast_ref::<SocialFailure>().unwrap();
+    assert_eq!(failure.code, ErrorCode::NotFound);
+    assert_eq!(failure.message, "Attachment unavailable");
+    assert!(receiver.try_recv().is_err());
+}
+
+#[test]
 fn read_only_social_requests_reserve_no_room_budget() {
     for json in [
         r#"{"type":"getRoomSnapshot","requestId":"r"}"#,
@@ -1351,66 +1368,180 @@ fn first_account_conversation_requires_admitted_account_peers_and_room_chat_auth
     assert!(!can_start_account_conversation(&room, &alice.id, &bob.id));
 }
 
-#[tokio::test]
-#[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
-async fn database_first_account_pm_uses_room_authority_and_retries_after_departure() {
-    let pool =
-        sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
-            .await
-            .unwrap();
-    let (mut room, alice, bob, _carol, _receivers) = fixture();
-    let own: Uuid = alice.id.as_uuid();
-    let peer: Uuid = bob.id.as_uuid();
-    for person in [&alice, &bob] {
+/// The migrated disposable database the ignored tests run against.
+async fn database_pool() -> sqlx::PgPool {
+    sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+        .await
+        .unwrap()
+}
+
+/// Save each participant as an account under the participant's id and name.
+async fn save_accounts(pool: &sqlx::PgPool, people: &[&Participant]) {
+    for person in people {
         sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
             .bind(person.id.as_uuid())
-            .bind(format!("{}@firstpm.invalid", person.id))
+            .bind(format!("{}@social.invalid", person.id))
             .bind(&person.name)
-            .execute(&pool)
+            .execute(pool)
             .await
             .unwrap();
     }
-    let sid = crate::auth::session::create_session(
-        &pool,
-        &own,
-        &crate::auth::session::generate_refresh_token().unwrap(),
-    )
-    .await
-    .unwrap();
-    let claims = crate::auth::types::Claims {
-        sub: own.to_string(),
-        name: "Alice".into(),
-        iss: "fixture".into(),
-        aud: "fixture".into(),
-        exp: (chrono::Utc::now().timestamp() + 3600) as usize,
-        auth_version: 0,
-        sid,
-    };
-    let room_id = rid(&format!("first-pm-{}", Uuid::new_v4()));
-    room.id.clone_from(&room_id);
+}
+
+/// A manager with one media worker on a free port, backed by `pool` if given.
+async fn one_worker_manager(pool: Option<sqlx::PgPool>, metrics: ServerMetrics) -> RoomManager {
     let mut config = MediaConfig::default();
     config.worker_config.num_workers = 1;
     config.webrtc_server_port_base = 0;
-    let metrics = ServerMetrics::new();
-    let manager = Arc::new(
-        RoomManager::new(
-            crate::room::ManagerSettings::default(),
-            config,
-            metrics.clone(),
-            Some(pool.clone()),
+    RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        config,
+        metrics,
+        pool,
+    )
+    .await
+    .unwrap()
+}
+
+/// Alice and Bob as saved accounts in one live room of a database-backed
+/// manager, with its signaling server and Alice's signed-in HTTP claims.
+struct AccountRoomFixture {
+    pool: sqlx::PgPool,
+    manager: Arc<RoomManager>,
+    server: crate::signaling::SignalingServer,
+    room: Arc<TokioRwLock<Room>>,
+    room_id: RoomId,
+    alice: Participant,
+    bob: Participant,
+    claims: crate::auth::types::Claims,
+    receivers: Vec<mpsc::Receiver<crate::OutboundJson>>,
+}
+
+impl AccountRoomFixture {
+    async fn new() -> Self {
+        let pool = database_pool().await;
+        let (mut room, alice, bob, _carol, receivers) = fixture();
+        save_accounts(&pool, &[&alice, &bob]).await;
+        let own = alice.id.as_uuid();
+        let sid = crate::auth::session::create_session(
+            &pool,
+            &own,
+            &crate::auth::session::generate_refresh_token().unwrap(),
         )
         .await
-        .unwrap(),
-    );
-    let room = Arc::new(TokioRwLock::new(room));
-    manager.rooms.write().insert(room_id.clone(), room.clone());
-    let server = crate::signaling::SignalingServer::new(
-        manager.clone(),
-        metrics,
-        Some(pool.clone()),
-        &crate::config::Config::for_tests(),
-    )
-    .unwrap();
+        .unwrap();
+        let claims = crate::auth::types::Claims {
+            sub: own.to_string(),
+            name: "Alice".into(),
+            iss: "fixture".into(),
+            aud: "fixture".into(),
+            exp: (chrono::Utc::now().timestamp() + 3600) as usize,
+            auth_version: 0,
+            sid,
+        };
+        let room_id = rid(&format!("account-room-{}", Uuid::new_v4()));
+        room.id.clone_from(&room_id);
+        let metrics = ServerMetrics::new();
+        let manager = Arc::new(one_worker_manager(Some(pool.clone()), metrics.clone()).await);
+        let room = Arc::new(TokioRwLock::new(room));
+        manager.rooms.write().insert(room_id.clone(), room.clone());
+        let server = crate::signaling::SignalingServer::new(
+            manager.clone(),
+            metrics,
+            Some(pool.clone()),
+            &crate::config::Config::for_tests(),
+        )
+        .unwrap();
+        Self {
+            pool,
+            manager,
+            server,
+            room,
+            room_id,
+            alice,
+            bob,
+            claims,
+            receivers,
+        }
+    }
+
+    /// Alice's saved private messages to Bob.
+    async fn saved_private_messages(&self) -> i64 {
+        sqlx::query_scalar(
+            "SELECT count(*) FROM chat_messages WHERE sender_account=$1 AND recipient_account=$2",
+        )
+        .bind(self.alice.id.as_uuid())
+        .bind(self.bob.id.as_uuid())
+        .fetch_one(&self.pool)
+        .await
+        .unwrap()
+    }
+
+    /// Alice's private message to Bob from her room socket.
+    async fn socket_send(&self, client_message_id: &str, content: &str) -> Result<()> {
+        self.manager
+            .send_social_chat(
+                &self.room_id,
+                &self.alice.id,
+                &self.alice.sender,
+                content.into(),
+                Some(client_message_id.into()),
+                Some(&self.bob.id),
+            )
+            .await
+    }
+
+    /// Alice's private message to Bob through the HTTP inbox.
+    async fn inbox_send(
+        &self,
+        client_message_id: &str,
+        content: &str,
+    ) -> Result<(ChatEntry, bool), crate::auth::types::AuthError> {
+        history::save_private_message(
+            &self.server,
+            &self.claims,
+            self.bob.id.as_uuid(),
+            history::SendRequest {
+                client_message_id: client_message_id.into(),
+                content: content.into(),
+                attachment_ids: vec![],
+                reply_to: None,
+                room_id: None,
+            },
+        )
+        .await
+    }
+
+    /// Retire the room, the manager and its worker, then both accounts; their
+    /// sessions and messages go with them.
+    async fn finish(self) {
+        self.manager.rooms.write().remove(&self.room_id);
+        self.manager.shutdown().await.unwrap();
+        self.manager.media_server().shutdown().await.unwrap();
+        sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+            .bind(vec![self.alice.id.as_uuid(), self.bob.id.as_uuid()])
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+async fn database_first_account_pm_uses_room_authority_and_retries_after_departure() {
+    let fixture = AccountRoomFixture::new().await;
+    let AccountRoomFixture {
+        pool,
+        server,
+        room,
+        room_id,
+        alice,
+        bob,
+        claims,
+        ..
+    } = &fixture;
+    let own: Uuid = alice.id.as_uuid();
+    let peer: Uuid = bob.id.as_uuid();
     let attempt = Uuid::new_v4().to_string();
     let request = |context: Option<String>, content: &str, reply_to| history::SendRequest {
         client_message_id: attempt.clone(),
@@ -1421,8 +1552,8 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     };
     assert!(
         history::save_private_message(
-            &server,
-            &claims,
+            server,
+            claims,
             peer,
             request(None, "First account PM", None)
         )
@@ -1438,8 +1569,8 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         .text_muted = true;
     assert!(
         history::save_private_message(
-            &server,
-            &claims,
+            server,
+            claims,
             peer,
             request(Some(room_id.to_string()), "First account PM", None)
         )
@@ -1454,8 +1585,8 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         .punitive
         .text_muted = false;
     let (saved, created) = history::save_private_message(
-        &server,
-        &claims,
+        server,
+        claims,
         peer,
         request(Some(room_id.to_string()), "First account PM", None),
     )
@@ -1465,8 +1596,8 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     assert_eq!(saved.account_conversation, Some(true));
     room.write().await.participants.remove(&bob.id);
     let (retry, created) = history::save_private_message(
-        &server,
-        &claims,
+        server,
+        claims,
         peer,
         request(Some("departed-room".into()), "First account PM", None),
     )
@@ -1475,19 +1606,14 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     assert!(!created);
     assert_eq!(retry.message_id, saved.message_id);
     assert!(
-        history::save_private_message(
-            &server,
-            &claims,
-            peer,
-            request(None, "Changed content", None)
-        )
-        .await
-        .is_err()
+        history::save_private_message(server, claims, peer, request(None, "Changed content", None))
+            .await
+            .is_err()
     );
     assert!(
         history::save_private_message(
-            &server,
-            &claims,
+            server,
+            claims,
             peer,
             request(None, "First account PM", Some(saved.message_id.as_uuid()))
         )
@@ -1501,7 +1627,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         reply_to: Some(saved.message_id.as_uuid()),
         room_id: None,
     };
-    let (reply, created) = history::save_private_message(&server, &claims, peer, reply)
+    let (reply, created) = history::save_private_message(server, claims, peer, reply)
         .await
         .unwrap();
     assert!(created);
@@ -1536,32 +1662,165 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         expired_write.await.unwrap(),
         Err(crate::auth::types::AuthError::TokenExpired)
     ));
-    let count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM chat_messages WHERE sender_account=$1 AND recipient_account=$2",
-    )
-    .bind(own)
-    .bind(peer)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
     assert_eq!(
-        count, 2,
+        fixture.saved_private_messages().await,
+        2,
         "same-ID retry and expired admission never create another row"
     );
-    manager.rooms.write().remove(&room_id);
-    manager.shutdown().await.unwrap();
-    manager.media_server().shutdown().await.unwrap();
-    sqlx::query("DELETE FROM chat_messages WHERE sender_account=$1 AND recipient_account=$2")
-        .bind(own)
-        .bind(peer)
-        .execute(&pool)
+    fixture.finish().await;
+}
+
+/// Send Alice's private messages to Bob from her room socket until `total` of
+/// hers are saved: each reaches Bob, Alice's socket acknowledges it, and it is
+/// saved. The one sent while `index` of hers are saved is `socket-{index}`.
+async fn send_from_socket_until(fixture: &mut AccountRoomFixture, total: i64) {
+    for index in fixture.saved_private_messages().await..total {
+        let attempt = format!("socket-{index}");
+        fixture
+            .socket_send(&attempt, &format!("Socket message {index}"))
+            .await
+            .unwrap();
+        let ack: Value = serde_json::from_str(&fixture.receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(ack["type"], "messageAck");
+        assert_eq!(ack["clientMessageId"], attempt);
+        let delivery: Value =
+            serde_json::from_str(&fixture.receivers[1].try_recv().unwrap()).unwrap();
+        assert_eq!(delivery["type"], "privateMessageReceived");
+    }
+    assert_eq!(fixture.saved_private_messages().await, total);
+}
+
+/// Forget the room's replay history and chat receipts, as trimming and expiry
+/// do, so only saved history still holds the room's messages.
+fn forget_chat(room: &mut Room) {
+    room.social.history.clear();
+    room.social.history_bytes = 0;
+    room.social.receipts.clear();
+    room.social.receipt_bytes = 0;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+async fn socket_private_messages_share_the_account_budget() {
+    let mut fixture = AccountRoomFixture::new().await;
+    send_from_socket_until(&mut fixture, history::PRIVATE_MESSAGES_PER_MINUTE).await;
+    let attempt = "over-budget";
+    let content = "One private message too many";
+    let refused = fixture
+        .socket_send(attempt, content)
+        .await
+        .expect_err("the next private message within the minute is refused");
+    let failure = refused
+        .downcast_ref::<SocialFailure>()
+        .expect("a refusal the socket answers with its own code");
+    assert_eq!(failure.code, ErrorCode::RateLimited);
+    assert_eq!(
+        failure.message,
+        "Private messages are rate limited; wait a moment"
+    );
+    assert!(
+        fixture.receivers[0].try_recv().is_err(),
+        "no acknowledgement"
+    );
+    assert!(fixture.receivers[1].try_recv().is_err(), "no delivery");
+    assert_eq!(
+        fixture.saved_private_messages().await,
+        history::PRIVATE_MESSAGES_PER_MINUTE
+    );
+    fixture.finish().await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+async fn http_sends_count_socket_sends() {
+    let mut fixture = AccountRoomFixture::new().await;
+    send_from_socket_until(&mut fixture, history::PRIVATE_MESSAGES_PER_MINUTE).await;
+    let sent = fixture
+        .inbox_send("inbox-over-budget", "Inbox message over the shared budget")
+        .await;
+    assert!(
+        matches!(sent, Err(crate::auth::types::AuthError::RateLimited)),
+        "{sent:?}"
+    );
+    assert_eq!(
+        fixture.saved_private_messages().await,
+        history::PRIVATE_MESSAGES_PER_MINUTE
+    );
+    fixture.finish().await;
+}
+
+#[tokio::test]
+#[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+async fn retries_of_saved_private_messages_are_not_budgeted() {
+    let mut fixture = AccountRoomFixture::new().await;
+    // The first socket message opens the conversation an inbox send needs.
+    send_from_socket_until(&mut fixture, 1).await;
+    let (inbox, created) = fixture
+        .inbox_send("inbox-1", "Inbox message")
         .await
         .unwrap();
-    sqlx::query("DELETE FROM users WHERE id=ANY($1)")
-        .bind(vec![own, peer])
-        .execute(&pool)
+    assert!(created);
+    send_from_socket_until(&mut fixture, history::PRIVATE_MESSAGES_PER_MINUTE).await;
+
+    // (a) An HTTP retry of the saved inbox message returns it.
+    let (retry, created) = fixture
+        .inbox_send("inbox-1", "Inbox message")
         .await
-        .unwrap();
+        .expect("an HTTP retry of a saved message returns it whatever the budget");
+    assert!(!created);
+    assert_eq!(retry.message_id, inbox.message_id);
+
+    // (b) A socket re-send of a saved message the room no longer holds in
+    // memory reaches the saved attempt and is answered with its receipt.
+    let saved = {
+        let mut room = fixture.room.write().await;
+        let saved = room
+            .social
+            .receipts
+            .iter()
+            .find(|receipt| receipt.message.client_message_id == "socket-0")
+            .unwrap()
+            .message
+            .clone();
+        forget_chat(&mut room);
+        saved
+    };
+    fixture
+        .socket_send("socket-0", "Socket message 0")
+        .await
+        .expect("a socket re-send of a saved message returns its receipt whatever the budget");
+    let ack: Value = serde_json::from_str(&fixture.receivers[0].try_recv().unwrap()).unwrap();
+    assert_eq!(ack["type"], "messageAck");
+    assert_eq!(ack["message"]["messageId"], saved.message_id.to_string());
+    let delivery: Value = serde_json::from_str(&fixture.receivers[1].try_recv().unwrap()).unwrap();
+    assert_eq!(delivery["type"], "privateMessageReceived");
+    assert_eq!(
+        delivery["message"]["messageId"],
+        saved.message_id.to_string()
+    );
+    assert!(fixture.receivers[1].try_recv().is_err());
+
+    // (c) A new private message is still refused on both transports.
+    let sent = fixture.inbox_send("inbox-new", "New inbox message").await;
+    assert!(
+        matches!(sent, Err(crate::auth::types::AuthError::RateLimited)),
+        "{sent:?}"
+    );
+    let refused = fixture
+        .socket_send("socket-new", "New socket message")
+        .await
+        .expect_err("a new private message over the budget is refused");
+    assert_eq!(
+        refused
+            .downcast_ref::<SocialFailure>()
+            .map(|failure| failure.code),
+        Some(ErrorCode::RateLimited)
+    );
+    assert_eq!(
+        fixture.saved_private_messages().await,
+        history::PRIVATE_MESSAGES_PER_MINUTE
+    );
+    fixture.finish().await;
 }
 
 #[test]
@@ -2235,17 +2494,7 @@ async fn message_removal_requires_moderation_and_never_targets_private_messages(
     for receiver in &mut receivers {
         while receiver.try_recv().is_ok() {}
     }
-    let mut config = MediaConfig::default();
-    config.worker_config.num_workers = 1;
-    config.webrtc_server_port_base = 0;
-    let manager = RoomManager::new(
-        crate::room::ManagerSettings::default(),
-        config,
-        ServerMetrics::new(),
-        None,
-    )
-    .await
-    .unwrap();
+    let manager = one_worker_manager(None, ServerMetrics::new()).await;
     let room_id = room.id.clone();
     let room_lock = Arc::new(TokioRwLock::new(room));
     manager
@@ -2326,8 +2575,7 @@ async fn message_removal_requires_moderation_and_never_targets_private_messages(
 #[tokio::test]
 #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
 async fn database_an_account_keeps_its_chat_style_across_joins() {
-    let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
-    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    let pool = database_pool().await;
     let user = Uuid::new_v4();
     sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
         .bind(user)
@@ -2340,17 +2588,7 @@ async fn database_an_account_keeps_its_chat_style_across_joins() {
         load_chat_style(&pool, user).await.unwrap(),
         Some(ChatStyle::default())
     );
-    let mut config = MediaConfig::default();
-    config.worker_config.num_workers = 1;
-    config.webrtc_server_port_base = 0;
-    let mut manager = RoomManager::new(
-        crate::room::ManagerSettings::default(),
-        config,
-        ServerMetrics::new(),
-        Some(pool.clone()),
-    )
-    .await
-    .unwrap();
+    let mut manager = one_worker_manager(Some(pool.clone()), ServerMetrics::new()).await;
     manager.allow_ad_hoc_rooms = true;
     let room_id = rid(&format!("style-{}", Uuid::new_v4()));
     let join = |sent: ChatStyle| {
@@ -2422,24 +2660,13 @@ async fn database_an_account_keeps_its_chat_style_across_joins() {
 #[tokio::test]
 #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
 async fn database_public_message_removal_scrubs_durable_history_without_runtime_copy() {
-    let pool =
-        sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
-            .await
-            .unwrap();
+    let pool = database_pool().await;
     let (mut room, alice, mut moderator, _carol, _receivers) = fixture();
     moderator.role = roles::Role::Moderator;
     room.participants.insert(moderator.id, moderator.clone());
     let room_id = rid(&format!("remove-{}", Uuid::new_v4()));
     let other_room = rid(&format!("remove-other-{}", Uuid::new_v4()));
-    for person in [&alice, &moderator] {
-        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-            .bind(person.id.as_uuid())
-            .bind(format!("{}@remove.invalid", person.id))
-            .bind(&person.name)
-            .execute(&pool)
-            .await
-            .unwrap();
-    }
+    save_accounts(&pool, &[&alice, &moderator]).await;
     for id in [&room_id, &other_room] {
         sqlx::query(
             "INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)",
@@ -2526,21 +2753,8 @@ async fn database_public_message_removal_scrubs_durable_history_without_runtime_
     )
     .await
     .unwrap();
-    room.social.history.clear();
-    room.social.history_bytes = 0;
-    room.social.receipts.clear();
-    room.social.receipt_bytes = 0;
-    let mut config = MediaConfig::default();
-    config.worker_config.num_workers = 1;
-    config.webrtc_server_port_base = 0;
-    let manager = RoomManager::new(
-        crate::room::ManagerSettings::default(),
-        config,
-        ServerMetrics::new(),
-        Some(pool.clone()),
-    )
-    .await
-    .unwrap();
+    forget_chat(&mut room);
+    let manager = one_worker_manager(Some(pool.clone()), ServerMetrics::new()).await;
     manager
         .rooms
         .write()
@@ -2625,8 +2839,7 @@ async fn database_public_message_removal_scrubs_durable_history_without_runtime_
 #[tokio::test]
 #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
 async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
-    let database_url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
-    let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+    let pool = database_pool().await;
     sqlx::raw_sql(include_str!("../../migrations/014_create_room_reports.sql"))
         .execute(&pool)
         .await
@@ -2642,15 +2855,7 @@ async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
         .iter()
         .map(|p| p.id.as_uuid())
         .collect();
-    for participant in [&owner, &bob, &absent] {
-        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-            .bind(participant.id.as_uuid())
-            .bind(format!("{}@social.invalid", participant.id))
-            .bind(&participant.name)
-            .execute(&pool)
-            .await
-            .unwrap();
-    }
+    save_accounts(&pool, &[&owner, &bob, &absent]).await;
     for id in [&room_id, &other_room_id] {
         sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
             .bind(id)
@@ -2669,17 +2874,7 @@ async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
     room.settings = Some(settings);
     room.participants.insert(owner.id, owner.clone());
     room.participants.remove(&absent.id);
-    let mut config = MediaConfig::default();
-    config.worker_config.num_workers = 1;
-    config.webrtc_server_port_base = 0;
-    let manager = RoomManager::new(
-        crate::room::ManagerSettings::default(),
-        config,
-        ServerMetrics::new(),
-        Some(pool.clone()),
-    )
-    .await
-    .unwrap();
+    let manager = one_worker_manager(Some(pool.clone()), ServerMetrics::new()).await;
     manager
         .rooms
         .write()

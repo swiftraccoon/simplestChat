@@ -345,14 +345,18 @@ fn send(
     .map_err(|_| rate_limited("Connection is busy; please retry"))
 }
 
-/// An uncertain commit is not a rejected send. Its owned room was quarantined
-/// already; preserve the client's unconfirmed attempt instead of inviting a new ID.
+/// A refusal answers the attempt with its own code and text. An uncertain
+/// commit is not a rejected send. Its owned room was quarantined already;
+/// preserve the client's unconfirmed attempt instead of inviting a new ID.
 fn chat_persistence_failure(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
     client_message_id: &str,
     error: RoomError,
 ) -> Result<()> {
+    if let RoomError::Refused(refusal) = error {
+        return Err(refused(refusal));
+    }
     if let RoomError::Database(error) = &error {
         crate::db::record_error(error);
     }

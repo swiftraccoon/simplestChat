@@ -24,6 +24,9 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 pub(crate) const PM_RETENTION_DAYS: i32 = 90;
+/// Private messages one account may send per minute, from its room sockets and
+/// the HTTP inbox together.
+pub(crate) const PRIVATE_MESSAGES_PER_MINUTE: i64 = 30;
 /// The retention periods a room may choose for its public history, in days (0 keeps none).
 pub(crate) const ROOM_HISTORY_RETENTION_DAYS: [i32; 5] = [0, 1, 7, 30, 90];
 const PAGE_LIMIT: usize = 50;
@@ -351,8 +354,45 @@ impl PrivateWrite {
     }
 }
 
+/// Admit one more private message from the `sender` account, whose room sends
+/// and HTTP inbox sends share one budget of [`PRIVATE_MESSAGES_PER_MINUTE`];
+/// refuse with [`Refusal::RateLimited`] once the last minute holds that many.
+/// Both send paths reach it only through `insert_message`, for a new private
+/// message, after the lookup that answers a retry with its saved message, so a
+/// retry never meets the budget. The sender's advisory lock lasts until the
+/// caller's transaction ends, so concurrent sends from any of the account's
+/// sessions count each other; it is taken under the conversation lock, and
+/// nothing takes the two the other way round.
+async fn reserve_private_message(
+    connection: &mut PgConnection,
+    sender: Uuid,
+) -> Result<(), RoomError> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 17))")
+        .bind(sender)
+        .execute(&mut *connection)
+        .await?;
+    let recent: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM (SELECT 1 FROM chat_messages \
+         WHERE sender_account = $1 AND recipient_account IS NOT NULL \
+         AND sent_at > now() - interval '1 minute' LIMIT $2) recent",
+    )
+    .bind(sender)
+    .bind(PRIVATE_MESSAGES_PER_MINUTE)
+    .fetch_one(&mut *connection)
+    .await?;
+    if recent >= PRIVATE_MESSAGES_PER_MINUTE {
+        return Err(Refusal::RateLimited(
+            "Private messages are rate limited; wait a moment".into(),
+        )
+        .into());
+    }
+    Ok(())
+}
+
 /// A successful return means the durable write committed before live delivery.
 /// The caller holds room control, never its state lock, across this operation.
+/// A new private message is refused once its sender has spent the budget that
+/// [`reserve_private_message`] keeps; a retry of a saved one still returns it.
 pub(crate) async fn persist_message(
     pool: &PgPool,
     room: Option<&str>,
@@ -432,6 +472,11 @@ async fn insert_message(
             return Err(Refusal::Conflict("Message ID was already used".into()).into());
         }
         return Ok(conversation_message(existing.0, recipient.is_some()));
+    }
+    // Only a new private message spends the sender's budget: a retry was
+    // answered above with its saved message.
+    if recipient.is_some() {
+        reserve_private_message(connection, sender).await?;
     }
     if !attachment_ids.is_empty() && !sender_authenticated {
         return Err(Refusal::Forbidden("Sign in to attach files".into()).into());
@@ -1372,13 +1417,6 @@ pub(super) async fn save_private_message(
             "Add this person as a contact or start the conversation in a room",
         ));
     }
-    // One account's inbox writes serialize with each other, bounding a burst
-    // across multiple sessions. Retries do not consume a second send slot.
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,17))")
-        .bind(own.to_string())
-        .execute(&mut *write.tx)
-        .await
-        .map_err(routes::database_error)?;
     write.lock_conversation().await?;
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3 AND expires_at>now()")
         .bind(&write.conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *write.tx).await.map_err(routes::database_error)?;
@@ -1400,11 +1438,6 @@ pub(super) async fn save_private_message(
     }
     if !write.allowed() {
         return Err(AuthError::InvalidInput("Private message unavailable"));
-    }
-    let recent:i64=sqlx::query_scalar("SELECT count(*) FROM (SELECT 1 FROM chat_messages WHERE sender_account=$1 AND sender_session=$1 AND recipient_account IS NOT NULL AND sent_at>now()-interval '1 minute' LIMIT 30) recent")
-        .bind(own).fetch_one(&mut *write.tx).await.map_err(routes::database_error)?;
-    if recent >= 30 {
-        return Err(AuthError::RateLimited);
     }
     let reply_to = if let Some(id) = request.reply_to {
         let original: SqlJson<ChatEntry> = sqlx::query_scalar(
@@ -1452,7 +1485,11 @@ pub(super) async fn save_private_message(
         &request.attachment_ids,
     )
     .await
-    .map_err(route_error)?;
+    .map_err(|error| match error {
+        // The account's private-message budget, shared with its room sends.
+        RoomError::Refused(Refusal::RateLimited(_)) => AuthError::RateLimited,
+        error => route_error(error),
+    })?;
     write.commit(claims).await?;
     Ok((saved, true))
 }

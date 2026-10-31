@@ -827,7 +827,11 @@ session locks. A supplied room ID alone grants no authority; departed, waiting a
 guest participants cannot establish a saved conversation. Existing conversations
 and exact committed retries remain usable after either participant leaves.
 Both room and HTTP account PM sends honor the two accounts' saved
-ignore/PM preferences under database row locks. Room-session preference changes
+ignore/PM preferences under database row locks. They also share one budget per
+sending account, 30 private messages a minute across room sockets and the HTTP
+inbox together: a new message beyond it answers `429` over HTTP and a
+`socialError` with code `rate_limited` on the socket, while a retry of a saved
+message still returns its receipt. Room-session preference changes
 also wait for in-flight durable sends before acknowledging, so an opt-out cannot
 overtake an accepted send. A known-success HTTP retry returns its existing receipt
 without redelivery, even after preferences change. Inbox delivery works while the
