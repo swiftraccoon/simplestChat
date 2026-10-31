@@ -460,9 +460,10 @@ requested delay plus up to 249 ms of jitter. It allows at most three total
 attempts within one 15-second budget, shortened by the accepted expiry; repeated
 deferrals and newer pending tokens cannot extend that budget.
 
-Renewal validates the same account and credential version without changing room
-membership, media, roles or reconnect credentials. It cannot upgrade a guest,
-change identity, shorten the accepted lifetime or revive an expired connection.
+Renewal validates the same account, credential version and refresh session
+(`sid`) without changing room membership, media, roles or reconnect credentials.
+It cannot upgrade a guest, change identity or session, shorten the accepted
+lifetime or revive an expired connection.
 The server bounds validation to two seconds and the old expiry, and permits three
 renewal attempts per minute per socket under the shared authentication budget.
 The browser retains the newest token for future handshakes. Terminal rejection,

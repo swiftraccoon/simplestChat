@@ -34,12 +34,14 @@ impl RenewalAuthenticator {
     }
 }
 
-/// Renewals cannot change identity, revive expiry, or move expiry backwards.
+/// Renewals cannot change identity or refresh session, revive expiry, or move
+/// expiry backwards.
 fn renewal_matches(current: &Claims, candidate: &Claims, now: u64) -> bool {
     current.exp as u64 > now
         && candidate.exp >= current.exp
         && candidate.sub == current.sub
         && candidate.auth_version == current.auth_version
+        && candidate.sid == current.sid
 }
 
 pub(super) fn unix_seconds() -> u64 {
@@ -508,6 +510,22 @@ mod tests {
         renewed.sub.clone_from(&current.sub);
         renewed.auth_version += 1;
         assert!(!renewal_matches(&current, &renewed, 100));
+    }
+
+    #[test]
+    fn renewal_refuses_a_token_from_another_session() {
+        let current = claims(200);
+        let mut candidate = current.clone();
+        candidate.sid = Uuid::new_v4();
+        assert!(
+            !renewal_matches(&current, &candidate, 100),
+            "a token issued with another refresh session cannot renew this socket"
+        );
+        candidate.sid = current.sid;
+        assert!(
+            renewal_matches(&current, &candidate, 100),
+            "the same token from the socket's own session still renews"
+        );
     }
 
     #[test]
