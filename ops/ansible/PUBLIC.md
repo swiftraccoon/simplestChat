@@ -361,6 +361,20 @@ response the proxy answers itself (`/metrics`, 404) carries the maintained
 content security policy. The policy is a default (`?Content-Security-Policy`):
 on application responses the backend's own policy is what browsers receive.
 
+The playbook leaves `/etc/simplestchat-public/browser-assets-installed.json`
+unchanged; that receipt records the Caddyfile digest that browser-asset
+retention was installed with. Until it matches the live file again,
+"Browser asset proxy configuration changed; use explicit maintenance" stops
+app-only and maintenance releases, and the browser-asset upgrade is refused
+once retention is installed. On such a host only the
+"Record the installed reviewed proxy capability on initial provisioning" task
+rewrites the receipt. It runs only as part of a full `public.yml` run, whose
+"Require the public project to be stopped before editing its configuration"
+check fails while any `simplestchat-public` container runs. Before the next
+release, therefore, stop the public project as described below, apply
+`public.yml` (it reinstalls the Caddyfile and records the receipt), and run
+the deployment command again.
+
 Before base-host provisioning, image builds, private benchmarks, or public
 configuration changes, announce downtime and stop the entire public project:
 

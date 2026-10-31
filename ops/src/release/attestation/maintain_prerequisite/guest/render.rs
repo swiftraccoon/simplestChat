@@ -278,7 +278,7 @@ pub(super) fn render(
     let caddy = source(
         sources,
         "Caddyfile",
-        "cb48cb809b5f80cb4187f3976be868c1d71a8411ad893ba0ad2b4df03ffd6039",
+        "c63bf202554c52938615d04c93f3162e254b27bad44bb70fe2207fbfaa3f6af5",
     )?;
     let caddy_hash = digest(caddy.as_bytes());
     outputs.insert("Caddyfile".into(), caddy.into_bytes());

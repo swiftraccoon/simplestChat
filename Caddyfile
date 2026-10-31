@@ -46,7 +46,10 @@
 	}
 
 	# Do not enable access logging: WebSocket URLs can contain credentials.
-	encode zstd gzip
+	# Authentication answers carry tokens beside caller-chosen text; never
+	# compress them, or their compressed length can reveal token bytes.
+	@compressible not path /api/auth/*
+	encode @compressible zstd gzip
 	# Only validated public files can answer an upstream miss. This directory is
 	# a readonly, bounded release store, independent of the selected app image.
 	@retained_asset {

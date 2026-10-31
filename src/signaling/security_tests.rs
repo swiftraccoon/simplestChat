@@ -400,22 +400,22 @@ async fn static_fallback_is_wrapped_in_security_headers() {
 fn the_proxy_defaults_to_the_applications_content_security_policy() {
     // The Caddyfile may only supply the policy where the backend sent none
     // (the `?` prefix); otherwise a handler's sandbox never reaches a browser.
-    let caddyfile = include_str!("../../Caddyfile");
-    let line = caddyfile
-        .lines()
-        .map(str::trim)
-        .find(|line| line.contains("Content-Security-Policy"))
-        .expect("the proxy carries a content security policy");
-    let value = line
+    let lines = caddyfile_lines(|line| line.contains("Content-Security-Policy"));
+    assert_eq!(lines.len(), 1, "one proxy policy line");
+    let value = lines[0]
         .strip_prefix("?Content-Security-Policy \"")
         .and_then(|rest| rest.strip_suffix('"'))
         .expect("the proxy policy is a default, not a replacement");
     assert_eq!(value, CONTENT_SECURITY_POLICY);
-    assert_eq!(
-        caddyfile.matches("Content-Security-Policy").count(),
-        1,
-        "one proxy policy line"
-    );
+}
+
+/// The trimmed lines of the maintained `Caddyfile` that `select` accepts, in file order.
+fn caddyfile_lines(select: impl Fn(&str) -> bool) -> Vec<&'static str> {
+    include_str!("../../Caddyfile")
+        .lines()
+        .map(str::trim)
+        .filter(|line| select(line))
+        .collect()
 }
 
 #[tokio::test]
@@ -1053,16 +1053,12 @@ fn websocket_ticket_protocol_rejects_bearers_duplicates_and_malformed_values() {
 fn the_proxy_repeats_the_applications_fixed_security_headers() {
     // Caddy owns transport security at the edge; every other fixed header the
     // application sends appears once in the Caddyfile with the same value.
-    let caddyfile = include_str!("../../Caddyfile");
     for (name, value) in SECURITY_HEADERS {
         if name == "strict-transport-security" {
             continue;
         }
-        let lines: Vec<&str> = caddyfile
-            .lines()
-            .map(str::trim)
-            .filter(|line| line.to_ascii_lowercase().starts_with(&format!("{name} \"")))
-            .collect();
+        let prefix = format!("{name} \"");
+        let lines = caddyfile_lines(|line| line.to_ascii_lowercase().starts_with(&prefix));
         assert_eq!(lines.len(), 1, "one proxy line for {name}");
         assert_eq!(
             lines[0].split_once(' ').map(|(_, rest)| rest),
@@ -1070,6 +1066,25 @@ fn the_proxy_repeats_the_applications_fixed_security_headers() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn the_proxy_does_not_compress_authentication_responses() {
+    // An authentication answer holds an access token beside the caller's own
+    // email and name; compressed, its length can reveal token bytes (BREACH),
+    // so the proxy's one compression directive must leave /api/auth/* alone.
+    let encoders = caddyfile_lines(|line| line.split_whitespace().next() == Some("encode"));
+    assert_eq!(encoders.len(), 1, "one proxy compression line");
+    let matcher = encoders[0]
+        .split_whitespace()
+        .nth(1)
+        .filter(|word| word.starts_with('@'))
+        .expect("compression names a matcher");
+    assert_eq!(
+        caddyfile_lines(|line| line.split_whitespace().next() == Some(matcher)),
+        ["@compressible not path /api/auth/*"],
+        "the matcher is defined once and excludes authentication paths"
+    );
 }
 
 #[tokio::test]
