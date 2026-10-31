@@ -34,12 +34,22 @@ const ACCOUNT_BYTES: i64 = 64 * 1024 * 1024;
 const TOTAL_BYTES: i64 = 1024 * 1024 * 1024;
 const ACCOUNT_FILES: i64 = 1000;
 const TOTAL_FILES: i64 = 20000;
+/// Key of the PostgreSQL advisory lock that `store_upload` holds for its
+/// transaction while it reads and reserves the shared attachment quota (bytes
+/// and files, per account and server-wide), so concurrent uploads from any
+/// accounts cannot both pass the same quota check.
+const ATTACHMENT_QUOTA_LOCK_KEY: i64 = 7_219_647_820_751_042;
 static UPLOADS: Semaphore = Semaphore::const_new(4);
 static DOWNLOADS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(4)));
 /// Accounts with an upload in flight. An account uploads one file at a time,
 /// so it never holds more than one of the four `UPLOADS` permits.
 static ACCOUNT_UPLOADS: LazyLock<crate::sync::Mutex<HashSet<Uuid>>> =
     LazyLock::new(|| crate::sync::Mutex::new(HashSet::new()));
+/// HS256 key for attachment grants: `grant_access` signs a 30-second token for
+/// one attachment, room, participant and media session (with the viewer's
+/// account claims, if any), and `allowed` verifies it. The key is per-process
+/// randomness drawn from the OS on first use and never stored, so grants do not
+/// survive a restart and no other server process accepts them.
 static GRANT_KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
     let mut key = [0; 32];
     SysRng
@@ -150,7 +160,8 @@ async fn store_upload(
     let (owner, _) = lock_current_session(&mut tx, claims).await?;
     // A single bounded quota reservation serializes uploads across accounts.
     // Expired bytes count until physically deleted, keeping the disk cap honest.
-    sqlx::query("SELECT pg_advisory_xact_lock(7219647820751042)")
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(ATTACHMENT_QUOTA_LOCK_KEY)
         .execute(&mut *tx)
         .await
         .map_err(routes::database_error)?;
