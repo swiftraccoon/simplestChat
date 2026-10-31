@@ -785,6 +785,15 @@ pub(super) async fn verify_discoverable_assertion(
     // older- and equal-counter scenarios (CI's accounts browser group) fail if that ever stops.
     let result = webauthn
         .finish_discoverable_authentication(credential, state, &[DiscoverableKey::from(&passkey)])
+        .inspect_err(|error| {
+            if matches!(error, WebauthnError::CredentialPossibleCompromise) {
+                warn!(
+                    %account_id,
+                    passkey_id,
+                    "Passkey assertion counter did not advance; the credential may be cloned"
+                );
+            }
+        })
         .map_err(|_| AuthError::InvalidPasskey)?;
     if authentication_credential_id(&result) != passkey_id {
         return Err(AuthError::InvalidPasskey);
