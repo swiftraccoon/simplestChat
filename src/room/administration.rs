@@ -693,23 +693,7 @@ impl Context {
                     }
                     room.last_password_hash_at = Some(now);
                 }
-                let permit = self
-                    .manager
-                    .password_hash_work
-                    .clone()
-                    .try_acquire_owned()
-                    .map_err(|_| {
-                        Refusal::Unavailable("Password service is busy; try again".into())
-                    })?;
-                let password = password.clone();
-                let hash = tokio::task::spawn_blocking(move || {
-                    let _permit = permit;
-                    crate::auth::password::hash_password(password.expose_secret())
-                })
-                .await
-                .map_err(|_| Refusal::Unavailable("Password update failed".into()))?
-                .map_err(|_| Refusal::Unavailable("Password update failed".into()))?;
-                Some(Some(hash))
+                Some(Some(self.manager.hash_room_password(password).await?))
             }
             Some(None) => Some(None),
             None => None,

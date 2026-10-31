@@ -99,31 +99,11 @@ impl RoomManager {
             room.last_password_hash_at = Some(now);
         }
 
-        // Argon2 is deliberately expensive; keep it off the async executor and
-        // bound concurrent work so settings updates cannot exhaust CPU threads.
+        // Argon2 is deliberately expensive: hash_room_password keeps it off the async
+        // executor under the single hashing permit, so settings updates cannot exhaust
+        // CPU threads.
         let password_hash = match patch.password.as_ref() {
-            Some(Some(value)) => {
-                let value = value.clone();
-                let permit = self
-                    .password_hash_work
-                    .clone()
-                    .try_acquire_owned()
-                    .map_err(|_| anyhow::anyhow!("Password service is busy; try again"))?;
-                let hash = tokio::task::spawn_blocking(move || {
-                    let _permit = permit;
-                    crate::auth::password::hash_password(value.expose_secret())
-                })
-                .await
-                .map_err(|error| {
-                    warn!(%room_id, %error, "Password hash task failed");
-                    anyhow::anyhow!("Password update failed")
-                })?
-                .map_err(|error| {
-                    warn!(%room_id, %error, "Password hashing failed");
-                    anyhow::anyhow!("Password update failed")
-                })?;
-                Some(Some(hash))
-            }
+            Some(Some(value)) => Some(Some(self.hash_room_password(value).await?)),
             Some(None) => Some(None),
             None => None,
         };

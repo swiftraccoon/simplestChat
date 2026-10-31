@@ -347,7 +347,8 @@ phrases are not split into words and no character-class composition is required.
 This comparison affects refusal only; the credential hash still uses NFC.
 Password verification uses NFC too, without reapplying selection minimums. Hashes use standard Argon2id PHC encoding and the bounded password-work
 lane; there is no raw-byte or versioned normalization fallback. Room passwords
-retain their separate policy. The
+keep their own selection rule (8–256 bytes, no control characters) but are
+hashed and verified under the same NFC policy. The
 [pinned corpus and MIT license](../vendor/seclists-passwords/README.md) are verified in tests and included locally at build time. No password is sent to an
 external lookup service. This is a common-password list, not a complete breach
 database or a claim of NIST certification.

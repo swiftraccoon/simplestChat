@@ -116,9 +116,43 @@ impl std::error::Error for RoomError {
     }
 }
 
+/// Why a room password could not be hashed. `Busy` clears once the hashing permit is free;
+/// `Failed` is a job failure (a panicked hashing job or an Argon2 error) that the caller may retry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PasswordHashError {
+    /// Another room password holds the single hashing permit; nothing queues for it.
+    Busy,
+    /// The hashing job panicked or Argon2 failed.
+    Failed,
+}
+
+impl PasswordHashError {
+    /// The client-safe explanation.
+    fn message(self) -> &'static str {
+        match self {
+            Self::Busy => "Password service is busy; try again",
+            Self::Failed => "Password update failed",
+        }
+    }
+}
+
+impl std::fmt::Display for PasswordHashError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message())
+    }
+}
+
+impl std::error::Error for PasswordHashError {}
+
+impl From<PasswordHashError> for RoomError {
+    fn from(error: PasswordHashError) -> Self {
+        Refusal::Unavailable(error.message().into()).into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Refusal, RoomError};
+    use super::{PasswordHashError, Refusal, RoomError};
     use crate::signaling::protocol::ErrorCode;
     use axum::http::StatusCode;
 
@@ -183,5 +217,25 @@ mod tests {
             database,
             RoomError::Database(sqlx::Error::PoolClosed)
         ));
+    }
+
+    /// Both hashing paths answered with these exact texts before they shared one site.
+    #[test]
+    fn password_hash_errors_keep_their_messages_and_refuse_as_unavailable() {
+        for (error, message) in [
+            (
+                PasswordHashError::Busy,
+                "Password service is busy; try again",
+            ),
+            (PasswordHashError::Failed, "Password update failed"),
+        ] {
+            assert_eq!(error.to_string(), message);
+            let RoomError::Refused(refusal) = RoomError::from(error) else {
+                panic!("{error:?} must be a refusal");
+            };
+            assert_eq!(refusal, Refusal::Unavailable(message.into()));
+            assert_eq!(refusal.status(), StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(refusal.code(), ErrorCode::Unavailable);
+        }
     }
 }

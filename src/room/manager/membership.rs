@@ -40,8 +40,9 @@ impl RoomManager {
         })
     }
 
-    /// Verifies a supplied room password on the blocking pool under the
-    /// password lane's permit; "Incorrect room password" when it does not match.
+    /// Verifies a supplied room password under the account passwords' NFC policy,
+    /// on the blocking pool under the password lane's permit; "Incorrect room
+    /// password" when it does not match.
     pub(in crate::room) async fn verify_room_password(
         &self,
         room_id: &RoomId,
@@ -60,7 +61,7 @@ impl RoomManager {
         .await?;
         let verified = tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            crate::auth::password::verify_password(&supplied, &hash).unwrap_or(false)
+            crate::auth::password::verify_account_password(&supplied, &hash).unwrap_or(false)
         })
         .await
         .map_err(|error| {

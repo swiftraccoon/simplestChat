@@ -12,6 +12,7 @@ mod moderation_ops;
 mod settings_ops;
 
 use super::*;
+use crate::room::refusal::PasswordHashError;
 use crate::secret::SecretString;
 
 impl RoomManager {
@@ -168,25 +169,36 @@ impl RoomManager {
             + 1_usize.saturating_sub(self.password_hash_work.available_permits())
     }
 
-    pub(crate) async fn hash_room_password(&self, password: &SecretString) -> Result<String> {
+    /// Hashes a room password under the account passwords' NFC policy, on the
+    /// blocking pool under the hashing lane's single permit. Room creation, the
+    /// socket settings change and HTTP administration all hash through here.
+    ///
+    /// # Errors
+    /// [`PasswordHashError::Busy`] at once, without queueing, while another room
+    /// password holds the permit; [`PasswordHashError::Failed`] when the hashing
+    /// job panics or Argon2 fails, after logging the cause.
+    pub(crate) async fn hash_room_password(
+        &self,
+        password: &SecretString,
+    ) -> Result<String, PasswordHashError> {
         let permit = self
             .password_hash_work
             .clone()
             .try_acquire_owned()
-            .map_err(|_| anyhow::anyhow!("Password service is busy; try again"))?;
+            .map_err(|_| PasswordHashError::Busy)?;
         let password = password.clone();
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            crate::auth::password::hash_password(password.expose_secret())
+            crate::auth::password::hash_account_password(password.expose_secret())
         })
         .await
         .map_err(|error| {
             warn!(%error, "Password hash task failed");
-            anyhow::anyhow!("Password update failed")
+            PasswordHashError::Failed
         })?
         .map_err(|error| {
             warn!(%error, "Password hashing failed");
-            anyhow::anyhow!("Password update failed")
+            PasswordHashError::Failed
         })
     }
 

@@ -6,20 +6,21 @@ use argon2::{
 };
 use icu_normalizer::ComposingNormalizer;
 
-/// Account passwords use NFC for both selection and verification. Stored values
-/// are ordinary Argon2 PHC strings; there is no alternate normalization policy.
+/// Normalizes a password to NFC before selection checks, hashing and verification; no other policy.
 pub(crate) fn normalize_selection(password: &str) -> String {
     ComposingNormalizer::new_nfc()
         .normalize(password)
         .into_owned()
 }
 
+/// Hashes an account or room password under the one NFC policy for both: NFC, then Argon2.
 pub(crate) fn hash_account_password(
     password: &str,
 ) -> Result<String, argon2::password_hash::Error> {
     hash_password(&normalize_selection(password))
 }
 
+/// Verifies an account or room password under the one NFC policy for both: NFC, then Argon2.
 pub(crate) fn verify_account_password(
     password: &str,
     hash: &str,
@@ -27,12 +28,14 @@ pub(crate) fn verify_account_password(
     verify_password(&normalize_selection(password), hash)
 }
 
+/// Hashes the raw bytes, no normalization; production code uses the NFC pair above.
 pub(crate) fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let argon2 = Argon2::default();
     let hash = argon2.hash_password(password.as_bytes())?;
     Ok(hash.to_string())
 }
 
+/// Verifies the raw bytes, no normalization; production code uses the NFC pair above.
 pub(crate) fn verify_password(
     password: &str,
     hash: &str,
