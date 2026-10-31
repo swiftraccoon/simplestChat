@@ -29,10 +29,24 @@ pub(crate) const DEFAULT_WORKER_UTILIZATION: f64 = 0.7;
 /// saturated. An over-admitted room queues outbound media in the process
 /// until the limit kills it, so joins stop well before that.
 pub(crate) const DEFAULT_MEMORY_FRACTION: f64 = 0.85;
-/// Memory saturation clears once usage falls below this share of the threshold.
+/// Memory saturation clears once usage falls below this share of the threshold
+/// (76.5 % of the limit at the default fraction). Every guard here clears below
+/// the point where it trips: setting up a joining call costs more than
+/// forwarding it later, so a signal dips as soon as joins stop, and a guard
+/// that cleared at its threshold would reopen on that dip while the joins it
+/// let in pushed the load straight back over. Memory holds what the admitted
+/// calls need and does not dip when joins stop, so it has the narrowest band;
+/// a wider one could keep joins refused after the load has gone, because
+/// memory that departed calls freed is not always handed back to the cgroup
+/// (the allocator keeps freed heap, and page cache stays charged).
 const MEMORY_CLEAR_FACTOR: f64 = 0.9;
 /// A saturated worker clears once its utilization falls below this share of
-/// the threshold.
+/// the threshold (0.56 of a core at the default 0.7). Utilization is the
+/// worker's own share of a core and moves in step with the work on it, so a
+/// band of a fifth outlasts the dip when joins stop; a tripped worker otherwise
+/// keeps the load of its admitted calls (in the ramp that set the default, both
+/// workers stayed at 0.73 and 0.75 of a core after they refused joins) and
+/// returns to placement once a real part of that load has left.
 const WORKER_CLEAR_FACTOR: f64 = 0.8;
 const WINDOW: Duration = Duration::from_secs(10);
 const INTERVAL: Duration = Duration::from_secs(2);
@@ -224,7 +238,12 @@ pub(crate) fn throttled_fraction(readings: &VecDeque<CpuStat>) -> Option<f64> {
 
 /// Saturation with hysteresis: entered at the thresholds, left only once both
 /// signals fall below half of them, so a load hovering at the line does not
-/// flap admission on and off.
+/// flap admission on and off. The band is the widest of the three because
+/// both signals count waiting for CPU (throttled periods, stalled time)
+/// rather than CPU used: they stay near zero while the quota has room and
+/// climb steeply once demand reaches it, so a reading just under the threshold
+/// still means the process is at its quota, and only one well below it shows
+/// room for more calls.
 pub(crate) fn evaluate(
     previously_saturated: bool,
     throttled: Option<f64>,
