@@ -1157,12 +1157,17 @@ async fn handle_connection_with_timing(
         if drain.is_draining() {
             // Global room drain clears both live and retained memberships. Do
             // not start a new grace timer or race its authoritative cleanup.
-            debug!(%room_id, %participant_id, "Membership handed to server drain");
+            debug!(
+                room = %room_id.log_handle(),
+                %participant_id,
+                "Membership handed to server drain"
+            );
         } else if in_lobby.load(Ordering::Acquire) || session.invalidated() {
             // Lobby and invalidated memberships do not receive reconnect grace.
             info!(
                 "Participant {} disconnected from room {}; lobby or expired/invalid credentials require immediate cleanup",
-                participant_id, room_id
+                participant_id,
+                room_id.log_handle()
             );
             if let Err(e) = room_manager
                 .remove_participant_for_sender(&room_id, &participant_id, &tx)
@@ -1173,7 +1178,8 @@ async fn handle_connection_with_timing(
         } else {
             info!(
                 "Participant {} disconnected from room {}, starting 30s grace period",
-                participant_id, room_id
+                participant_id,
+                room_id.log_handle()
             );
 
             retain_for_reconnect(

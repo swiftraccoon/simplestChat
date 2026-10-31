@@ -127,7 +127,11 @@ impl RoomManager {
                 .attach_viewer_lease(&media_participant_id, lease)
                 .await
         {
-            debug!(%room_id, %error, "Receive transport left before its placement was recorded");
+            debug!(
+                room = %room_id.log_handle(),
+                %error,
+                "Receive transport left before its placement was recorded"
+            );
         }
         if !self
             .is_current_media_session(room_id, participant_id, expected_sender, media_session_id)
@@ -314,7 +318,7 @@ impl RoomManager {
                     .await
             {
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     %producer_id,
                     %error,
                     "Active speaker observer rejected a producer"
@@ -326,7 +330,7 @@ impl RoomManager {
                     .await
             {
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     %producer_id,
                     %error,
                     "Audio level observer rejected a producer"
@@ -336,7 +340,10 @@ impl RoomManager {
 
         info!(
             "Created {:?} producer {} for participant {} in room {}",
-            kind, producer_id, participant_id, room_id
+            kind,
+            producer_id,
+            participant_id,
+            room_id.log_handle()
         );
 
         Ok(producer_id)
@@ -430,7 +437,9 @@ impl RoomManager {
 
         debug!(
             "Created consumer {} for participant {} in room {}",
-            consumer_info.id, participant_id, room_id
+            consumer_info.id,
+            participant_id,
+            room_id.log_handle()
         );
 
         Ok(consumer_info)
@@ -605,7 +614,9 @@ impl RoomManager {
 
         info!(
             "Closed producer {} for participant {} in room {}",
-            producer_id, participant_id, room_id
+            producer_id,
+            participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -682,7 +693,9 @@ impl RoomManager {
 
         info!(
             "Paused producer {} for participant {} in room {}",
-            producer_id, participant_id, room_id
+            producer_id,
+            participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -743,7 +756,9 @@ impl RoomManager {
 
         info!(
             "Resumed producer {} for participant {} in room {}",
-            producer_id, participant_id, room_id
+            producer_id,
+            participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -1175,7 +1190,7 @@ impl RoomManager {
                 // stream alive. Fall back to dropping all media state for that
                 // participant; they may establish fresh authorized transports.
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     participant_id = %producer.participant_id,
                     producer_id = %producer.producer_id,
                     %error,
@@ -1189,7 +1204,7 @@ impl RoomManager {
                     .await
                 {
                     warn!(
-                        %room_id,
+                        room = %room_id.log_handle(),
                         participant_id = %producer.participant_id,
                         %cleanup_error,
                         "Failed to drop media state after producer revocation"

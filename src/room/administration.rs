@@ -915,7 +915,7 @@ impl Context {
                 drop(room);
                 self._control.take();
                 for session in sessions {
-                    let media = RoomManager::media_participant_id(
+                    let media_participant_id = RoomManager::media_participant_id(
                         &self.room_id,
                         &session.participant_id,
                         session.media_session_id,
@@ -924,7 +924,7 @@ impl Context {
                         .manager
                         .media_server
                         .transport_manager()
-                        .remove_participant(&media)
+                        .remove_participant(&media_participant_id)
                         .await
                     {
                         tracing::warn!(%error, "Administered participant media cleanup failed");

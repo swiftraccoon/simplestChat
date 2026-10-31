@@ -182,9 +182,11 @@ receives an unambiguous room-local label, but full server-issued UUIDs remain th
 message, authorization and moderation identity. Cross-script lookalikes are not
 fully resolved by normalization; visible UUID discriminators provide the
 additional identity cue. Room creation and identity updates share label checks.
-Routine join/lobby logs contain IDs, not display names. User/participant IDs and
-room IDs intentionally remain in lifecycle and moderation logs to correlate
-failures and administrative actions; they are pseudonymous, potentially linkable
+Routine join/lobby logs contain IDs, not display names. Logs carry a room's log
+handle (the first eight hexadecimal characters of the SHA-256 of its identifier)
+and a participant's public UUID, never a room identifier or a media session, so
+lifecycle and moderation lines still correlate failures and administrative
+actions; the handles and UUIDs are pseudonymous, potentially linkable
 operational data, not anonymous telemetry. Structured moderation history retains
 its separately governed labels, reasons and retention controls.
 

@@ -154,7 +154,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(%room_id, %error, "Failed to persist room settings");
+                warn!(room = %room_id.log_handle(), %error, "Failed to persist room settings");
                 anyhow::anyhow!("Room settings could not be saved")
             })?;
         }
@@ -179,7 +179,11 @@ impl RoomManager {
 
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
-        info!("Room settings updated for room {} by {}", room_id, admin_id);
+        info!(
+            "Room settings updated for room {} by {}",
+            room_id.log_handle(),
+            admin_id
+        );
         Ok(())
     }
 
@@ -254,7 +258,7 @@ impl RoomManager {
             })
             .await
             .map_err(|error| {
-                warn!(%room_id, %error, "Failed to persist room topic");
+                warn!(room = %room_id.log_handle(), %error, "Failed to persist room topic");
                 anyhow::anyhow!("Room topic could not be saved")
             })?;
         }
@@ -270,7 +274,11 @@ impl RoomManager {
         });
         drop(room);
         control.release();
-        info!("Topic set for room {} by {}", room_id, admin_id);
+        info!(
+            "Topic set for room {} by {}",
+            room_id.log_handle(),
+            admin_id
+        );
         Ok(())
     }
 }

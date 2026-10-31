@@ -205,7 +205,7 @@ impl RoomManager {
                         .entry(room_id.clone())
                         .or_insert_with(Uuid::new_v4);
                     tracing::warn!(
-                        %room_id,
+                        room = %room_id.log_handle(),
                         "Room identity persistence outcome uncertain; retaining room-ID reservation until restart"
                     );
                 }

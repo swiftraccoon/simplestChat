@@ -158,7 +158,11 @@ impl RoomManager {
                         // unknowable. Keep the room reserved and tombstoned
                         // rather than reviving a runtime room whose DB row may
                         // already be gone.
-                        warn!(%room_id, %error, "Room delete outcome is indeterminate; retaining tombstone");
+                        warn!(
+                            room = %room_id.log_handle(),
+                            %error,
+                            "Room delete outcome is indeterminate; retaining tombstone"
+                        );
                     }
                     return Err(error);
                 }
@@ -168,7 +172,7 @@ impl RoomManager {
                     // PostgreSQL did not commit. Fail closed until process
                     // reconciliation/restart rather than creating a zombie.
                     warn!(
-                        %room_id,
+                        room = %room_id.log_handle(),
                         "Room delete timed out; retaining tombstone because commit status is unknown"
                     );
                     return Err(room_delete_timeout("deleting the database row"));
@@ -194,7 +198,7 @@ impl RoomManager {
                             // tombstoned and the ID reserved rather than leak a
                             // permanently waiting teardown task.
                             warn!(
-                                %room_id,
+                                room = %room_id.log_handle(),
                                 "Timed out draining deleted room; retaining room-ID reservation"
                             );
                             return Ok(DeleteRoomResult::Deleted);
@@ -235,26 +239,32 @@ impl RoomManager {
             }
             drop(control_guard);
 
-            let participant_cleanup = participant_sessions.into_iter().map(
-                |(participant_id, media_session_id)| {
-                    let media_server = media_server.clone();
-                    let room_id = room_id.clone();
-                    async move {
-                        let media_participant_id = RoomManager::media_participant_id(
-                            &room_id,
-                            &participant_id,
-                            media_session_id,
-                        );
-                        if let Err(error) = media_server
-                            .transport_manager()
-                            .remove_participant(&media_participant_id)
-                            .await
-                        {
-                            warn!(%room_id, %participant_id, %error, "Failed to tear down deleted-room participant media");
+            let participant_cleanup =
+                participant_sessions
+                    .into_iter()
+                    .map(|(participant_id, media_session_id)| {
+                        let media_server = media_server.clone();
+                        let room_id = room_id.clone();
+                        async move {
+                            let media_participant_id = RoomManager::media_participant_id(
+                                &room_id,
+                                &participant_id,
+                                media_session_id,
+                            );
+                            if let Err(error) = media_server
+                                .transport_manager()
+                                .remove_participant(&media_participant_id)
+                                .await
+                            {
+                                warn!(
+                                    room = %room_id.log_handle(),
+                                    %participant_id,
+                                    %error,
+                                    "Failed to tear down deleted-room participant media"
+                                );
+                            }
                         }
-                    }
-                },
-            );
+                    });
             if tokio::time::timeout(
                 ROOM_DELETE_TIMEOUT,
                 futures_util::future::join_all(participant_cleanup),
@@ -263,7 +273,7 @@ impl RoomManager {
             .is_err()
             {
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     "Timed out tearing down deleted-room participant media"
                 );
             }
@@ -281,12 +291,16 @@ impl RoomManager {
                         // recreation fail or attach to stale infrastructure.
                         // Fail closed until restart/reconciliation can prove the
                         // router is gone.
-                        warn!(%room_id, %error, "Failed to tear down deleted-room router; retaining room-ID reservation");
+                        warn!(
+                            room = %room_id.log_handle(),
+                            %error,
+                            "Failed to tear down deleted-room router; retaining room-ID reservation"
+                        );
                         false
                     }
                     Err(_) => {
                         warn!(
-                            %room_id,
+                            room = %room_id.log_handle(),
                             "Timed out tearing down deleted-room router; retaining room-ID reservation"
                         );
                         false
@@ -377,7 +391,11 @@ impl RoomManager {
                 .close_room_for_rejoin(&room_id, dead_worker, "Media worker restarted; rejoining")
                 .await
             {
-                warn!(%room_id, %error, "Failed to close a room whose media worker died");
+                warn!(
+                    room = %room_id.log_handle(),
+                    %error,
+                    "Failed to close a room whose media worker died"
+                );
             }
         }
     }
@@ -475,7 +493,12 @@ impl RoomManager {
                 .remove_participant(&media_participant_id)
                 .await
             {
-                debug!(%room_id, %participant_id, %error, "Media for a rejoining participant was already gone");
+                debug!(
+                    room = %room_id.log_handle(),
+                    %participant_id,
+                    %error,
+                    "Media for a rejoining participant was already gone"
+                );
             }
         }
         let teardown = tokio::time::timeout(
@@ -537,7 +560,12 @@ impl RoomManager {
                         room.active_speaker_observer = None;
                         room.audio_level_observer = None;
                         remaining.fetch_sub(1, Ordering::Relaxed);
-                        info!(%room_id, participants, lobby, "Room membership drained");
+                        info!(
+                            room = %room_id.log_handle(),
+                            participants,
+                            lobby,
+                            "Room membership drained"
+                        );
                     }
                 })
                 .await;

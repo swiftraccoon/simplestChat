@@ -222,7 +222,7 @@ impl RoomManager {
             sessions
         };
         warn!(
-            %room_id,
+            room = %room_id.log_handle(),
             "Room persistence outcome uncertain; retaining runtime tombstone and room-ID reservation until restart"
         );
         let media = self.media_server.clone();
@@ -230,20 +230,29 @@ impl RoomManager {
         tokio::spawn(
             async move {
                 use futures_util::StreamExt;
-                let cleanup = futures_util::stream::iter(sessions).for_each_concurrent(16, |id| {
-                    let media = media.clone();
-                    async move {
-                        if let Err(error) = media.transport_manager().remove_participant(&id).await
-                        {
-                            warn!(%error, "Quarantined room participant media cleanup failed");
+                let cleanup = futures_util::stream::iter(sessions).for_each_concurrent(
+                    16,
+                    |media_participant_id| {
+                        let media = media.clone();
+                        async move {
+                            if let Err(error) = media
+                                .transport_manager()
+                                .remove_participant(&media_participant_id)
+                                .await
+                            {
+                                warn!(%error, "Quarantined room participant media cleanup failed");
+                            }
                         }
-                    }
-                });
+                    },
+                );
                 if tokio::time::timeout(QUARANTINE_CLEANUP_TIMEOUT, cleanup)
                     .await
                     .is_err()
                 {
-                    warn!(%room_id, "Quarantined room participant cleanup incomplete");
+                    warn!(
+                        room = %room_id.log_handle(),
+                        "Quarantined room participant cleanup incomplete"
+                    );
                 }
                 match tokio::time::timeout(
                     QUARANTINE_CLEANUP_TIMEOUT,
@@ -253,9 +262,16 @@ impl RoomManager {
                 {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => {
-                        warn!(%room_id, %error, "Quarantined room router cleanup failed")
+                        warn!(
+                            room = %room_id.log_handle(),
+                            %error,
+                            "Quarantined room router cleanup failed"
+                        )
                     }
-                    Err(_) => warn!(%room_id, "Quarantined room router cleanup incomplete"),
+                    Err(_) => warn!(
+                        room = %room_id.log_handle(),
+                        "Quarantined room router cleanup incomplete"
+                    ),
                 }
                 // Intentionally retain the reservation even after successful cleanup.
             }

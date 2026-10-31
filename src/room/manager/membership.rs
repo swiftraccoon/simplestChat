@@ -65,7 +65,7 @@ impl RoomManager {
         })
         .await
         .map_err(|error| {
-            warn!(%room_id, %error, "Password verification task failed");
+            warn!(room = %room_id.log_handle(), %error, "Password verification task failed");
             anyhow::anyhow!("Password verification failed")
         })?;
         anyhow::ensure!(verified, "Incorrect room password");
@@ -101,7 +101,7 @@ impl RoomManager {
         .await
         .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
         .map_err(|error| {
-            warn!(%room_id, %error, "Failed to load room");
+            warn!(room = %room_id.log_handle(), %error, "Failed to load room");
             anyhow::anyhow!("Room data is temporarily unavailable")
         })?;
         let Some((room_settings, password_hash)) = loaded else {
@@ -117,7 +117,7 @@ impl RoomManager {
             Ok(true) => anyhow::bail!("You are banned from this room"),
             Ok(false) => {}
             Err(error) => {
-                warn!(%room_id, %error, "Ban check failed");
+                warn!(room = %room_id.log_handle(), %error, "Ban check failed");
                 anyhow::bail!("Room access could not be verified");
             }
         }
@@ -142,7 +142,7 @@ impl RoomManager {
         )
         .await
         .map_err(|error| {
-            warn!(%room_id, %error, "Role lookup failed");
+            warn!(room = %room_id.log_handle(), %error, "Role lookup failed");
             anyhow::anyhow!("Room access could not be verified")
         })?;
         if role >= roles::Role::Admin {
@@ -219,7 +219,7 @@ impl RoomManager {
             .await
             .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
             .map_err(|error| {
-                warn!(%room_id, %error, "Failed to load room");
+                warn!(room = %room_id.log_handle(), %error, "Failed to load room");
                 anyhow::anyhow!("Room data is temporarily unavailable")
             })?;
             loaded.map_or((None, None), |(settings, hash)| (Some(settings), hash))
@@ -235,7 +235,7 @@ impl RoomManager {
         // same-ID creators and the live-room cap stay atomic. Bound the entire
         // media phase; on timeout, best-effort removal prevents a half-created
         // router from poisoning the room ID after the lock is released.
-        info!("Creating new room: {}", room_id);
+        info!("Creating new room: {}", room_id.log_handle());
         let media_setup = async {
             self.media_server.create_router(room_id.to_string()).await?;
             let router = self
@@ -250,7 +250,11 @@ impl RoomManager {
             {
                 Ok(observer) => Some(observer),
                 Err(error) => {
-                    warn!(%room_id, %error, "Failed to create active speaker observer");
+                    warn!(
+                        room = %room_id.log_handle(),
+                        %error,
+                        "Failed to create active speaker observer"
+                    );
                     None
                 }
             };
@@ -262,7 +266,11 @@ impl RoomManager {
             let audio_level_observer = match router.create_audio_level_observer(options).await {
                 Ok(observer) => Some(observer),
                 Err(error) => {
-                    warn!(%room_id, %error, "Failed to create audio level observer");
+                    warn!(
+                        room = %room_id.log_handle(),
+                        %error,
+                        "Failed to create audio level observer"
+                    );
                     None
                 }
             };
@@ -284,7 +292,10 @@ impl RoomManager {
                 return Err(error);
             }
             Err(_) => {
-                warn!(%room_id, "Room media setup timed out; rolling back router");
+                warn!(
+                    room = %room_id.log_handle(),
+                    "Room media setup timed out; rolling back router"
+                );
                 let _ = tokio::time::timeout(
                     ROOM_DELETE_TIMEOUT,
                     self.media_server.remove_router(room_id.as_str()),
@@ -368,7 +379,7 @@ impl RoomManager {
                 .await,
                 Ok(Ok(()))
             ) {
-                warn!(%room_id, "Draining room creation rollback incomplete");
+                warn!(room = %room_id.log_handle(), "Draining room creation rollback incomplete");
             }
             anyhow::bail!("Server shutting down");
         };
@@ -523,7 +534,7 @@ impl RoomManager {
         };
         if let Some(stale_sender) = stale_sender {
             info!(
-                %room_id,
+                room = %room_id.log_handle(),
                 %participant_id,
                 "Replacing a retained membership whose socket has closed"
             );
@@ -576,7 +587,7 @@ impl RoomManager {
                     Ok(true) => anyhow::bail!("You are banned from this room"),
                     Ok(false) => {}
                     Err(error) => {
-                        warn!(%room_id, %error, "Ban check failed");
+                        warn!(room = %room_id.log_handle(), %error, "Ban check failed");
                         anyhow::bail!("Room access could not be verified");
                     }
                 }
@@ -603,7 +614,7 @@ impl RoomManager {
                 )
                 .await
                 .map_err(|error| {
-                    warn!(%room_id, %error, "Role lookup failed");
+                    warn!(room = %room_id.log_handle(), %error, "Role lookup failed");
                     anyhow::anyhow!("Room access could not be verified")
                 })?,
             )
@@ -625,11 +636,11 @@ impl RoomManager {
             {
                 Ok(Ok(saved)) => saved.unwrap_or_default(),
                 Ok(Err(error)) => {
-                    warn!(%room_id, %error, "Chat style lookup failed");
+                    warn!(room = %room_id.log_handle(), %error, "Chat style lookup failed");
                     requested_style
                 }
                 Err(_) => {
-                    warn!(%room_id, "Chat style lookup timed out");
+                    warn!(room = %room_id.log_handle(), "Chat style lookup timed out");
                     requested_style
                 }
             },
@@ -650,7 +661,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(%room_id, %error, "Sanction lookup failed");
+                warn!(room = %room_id.log_handle(), %error, "Sanction lookup failed");
                 anyhow::anyhow!("Room access could not be verified")
             })?
         } else {
@@ -800,7 +811,8 @@ impl RoomManager {
 
                 info!(
                     "Participant {} entered lobby for room {}",
-                    participant_id, room_id
+                    participant_id,
+                    room_id.log_handle()
                 );
                 return Ok(JoinResult::Lobbied);
             }
@@ -830,7 +842,11 @@ impl RoomManager {
             // under the process-wide admission guard.
             drop(admission);
 
-            info!("Participant {} joined room {}", participant_id, room_id);
+            info!(
+                "Participant {} joined room {}",
+                participant_id,
+                room_id.log_handle()
+            );
 
             // Notify other participants
             room.broadcast_except(
@@ -961,7 +977,8 @@ impl RoomManager {
                 removed_any = true;
                 info!(
                     "Lobby participant {} removed from room {}",
-                    participant_id, room_id
+                    participant_id,
+                    room_id.log_handle()
                 );
                 room_empty = room.participants.is_empty() && room.lobby.is_empty();
                 // No media cleanup needed for lobby participants
@@ -971,7 +988,11 @@ impl RoomManager {
                 removed = true;
                 removed_any = true;
                 media_session_id = Some(participant.media_session_id);
-                info!("Participant {} left room {}", participant_id, room_id);
+                info!(
+                    "Participant {} left room {}",
+                    participant_id,
+                    room_id.log_handle()
+                );
 
                 // Collect audio producer IDs for observer cleanup
                 for (pid, ProducerRecord { kind, .. }) in &participant.producers {
@@ -1038,7 +1059,10 @@ impl RoomManager {
                 {
                     Ok(guard) => guard,
                     Err(_) => {
-                        warn!(%room_id, "Timed out waiting to evict an empty room");
+                        warn!(
+                            room = %room_id.log_handle(),
+                            "Timed out waiting to evict an empty room"
+                        );
                         return Ok(removed_any);
                     }
                 };
@@ -1048,7 +1072,7 @@ impl RoomManager {
                 Ok(room) => room,
                 Err(_) => {
                     warn!(
-                        %room_id,
+                        room = %room_id.log_handle(),
                         "Timed out rechecking an empty room; leaving it active"
                     );
                     return Ok(removed_any);
@@ -1097,16 +1121,20 @@ impl RoomManager {
                 .await
                 {
                     Ok(Ok(())) => {
-                        info!("Room {} is empty, cleaned up router", room_id);
+                        info!("Room {} is empty, cleaned up router", room_id.log_handle());
                         true
                     }
                     Ok(Err(error)) => {
-                        warn!(%room_id, %error, "Failed to tear down empty-room router; retaining room-ID reservation");
+                        warn!(
+                            room = %room_id.log_handle(),
+                            %error,
+                            "Failed to tear down empty-room router; retaining room-ID reservation"
+                        );
                         false
                     }
                     Err(_) => {
                         warn!(
-                            %room_id,
+                            room = %room_id.log_handle(),
                             "Timed out tearing down empty-room router; retaining room-ID reservation"
                         );
                         false
@@ -1167,7 +1195,7 @@ impl RoomManager {
         if let Some(participant) = room.participants.get_mut(participant_id) {
             if !participant.sender.same_channel(expected_sender) {
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     %participant_id,
                     "Reconnect attempted against a superseded room session"
                 );
@@ -1180,7 +1208,7 @@ impl RoomManager {
             };
             if !identity_matches {
                 warn!(
-                    %room_id,
+                    room = %room_id.log_handle(),
                     %participant_id,
                     "Reconnect authentication identity mismatch"
                 );

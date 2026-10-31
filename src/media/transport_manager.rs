@@ -131,6 +131,17 @@ fn lifecycle_participant_id(media_namespace: &str) -> Option<Uuid> {
     Some(participant_id)
 }
 
+/// The participant an operational log names for a media namespace: the public
+/// UUID [`lifecycle_participant_id`] extracts, or `unknown` for a key of
+/// another shape. The namespace itself never reaches a log, because it also
+/// holds the room identifier and the media session.
+fn logged_participant(media_namespace: &str) -> String {
+    lifecycle_participant_id(media_namespace).map_or_else(
+        || "unknown".to_owned(),
+        |participant| participant.to_string(),
+    )
+}
+
 /// Keep application and wire bitrates within their 32-bit contract. The worker
 /// reports 64-bit estimates; saturation preserves high-bandwidth tier selection
 /// without truncating an oversized estimate into a low-bandwidth value.
@@ -251,7 +262,7 @@ impl TransportManager {
         participants
             .get(participant_id)
             .cloned()
-            .ok_or_else(|| MediaError::ParticipantNotFound(participant_id.to_string()))
+            .ok_or_else(|| MediaError::ParticipantNotFound(logged_participant(participant_id)))
     }
 
     /// Confirms that a previously cloned participant handle still represents
@@ -282,7 +293,7 @@ impl TransportManager {
             .map_err(|error| MediaError::ConfigurationError(error.to_string()))?;
         debug!(
             "Creating send transport for participant: {}",
-            participant_id
+            logged_participant(&participant_id)
         );
 
         let participant_lock = self.get_or_create_participant(&participant_id);
@@ -342,7 +353,8 @@ impl TransportManager {
 
         info!(
             "Created send transport {} for participant {}",
-            transport_info.id, participant_id
+            transport_info.id,
+            logged_participant(&participant_id)
         );
         Ok(transport_info)
     }
@@ -360,7 +372,7 @@ impl TransportManager {
             .map_err(|error| MediaError::ConfigurationError(error.to_string()))?;
         debug!(
             "Creating receive transport for participant: {}",
-            participant_id
+            logged_participant(&participant_id)
         );
 
         let participant_lock = self.get_or_create_participant(&participant_id);
@@ -401,7 +413,8 @@ impl TransportManager {
 
         info!(
             "Created receive transport {} for participant {}",
-            transport_info.id, participant_id
+            transport_info.id,
+            logged_participant(&participant_id)
         );
         Ok(transport_info)
     }
@@ -631,7 +644,8 @@ impl TransportManager {
 
         info!(
             "Connected transport {} for participant {}",
-            transport_id, participant_id
+            transport_id,
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -685,7 +699,9 @@ impl TransportManager {
 
         info!(
             "Created {:?} producer {} for participant {}",
-            kind, producer_id, participant_id
+            kind,
+            producer_id,
+            logged_participant(participant_id)
         );
         Ok(producer)
     }
@@ -770,7 +786,9 @@ impl TransportManager {
 
         info!(
             "Created consumer {} for producer {} and participant {}",
-            consumer_id, producer_id, participant_id
+            consumer_id,
+            producer_id,
+            logged_participant(participant_id)
         );
         Ok(consumer)
     }
@@ -798,7 +816,8 @@ impl TransportManager {
 
         info!(
             "Resumed consumer {} for participant {}",
-            consumer_id, participant_id
+            consumer_id,
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -827,7 +846,8 @@ impl TransportManager {
 
         info!(
             "Paused consumer {} for participant {}",
-            consumer_id, participant_id
+            consumer_id,
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -856,7 +876,8 @@ impl TransportManager {
 
         info!(
             "Paused producer {} for participant {}",
-            producer_id, participant_id
+            producer_id,
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -884,7 +905,8 @@ impl TransportManager {
 
         info!(
             "Resumed producer {} for participant {}",
-            producer_id, participant_id
+            producer_id,
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -1013,7 +1035,7 @@ impl TransportManager {
             "Set preferred layers {:?} for consumer {} of participant {}",
             target,
             consumer.id(),
-            participant_id
+            logged_participant(participant_id)
         );
         Ok(true)
     }
@@ -1049,7 +1071,8 @@ impl TransportManager {
 
         info!(
             "Restarted ICE for transport {} of participant {}",
-            transport_id, participant_id
+            transport_id,
+            logged_participant(participant_id)
         );
         Ok(ice_parameters.into())
     }
@@ -1074,7 +1097,7 @@ impl TransportManager {
 
         info!(
             "Subscribed to BWE events for participant {}",
-            participant_id
+            logged_participant(participant_id)
         );
         Ok(())
     }
@@ -1246,7 +1269,8 @@ impl TransportManager {
 
         info!(
             "Closed producer {} for participant {}",
-            producer_id, participant_id
+            producer_id,
+            logged_participant(participant_id)
         );
         Ok(())
     }
@@ -1319,11 +1343,13 @@ impl TransportManager {
             }
             info!(
                 "Removed participant {} and closed all media resources",
-                participant_id
+                logged_participant(participant_id)
             );
             Ok(())
         } else {
-            Err(MediaError::ParticipantNotFound(participant_id.to_string()))
+            Err(MediaError::ParticipantNotFound(logged_participant(
+                participant_id,
+            )))
         }
     }
 
@@ -1392,7 +1418,10 @@ impl TransportManager {
                     }
                     info!(
                         "DTLS state: {:?} for {} transport {} (participant {})",
-                        dtls_state, transport_type, transport_id, participant_id
+                        dtls_state,
+                        transport_type,
+                        transport_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1414,7 +1443,10 @@ impl TransportManager {
                     }
                     info!(
                         "ICE state: {:?} for {} transport {} (participant {})",
-                        ice_state, transport_type, transport_id, participant_id
+                        ice_state,
+                        transport_type,
+                        transport_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1439,7 +1471,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Producer {} paused for participant {}",
-                        producer_id, participant_id
+                        producer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1450,7 +1483,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Producer {} resumed for participant {}",
-                        producer_id, participant_id
+                        producer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1487,7 +1521,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Consumer {} paused for participant {}",
-                        consumer_id, participant_id
+                        consumer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1499,7 +1534,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Consumer {} resumed for participant {}",
-                        consumer_id, participant_id
+                        consumer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1511,7 +1547,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Producer paused for consumer {} of participant {}",
-                        consumer_id, participant_id
+                        consumer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1523,7 +1560,8 @@ impl TransportManager {
                 move || {
                     debug!(
                         "Producer resumed for consumer {} of participant {}",
-                        consumer_id, participant_id
+                        consumer_id,
+                        logged_participant(&participant_id)
                     );
                 }
             })
@@ -1537,7 +1575,9 @@ impl TransportManager {
                     move |layers| {
                         debug!(
                             "Consumer {} layers changed to {:?} for participant {}",
-                            consumer_id, layers, participant_id
+                            consumer_id,
+                            layers,
+                            logged_participant(&participant_id)
                         );
                         let msg = ServerMessage::ConsumerLayersChanged {
                             consumer_id,
@@ -1568,7 +1608,10 @@ impl TransportManager {
             let mut participant = lock.lock().await;
             participant.close_all();
             self.clear_bwe_trace_handler(participant.generation);
-            debug!("Closed all transports for participant: {}", participant_id);
+            debug!(
+                "Closed all transports for participant: {}",
+                logged_participant(&participant_id)
+            );
         }
 
         Ok(())

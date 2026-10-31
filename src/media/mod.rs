@@ -20,6 +20,7 @@ pub use transport_manager::TransportManager;
 pub use types::{ConsumerInfo, MediaError, MediaResult, ProducerInfo, TransportInfo};
 pub use worker_manager::WorkerManager;
 
+use crate::ids::room_log_handle;
 use anyhow::Result;
 use mediasoup::webrtc_server::WebRtcServer;
 use std::sync::Arc;
@@ -63,7 +64,7 @@ impl MediaServer {
 
     /// Creates a new router for a room
     pub async fn create_router(&self, room_id: String) -> MediaResult<String> {
-        debug!("Creating router for room: {}", room_id);
+        debug!("Creating router for room: {}", room_log_handle(&room_id));
         self.router_manager
             .create_router(room_id, self.config.router_config.clone())
             .await
@@ -71,7 +72,7 @@ impl MediaServer {
 
     /// Removes a router when a room is closed
     pub async fn remove_router(&self, room_id: &str) -> MediaResult<()> {
-        debug!("Removing router for room: {}", room_id);
+        debug!("Removing router for room: {}", room_log_handle(room_id));
         self.router_manager.remove_router(room_id).await
     }
 

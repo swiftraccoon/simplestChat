@@ -687,8 +687,13 @@ before removing that container; never target the live PostgreSQL container.
 
 ### Logging and rollout order
 
-Application logs default to JSON and include the release identity. The maintained
-public Compose template uses journald for the application, with a 4 MB
+Application logs default to JSON and include the release identity. They name a
+room by an eight-character handle, the first eight lowercase hexadecimal
+characters of the SHA-256 of its identifier, and a participant by its public
+UUID. To find a room's lines, compute its handle with
+`printf %s '<room id>' | sha256sum | cut -c1-8` (`shasum -a 256` in place of
+`sha256sum` on macOS); `echo` would add a newline and change the digest. The
+maintained public Compose template uses journald for the application, with a 4 MB
 nonblocking Docker buffer. The monitoring playbook configures a persistent host
 journal bounded to 256 MB, 15 days and a 2 GB free-space reserve. This includes
 other host journal entries; check existing retention requirements before applying

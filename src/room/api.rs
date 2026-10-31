@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::auth::{account, types::AuthError};
-use crate::ids::RoomId;
+use crate::ids::{RoomId, room_log_handle};
 use crate::room::DeleteRoomResult;
 use crate::room::community::RoomIdentityUpdate;
 use crate::room::refusal::RoomError;
@@ -420,7 +420,7 @@ pub(crate) async fn create_room(
                 }
                 RoomError::Database(error) => {
                     crate::db::record_error(&error);
-                    warn!(room_id = %req.id, %error, "Failed to create room");
+                    warn!(room = %room_log_handle(&req.id), %error, "Failed to create room");
                     AuthError::DatabaseError("room creation failed".to_string()).into_response()
                 }
             }
@@ -468,7 +468,7 @@ pub(crate) async fn delete_room(
             }
             RoomError::Database(error) => {
                 crate::db::record_error(&error);
-                warn!(%room_id, %error, "Failed to delete room");
+                warn!(room = %room_id.log_handle(), %error, "Failed to delete room");
                 AuthError::DatabaseError("room deletion failed".to_string()).into_response()
             }
         })?;
@@ -554,7 +554,7 @@ pub(crate) async fn room_image(
     Query(params): Query<RoomImageParams>,
 ) -> Result<Response, RoomApiError> {
     let version = params.v.as_deref().unwrap_or_default();
-    let Ok(id) = RoomId::new(id) else {
+    let Ok(room_id) = RoomId::new(id) else {
         return Err(not_found());
     };
     if version.len() != 16
@@ -573,7 +573,7 @@ pub(crate) async fn room_image(
     })?;
     let image: Option<String> =
         sqlx::query_scalar("SELECT image_url FROM rooms WHERE id = $1 AND image_version = $2")
-            .bind(&id)
+            .bind(&room_id)
             .bind(version)
             .fetch_optional(pool)
             .await
@@ -582,7 +582,7 @@ pub(crate) async fn room_image(
         return Err(not_found());
     };
     let (content_type, bytes) = decode_room_image(&image).ok_or_else(|| {
-        warn!(room_id = %id, "Stored room image is not a raster data URL");
+        warn!(room = %room_id.log_handle(), "Stored room image is not a raster data URL");
         not_found()
     })?;
     Ok((

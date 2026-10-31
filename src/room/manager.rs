@@ -219,6 +219,6 @@ impl RoomManager {
         rooms
             .get(room_id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Room not found: {room_id}"))
+            .ok_or_else(|| anyhow::anyhow!("Room not found: {}", room_id.log_handle()))
     }
 }

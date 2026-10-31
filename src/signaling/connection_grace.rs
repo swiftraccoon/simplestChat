@@ -193,7 +193,7 @@ pub(super) async fn retain_for_reconnect(
     let grace_map = grace_periods.clone();
     let rm = room_manager.clone();
     let pid = participant_id;
-    let rid = room_id.clone();
+    let timer_room_id = room_id.clone();
     let timer_token = reconnect_token.clone();
     let authenticated_subject = claims.as_ref().map(|claims| claims.sub.clone());
     let authenticated_version = claims.as_ref().map(|claims| claims.auth_version);
@@ -253,12 +253,13 @@ pub(super) async fn retain_for_reconnect(
         // win the race at the deadline without being torn down by an
         // older task.
         if grace_map
-            .remove_if_token_matches(&rid, &pid, &timer_token, timer_subject.as_deref())
+            .remove_if_token_matches(&timer_room_id, &pid, &timer_token, timer_subject.as_deref())
             .is_some()
         {
             info!(
                 "Grace period expired for participant {} in room {}",
-                pid, rid
+                pid,
+                timer_room_id.log_handle()
             );
             if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG) {
                 let lifecycle_id = pid.as_uuid();
@@ -270,7 +271,7 @@ pub(super) async fn retain_for_reconnect(
                 );
             }
             if let Err(e) = rm
-                .remove_participant_for_sender(&rid, &pid, &timer_sender)
+                .remove_participant_for_sender(&timer_room_id, &pid, &timer_sender)
                 .await
             {
                 error!("Error removing participant after grace period: {}", e);
@@ -304,7 +305,7 @@ pub(super) async fn retain_for_reconnect(
     }
     if !retained_for_reconnect {
         warn!(
-            %room_id,
+            room = %room_id.log_handle(),
             %participant_id,
             "Grace-session capacity reached; cleaning up disconnected participant immediately"
         );
@@ -313,7 +314,7 @@ pub(super) async fn retain_for_reconnect(
             .await
         {
             debug!(
-                %room_id,
+                room = %room_id.log_handle(),
                 %participant_id,
                 %error,
                 "Immediate grace-cap cleanup found no current participant session"
@@ -359,14 +360,16 @@ pub(super) async fn handle_reconnect(
             Ok(true) => {
                 info!(
                     "Participant {} reconnected to room {}",
-                    participant_id, room_id
+                    participant_id,
+                    room_id.log_handle()
                 );
                 Some(entry.media_rate_state)
             }
             Ok(false) => {
                 warn!(
                     "Participant {} not found in room {} during reconnect",
-                    participant_id, room_id
+                    participant_id,
+                    room_id.log_handle()
                 );
                 let _ = room_manager
                     .remove_participant_for_sender(room_id, participant_id, &entry.sender)

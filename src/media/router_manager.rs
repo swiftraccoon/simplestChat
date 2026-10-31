@@ -2,6 +2,7 @@
 
 // Router management for rooms
 
+use crate::ids::room_log_handle;
 use crate::media::config::RouterConfig;
 use crate::media::types::{MediaError, MediaResult};
 use crate::media::worker_manager::{RouterLoadReservation, WorkerManager};
@@ -118,7 +119,10 @@ impl RouterManager {
         let (primary_router, primary_worker) = {
             let routers = self.routers.read().await;
             let info = routers.get(room_id).ok_or_else(|| {
-                MediaError::RouterError(format!("Router not found for room: {room_id}"))
+                MediaError::RouterError(format!(
+                    "Router not found for room: {}",
+                    room_log_handle(room_id)
+                ))
             })?;
             (info.router.clone(), info.worker_id)
         };
@@ -170,7 +174,7 @@ impl RouterManager {
         info!(
             "Created viewer router {} for room {} on worker {}",
             router.id(),
-            room_id,
+            room_log_handle(room_id),
             worker_id
         );
         room.by_worker.insert(
@@ -227,7 +231,10 @@ impl RouterManager {
         let primary_router = self.get_router(room_id).await?;
         let mut viewers = self.viewer_routers.lock().await;
         let room = viewers.get_mut(room_id).ok_or_else(|| {
-            MediaError::RouterError(format!("No viewer routers for room: {room_id}"))
+            MediaError::RouterError(format!(
+                "No viewer routers for room: {}",
+                room_log_handle(room_id)
+            ))
         })?;
         let key = (producer_id, worker_id);
         if let Some(handles) = room.pipes.get(&key) {
@@ -242,7 +249,10 @@ impl RouterManager {
             .filter(|info| !info.router.closed())
             .map(|info| info.router.clone())
             .ok_or_else(|| {
-                MediaError::RouterError(format!("Viewer router is gone for room: {room_id}"))
+                MediaError::RouterError(format!(
+                    "Viewer router is gone for room: {}",
+                    room_log_handle(room_id)
+                ))
             })?;
         let pair = primary_router
             .pipe_producer_to_router(producer_id, PipeToRouterOptions::new(target))
@@ -252,7 +262,9 @@ impl RouterManager {
             })?;
         debug!(
             "Piped producer {} of room {} to worker {}",
-            producer_id, room_id, worker_id
+            producer_id,
+            room_log_handle(room_id),
+            worker_id
         );
         // A pipe closes with its producer, and a replacement producer has a
         // new id, so closed pairs would otherwise stay until the room closes.
@@ -328,7 +340,8 @@ impl RouterManager {
             let routers = self.routers.read().await;
             if routers.contains_key(&room_id) {
                 return Err(MediaError::RouterError(format!(
-                    "Router already exists for room: {room_id}"
+                    "Router already exists for room: {}",
+                    room_log_handle(&room_id)
                 )));
             }
         }
@@ -361,7 +374,8 @@ impl RouterManager {
         match routers.entry(room_id.clone()) {
             Entry::Occupied(_) => {
                 return Err(MediaError::RouterError(format!(
-                    "Router already exists for room: {room_id}"
+                    "Router already exists for room: {}",
+                    room_log_handle(&room_id)
                 )));
             }
             Entry::Vacant(entry) => {
@@ -371,7 +385,9 @@ impl RouterManager {
 
         info!(
             "Created router {} for room {} on worker {}",
-            router_id, room_id, worker_id
+            router_id,
+            room_log_handle(&room_id),
+            worker_id
         );
 
         Ok(router_id)
@@ -384,7 +400,12 @@ impl RouterManager {
         routers
             .get(room_id)
             .map(|info| info.router.clone())
-            .ok_or_else(|| MediaError::RouterError(format!("Router not found for room: {room_id}")))
+            .ok_or_else(|| {
+                MediaError::RouterError(format!(
+                    "Router not found for room: {}",
+                    room_log_handle(room_id)
+                ))
+            })
     }
 
     /// Gets the worker ID for a room's router
@@ -393,7 +414,12 @@ impl RouterManager {
         routers
             .get(room_id)
             .map(|info| info.worker_id)
-            .ok_or_else(|| MediaError::RouterError(format!("Router not found for room: {room_id}")))
+            .ok_or_else(|| {
+                MediaError::RouterError(format!(
+                    "Router not found for room: {}",
+                    room_log_handle(room_id)
+                ))
+            })
     }
 
     /// Gets the consumer counter for the worker hosting a room's router
@@ -405,7 +431,8 @@ impl RouterManager {
         match routers.get(room_id) {
             Some(info) => Ok(self.worker_manager.get_consumer_counter(info.worker_id)),
             None => Err(MediaError::RouterError(format!(
-                "Router not found for room: {room_id}"
+                "Router not found for room: {}",
+                room_log_handle(room_id)
             ))),
         }
     }
@@ -445,14 +472,15 @@ impl RouterManager {
 
             info!(
                 "Removed router for room {} from worker {} with {} viewer routers",
-                room_id,
+                room_log_handle(room_id),
                 router_info.worker_id,
                 viewer_routers.map_or(0, |viewers| viewers.by_worker.len())
             );
             Ok(())
         } else {
             Err(MediaError::RouterError(format!(
-                "Router not found for room: {room_id}"
+                "Router not found for room: {}",
+                room_log_handle(room_id)
             )))
         }
     }
@@ -490,7 +518,7 @@ impl RouterManager {
                     // mediasoup fires this for ordinary final-handle Drop as
                     // well as worker closure. The distinct worker-close event
                     // below retains its warning; worker death is logged as an error.
-                    debug!("Router closed for room: {}", room_id);
+                    debug!("Router closed for room: {}", room_log_handle(&room_id));
                 }
             })
             .detach();
@@ -498,7 +526,10 @@ impl RouterManager {
         router
             .on_worker_close({
                 move || {
-                    warn!("Worker closed for router in room: {}", room_id);
+                    warn!(
+                        "Worker closed for router in room: {}",
+                        room_log_handle(&room_id)
+                    );
                 }
             })
             .detach();
@@ -521,7 +552,7 @@ impl RouterManager {
 
         // Routers are automatically closed when dropped
         for (room_id, _router_info) in routers.drain() {
-            debug!("Closed router for room: {}", room_id);
+            debug!("Closed router for room: {}", room_log_handle(&room_id));
         }
 
         Ok(())

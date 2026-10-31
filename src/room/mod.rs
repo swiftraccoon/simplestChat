@@ -1219,7 +1219,7 @@ impl PendingRoomJoin {
 
     fn complete_locked(&mut self, room: &mut Room) {
         if room.pending_joins == 0 {
-            warn!(room_id = %self.room_id, "Join reservation count underflow");
+            warn!(room = %self.room_id.log_handle(), "Join reservation count underflow");
         } else {
             room.pending_joins -= 1;
         }
@@ -1243,7 +1243,11 @@ impl Drop for PendingRoomJoin {
                 });
             }
             Err(error) => {
-                warn!(%error, room_id = %self.room_id, "Could not schedule failed-join cleanup");
+                warn!(
+                    %error,
+                    room = %self.room_id.log_handle(),
+                    "Could not schedule failed-join cleanup"
+                );
             }
         }
     }
@@ -1308,16 +1312,20 @@ impl FailedJoinCleanup {
             .await
             {
                 Ok(Ok(())) => {
-                    debug!(%room_id, "Cleaned up router after failed join");
+                    debug!(room = %room_id.log_handle(), "Cleaned up router after failed join");
                     true
                 }
                 Ok(Err(error)) => {
-                    warn!(%room_id, %error, "Failed to tear down failed-join router; retaining room-ID reservation");
+                    warn!(
+                        room = %room_id.log_handle(),
+                        %error,
+                        "Failed to tear down failed-join router; retaining room-ID reservation"
+                    );
                     false
                 }
                 Err(_) => {
                     warn!(
-                        %room_id,
+                        room = %room_id.log_handle(),
                         "Timed out tearing down failed-join router; retaining room-ID reservation"
                     );
                     false

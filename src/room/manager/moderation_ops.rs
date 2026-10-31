@@ -148,7 +148,11 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(%room_id, %error, "Failed to persist participant sanction");
+                warn!(
+                    room = %room_id.log_handle(),
+                    %error,
+                    "Failed to persist participant sanction"
+                );
                 anyhow::anyhow!("Moderation state could not be saved")
             })?;
         }
@@ -220,13 +224,13 @@ impl RoomManager {
         };
 
         // Close producers outside room lock (async mediasoup IPC)
-        let target_media_id =
+        let media_participant_id =
             Self::media_participant_id(room_id, target_participant_id, target_media_session_id);
         for producer_id in &producers_to_close {
             if let Err(e) = self
                 .media_server
                 .transport_manager()
-                .close_producer(&target_media_id, *producer_id)
+                .close_producer(&media_participant_id, *producer_id)
                 .await
             {
                 warn!(
@@ -265,7 +269,7 @@ impl RoomManager {
             moderator_id,
             producers_to_close.len(),
             target_participant_id,
-            room_id
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -294,7 +298,9 @@ impl RoomManager {
         if changed {
             info!(
                 "cam_ban: {} cam-banned {} in room {}",
-                moderator_id, target_participant_id, room_id
+                moderator_id,
+                target_participant_id,
+                room_id.log_handle()
             );
         }
         Ok(())
@@ -323,7 +329,9 @@ impl RoomManager {
         if changed {
             info!(
                 "cam_unban: {} cam-unbanned {} in room {}",
-                moderator_id, target_participant_id, room_id
+                moderator_id,
+                target_participant_id,
+                room_id.log_handle()
             );
         }
         Ok(())
@@ -352,7 +360,9 @@ impl RoomManager {
         if changed {
             info!(
                 "text_mute: {} text-muted {} in room {}",
-                moderator_id, target_participant_id, room_id
+                moderator_id,
+                target_participant_id,
+                room_id.log_handle()
             );
         }
         Ok(())
@@ -381,7 +391,9 @@ impl RoomManager {
         if changed {
             info!(
                 "text_unmute: {} text-unmuted {} in room {}",
-                moderator_id, target_participant_id, room_id
+                moderator_id,
+                target_participant_id,
+                room_id.log_handle()
             );
         }
         Ok(())
@@ -477,12 +489,12 @@ impl RoomManager {
         };
 
         // Clean up media outside lock
-        let target_media_id =
+        let media_participant_id =
             Self::media_participant_id(room_id, target_participant_id, target_media_session_id);
         if let Err(e) = self
             .media_server
             .transport_manager()
-            .remove_participant(&target_media_id)
+            .remove_participant(&media_participant_id)
             .await
         {
             warn!(
@@ -493,7 +505,9 @@ impl RoomManager {
 
         info!(
             "kick: {} kicked {} from room {}",
-            moderator_id, target_participant_id, room_id
+            moderator_id,
+            target_participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -635,7 +649,11 @@ impl RoomManager {
                         anyhow::anyhow!("Report not found")
                     }
                     RoomError::Database(database) => {
-                        warn!(%room_id, error = %database, "Failed to persist room ban");
+                        warn!(
+                            room = %room_id.log_handle(),
+                            error = %database,
+                            "Failed to persist room ban"
+                        );
                         anyhow::anyhow!("Ban could not be saved")
                     }
                 })?;
@@ -664,7 +682,7 @@ impl RoomManager {
 
         // Clean up media outside lock
         for session in target_sessions {
-            let target_media_id = Self::media_participant_id(
+            let media_participant_id = Self::media_participant_id(
                 room_id,
                 &session.participant_id,
                 session.media_session_id,
@@ -672,7 +690,7 @@ impl RoomManager {
             if let Err(e) = self
                 .media_server
                 .transport_manager()
-                .remove_participant(&target_media_id)
+                .remove_participant(&media_participant_id)
                 .await
             {
                 warn!(
@@ -684,7 +702,9 @@ impl RoomManager {
 
         info!(
             "ban: {} banned {} from room {}",
-            moderator_id, target_participant_id, room_id
+            moderator_id,
+            target_participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -780,7 +800,7 @@ impl RoomManager {
                 )
                 .await
                 .map_err(|error| {
-                    warn!(%room_id, %error, "Failed to remove persisted ban");
+                    warn!(room = %room_id.log_handle(), %error, "Failed to remove persisted ban");
                     anyhow::anyhow!("Ban state could not be updated")
                 })?;
         }
@@ -820,7 +840,9 @@ impl RoomManager {
 
         info!(
             "unban: {} unbanned {} from room {}",
-            moderator_id, target_participant_id, room_id
+            moderator_id,
+            target_participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -906,7 +928,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(%room_id, %error, "Failed to persist participant role");
+                warn!(room = %room_id.log_handle(), %error, "Failed to persist participant role");
                 anyhow::anyhow!("Role could not be saved")
             })?;
         }
@@ -924,7 +946,10 @@ impl RoomManager {
 
         info!(
             "set_role: {} set {} to {:?} in room {}",
-            setter_id, target_participant_id, new_role, room_id
+            setter_id,
+            target_participant_id,
+            new_role,
+            room_id.log_handle()
         );
         Ok(())
     }
@@ -957,7 +982,8 @@ impl RoomManager {
 
         info!(
             "request_voice: {} requested voice in room {}",
-            participant_id, room_id
+            participant_id,
+            room_id.log_handle()
         );
         Ok(())
     }

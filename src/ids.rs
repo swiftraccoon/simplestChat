@@ -9,6 +9,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// The longest room identifier the server accepts.
@@ -56,6 +57,24 @@ impl RoomId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// What operational logs write for this room: the first eight lowercase
+    /// hexadecimal characters of SHA-256 over the identifier. Identifiers are
+    /// names that owners chose, and an unlisted room is found only through its
+    /// identifier, so logs carry the handle instead. The same room always has
+    /// the same handle and the handle does not spell the name, though a guessed
+    /// name can be checked against it; two rooms can share a handle, so it
+    /// narrows a search rather than proving which room it was.
+    pub(crate) fn log_handle(&self) -> String {
+        room_log_handle(&self.0)
+    }
+}
+
+/// [`RoomId::log_handle`] of an identifier held as text: by the media layer,
+/// which keys rooms by `RoomId::as_str`, and by handlers that read one from a
+/// request before it becomes a `RoomId`.
+pub(crate) fn room_log_handle(room_id: &str) -> String {
+    hex::encode(&Sha256::digest(room_id.as_bytes())[..4])
 }
 
 impl fmt::Display for RoomId {
@@ -275,6 +294,33 @@ mod tests {
         for bad in ["a b", "a/b", "ä", "a.b", "a\0"] {
             assert_eq!(RoomId::new(bad), Err(InvalidRoomId::Character), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn log_handles_are_stable_and_short() {
+        let lobby = fixtures::rid("lobby");
+        // The first eight hexadecimal characters of SHA-256 over "lobby".
+        assert_eq!(lobby.log_handle(), "4b5dc076");
+        assert_eq!(
+            fixtures::rid("lobby").log_handle(),
+            lobby.log_handle(),
+            "the same id has the same handle"
+        );
+        assert_eq!(
+            room_log_handle(lobby.as_str()),
+            lobby.log_handle(),
+            "the identifier's text has the same handle"
+        );
+        assert_eq!(fixtures::rid("lobby-2").log_handle(), "a83ec62f");
+        assert_eq!(fixtures::rid("Lobby").log_handle(), "4c97a9ef");
+        let longest = fixtures::rid(&"a".repeat(MAX_ROOM_ID_LEN)).log_handle();
+        assert!(
+            longest.len() == 8
+                && longest
+                    .bytes()
+                    .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+            "{longest}"
+        );
     }
 
     #[test]

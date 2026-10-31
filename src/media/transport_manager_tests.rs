@@ -38,6 +38,9 @@ use super::*;
 use crate::media::config::{MediaConfig, RouterConfig};
 use crate::media::router_manager::RouterManager;
 use crate::media::worker_manager::WorkerManager;
+use crate::source_scan::{
+    Invocation, Token, calls, macro_invocations, production_sources, variant_constructions,
+};
 use std::num::{NonZeroU8, NonZeroU32};
 
 #[tokio::test]
@@ -111,6 +114,14 @@ fn lifecycle_identity_rejects_unfamiliar_media_namespaces() {
     ] {
         assert_eq!(lifecycle_participant_id(&namespace), None);
     }
+}
+
+#[test]
+fn operational_logs_name_a_media_namespace_by_its_public_uuid() {
+    let participant_id = Uuid::new_v4();
+    let namespace = format!("private room\u{1f}{}\u{1f}{participant_id}", Uuid::new_v4());
+    assert_eq!(logged_participant(&namespace), participant_id.to_string());
+    assert_eq!(logged_participant("private room"), "unknown");
 }
 
 #[test]
@@ -783,4 +794,408 @@ async fn tcp_listener_adds_tcp_ice_candidates_and_is_off_by_default() {
         assert!(protocols.contains(&Protocol::Udp), "{protocols:?}");
         assert_eq!(protocols.contains(&Protocol::Tcp), tcp, "{protocols:?}");
     }
+}
+
+/// The tracing macros an operational log is written with, every level: a room
+/// must stay out of the debug output an operator turns on to diagnose too.
+const LOG_MACROS: [&str; 5] = ["trace", "debug", "info", "warn", "error"];
+
+/// Whether the arguments of a log invocation or of an error construction name
+/// a room or a media namespace. The scans recognize these by name, so the rule
+/// is only as good as the names: a word that is `rid`, ends in `room_id`,
+/// `room_ids`, `media_id` or `media_ids`, or starts with `room_id_` or
+/// `media_id_` counts as a room identifier, `media_participant_id` as the
+/// namespace `RoomManager::media_participant_id` builds, and, in the media
+/// layer, whose `participant_id` parameters hold that namespace,
+/// `participant_id` too. Such a word may reach a log only reduced (see
+/// `reduced`), a format string may not capture one inline, and a structured
+/// field named `room` must hold a log handle. A room identifier or namespace
+/// held under any other name escapes the scans, so the bindings they read carry
+/// these names. A field named `participant_id` is not itself a value: the
+/// lifecycle markers keep that name for the public UUID, and whatever value
+/// follows the `=` is checked on its own.
+fn names_a_room(arguments: &[Token<'_>], media: bool) -> bool {
+    arguments
+        .iter()
+        .enumerate()
+        .any(|(at, token)| match *token {
+            Token::Word("media_participant_id") => true,
+            Token::Word("room") if field_name(arguments, at) => {
+                !reduced_value(&arguments[at + 2..])
+            }
+            Token::Word(word) if names_an_identifier(word, media) => {
+                !reduced(arguments, at) && !(word == "participant_id" && field_name(arguments, at))
+            }
+            Token::Text(text) => inline_captures(text)
+                .into_iter()
+                .any(|name| names_an_identifier(name, media)),
+            _ => false,
+        })
+}
+
+/// Whether a word names a room identifier or a media namespace under the scans'
+/// naming rule (see `names_a_room`).
+fn names_an_identifier(word: &str, media: bool) -> bool {
+    word == "rid"
+        || ["room_id", "room_ids", "media_id", "media_ids"]
+            .into_iter()
+            .any(|suffix| word.ends_with(suffix))
+        || ["room_id_", "media_id_"]
+            .into_iter()
+            .any(|prefix| word.starts_with(prefix))
+        || word == "media_participant_id"
+        || (media && word == "participant_id")
+}
+
+/// The names a format string captures inline, `{name}` or `{name:…}`, escaped
+/// braces aside.
+fn inline_captures(text: &str) -> Vec<&str> {
+    let mut names = Vec::new();
+    let mut rest = text;
+    while let Some(open) = rest.find('{') {
+        let after = &rest[open + 1..];
+        if let Some(escaped) = after.strip_prefix('{') {
+            rest = escaped;
+            continue;
+        }
+        let length = after
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(after.len());
+        if length > 0 && after[length..].starts_with(['}', ':']) {
+            names.push(&after[..length]);
+        }
+        rest = after;
+    }
+    names
+}
+
+/// Whether a structured field's value, the tokens after its `=`, is a log
+/// handle: `<expression>.log_handle()` or `room_log_handle(…)`, through `%` or
+/// `?` or neither.
+fn reduced_value(after: &[Token<'_>]) -> bool {
+    use Token::{Mark, Word};
+    let value = after
+        .strip_prefix(&[Mark('%')])
+        .or_else(|| after.strip_prefix(&[Mark('?')]))
+        .unwrap_or(after);
+    let mut depth = 0_usize;
+    let end = value
+        .iter()
+        .position(|token| {
+            match *token {
+                Mark('(' | '[' | '{') => depth += 1,
+                Mark(')' | ']' | '}') => depth = depth.saturating_sub(1),
+                Mark(',') if depth == 0 => return true,
+                _ => {}
+            }
+            false
+        })
+        .unwrap_or(value.len());
+    let value = &value[..end];
+    value.ends_with(&[Mark('.'), Word("log_handle"), Mark('('), Mark(')')])
+        || (value.starts_with(&[Word("room_log_handle"), Mark('(')])
+            && value.last() == Some(&Mark(')')))
+}
+
+/// Whether the identifier at `at` reaches the log only through the reduction
+/// that hides it: as the receiver of `.log_handle()`, or as the one argument,
+/// borrowed or not and with or without rustfmt's trailing comma, of
+/// `room_log_handle` or `logged_participant`.
+fn reduced(arguments: &[Token<'_>], at: usize) -> bool {
+    use Token::{Mark, Word};
+    let after = &arguments[at + 1..];
+    let before = &arguments[..at];
+    let before = before.strip_suffix(&[Mark('&')]).unwrap_or(before);
+    let closing = after.strip_prefix(&[Mark(',')]).unwrap_or(after);
+    after.starts_with(&[Mark('.'), Word("log_handle"), Mark('('), Mark(')')])
+        || (closing.first() == Some(&Mark(')'))
+            && ["room_log_handle", "logged_participant"]
+                .into_iter()
+                .any(|reducer| before.ends_with(&[Word(reducer), Mark('(')])))
+}
+
+/// Whether the identifier at `at` names a structured field (`name = value`).
+fn field_name(arguments: &[Token<'_>], at: usize) -> bool {
+    arguments.get(at + 1) == Some(&Token::Mark('='))
+        && arguments.get(at + 2) != Some(&Token::Mark('='))
+}
+
+#[test]
+fn the_log_scan_flags_each_way_of_naming_a_room() {
+    // (invocation, in the media layer, names a room or a namespace)
+    let cases = [
+        (r#"warn!(%room_id, %error, "Failed")"#, false, true),
+        (r#"warn!(room_id = %req.id, "Failed")"#, false, true),
+        (r#"warn!(room_id = %self.room_id, "Failed")"#, false, true),
+        (
+            r#"info!("Participant {} joined room {}", participant_id, room_id)"#,
+            false,
+            true,
+        ),
+        (
+            r#"info!("Participant {participant_id} joined room {room_id}")"#,
+            false,
+            true,
+        ),
+        (r#"info!("Removed {}", media_participant_id)"#, false, true),
+        (r#"info!("Removed {media_participant_id}")"#, false, true),
+        (
+            r#"info!("Missing {}", participant_id.to_string())"#,
+            true,
+            true,
+        ),
+        (
+            r#"info!("Created transport {} for {}", id, participant_id)"#,
+            true,
+            true,
+        ),
+        (
+            r#"info!(participant_id = %participant_id, "Created")"#,
+            true,
+            true,
+        ),
+        (
+            r#"info!("Created transport for {participant_id}")"#,
+            true,
+            true,
+        ),
+        (
+            r#"warn!(room = %room_id.log_handle(), %error, "Failed")"#,
+            false,
+            false,
+        ),
+        (
+            r#"warn!(room = %self.room_id.log_handle(), "Failed")"#,
+            false,
+            false,
+        ),
+        (
+            r#"info!("Participant {} joined room {}", participant_id, room_id.log_handle())"#,
+            false,
+            false,
+        ),
+        (
+            r#"info!("Created router for room {}", room_log_handle(&room_id))"#,
+            true,
+            false,
+        ),
+        (
+            r#"info!("Created transport for {}", logged_participant(&participant_id))"#,
+            true,
+            false,
+        ),
+        (
+            r#"info!("Missing {}", logged_participant(participant_id,))"#,
+            true,
+            false,
+        ),
+        (
+            r#"info!("Missing {}", logged_participant(participant_id, room_id))"#,
+            true,
+            true,
+        ),
+        (r#"trace!("Room {} drained", room_id)"#, false, true),
+        (r#"debug!(%room_id, %participant_id, "Gone")"#, false, true),
+        (
+            r#"debug!(target: "simplestchat::lifecycle", participant_id = %lifecycle_id, "lifecycle")"#,
+            true,
+            false,
+        ),
+        (
+            r#"debug!(participant_id = participant_id.as_str(), "Gone")"#,
+            true,
+            true,
+        ),
+        (r#"info!("Expired in room {}", rid)"#, false, true),
+        (r#"warn!(%rid, "Expired")"#, false, true),
+        (
+            r#"warn!(room = %id, "Stored image is not raster")"#,
+            false,
+            true,
+        ),
+        (r#"warn!("Failed for {target_room_id}")"#, false, true),
+        (r#"warn!("Failed for {target_room_id:?}")"#, false, true),
+        (r#"warn!("Literal {{room_id}} braces")"#, false, false),
+        (r#"warn!("Removed {}", target_media_id)"#, false, true),
+        (
+            r#"warn!(room = %room_log_handle(&req.id), %error, "Failed")"#,
+            false,
+            false,
+        ),
+        (r#"warn!(room = %id.log_handle(), "Stored")"#, false, false),
+        (
+            r#"info!("Expired in room {}", timer_room_id.log_handle())"#,
+            false,
+            false,
+        ),
+        (r#"warn!("Closing {room_ids:?}")"#, false, true),
+        (r#"info!("Saved {}", room_id_text)"#, false, true),
+        (
+            r#"info!("Updated {}", update_room_identity(&room))"#,
+            false,
+            false,
+        ),
+    ];
+    for (source, media, names) in cases {
+        let invocations = macro_invocations(source, &LOG_MACROS).unwrap();
+        assert_eq!(invocations.len(), 1, "{source}");
+        assert_eq!(
+            names_a_room(&invocations[0].arguments, media),
+            names,
+            "{source}"
+        );
+    }
+}
+
+/// Room identifiers are names their owners chose, and a media namespace holds
+/// one beside the media session, so operational logs in the room, media and
+/// signaling layers, subdirectories included, name a room only by its log
+/// handle and a participant only by its public UUID, at every level. The scan
+/// recognizes identifiers by name (see `names_a_room`).
+#[test]
+fn operational_logs_never_name_rooms() {
+    let mut offenders = Vec::new();
+    for directory in ["room", "media", "signaling"] {
+        for (name, production) in production_sources(directory) {
+            let invocations = macro_invocations(&production, &LOG_MACROS)
+                .unwrap_or_else(|| panic!("{name}: a log invocation is never closed"));
+            for invocation in invocations {
+                if names_a_room(&invocation.arguments, name.starts_with("media/")) {
+                    offenders.push(format!("{name}:{}", invocation.line));
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "{} operational logs name a room or a media namespace:\n{}",
+        offenders.len(),
+        offenders.join("\n")
+    );
+}
+
+/// A media error's text reaches operational logs through the `%error` of the
+/// room layer's warnings, so it names a room and a participant the way those
+/// logs do: by the room's log handle and the participant's public UUID.
+#[test]
+fn media_errors_never_name_rooms() {
+    let mut offenders = Vec::new();
+    for (name, production) in production_sources("media") {
+        let constructions = variant_constructions(&production, "MediaError")
+            .unwrap_or_else(|| panic!("{name}: a MediaError construction is never closed"));
+        for construction in constructions {
+            if names_a_room(&construction.arguments, true) {
+                offenders.push(format!("{name}:{}", construction.line));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "{} media errors name a room or a media namespace:\n{}",
+        offenders.len(),
+        offenders.join("\n")
+    );
+}
+
+/// The social error helpers (social.rs) that build a refusal from a message.
+const SOCIAL_ERROR_HELPERS: [&str; 8] = [
+    "refusal",
+    "invalid",
+    "forbidden",
+    "not_found",
+    "rate_limited",
+    "unavailable",
+    "timed_out",
+    "failed",
+];
+
+/// The message of an `ensure!`: the tokens after its condition, which ends at
+/// the first top-level comma; the condition may name a room to look it up.
+fn ensure_message<'a>(arguments: &[Token<'a>]) -> Vec<Token<'a>> {
+    let mut depth = 0_usize;
+    for (at, token) in arguments.iter().enumerate() {
+        match *token {
+            Token::Mark('(' | '[' | '{') => depth += 1,
+            Token::Mark(')' | ']' | '}') => depth = depth.saturating_sub(1),
+            Token::Mark(',') if depth == 0 => return arguments[at + 1..].to_vec(),
+            _ => {}
+        }
+    }
+    Vec::new()
+}
+
+#[test]
+fn the_error_scan_reads_only_the_message_of_an_ensure() {
+    // (ensure! invocation, its message names a room)
+    let checks = [
+        (
+            r#"ensure!(rooms.get(room_id).is_some_and(|current| same(current, &room)), "Room is no longer active")"#,
+            false,
+        ),
+        (r#"ensure!(ready, "Room {} is gone", room_id)"#, true),
+        (r#"ensure!(ready, "Room {room_id} is gone")"#, true),
+        (
+            r#"ensure!(ready, "Room {} is gone", room_id.log_handle())"#,
+            false,
+        ),
+    ];
+    for (source, names) in checks {
+        let found = macro_invocations(source, &["ensure"]).unwrap();
+        assert_eq!(
+            names_a_room(&ensure_message(&found[0].arguments), false),
+            names,
+            "{source}"
+        );
+    }
+}
+
+/// The constructions a scan found in the file `name`, failing the scan when
+/// one never closes.
+fn closed<'a>(name: &str, found: Option<Vec<Invocation<'a>>>) -> Vec<Invocation<'a>> {
+    found.unwrap_or_else(|| panic!("{name}: an error construction is never closed"))
+}
+
+/// A room-layer error's text reaches operational logs the same way, through the
+/// `%error` of a warning or a media error that wraps it (`media_ops` turns a
+/// room lookup's failure into a `MediaError::ConsumerError`), so the room
+/// layer, subdirectories included, names a room only by its log handle in its
+/// `anyhow!` and `bail!` errors, the message of its `ensure!` checks, the
+/// arguments of `.context(…)` and `.with_context(…)`, the social error helpers
+/// and its `Refusal`, `RoomError` and `MediaError` constructions.
+#[test]
+fn room_errors_never_name_rooms() {
+    let mut offenders = Vec::new();
+    for (name, production) in production_sources("room") {
+        let mut constructions = closed(&name, macro_invocations(&production, &["anyhow", "bail"]));
+        constructions.extend(
+            closed(&name, macro_invocations(&production, &["ensure"]))
+                .into_iter()
+                .map(|check| Invocation {
+                    line: check.line,
+                    arguments: ensure_message(&check.arguments),
+                }),
+        );
+        constructions.extend(closed(
+            &name,
+            calls(&production, &["context", "with_context"]),
+        ));
+        constructions.extend(closed(&name, calls(&production, &SOCIAL_ERROR_HELPERS)));
+        for type_name in ["Refusal", "RoomError", "MediaError"] {
+            constructions.extend(closed(&name, variant_constructions(&production, type_name)));
+        }
+        let mut lines: Vec<usize> = constructions
+            .iter()
+            .filter(|construction| names_a_room(&construction.arguments, false))
+            .map(|construction| construction.line)
+            .collect();
+        lines.sort_unstable();
+        lines.dedup();
+        offenders.extend(lines.into_iter().map(|line| format!("{name}:{line}")));
+    }
+    assert!(
+        offenders.is_empty(),
+        "{} room errors name a room or a media namespace:\n{}",
+        offenders.len(),
+        offenders.join("\n")
+    );
 }

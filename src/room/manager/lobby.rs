@@ -234,7 +234,7 @@ impl RoomManager {
             },
         );
 
-        info!("Admitted {} to room {}", target_id, room_id);
+        info!("Admitted {} to room {}", target_id, room_id.log_handle());
         room.notify_lobby_status();
         drop(room);
         _control.release();
@@ -307,7 +307,7 @@ impl RoomManager {
             );
         }
 
-        info!("Denied {} from room {}", target_id, room_id);
+        info!("Denied {} from room {}", target_id, room_id.log_handle());
         Ok(())
     }
 }

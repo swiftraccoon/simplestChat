@@ -30,6 +30,8 @@ pub mod turn;
 
 #[cfg(test)]
 mod security_canary_tests;
+#[cfg(test)]
+mod source_scan;
 
 /// Serialized outbound signaling payload. A broadcast serializes once and
 /// every recipient's writer sends the same buffer; cloning is a refcount
