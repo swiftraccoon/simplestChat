@@ -1,6 +1,7 @@
 use super::*;
 use crate::ids::fixtures::rid;
 use crate::ids::{MessageId, ParticipantId};
+use axum::response::IntoResponse;
 
 #[test]
 fn attachments_accept_bounded_unique_ids_and_sanitize_names() {
@@ -25,6 +26,114 @@ fn attachments_accept_bounded_unique_ids_and_sanitize_names() {
     );
     let png=base64::engine::general_purpose::STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCGUAAAAASUVORK5CYII=").unwrap();
     assert_eq!(content_type(&png), "image/png");
+}
+
+/// The JWT secret `account_server` validates bearer tokens with.
+fn jwt_secret() -> String {
+    "a".repeat(32)
+}
+
+/// A server with accounts configured over `pool`, on one media worker whose
+/// room manager has no database.
+async fn account_server(pool: PgPool) -> SignalingServer {
+    let mut config = crate::config::Config::for_tests();
+    config.auth.jwt_secret = Some(jwt_secret().into());
+    let mut media = crate::media::config::MediaConfig::default();
+    media.worker_config.num_workers = 1;
+    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+    let metrics = crate::metrics::ServerMetrics::new();
+    let manager = crate::room::RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        media,
+        metrics.clone(),
+        None,
+    )
+    .await
+    .unwrap();
+    SignalingServer::new(Arc::new(manager), metrics, Some(pool), &config).unwrap()
+}
+
+/// `account_server` over a database that cannot be reached: the pool connects
+/// lazily to a closed port and is closed before any request, so any query
+/// fails as `PoolClosed` and answers 500. A 401 from this server therefore
+/// shows the refusal came before any database access.
+async fn server_without_database() -> SignalingServer {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    let pool =
+        PgPoolOptions::new().connect_lazy_with(PgConnectOptions::new().host("127.0.0.1").port(9));
+    pool.close().await;
+    account_server(pool).await
+}
+
+/// The status a refused handler call answers with.
+fn refusal<T>(result: Result<T, AuthError>) -> StatusCode {
+    match result {
+        Ok(_) => panic!("expected a refusal"),
+        Err(error) => error.into_response().status(),
+    }
+}
+
+/// An anonymous upload answers 401 without spending an upload permit, and
+/// still answers 401, not 503, while the test holds all four permits:
+/// authentication runs before admission. The server has no reachable
+/// database, so the 401 also shows no query ran first.
+#[tokio::test]
+async fn uploads_authenticate_before_taking_a_slot() {
+    let server = server_without_database().await;
+    let anonymous = || {
+        upload(
+            State(server.clone()),
+            Request::post("/api/auth/attachments")
+                .header("x-file-name", URL_SAFE_NO_PAD.encode("notes.txt"))
+                .body(Body::from("anonymous bytes"))
+                .unwrap(),
+        )
+    };
+    assert_eq!(UPLOADS.available_permits(), 4);
+    assert_eq!(refusal(anonymous().await), StatusCode::UNAUTHORIZED);
+    assert_eq!(UPLOADS.available_permits(), 4);
+    let held = UPLOADS.try_acquire_many(4).unwrap();
+    assert_eq!(refusal(anonymous().await), StatusCode::UNAUTHORIZED);
+    drop(held);
+}
+
+/// The download mirror: an anonymous download answers 401 without spending a
+/// download permit, and still answers 401, not 503, while the test holds all
+/// four permits. As for uploads, the 401 also shows no query ran first.
+#[tokio::test]
+async fn downloads_authenticate_before_taking_a_slot() {
+    let server = server_without_database().await;
+    let anonymous = || {
+        download(
+            State(server.clone()),
+            HeaderMap::new(),
+            Path(Uuid::new_v4()),
+        )
+    };
+    assert_eq!(DOWNLOADS.available_permits(), 4);
+    assert_eq!(refusal(anonymous().await), StatusCode::UNAUTHORIZED);
+    assert_eq!(DOWNLOADS.available_permits(), 4);
+    let held = DOWNLOADS.try_acquire_many(4).unwrap();
+    assert_eq!(refusal(anonymous().await), StatusCode::UNAUTHORIZED);
+    drop(held);
+}
+
+/// One upload per account: a second reservation while the first slot lives
+/// answers 429, another account is admitted, and dropping the slot, as a
+/// cancelled upload drops its future, frees the account.
+#[test]
+fn one_upload_per_account_at_a_time() {
+    let account = Uuid::new_v4();
+    let first = reserve_account_upload(account).unwrap();
+    assert_eq!(
+        refusal(reserve_account_upload(account)),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    let other = reserve_account_upload(Uuid::new_v4()).unwrap();
+    drop(first);
+    let again = reserve_account_upload(account).unwrap();
+    drop(again);
+    drop(other);
 }
 
 struct Database {
@@ -93,6 +202,31 @@ impl Database {
     }
     async fn upload(&self, owner: usize, data: Vec<u8>) -> ChatAttachment {
         store_upload(&self.pool, &self.claims[owner], "notes.txt".into(), data)
+            .await
+            .unwrap()
+    }
+    /// An upload request from user `owner` carrying `body`, with a bearer token
+    /// that `account_server` accepts for that user's session.
+    fn upload_request(&self, owner: usize, body: Body) -> Request {
+        let claims = &self.claims[owner];
+        let token = crate::auth::jwt::create_session_token(
+            &claims.sub,
+            &claims.name,
+            &crate::auth::jwt::JwtSecret::from(jwt_secret().as_str()),
+            claims.auth_version,
+            claims.sid,
+        )
+        .unwrap();
+        Request::post("/api/auth/attachments")
+            .header("authorization", format!("Bearer {token}"))
+            .header("x-file-name", URL_SAFE_NO_PAD.encode("notes.txt"))
+            .body(body)
+            .unwrap()
+    }
+    async fn owner_of(&self, id: Uuid) -> Uuid {
+        sqlx::query_scalar("SELECT owner_id FROM attachments WHERE id=$1")
+            .bind(id)
+            .fetch_one(&self.pool)
             .await
             .unwrap()
     }
@@ -289,6 +423,104 @@ async fn database_attachments_enforce_logical_byte_quota_and_current_session() {
             .is_err()
     );
     assert!(validate_account(&db.pool, &db.claims[1]).await.is_err());
+    db.close().await;
+}
+
+/// The upload handler consults the account's slot before the upload permit:
+/// with user 0's slot held and all four permits taken, user 0's upload answers
+/// 429, not 503; with the slot free and the permits still taken, 503; with
+/// the permits free, user 1's upload is stored while user 0's slot is held.
+/// This fails if `upload` stops calling `reserve_account_upload` or calls it
+/// after taking the permit.
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn upload_consults_the_account_slot_before_the_permit() {
+    let db = Database::new().await;
+    let server = account_server(db.pool.clone()).await;
+    let request = |owner: usize| db.upload_request(owner, Body::from("slot test bytes"));
+    let slot = reserve_account_upload(db.users[0]).unwrap();
+    let permits = UPLOADS.try_acquire_many(4).unwrap();
+    assert_eq!(
+        refusal(upload(State(server.clone()), request(0)).await),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    drop(slot);
+    assert_eq!(
+        refusal(upload(State(server.clone()), request(0)).await),
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    drop(permits);
+    let slot = reserve_account_upload(db.users[0]).unwrap();
+    let (_, Json(stored)) = upload(State(server), request(1)).await.unwrap();
+    drop(slot);
+    assert_eq!(db.owner_of(stored.id).await, db.users[1]);
+    db.close().await;
+}
+
+/// The upload handler holds the account's slot for the whole upload: while
+/// user 0's body is still arriving, another upload from user 0 answers 429 and
+/// user 1's upload is stored; dropping the pending request, as when the client
+/// goes away mid-body, frees user 0's slot, and so does a completed upload.
+/// This fails if `upload` lets the slot go early, for example by binding it to
+/// `_`.
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn upload_holds_the_account_slot_until_the_body_is_read_or_the_request_is_dropped() {
+    let db = Database::new().await;
+    let server = account_server(db.pool.clone()).await;
+    // A body that stays pending until the test sends into it or drops the sender.
+    let pending_body = || {
+        let (sender, receiver) = mpsc::channel::<Bytes>(1);
+        let chunks = futures_util::stream::unfold(receiver, |mut receiver| async move {
+            let chunk = receiver.recv().await?;
+            Some((Ok::<_, std::convert::Infallible>(chunk), receiver))
+        });
+        (sender, Body::from_stream(chunks))
+    };
+    // A spawned upload takes the account slot, then an upload permit, and holds
+    // both while it waits for its body; wait at most ten seconds for the permit.
+    let reading_body = || async {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while UPLOADS.available_permits() == 4 {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .is_ok()
+    };
+    let holds_slot = || ACCOUNT_UPLOADS.lock().contains(&db.users[0]);
+
+    let (sender, body) = pending_body();
+    let dropped = tokio::spawn(upload(State(server.clone()), db.upload_request(0, body)));
+    assert!(reading_body().await, "the upload never reached its body");
+    let second = db.upload_request(0, Body::from("second upload"));
+    assert_eq!(
+        refusal(upload(State(server.clone()), second).await),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    let other = db.upload_request(1, Body::from("another account"));
+    let (_, Json(other)) = upload(State(server.clone()), other).await.unwrap();
+    assert_eq!(db.owner_of(other.id).await, db.users[1]);
+    assert!(holds_slot());
+    dropped.abort();
+    assert!(dropped.await.unwrap_err().is_cancelled());
+    drop(sender);
+    assert!(!holds_slot(), "dropping the request frees the slot");
+    assert_eq!(UPLOADS.available_permits(), 4);
+
+    let (sender, body) = pending_body();
+    let completed = tokio::spawn(upload(State(server.clone()), db.upload_request(0, body)));
+    assert!(reading_body().await, "the upload never reached its body");
+    assert!(holds_slot());
+    sender
+        .send(Bytes::from_static(b"completed upload"))
+        .await
+        .unwrap();
+    drop(sender);
+    let (_, Json(stored)) = completed.await.unwrap().unwrap();
+    assert_eq!(db.owner_of(stored.id).await, db.users[0]);
+    assert!(!holds_slot(), "a completed upload frees the slot");
+    assert_eq!(UPLOADS.available_permits(), 4);
     db.close().await;
 }
 

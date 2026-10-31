@@ -1277,6 +1277,8 @@ account session. `X-File-Name` is the unpadded base64url encoding of a UTF-8 nam
 (up to 255 bytes). The server returns `{id,name,contentType,size}`; it determines
 the content type. `DELETE /api/auth/attachments/{id}` removes an owned unclaimed
 upload. `GET` returns bytes with no-store, nosniff and sandbox response policy.
+A second upload from the same account while one is in flight answers 429; the
+web client queues its uploads so that one is in flight per page.
 
 Chat, private-message and retry requests accept `attachmentIds` (at most four
 unique UUIDs). The server replaces these with authoritative `attachments`

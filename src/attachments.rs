@@ -23,6 +23,7 @@ use chrono::{DateTime, Utc};
 use rand::{TryRng, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
+use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Semaphore, mpsc};
 use uuid::Uuid;
@@ -35,6 +36,10 @@ const ACCOUNT_FILES: i64 = 1000;
 const TOTAL_FILES: i64 = 20000;
 static UPLOADS: Semaphore = Semaphore::const_new(4);
 static DOWNLOADS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore::new(4)));
+/// Accounts with an upload in flight. An account uploads one file at a time,
+/// so it never holds more than one of the four `UPLOADS` permits.
+static ACCOUNT_UPLOADS: LazyLock<crate::sync::Mutex<HashSet<Uuid>>> =
+    LazyLock::new(|| crate::sync::Mutex::new(HashSet::new()));
 static GRANT_KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
     let mut key = [0; 32];
     SysRng
@@ -147,13 +152,41 @@ async fn store_upload(
     Ok(metadata)
 }
 
+/// An account's one upload in flight, held until the upload handler returns.
+/// Dropping it frees the account, including when the client goes away
+/// mid-body and the request's future is dropped.
+struct AccountUploadSlot(Uuid);
+
+impl Drop for AccountUploadSlot {
+    fn drop(&mut self) {
+        ACCOUNT_UPLOADS.lock().remove(&self.0);
+    }
+}
+
+/// Reserve the upload slot of `account_id`, or refuse with `RateLimited`
+/// (429) while another upload from the same account is in flight.
+fn reserve_account_upload(account_id: Uuid) -> Result<AccountUploadSlot, AuthError> {
+    if ACCOUNT_UPLOADS.lock().insert(account_id) {
+        Ok(AccountUploadSlot(account_id))
+    } else {
+        Err(AuthError::RateLimited)
+    }
+}
+
 pub(crate) async fn upload(
     State(server): State<SignalingServer>,
     request: Request,
 ) -> Result<(HeaderMap, Json<ChatAttachment>), AuthError> {
-    let _upload = UPLOADS.try_acquire().map_err(|_| AuthError::ServiceBusy)?;
+    // Authenticate before admission: a refused request spends neither the
+    // account's upload slot nor one of the four upload permits.
     let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, request.headers()).await?;
+    let account = claims
+        .sub
+        .parse::<Uuid>()
+        .map_err(|_| AuthError::InvalidToken)?;
+    let _account_upload = reserve_account_upload(account)?;
+    let _upload = UPLOADS.try_acquire().map_err(|_| AuthError::ServiceBusy)?;
     let name = filename(
         request
             .headers()
@@ -422,12 +455,14 @@ pub(crate) async fn download(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, Body), AuthError> {
+    // Authorize before admission: a refused request never takes one of the
+    // four download permits. The permit then travels with the streamed body.
+    let _permit = routes::acquire_account_request(&server)?;
+    allowed(&server, &headers, id).await?;
     let download = DOWNLOADS
         .clone()
         .try_acquire_owned()
         .map_err(|_| AuthError::ServiceBusy)?;
-    let _permit = routes::acquire_account_request(&server)?;
-    allowed(&server, &headers, id).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let (name,content_type,data):(String,String,Vec<u8>)=sqlx::query_as("SELECT name,content_type,data FROM attachments WHERE id=$1 AND expires_at>clock_timestamp()")
         .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or_else(unavailable)?;

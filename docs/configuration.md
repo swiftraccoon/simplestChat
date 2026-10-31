@@ -178,8 +178,11 @@ or 180–300 for two peers behind one address. Healthy account-update streams
 replace periodic polling and coalesce invalidations across each view. The
 300-request application budget supports that work without spending the unchanged
 60-request authentication or 20-request per-account credential/ticket budgets.
-Uploads retain their separate four-operation lane, five-MiB body bound and upload
-deadline. Account streams use queues of 64 notices, at most eight streams per
+Uploads take the shared account lane, authenticate, then take one of four upload
+permits, with a five-MiB body bound and an upload deadline; an account uploads
+one file at a time (a second concurrent upload answers 429), and the browser
+queues its uploads.
+Account streams use queues of 64 notices, at most eight streams per
 account, and their own `MAX_CONNECTIONS` ceiling; slow receivers must reconnect
 and resync rather than accumulate an unbounded backlog. A five-minute absolute
 stream lifetime forces a fresh durable resync after uncertain or missed commit

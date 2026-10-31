@@ -350,8 +350,11 @@ per-peer overrides, unread state and existing PM consent before dispatch.
 
 Migration 033 stores attachment bytes in PostgreSQL, inside the existing backup
 and migration boundary. Limits are 5 MiB/file, four/message, 64 MiB or 1,000 files
-per account and 1 GiB or 20,000 files globally. Four upload permits bound body
-reads; four download permits stay owned until the streamed body ends or drops.
+per account and 1 GiB or 20,000 files globally. Requests authenticate before
+they take an upload or download permit. An account uploads one file at a time
+(a second concurrent upload answers 429, so the browser queues its uploads),
+four upload permits bound body reads, and four download permits stay owned
+until the streamed body ends or drops.
 Quota accounting includes expired bytes until physical cleanup. Pending files
 expire after an hour. Durable claims occur in the message transaction; message
 expiry/removal deletes the associated bytes. Ephemeral files require the original

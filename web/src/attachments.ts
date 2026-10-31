@@ -101,6 +101,38 @@ export function uploadAttachment(
   });
 }
 
+// The server admits one upload per account at a time, so every composer on the
+// page shares one queue: a single upload is in flight and the rest wait in order.
+const waitingUploads: (() => Promise<void>)[] = [];
+let uploadInFlight = false;
+
+/** Run `start` after every earlier queued upload settles; aborting `signal` first drops it. */
+function queueUpload(signal: AbortSignal, start: () => Promise<void>): void {
+  waitingUploads.push(start);
+  signal.addEventListener(
+    'abort',
+    () => {
+      const index = waitingUploads.indexOf(start);
+      if (index >= 0) waitingUploads.splice(index, 1);
+    },
+    { once: true },
+  );
+  startNextUpload();
+}
+
+function startNextUpload(): void {
+  if (uploadInFlight) return;
+  const start = waitingUploads.shift();
+  if (!start) return;
+  uploadInFlight = true;
+  const settled = (): void => {
+    uploadInFlight = false;
+    startNextUpload();
+  };
+  // A start that throws settles like a failed upload, so the queue never stalls.
+  new Promise<void>((resolve) => resolve(start())).then(settled, settled);
+}
+
 type ComposerOptions = {
   host: HTMLElement;
   input: HTMLTextAreaElement;
@@ -113,7 +145,7 @@ type PendingFile = {
   file: File;
   controller: AbortController;
   metadata: ChatAttachment | null;
-  state: 'uploading' | 'ready' | 'failed';
+  state: 'queued' | 'uploading' | 'ready' | 'failed';
   progress: number;
   error: string;
 };
@@ -240,7 +272,7 @@ export class AttachmentComposer {
         file,
         controller: new AbortController(),
         metadata: null,
-        state: 'uploading',
+        state: 'queued',
         progress: 0,
         error: '',
       };
@@ -251,35 +283,47 @@ export class AttachmentComposer {
   }
 
   private upload(file: PendingFile): void {
-    const token = this.options.getToken();
-    if (!token || this.disposed || !this.options.current()) return;
-    file.controller = new AbortController();
-    file.state = 'uploading';
+    if (!this.options.getToken() || this.disposed || !this.options.current()) return;
+    const controller = new AbortController();
+    file.controller = controller;
+    file.state = 'queued';
     file.progress = 0;
     file.error = '';
     const current = (): boolean =>
       !this.disposed && this.files.includes(file) && this.options.current();
-    uploadAttachment(file.file, token, file.controller.signal, (percent) => {
-      if (!current()) return;
-      file.progress = percent;
+    queueUpload(controller.signal, () => {
+      // A file whose composer moved on while it waited never starts.
+      if (!current()) return Promise.resolve();
+      file.state = 'uploading';
       this.render();
-    })
-      .then((metadata) => {
-        if (!current()) {
-          this.removePending(metadata.id, token);
-          return;
-        }
-        file.metadata = metadata;
-        file.state = 'ready';
-        file.progress = 100;
-        this.render();
-      })
-      .catch((error: unknown) => {
-        if (!current() || file.controller.signal.aborted) return;
-        file.state = 'failed';
-        file.error = error instanceof Error ? error.message : 'Upload failed';
-        this.render();
-      });
+      // Read the token as the upload starts: one captured when the file was queued
+      // can be near expiry, or replaced by a refresh, by the file's turn.
+      const token = this.options.getToken();
+      const uploaded = token
+        ? uploadAttachment(file.file, token, controller.signal, (percent) => {
+            if (!current()) return;
+            file.progress = percent;
+            this.render();
+          })
+        : Promise.reject(new Error('Sign in again to attach files'));
+      return uploaded
+        .then((metadata) => {
+          if (!current()) {
+            this.removePending(metadata.id, token);
+            return;
+          }
+          file.metadata = metadata;
+          file.state = 'ready';
+          file.progress = 100;
+          this.render();
+        })
+        .catch((error: unknown) => {
+          if (!current() || controller.signal.aborted) return;
+          file.state = 'failed';
+          file.error = error instanceof Error ? error.message : 'Upload failed';
+          this.render();
+        });
+    });
   }
 
   private removePending(id: string, token = this.options.getToken()): void {
@@ -307,7 +351,9 @@ export class AttachmentComposer {
             ? 'Ready'
             : file.state === 'failed'
               ? file.error
-              : `${file.progress}%`,
+              : file.state === 'queued'
+                ? 'Waiting'
+                : `${file.progress}%`,
           'attachment-status',
         );
         status.setAttribute('role', 'status');

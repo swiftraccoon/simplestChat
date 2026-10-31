@@ -89,6 +89,16 @@ function click(host, name) {
   assert.ok(control, name);
   control.click();
 }
+/** A second composer on the same page; every composer shares the module's upload queue. */
+function secondComposer(f, options = {}) {
+  const host = f.ui.el('div');
+  const input = f.ui.el('textarea');
+  host.append(input);
+  f.document.body.append(host);
+  const composer = new f.module.AttachmentComposer({ ...f.options, host, input, ...options });
+  return { host, composer };
+}
+const occurrences = (text, word) => text.split(word).length - 1;
 
 test('binary uploads preserve Unicode names, report progress, and gate send until acknowledged', async () => {
   const f = await fixture();
@@ -164,6 +174,72 @@ test('paste/drop, count and size bounds, sign-in and disabled send state apply t
   assert.match(f.state.notices.pop(), /Sign in/);
   assert.equal(f.state.xhrs.length, 1);
   composer.dispose();
+});
+
+test('the page sends one upload at a time in selection order; a file removed while queued never starts', async () => {
+  const f = await fixture();
+  const composer = new f.module.AttachmentComposer(f.options);
+  const names = ['one.png', 'two.png', 'three.png', 'four.png'];
+  select(
+    f,
+    names.map((name) => new File(['abc'], name, { type: 'image/png' })),
+  );
+  for (const [index, name] of names.entries()) {
+    assert.equal(f.state.xhrs.length, index + 1, 'at most one upload is in flight');
+    assert.equal(occurrences(f.host.textContent, 'Waiting'), names.length - index - 1);
+    const xhr = f.state.xhrs[index];
+    assert.equal(xhr.file.name, name, 'uploads start in selection order');
+    if (index % 2 === 0) xhr.onload();
+    else xhr.onerror();
+    await flush();
+  }
+  assert.equal(f.state.xhrs.length, names.length);
+  assert.equal(occurrences(f.host.textContent, 'Ready'), 2);
+  assert.equal(occurrences(f.host.textContent, 'Upload interrupted'), 2);
+  composer.consume();
+  // A second composer on the page waits behind the first composer's upload.
+  const other = secondComposer(f);
+  select(f, [new File(['abc'], 'five.png', { type: 'image/png' })]);
+  select(
+    other,
+    ['six.png', 'seven.png', 'eight.png'].map((name) => new File(['abc'], name)),
+  );
+  assert.equal(f.state.xhrs.length, 5);
+  click(other.host, '×');
+  // A queued upload reads the token when it starts, not when it was queued.
+  f.state.token = 'refreshed-token';
+  f.state.xhrs[4].onload();
+  await flush();
+  assert.equal(f.state.xhrs.length, 6);
+  assert.equal(f.state.xhrs[5].file.name, 'seven.png');
+  assert.equal(f.state.xhrs[5].headers.Authorization, 'Bearer refreshed-token');
+  f.state.token = null;
+  f.state.xhrs[5].onload();
+  await flush();
+  assert.equal(f.state.xhrs.length, 6, 'neither the removed nor the signed-out file starts');
+  assert.match(other.host.textContent, /Sign in again to attach files/);
+  assert.equal(f.state.fetches.length, 0);
+  composer.dispose();
+  other.composer.dispose();
+});
+
+test('a queued file whose composer stops being current never starts and never deletes', async () => {
+  const f = await fixture();
+  const composer = new f.module.AttachmentComposer(f.options);
+  let current = true;
+  const other = secondComposer(f, { current: () => current });
+  select(f, [new File(['abc'], 'first.png', { type: 'image/png' })]);
+  select(other, [new File(['abc'], 'queued.png')]);
+  assert.equal(f.state.xhrs.length, 1);
+  assert.match(other.host.textContent, /Waiting/);
+  current = false;
+  f.state.xhrs[0].onload();
+  await flush();
+  assert.equal(f.state.xhrs.length, 1, 'the stale file never starts an upload');
+  assert.equal(f.state.fetches.length, 0, 'and nothing is deleted');
+  composer.consume();
+  composer.dispose();
+  other.composer.dispose();
 });
 
 test('preview is explicitly requested, sends only a header grant and revokes blob on disposal', async () => {
