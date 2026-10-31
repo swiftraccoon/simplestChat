@@ -778,23 +778,15 @@ pub(super) async fn verify_discoverable_assertion(
     .await
     .map_err(database_error)?
     .ok_or(AuthError::InvalidPasskey)?;
-    let mut passkey: Passkey = serde_json::from_value(credential_json.clone())
+    let mut passkey: Passkey = serde_json::from_value(credential_json)
         .map_err(|error| AuthError::DatabaseError(format!("Invalid credential: {error}")))?;
+    // The only counter check: webauthn-rs 0.5.5 always refuses a counter that does not advance
+    // unless both are zero (no builder option or setter disables it), and web/e2e/passkey.cjs's
+    // older- and equal-counter scenarios (CI's accounts browser group) fail if that ever stops.
     let result = webauthn
         .finish_discoverable_authentication(credential, state, &[DiscoverableKey::from(&passkey)])
         .map_err(|_| AuthError::InvalidPasskey)?;
     if authentication_credential_id(&result) != passkey_id {
-        return Err(AuthError::InvalidPasskey);
-    }
-
-    // Keep the strict application counter policy as well as library validation:
-    // positive counters must advance, including concurrent ceremonies.
-    let stored_counter = credential_json
-        .pointer("/cred/counter")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let presented_counter = u64::from(result.counter());
-    if (stored_counter > 0 || presented_counter > 0) && presented_counter <= stored_counter {
         return Err(AuthError::InvalidPasskey);
     }
 

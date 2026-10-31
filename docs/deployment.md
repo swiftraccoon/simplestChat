@@ -787,8 +787,10 @@ in the upgrade subprotocol.
 
 Passkey login starts with an empty JSON object and no account lookup or credential
 allowlist. The browser selects a discoverable credential; the server binds its
-user handle and credential ID to the same account, verifies the assertion with
-required user verification, then checks the locked current credential counter.
+user handle and credential ID to the same account and verifies the assertion
+against the locked current credential: the WebAuthn library requires user
+verification for both registration and sign-in and refuses a signature counter
+that does not advance, unless the authenticator always reports zero.
 The retired email selector is rejected regardless of account state. Account
 registration still reports duplicate email addresses, so it is the remaining
 account-existence signal: each client address gets `REGISTRATIONS_PER_IP_PER_HOUR`
