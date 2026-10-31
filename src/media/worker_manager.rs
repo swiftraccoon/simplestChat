@@ -9,9 +9,11 @@ use crate::sync::{Mutex, RwLock as SyncRwLock};
 use anyhow::Result;
 use mediasoup::prelude::*;
 use mediasoup::types::data_structures::SocketFlags;
+use mediasoup::webrtc_server::EmptyListError;
 use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr};
+#[cfg(test)]
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
@@ -94,11 +96,15 @@ pub struct WorkerManager {
 /// `enable_udp`/`enable_tcp`. The socket buffers come from the configuration
 /// (0 keeps the kernel default); the worker applies them with `SO_RCVBUF` and
 /// `SO_SNDBUF`, which the kernel clamps to its `net.core` ceilings.
+///
+/// # Errors
+/// `EmptyListError` for a configuration without a listener, which
+/// `MediaConfig::validate` refuses before any worker starts.
 fn webrtc_server_listen_infos(
     port: u16,
     tcp: bool,
     config: &MediaConfig,
-) -> WebRtcServerListenInfos {
+) -> Result<WebRtcServerListenInfos, EmptyListError> {
     let buffer = |bytes: u32| (bytes > 0).then_some(bytes);
     // mediasoup sets IPV6_V6ONLY only from this flag; without it a `::` socket
     // claims both families and collides with `0.0.0.0` on the same port.
@@ -116,23 +122,7 @@ fn webrtc_server_listen_infos(
         recv_buffer_size: buffer(config.webrtc_recv_buffer_bytes),
         expose_internal_ip: false,
     };
-    let fallback = ListenInfo {
-        protocol: Protocol::Udp,
-        ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        announced_address: None,
-        port: None,
-        port_range: None,
-        flags: None,
-        send_buffer_size: None,
-        recv_buffer_size: None,
-        expose_internal_ip: false,
-    };
     let listeners = &config.webrtc_transport_config.listen_ips;
-    let listeners: &[ListenInfo] = if listeners.is_empty() {
-        std::slice::from_ref(&fallback)
-    } else {
-        listeners
-    };
     let mut entries = Vec::with_capacity(listeners.len() * 2);
     for listener in listeners {
         entries.push(info(Protocol::Udp, listener));
@@ -140,13 +130,7 @@ fn webrtc_server_listen_infos(
             entries.push(info(Protocol::Tcp, listener));
         }
     }
-    let mut entries = entries.into_iter();
-    let first = entries
-        .next()
-        .unwrap_or_else(|| info(Protocol::Udp, &fallback));
-    entries.fold(WebRtcServerListenInfos::new(first), |infos, entry| {
-        infos.insert(entry)
-    })
+    WebRtcServerListenInfos::try_from(entries)
 }
 
 /// The kernel grants at most `net.core.rmem_max`/`wmem_max` per socket and
@@ -244,7 +228,7 @@ impl WorkerManager {
                 port,
                 config.webrtc_server_tcp,
                 &config,
-            ));
+            )?);
             let webrtc_server = worker
                 .create_webrtc_server(server_options)
                 .await
@@ -430,28 +414,29 @@ impl WorkerManager {
         let mut load = self.worker_load.lock();
         let consumer_counts = self.worker_consumer_counts.read();
         let saturated = self.saturated_workers.read().clone();
+        // One pass over the pool, read lazily under the locks held above.
         let candidates = |skip_saturated: bool| {
-            workers
-                .iter()
-                .map(|worker| {
-                    let worker_id = worker.id();
-                    if !worker_has_capacity(
-                        worker.closed(),
-                        servers.get(&worker_id).map(WebRtcServer::closed),
-                    ) || (skip_saturated && saturated.contains(&worker_id))
-                    {
-                        return None;
-                    }
-                    Some(WorkerLoad {
-                        consumers: consumer_counts.get(&worker_id)?.load(Ordering::Relaxed),
-                        routers: *load.get(&worker_id)?,
-                    })
+            let (servers, load, consumer_counts, saturated) =
+                (&*servers, &*load, &*consumer_counts, &saturated);
+            workers.iter().map(move |worker| {
+                let worker_id = worker.id();
+                if !worker_has_capacity(
+                    worker.closed(),
+                    servers.get(&worker_id).map(WebRtcServer::closed),
+                ) || (skip_saturated && saturated.contains(&worker_id))
+                {
+                    return None;
+                }
+                Some(WorkerLoad {
+                    consumers: consumer_counts.get(&worker_id)?.load(Ordering::Relaxed),
+                    routers: *load.get(&worker_id)?,
                 })
-                .collect::<Vec<_>>()
+            })
         };
         // A saturated worker is skipped while another can host the router;
         // when every worker is saturated the least loaded one still does, so
-        // reconnects and admitted lobby members keep working.
+        // reconnects and admitted lobby members keep working. The second pass
+        // runs only when the first finds no candidate.
         let (best_idx, best_load) = select_worker_by_load(candidates(true))
             .or_else(|_| select_worker_by_load(candidates(false)))?;
 
@@ -567,11 +552,15 @@ impl WorkerManager {
         let port = self.config.worker_port(pos).map_err(|error| {
             MediaError::ConfigurationError(format!("Invalid worker port configuration: {error}"))
         })?;
-        let server_options = WebRtcServerOptions::new(webrtc_server_listen_infos(
+        let listen_infos = webrtc_server_listen_infos(
             port,
             self.config.webrtc_server_tcp,
             &self.config,
-        ));
+        )
+        .map_err(|error| {
+            MediaError::ConfigurationError(format!("Invalid media listener configuration: {error}"))
+        })?;
+        let server_options = WebRtcServerOptions::new(listen_infos);
         let webrtc_server = new_worker
             .create_webrtc_server(server_options)
             .await
@@ -710,12 +699,39 @@ mod tests {
         config.webrtc_transport_config = WebRtcTransportConfig::default()
             .with_public_ip("127.0.0.1".parse().unwrap())
             .with_announced_address("::1".parse().unwrap());
-        let infos = webrtc_server_listen_infos(config.webrtc_server_port_base, false, &config);
+        let infos =
+            webrtc_server_listen_infos(config.webrtc_server_port_base, false, &config).unwrap();
         let manager = WorkerManager::new(Arc::new(config)).await.unwrap();
         let ids = worker_ids(&manager).await;
         assert!(manager.get_webrtc_server(ids[0]).await.is_ok());
         manager.shutdown().await.unwrap();
         drop(infos);
+    }
+
+    #[test]
+    fn listen_infos_come_only_from_the_configured_listeners() {
+        let mut config = MediaConfig {
+            webrtc_transport_config: WebRtcTransportConfig::default()
+                .with_public_ip("127.0.0.1".parse().unwrap()),
+            ..MediaConfig::default()
+        };
+        let infos = webrtc_server_listen_infos(40_000, true, &config).unwrap();
+        assert_eq!(
+            infos
+                .iter()
+                .map(|info| (info.protocol, info.announced_address.as_deref(), info.port))
+                .collect::<Vec<_>>(),
+            [
+                (Protocol::Udp, Some("127.0.0.1"), Some(40_000)),
+                (Protocol::Tcp, Some("127.0.0.1"), Some(40_000)),
+            ],
+            "UDP and ICE-TCP on the worker's port for the configured listener"
+        );
+        config.webrtc_transport_config.listen_ips.clear();
+        assert!(
+            webrtc_server_listen_infos(40_000, false, &config).is_err(),
+            "a configuration without a listener is refused, not given a wildcard one"
+        );
     }
 
     #[tokio::test]
