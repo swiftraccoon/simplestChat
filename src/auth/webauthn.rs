@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::sync::RwLock;
 use std::collections::HashMap;
 use std::net::IpAddr;

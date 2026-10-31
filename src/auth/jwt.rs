@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::auth::types::{AuthError, Claims};
 use crate::secret::SecretString;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};

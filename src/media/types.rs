@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Common types and error handling for the media module
 
 use crate::signaling::protocol::IceCredentials;

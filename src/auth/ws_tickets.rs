@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! One-use WebSocket upgrade capabilities. Bearer JWTs stay in authenticated
 //! HTTP requests and established signaling frames, never handshake protocols.
 

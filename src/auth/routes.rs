@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::auth::password_policy::{MAX_PASSWORD_BYTES, validate_new_password};
 use crate::auth::{jwt, password, session, types::*};
 use crate::signaling::{ClientIp, SignalingServer};

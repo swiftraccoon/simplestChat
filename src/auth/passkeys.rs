@@ -6,8 +6,6 @@
 //! creation, then swaps credentials atomically. Removal and replacement revoke
 //! every session. Recovery secrets are exposed once and are never logged.
 
-#![forbid(unsafe_code)]
-
 use super::{
     account, routes, session,
     types::{AuthError, Claims},

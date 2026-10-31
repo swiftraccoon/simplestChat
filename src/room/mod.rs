@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Room module - Room state management and participant tracking
 pub(crate) mod administration;
 pub(crate) mod api;

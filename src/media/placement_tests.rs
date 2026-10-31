@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Viewer placement across workers with router-to-router pipes, on bounded,
 //! disposable local workers. Direct transports keep every packet inside the
 //! owned workers; browsers, sockets and databases are not involved.

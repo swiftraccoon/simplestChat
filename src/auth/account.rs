@@ -11,8 +11,6 @@
 //! Only a digest of the recovery key is stored. Treat the key returned to the
 //! caller as a credential: never include it in logs, metrics or room messages.
 
-#![forbid(unsafe_code)]
-
 use super::{
     jwt, password_policy, routes, session,
     sessions::lock_current_session,

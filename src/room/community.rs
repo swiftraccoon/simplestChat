@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use super::{RoomManager, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;

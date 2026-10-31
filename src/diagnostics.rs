@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Opt-in, bounded, local operation diagnostics. No message data or free-form
 //! fields enter this recorder. Producers never perform file I/O or wait for the
 //! writer; full queues and limits are counted as missing coverage.

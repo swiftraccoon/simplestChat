@@ -2,7 +2,6 @@
 //!
 //! Publication reads durable state only after acquiring each room's control
 //! gate, so a delayed older HTTP completion cannot overwrite a newer policy.
-#![forbid(unsafe_code)]
 
 use super::{Room, RoomManager, TokioRwLock, control};
 use crate::auth::account::{ChatPreferences, load_chat_preferences};

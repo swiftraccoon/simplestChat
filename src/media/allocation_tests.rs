@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Native worker-allocation regressions using bounded, disposable local fixtures.
 
 use super::*;

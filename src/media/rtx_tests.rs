@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Exercise the vendored worker's RTX sequence handling with real RTP packets.
 //! Direct transports keep every packet inside an owned worker, without sockets,
 //! browsers, a database, or production media. These are packet-accounting tests;

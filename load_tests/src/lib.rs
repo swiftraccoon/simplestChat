@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Offline planning, bounded diagnostic readers and explicit capacity measurement.
 //! Importing these modules starts no runtime, connection, engine or workload;
 //! only explicit `capacity run` or `bench` runtime commands construct a

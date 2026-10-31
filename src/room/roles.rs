@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::ids::RoomId;
 use crate::room::refusal::RoomError;
 use sqlx::{PgExecutor, PgPool};

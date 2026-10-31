@@ -1,6 +1,5 @@
 //! Account-owned session management. Session ids are revocation handles, never
 //! credentials; refresh secrets and their digests are never returned.
-#![forbid(unsafe_code)]
 
 use super::{
     account::authenticated_claims,

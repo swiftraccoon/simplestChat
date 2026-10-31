@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Transport management for WebRTC connections
 
 use crate::diagnostics::{Stage, measure, measure_result};

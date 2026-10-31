@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::auth::{account, types::AuthError};
 use crate::ids::{RoomId, room_log_handle};
 use crate::room::DeleteRoomResult;

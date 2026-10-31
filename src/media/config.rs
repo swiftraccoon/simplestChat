@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Configuration for mediasoup workers, routers, and transports
 
 use mediasoup::prelude::*;

@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // WebSocket connection handler for individual clients
 
 use super::protocol::{

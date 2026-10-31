@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! Sign-in failure delays and a registration window, keyed by client address.
 //!
 //! Only failures from the same address cohort against the same account delay

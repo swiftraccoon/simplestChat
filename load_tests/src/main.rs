@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Load test binary - Spawn multiple synthetic clients to test server scalability
 //!
 //! Usage:

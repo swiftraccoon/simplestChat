@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 pub(crate) mod account;
 pub(crate) mod common_passwords;
 pub(crate) mod discovery;

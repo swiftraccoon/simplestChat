@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! Room invitations and memberships: an admin mints a code that grants a role
 //! in the room, whoever redeems it becomes a member (never demoted), and an
 //! account can list the rooms it belongs to.

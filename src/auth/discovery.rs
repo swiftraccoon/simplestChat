@@ -1,6 +1,5 @@
 //! Bounded account contacts and room shortcuts. Exact account identifiers are
 //! shared explicitly; there is no email or account-name search endpoint.
-#![forbid(unsafe_code)]
 
 use super::{
     account, routes,

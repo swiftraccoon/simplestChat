@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Signaling module - WebSocket signaling server
 
 #[cfg(test)]

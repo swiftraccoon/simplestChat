@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // TURN credential generation for coturn time-limited credentials.
 // Uses HMAC-SHA1 per the TURN REST API spec (coturn --use-auth-secret).
 

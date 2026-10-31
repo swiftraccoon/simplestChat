@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use argon2::{
     Argon2,
     password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},

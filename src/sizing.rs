@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! What this process was given and what that carries, said once at startup so
 //! an operator can see a mis-sized deployment in the first log lines.
 //!

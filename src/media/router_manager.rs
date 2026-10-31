@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Router management for rooms
 
 use crate::ids::room_log_handle;

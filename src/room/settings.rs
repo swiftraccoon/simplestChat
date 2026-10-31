@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::ids::RoomId;
 use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::ChatStyle;

@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Bounded, opt-in observations of worker intake and forwarding counters.
 //!
 //! These are not client-delivery acknowledgments. Worker timestamps are monotonic

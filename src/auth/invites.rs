@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! Registration invitations: any account holds a few single-use codes that let
 //! someone register while registration is closed.
 

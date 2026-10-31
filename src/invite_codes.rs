@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 //! Invitation codes: 32 symbols from a 32-symbol alphabet (160 bits), no
 //! letters that read like digits, lowercase so a code survives being read aloud.
 

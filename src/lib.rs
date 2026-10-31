@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 //! Single-process chat and media server. [`signaling`] owns HTTP/WebSocket
 //! admission, [`room`] owns authoritative membership and room policy, and
 //! [`media`] owns mediasoup workers, routers, and session-scoped transports.

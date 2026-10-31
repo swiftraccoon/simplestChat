@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use anyhow::{Context, bail};
 use sqlx::Connection as _;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions, PgSslMode};

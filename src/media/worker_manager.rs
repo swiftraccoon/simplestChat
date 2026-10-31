@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Worker pool management for mediasoup
 
 use crate::media::config::{MediaConfig, clamped_socket_buffer, kernel_socket_buffer_max};

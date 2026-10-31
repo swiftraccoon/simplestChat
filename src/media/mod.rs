@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Media module - mediasoup worker and router management
 // Handles mediasoup workers, routers, transports, producers, and consumers
 

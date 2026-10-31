@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use crate::auth::types::AuthError;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::{TryRng, rngs::SysRng};

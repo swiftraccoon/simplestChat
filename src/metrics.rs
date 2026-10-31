@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Server metrics — lock-free AtomicU64 counters and Prometheus-compatible histogram.
 
 use crate::diagnostics::Diagnostics;

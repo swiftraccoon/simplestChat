@@ -3,8 +3,6 @@
 //! sign-up form and the server refuse the same passwords. Login never reapplies the
 //! policy: existing credentials stay usable.
 
-#![forbid(unsafe_code)]
-
 use super::{common_passwords, password, types::AuthError};
 
 /// The fewest NFC-normalized characters a new password may have.

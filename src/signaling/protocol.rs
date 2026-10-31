@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 // Signaling protocol - Message types for WebSocket communication
 
 use crate::secret::SecretString;
