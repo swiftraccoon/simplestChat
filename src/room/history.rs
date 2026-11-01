@@ -23,12 +23,12 @@ use sqlx::{PgConnection, PgPool, types::Json as SqlJson};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-pub(crate) const PM_RETENTION_DAYS: i32 = 90;
+pub(crate) const PM_RETENTION_DAYS: i64 = 90;
 /// Private messages one account may send per minute, from its room sockets and
 /// the HTTP inbox together.
 pub(crate) const PRIVATE_MESSAGES_PER_MINUTE: i64 = 30;
 /// The retention periods a room may choose for its public history, in days (0 keeps none).
-pub(crate) const ROOM_HISTORY_RETENTION_DAYS: [i32; 5] = [0, 1, 7, 30, 90];
+pub(crate) const ROOM_HISTORY_RETENTION_DAYS: [i64; 5] = [0, 1, 7, 30, 90];
 const PAGE_LIMIT: usize = 50;
 /// Search examines the newest 10,000 retained messages, then paginates matches.
 const SEARCH_WINDOW: i64 = 10_000;
@@ -53,7 +53,7 @@ pub struct HistoryPage {
     pub newer_cursor: Option<String>,
     pub first_unread_message_id: Option<MessageId>,
     pub read_message_id: Option<MessageId>,
-    pub retention_days: i32,
+    pub retention_days: i64,
 }
 
 #[derive(Serialize)]
@@ -71,7 +71,7 @@ pub(crate) struct Conversation {
 pub(crate) struct InboxPage {
     pub conversations: Vec<Conversation>,
     pub next_cursor: Option<String>,
-    pub retention_days: i32,
+    pub retention_days: i64,
 }
 
 #[derive(Deserialize)]
@@ -398,7 +398,7 @@ pub(crate) async fn persist_message(
     room: Option<&str>,
     sender_session: Uuid,
     sender_authenticated: bool,
-    retention_days: i32,
+    retention_days: i64,
     message: &ChatEntry,
     attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, RoomError> {
@@ -435,7 +435,7 @@ async fn insert_message(
     room: Option<&str>,
     sender_session: Uuid,
     sender_authenticated: bool,
-    retention_days: i32,
+    retention_days: i64,
     message: &ChatEntry,
     attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, RoomError> {
@@ -501,7 +501,7 @@ async fn insert_message(
     }
     let id: Uuid = message.message_id.as_uuid();
     let at = message.sent_at;
-    let expires = at + chrono::Duration::days(i64::from(retention_days));
+    let expires = at + chrono::Duration::days(retention_days);
     // The unique attempt key reconciles retries after an uncertain commit. Never
     // replace the saved body: moderation may already have removed that content.
     let inserted: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
@@ -553,7 +553,7 @@ pub(crate) async fn page(
     pool: &PgPool,
     conversation: &str,
     account: Option<Uuid>,
-    retention_days: i32,
+    retention_days: i64,
     query: &HistoryQuery,
 ) -> Result<HistoryPage, RoomError> {
     query
@@ -1138,7 +1138,10 @@ pub(crate) async fn set_pin(
 }
 
 /// Public history stops being readable and is erased in the settings transaction.
-pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Result<(), RoomError> {
+/// The period is bound as the column's BIGINT; `make_interval` takes integer
+/// days, so the two statements that build an interval cast it there, and every
+/// allowed period fits.
+pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i64) -> Result<(), RoomError> {
     if !ROOM_HISTORY_RETENTION_DAYS.contains(&days) {
         return Err(Refusal::Invalid("Invalid history retention".into()).into());
     }
@@ -1146,17 +1149,17 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
     let updated =
         sqlx::query("UPDATE rooms SET history_retention_days=$2,updated_at=now() WHERE id=$1")
             .bind(room)
-            .bind(i64::from(days))
+            .bind(days)
             .execute(&mut *tx)
             .await?;
     if updated.rows_affected() != 1 {
         return Err(sqlx::Error::RowNotFound.into());
     }
-    sqlx::query("DELETE FROM chat_messages WHERE room_id=$1 AND ($2=0 OR sent_at<=now()-make_interval(days=>$2))")
+    sqlx::query("DELETE FROM chat_messages WHERE room_id=$1 AND ($2=0 OR sent_at<=now()-make_interval(days=>$2::integer))")
         .bind(room).bind(days).execute(&mut *tx).await?;
     // Extending retention affects future messages only. Never extend a promise
     // already made when a message was saved under a shorter retention period.
-    sqlx::query("UPDATE chat_messages SET expires_at=LEAST(expires_at,sent_at+make_interval(days=>$2)) WHERE room_id=$1")
+    sqlx::query("UPDATE chat_messages SET expires_at=LEAST(expires_at,sent_at+make_interval(days=>$2::integer)) WHERE room_id=$1")
         .bind(room).bind(days).execute(&mut *tx).await?;
     sqlx::query("UPDATE attachments a SET expires_at=LEAST(a.expires_at,m.expires_at) FROM chat_messages m WHERE a.message_id=m.id AND m.room_id=$1")
         .bind(room).execute(&mut *tx).await?;

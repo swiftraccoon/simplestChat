@@ -113,7 +113,7 @@ impl RoomManager {
     pub(super) async fn set_room_history(
         &self,
         request: &mut SocialRequest<'_>,
-        retention_days: i32,
+        retention_days: i64,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Owner)?;
         let room_id = request.room_id;

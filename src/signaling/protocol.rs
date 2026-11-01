@@ -283,7 +283,7 @@ pub enum ClientMessage {
     },
     SetRoomHistory {
         request_id: String,
-        retention_days: i32,
+        retention_days: i64,
     },
     SetChatPreferences {
         request_id: String,
@@ -1045,7 +1045,7 @@ pub enum SocialResponse {
         read_message_id: Option<MessageId>,
     },
     SetRoomHistory {
-        retention_days: i32,
+        retention_days: i64,
     },
     ListRoomBans {
         bans: Vec<BanEntry>,

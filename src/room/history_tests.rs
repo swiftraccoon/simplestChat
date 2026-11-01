@@ -825,12 +825,11 @@ async fn database_history_retention_pagination_private_isolation_and_monotonic_r
         .execute(&pool)
         .await
         .unwrap();
-    let retention: i32 =
-        sqlx::query_scalar("SELECT history_retention_days::integer FROM rooms WHERE id=$1")
-            .bind(&room)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let retention: i64 = sqlx::query_scalar("SELECT history_retention_days FROM rooms WHERE id=$1")
+        .bind(&room)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(retention, 0, "existing/new rooms begin ephemeral");
     set_retention(&pool, room.as_str(), 7).await.unwrap();
     let session = Uuid::new_v4();
