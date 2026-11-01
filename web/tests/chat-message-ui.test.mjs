@@ -71,3 +71,37 @@ test('an address with user information before its host stays plain text', async 
   assert.equal(link.textContent, 'https://evil.example/');
   assert.equal(link.href, 'https://@evil.example');
 });
+
+test('punctuation that ends a sentence stays out of the link', async () => {
+  const render = await chatText();
+  for (const [content, shown] of [
+    ['see https://example.com.', 'see https://example.com/.'],
+    ['https://example.com:', 'https://example.com/:'],
+  ]) {
+    const text = render(content);
+    const link = text.querySelector('a');
+    assert.equal(link.textContent, 'https://example.com/', content);
+    assert.equal(link.href, 'https://example.com');
+    assert.equal(link.nextSibling.textContent, content.at(-1));
+    assert.equal(text.textContent, shown);
+  }
+});
+
+test('a closing parenthesis stays out of the link unless the address opens one', async () => {
+  const render = await chatText();
+  const foo = 'https://en.wikipedia.org/wiki/Foo_(bar)';
+  const mercury = 'https://en.wikipedia.org/wiki/Mercury_(planet)';
+  // Message, href, link text, then the text after the link.
+  for (const [content, href, shown, after] of [
+    ['(https://example.com)', 'https://example.com', 'https://example.com/', ')'],
+    ['(see https://example.com).', 'https://example.com', 'https://example.com/', ').'],
+    [foo, foo, foo, ''],
+    [`${foo}.`, foo, foo, '.'],
+    [`(see ${mercury})`, mercury, mercury, ')'],
+  ]) {
+    const link = render(content).querySelector('a');
+    assert.equal(link.href, href, content);
+    assert.equal(link.textContent, shown, content);
+    assert.equal(link.nextSibling.textContent, after, content);
+  }
+});

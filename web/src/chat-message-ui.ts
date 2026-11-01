@@ -4,7 +4,8 @@ import { asyncButton, button, el, field, modal } from './ui';
 /**
  * Links stay whole; outside them, each occurrence of `mention` is marked, in any case.
  * A link's text is the address it opens (see `linkAddress`) and its `href` the text
- * as sent; a match `linkAddress` refuses stays plain text.
+ * as sent, less the punctuation that closes a sentence around it; a match
+ * `linkAddress` refuses stays plain text.
  */
 export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
   const pattern = /https?:\/\/[^\s<>]+/g;
@@ -19,17 +20,41 @@ export function appendLinkedText(parent: HTMLElement, text: string, mention?: st
   for (const match of text.matchAll(pattern)) {
     const index = match.index;
     if (hidden.test(match[0])) continue;
-    const address = linkAddress(match[0]);
+    const raw = withoutTrailingPunctuation(match[0]);
+    const address = linkAddress(raw);
     if (address === null) continue;
     appendMarkedText(parent, text.slice(start, index), mention);
     const link = el('a', address);
-    link.href = match[0];
+    link.href = raw;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     parent.append(link);
-    start = index + match[0].length;
+    start = index + raw.length;
   }
   appendMarkedText(parent, text.slice(start), mention);
+}
+
+/**
+ * `match` without the punctuation that ends a sentence or clause after an address:
+ * the link pattern stops only at whitespace and angle brackets, so it takes in a
+ * trailing `.,:;!?'"` and the `)` of a parenthesis around the address. A trailing `)`
+ * goes only while the match holds more `)` than `(`, so the one closing a parenthesis
+ * the address opens stays, as in `(see https://en.wikipedia.org/wiki/Mercury_(planet))`.
+ */
+function withoutTrailingPunctuation(match: string): string {
+  let unmatched = 0;
+  for (const character of match) {
+    if (character === ')') unmatched++;
+    else if (character === '(') unmatched--;
+  }
+  let end = match.length;
+  while (end > 0) {
+    const last = match.charAt(end - 1);
+    if (last === ')' && unmatched > 0) unmatched--;
+    else if (!`.,:;!?'"`.includes(last)) break;
+    end--;
+  }
+  return match.slice(0, end);
 }
 
 /**
