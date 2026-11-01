@@ -574,13 +574,17 @@ async fn retire_old_batch(
 ) -> Result<RetentionReport, RoomError> {
     let address_days = i32::try_from(config.address_days).unwrap_or(i32::MAX);
     let history_days = i32::try_from(config.history_days).unwrap_or(i32::MAX);
+    // Each statement collects its batch into an array first, so the locking
+    // subquery runs once and changes at most `batch_size` rows. As an `IN`
+    // subquery the planner may rescan it for every row, and each rescan skips
+    // the rows the statement already changed and takes the next ones.
     let addresses_cleared = sqlx::query(
         "UPDATE moderation_events SET target_ip = NULL
-         WHERE id IN (
+         WHERE id = ANY(ARRAY(
              SELECT id FROM moderation_events
              WHERE target_ip IS NOT NULL AND created_at < now() - make_interval(days => $1)
              ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
-         )",
+         ))",
     )
     .bind(address_days)
     .bind(batch_size)
@@ -589,11 +593,11 @@ async fn retire_old_batch(
     .rows_affected();
     let sanctions_removed = sqlx::query(
         "DELETE FROM room_states
-         WHERE id IN (
+         WHERE id = ANY(ARRAY(
              SELECT id FROM room_states
              WHERE expires_at IS NOT NULL AND expires_at < now() - make_interval(days => $1)
              ORDER BY expires_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
-         )",
+         ))",
     )
     .bind(history_days)
     .bind(batch_size)
@@ -601,10 +605,10 @@ async fn retire_old_batch(
     .await?
     .rows_affected();
     let entries_removed = sqlx::query(
-        "DELETE FROM moderation_events WHERE id IN (
+        "DELETE FROM moderation_events WHERE id = ANY(ARRAY(
              SELECT id FROM moderation_events WHERE created_at < now() - make_interval(days => $1)
              ORDER BY created_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
-         )",
+         ))",
     )
     .bind(history_days)
     .bind(batch_size)
@@ -613,11 +617,11 @@ async fn retire_old_batch(
     .rows_affected();
     let reports_removed = sqlx::query(
         "DELETE FROM room_reports
-         WHERE id IN (
+         WHERE id = ANY(ARRAY(
              SELECT id FROM room_reports
              WHERE status <> 'open' AND resolved_at < now() - make_interval(days => $1)
              ORDER BY resolved_at, id LIMIT $2 FOR UPDATE SKIP LOCKED
-         )",
+         ))",
     )
     .bind(history_days)
     .bind(batch_size)
@@ -625,10 +629,10 @@ async fn retire_old_batch(
     .await?
     .rows_affected();
     let invites_removed = sqlx::query(
-        "DELETE FROM invites WHERE code_hash IN (
+        "DELETE FROM invites WHERE code_hash = ANY(ARRAY(
              SELECT code_hash FROM invites WHERE expires_at < now() - make_interval(days => $1)
              ORDER BY expires_at, code_hash LIMIT $2 FOR UPDATE SKIP LOCKED
-         )",
+         ))",
     )
     .bind(super::invites::INVITE_RECEIPT_RETENTION_DAYS)
     .bind(batch_size)
@@ -1410,7 +1414,13 @@ mod tests {
 
     /// The migrated disposable database the ignored tests run against.
     async fn database() -> PgPool {
-        PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+        connect(sqlx::postgres::PgPoolOptions::new()).await
+    }
+
+    /// The migrated disposable database through a pool built from `options`.
+    async fn connect(options: sqlx::postgres::PgPoolOptions) -> PgPool {
+        options
+            .connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
             .await
             .unwrap()
     }
@@ -1759,6 +1769,90 @@ mod tests {
         assert_eq!(receipts, 1);
 
         remove_accounts(&pool, &[owner, member]).await;
+    }
+
+    /// A retention batch changes at most `batch` rows of each table, whatever plan
+    /// its statements get. The test forces the plan that once broke that, through
+    /// `retire_old_batch` itself, on a pool of one connection: temporary copies of
+    /// the four tables shadow the shared ones (the session's temporary schema comes
+    /// first in the search path, and autovacuum never analyzes temporary tables);
+    /// each copy is analyzed while it holds a page but no live row, so the planner
+    /// estimates one row however many follow, as for a table emptied by deletions
+    /// and analyzed; five eligible rows per table go in oldest first; and the
+    /// connection sets `plan_cache_mode = force_generic_plan`, the plan a cached
+    /// prepared statement can settle on. Written as `IN (SELECT … LIMIT $2 FOR
+    /// UPDATE SKIP LOCKED)`, each statement then rescanned its locking subquery for
+    /// every row, skipped the rows it had already changed, and changed all five.
+    /// The setup names `pg_temp` itself, so on any other connection it fails
+    /// instead of reaching the shared tables; the statements under test stay as
+    /// the server runs them.
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn retention_batches_keep_their_size_whatever_the_plan() {
+        let pool = connect(sqlx::postgres::PgPoolOptions::new().max_connections(1)).await;
+        for statement in [
+            "CREATE TEMPORARY TABLE moderation_events (LIKE public.moderation_events INCLUDING ALL)",
+            "CREATE TEMPORARY TABLE room_states (LIKE public.room_states INCLUDING ALL)",
+            "CREATE TEMPORARY TABLE room_reports (LIKE public.room_reports INCLUDING ALL)",
+            "CREATE TEMPORARY TABLE invites (LIKE public.invites INCLUDING ALL)",
+            "INSERT INTO pg_temp.moderation_events (id, room_id, action, actor_id, actor_name,
+                 target_id, target_name, target_authenticated)
+             VALUES (gen_random_uuid(), 'retention', 'kick', 'actor', 'Actor', 'target', 'Target',
+                     false)",
+            "INSERT INTO pg_temp.room_states (room_id, user_id, state, applied_by)
+             VALUES ('retention', gen_random_uuid(), 'banned', gen_random_uuid())",
+            "INSERT INTO pg_temp.room_reports (id, room_id, reporter_id, reporter_name,
+                 target_participant_id, target_name, reason)
+             VALUES (gen_random_uuid(), 'retention', 'reporter', 'Reporter', 'target', 'Target',
+                     'spam')",
+            "INSERT INTO pg_temp.invites (code_hash, kind, created_by, uses_left, expires_at)
+             VALUES (repeat('0', 64), 'registration', gen_random_uuid(), 0, now())",
+            "DELETE FROM pg_temp.moderation_events",
+            "DELETE FROM pg_temp.room_states",
+            "DELETE FROM pg_temp.room_reports",
+            "DELETE FROM pg_temp.invites",
+            "ANALYZE pg_temp.moderation_events",
+            "ANALYZE pg_temp.room_states",
+            "ANALYZE pg_temp.room_reports",
+            "ANALYZE pg_temp.invites",
+            "INSERT INTO pg_temp.moderation_events (id, room_id, action, actor_id, actor_name,
+                 target_id, target_name, target_authenticated, target_ip, created_at)
+             SELECT gen_random_uuid(), 'retention', 'kick', 'actor', 'Actor', 'target', 'Target',
+                    false, '192.0.2.1', now() - interval '400 days' + make_interval(secs => n)
+             FROM generate_series(1, 5) n",
+            "INSERT INTO pg_temp.room_states (room_id, user_id, state, applied_by, expires_at)
+             SELECT 'retention', gen_random_uuid(), 'banned', gen_random_uuid(),
+                    now() - interval '400 days' + make_interval(secs => n)
+             FROM generate_series(1, 5) n",
+            "INSERT INTO pg_temp.room_reports (id, room_id, reporter_id, reporter_name,
+                 target_participant_id, target_name, reason, status, resolved_by, resolved_at)
+             SELECT gen_random_uuid(), 'retention', 'reporter', 'Reporter', 'target', 'Target',
+                    'spam', 'resolved', 'moderator',
+                    now() - interval '400 days' + make_interval(secs => n)
+             FROM generate_series(1, 5) n",
+            "INSERT INTO pg_temp.invites (code_hash, kind, created_by, uses_left, expires_at)
+             SELECT encode(sha256(convert_to('retention ' || n, 'UTF8')), 'hex'), 'registration',
+                    gen_random_uuid(), 0, now() - interval '400 days' + make_interval(secs => n)
+             FROM generate_series(1, 5) n",
+            "SET plan_cache_mode = force_generic_plan",
+        ] {
+            sqlx::query(statement).execute(&pool).await.unwrap();
+        }
+        let config = RetentionConfig {
+            address_days: 30,
+            history_days: 365,
+        };
+        assert_eq!(
+            retire_old_batch(&pool, config, 2).await.unwrap(),
+            RetentionReport {
+                addresses_cleared: 2,
+                sanctions_removed: 2,
+                entries_removed: 2,
+                reports_removed: 2,
+                invites_removed: 2,
+            }
+        );
+        pool.close().await;
     }
 
     /// The room keeps its newest entries by time, whatever order they arrive in:
