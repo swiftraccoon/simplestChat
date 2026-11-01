@@ -1,7 +1,11 @@
 import type { ChatEntry } from './protocol';
 import { asyncButton, button, el, field, modal } from './ui';
 
-/** Links stay whole; outside them, each occurrence of `mention` is marked, in any case. */
+/**
+ * Links stay whole; outside them, each occurrence of `mention` is marked, in any case.
+ * A link's text is the address it opens (see `linkAddress`) and its `href` the text
+ * as sent; a match `linkAddress` refuses stays plain text.
+ */
 export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
   const pattern = /https?:\/\/[^\s<>]+/g;
   // Default-ignorable characters (the server's labels::is_hidden_format set:
@@ -15,8 +19,10 @@ export function appendLinkedText(parent: HTMLElement, text: string, mention?: st
   for (const match of text.matchAll(pattern)) {
     const index = match.index;
     if (hidden.test(match[0])) continue;
+    const address = linkAddress(match[0]);
+    if (address === null) continue;
     appendMarkedText(parent, text.slice(start, index), mention);
-    const link = el('a', match[0]);
+    const link = el('a', address);
     link.href = match[0];
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -24,6 +30,23 @@ export function appendLinkedText(parent: HTMLElement, text: string, mention?: st
     start = index + match[0].length;
   }
   appendMarkedText(parent, text.slice(start), mention);
+}
+
+/**
+ * The address a browser opens for `raw`, as the URL parser writes it: a host name with
+ * letters outside ASCII is written in punycode (`xn--`), so a name spelled with
+ * look-alike letters from another script cannot pass for the site it imitates. Null
+ * when the parser rejects `raw`, which no browser could open, and when user information
+ * precedes an `@`, which RFC 9110 (section 4.2.4) has a recipient treat as an error in
+ * a URI from an untrusted source: `https://good.example@evil.example/` opens evil.example.
+ */
+function linkAddress(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    return url.username === '' && url.password === '' ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function appendMarkedText(parent: HTMLElement, text: string, mention: string | undefined): void {
