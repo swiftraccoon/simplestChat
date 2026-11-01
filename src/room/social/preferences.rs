@@ -4,9 +4,10 @@
 use super::*;
 
 impl RoomManager {
-    pub(super) async fn set_chat_preferences(
+    pub(super) async fn set_chat_preferences<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         allow_private_messages: bool,
         ignored_participant_ids: &[ParticipantId],
     ) -> Result<SocialResponse> {
@@ -27,16 +28,15 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| unavailable("Account preferences unavailable"))?;
             let account = participant_id.as_uuid();
-            request.release();
+            let released = release(room);
             let preferences = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 crate::auth::account::load_chat_preferences(pool, account),
             )
             .await
             .map_err(|_| timed_out("Account preferences timed out"))??;
-            request.reacquire().await?;
-            let room = request.room();
-            let actor = room.participants.get(participant_id).unwrap();
+            room = request.reacquire(released).await?;
+            let actor = request.actor(&room)?;
             let guests = ignored_participant_ids
                 .iter()
                 .filter(|id| {
@@ -47,15 +47,15 @@ impl RoomManager {
                 })
                 .cloned()
                 .collect();
-            let actor = room.participants.get_mut(participant_id).unwrap();
+            let actor = request.actor_mut(&mut room)?;
             actor.social.guest_ignored = guests;
             actor.social.apply_account_preferences(&preferences);
         } else {
-            let actor = request.room().participants.get_mut(participant_id).unwrap();
+            let actor = request.actor_mut(&mut room)?;
             actor.social.allow_private_messages = allow_private_messages;
             actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
         }
-        let actor = request.room().participants.get(participant_id).unwrap();
+        let actor = request.actor(&room)?;
         Ok(SocialResponse::SetChatPreferences {
             allow_private_messages: actor.social.allow_private_messages,
             ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),
@@ -64,7 +64,8 @@ impl RoomManager {
 
     pub(super) fn change_nickname(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'_>,
+        mut room: HeldRoom<'_>,
         nickname: &str,
     ) -> Result<SocialResponse> {
         let participant_id = request.participant_id;
@@ -78,11 +79,10 @@ impl RoomManager {
                 "Nickname must be 1–64 bytes of plain text; \"You\" is taken",
             ));
         }
-        let room = request.room();
         if room.name_in_use(nickname, Some(participant_id)) {
             return Err(invalid("That name is already in use in this room"));
         }
-        room.participants.get_mut(participant_id).unwrap().name = nickname.to_string();
+        request.actor_mut(&mut room)?.name = nickname.to_string();
         room.broadcast_all(&ServerMessage::NicknameChanged {
             participant_id: *participant_id,
             nickname: nickname.to_string(),
@@ -92,9 +92,10 @@ impl RoomManager {
         })
     }
 
-    pub(super) async fn set_chat_style(
+    pub(super) async fn set_chat_style<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         chat_style: &ChatStyle,
     ) -> Result<SocialResponse> {
         let participant_id = request.participant_id;
@@ -106,7 +107,7 @@ impl RoomManager {
         {
             let user: Uuid = participant_id.as_uuid();
             // The account keeps the look before anyone sees it.
-            request.release();
+            let released = release(room);
             tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 save_chat_style(&pool, user, &chat_style),
@@ -114,13 +115,9 @@ impl RoomManager {
             .await
             .map_err(|_| failed("Your chat look could not be saved"))?
             .map_err(|_| failed("Your chat look could not be saved"))?;
-            request.reacquire().await?;
+            room = request.reacquire(released).await?;
         }
-        let room = request.room();
-        room.participants
-            .get_mut(participant_id)
-            .ok_or_else(|| not_found("Participant not found"))?
-            .chat_style = chat_style.clone();
+        request.actor_mut(&mut room)?.chat_style = chat_style.clone();
         room.broadcast_all(&ServerMessage::ChatStyleChanged {
             participant_id: *participant_id,
             chat_style: chat_style.clone(),

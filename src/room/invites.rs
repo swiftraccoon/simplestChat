@@ -375,13 +375,11 @@ pub(crate) async fn memberships(
     .await?;
     let has_more = rows.len() > MEMBERSHIP_PAGE_SIZE;
     rows.truncate(MEMBERSHIP_PAGE_SIZE);
-    let next_cursor = has_more.then(|| {
-        rows.last()
-            .expect("full membership page")
-            .room
-            .id
-            .to_string()
-    });
+    // A further page exists only after a full one, whose last row is the cursor.
+    let next_cursor = rows
+        .last()
+        .filter(|_| has_more)
+        .map(|row| row.room.id.to_string());
     Ok(MembershipBatch {
         next_cursor,
         rows: rows.into_iter().map(|row| (row.room, row.role)).collect(),

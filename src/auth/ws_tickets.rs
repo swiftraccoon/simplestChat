@@ -23,7 +23,9 @@ use std::{
 #[path = "ws_tickets_property_tests.rs"]
 mod property_tests;
 
-const MAX_PENDING: usize = 10_000;
+/// Pending tickets per process; a zero would fail the build, since a constant
+/// is evaluated at compile time.
+const MAX_PENDING: NonZeroUsize = NonZeroUsize::new(10_000).unwrap();
 const TICKET_TTL_SECONDS: u64 = 30;
 
 struct Ticket {
@@ -70,11 +72,9 @@ impl TicketStore {
         Self::with_capacity(MAX_PENDING)
     }
 
-    fn with_capacity(capacity: usize) -> Self {
+    fn with_capacity(capacity: NonZeroUsize) -> Self {
         Self {
-            entries: Mutex::new(LruCache::new(
-                NonZeroUsize::new(capacity).expect("nonzero ticket capacity"),
-            )),
+            entries: Mutex::new(LruCache::new(capacity)),
         }
     }
 
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn tickets_are_one_use_bounded_and_expire_without_extending_the_jwt() {
-        let store = TicketStore::with_capacity(2);
+        let store = TicketStore::with_capacity(NonZeroUsize::new(2).unwrap());
         let now = Instant::now();
         let identity = claims(1000);
         let first = store.issue_at(identity.clone(), now, 1000).unwrap();
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn issued_tickets_serialize_in_full_and_redact_their_debug_output() {
-        let store = TicketStore::with_capacity(1);
+        let store = TicketStore::with_capacity(NonZeroUsize::MIN);
         let issued = store.issue_at(claims(1000), Instant::now(), 1000).unwrap();
         let wire = serde_json::to_value(&issued).unwrap();
         let ticket = wire["ticket"].as_str().unwrap_or_default();
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn capacity_reclaims_expired_tickets_and_concurrent_consumers_have_one_winner() {
-        let store = std::sync::Arc::new(TicketStore::with_capacity(1));
+        let store = std::sync::Arc::new(TicketStore::with_capacity(NonZeroUsize::MIN));
         let now = Instant::now();
         store.issue_at(claims(1000), now, 1000).unwrap();
         let ticket = store

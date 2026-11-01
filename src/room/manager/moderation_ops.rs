@@ -485,7 +485,9 @@ impl RoomManager {
             .into_iter()
             .next()
             .map(|session| session.media_session_id)
-            .expect("target was checked under the same room lock")
+            // The target was checked under this same room lock, so the
+            // removal names its session; refuse rather than assume it.
+            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?
         };
 
         // Clean up media outside lock

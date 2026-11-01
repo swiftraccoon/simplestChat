@@ -4,9 +4,10 @@
 use super::*;
 
 impl RoomManager {
-    pub(super) async fn report_participant(
+    pub(super) async fn report_participant<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         target_participant_id: &ParticipantId,
         reason: &str,
     ) -> Result<SocialResponse> {
@@ -20,13 +21,12 @@ impl RoomManager {
         if target_participant_id == participant_id {
             return Err(invalid("Choose another participant"));
         }
-        let room = request.room();
         let target = room
             .participants
             .get(target_participant_id)
             .ok_or_else(|| not_found("Participant is no longer in this room"))?;
         let target_name = target.name.clone();
-        let reporter = reporter_key(room.participants.get(participant_id).unwrap());
+        let reporter = reporter_key(request.actor(&room)?);
         if room
             .social
             .report_cooldown_active(&reporter, std::time::Instant::now())
@@ -51,9 +51,9 @@ impl RoomManager {
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Report service unavailable"))?;
-            request.release();
-            let inserted = self
-                .persist_room(room_id, request.room_lock, async {
+            let released = release(room);
+            let inserted = request
+                .persist(self, &released, async {
                     let mut transaction = pool.begin().await?;
                     let inserted =
                         moderation::file_report(&mut transaction, room_id, &report, MAX_REPORTS)
@@ -67,7 +67,7 @@ impl RoomManager {
                     "Room report capacity reached; contact a moderator",
                 ));
             }
-            request.reacquire().await?;
+            room = request.reacquire(released).await?;
         } else {
             if room.social.reports.len() >= MAX_REPORTS as usize {
                 if let Some(index) = room
@@ -85,10 +85,7 @@ impl RoomManager {
             }
             room.social.reports.push_back(report.clone());
         }
-        request
-            .room()
-            .social
-            .note_report(reporter, std::time::Instant::now());
+        room.social.note_report(reporter, std::time::Instant::now());
         // Only the submitting participant receives the report ID here.
         Ok(SocialResponse::ReportParticipant {
             report_id: report.report_id.clone(),
@@ -96,28 +93,28 @@ impl RoomManager {
         })
     }
 
-    pub(super) async fn list_room_reports(
+    pub(super) async fn list_room_reports<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        room: HeldRoom<'a>,
         offset: Option<u32>,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let offset = page_offset(offset)?;
         let room_id = request.room_id;
-        let room = request.room();
         let mut reports: Vec<ReportEntry> = if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Report service unavailable"))?;
-            request.release();
+            let released = release(room);
             let reports = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 moderation::list_reports(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
             )
             .await
             .map_err(|_| timed_out("Report service timed out"))??;
-            request.reacquire().await?;
+            drop(request.reacquire(released).await?);
             reports
         } else {
             room.social
@@ -137,9 +134,10 @@ impl RoomManager {
         Ok(SocialResponse::ListRoomReports { reports, has_more })
     }
 
-    pub(super) async fn resolve_room_report(
+    pub(super) async fn resolve_room_report<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         report_id: &str,
         status: moderation::ReportResolution,
     ) -> Result<SocialResponse> {
@@ -149,16 +147,15 @@ impl RoomManager {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_name = request.actor_name.clone();
-        let room = request.room();
         if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Report service unavailable"))?;
-            request.release();
+            let released = release(room);
             let actor_id = *participant_id;
-            let resolved = self
-                .persist_room(room_id, request.room_lock, async {
+            let resolved = request
+                .persist(self, &released, async {
                     let mut transaction = pool.begin().await?;
                     let resolved = moderation::resolve_report(
                         &mut transaction,
@@ -175,7 +172,7 @@ impl RoomManager {
                     Ok(resolved)
                 })
                 .await?;
-            request.reacquire().await?;
+            drop(request.reacquire(released).await?);
             if !resolved {
                 return Err(not_found("Open report not found"));
             }
@@ -217,29 +214,29 @@ impl RoomManager {
         })
     }
 
-    pub(super) async fn list_moderation_events(
+    pub(super) async fn list_moderation_events<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        room: HeldRoom<'a>,
         offset: Option<u32>,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let offset = page_offset(offset)?;
         let owner = request.actor_role >= roles::Role::Owner;
         let room_id = request.room_id;
-        let room = request.room();
         let mut events: Vec<ModerationEvent> = if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("History service unavailable"))?;
-            request.release();
+            let released = release(room);
             let rows = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 moderation::list_events(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
             )
             .await
             .map_err(|_| timed_out("History service timed out"))??;
-            request.reacquire().await?;
+            drop(request.reacquire(released).await?);
             rows
         } else {
             room.social

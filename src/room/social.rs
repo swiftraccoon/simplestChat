@@ -13,6 +13,7 @@ use crate::signaling::protocol::{
     ReportEntry, ReportOutcome, RoomSnapshot, SnapshotLobbyEntry, SocialResponse,
     valid_correlation_id,
 };
+use hand_off::{Released, release};
 use uuid::Uuid;
 
 const HISTORY_MESSAGES: usize = 300;
@@ -938,12 +939,13 @@ impl RoomSocial {
             .count()
             >= CHAT_RECEIPTS_PER_MEMBER
         {
-            let index = self
+            let oldest = self
                 .receipts
                 .iter()
-                .position(|entry| entry.sender_session == sender_session)
-                .expect("member receipt count checked");
-            let entry = self.receipts.remove(index).expect("receipt index checked");
+                .position(|entry| entry.sender_session == sender_session);
+            let Some(entry) = oldest.and_then(|index| self.receipts.remove(index)) else {
+                break;
+            };
             self.receipt_bytes -= entry.bytes;
         }
         while self.receipts.len() >= CHAT_RECEIPTS
@@ -1179,44 +1181,88 @@ impl Room {
     }
 }
 
-/// A social request's hold on the room: the write guard a handler works under,
-/// given up around every await through [`SocialRequest::release`] and taken back
-/// through [`SocialRequest::reacquire`], which checks that the room is still live
-/// and the actor still bound to this connection before the handler goes on. The
-/// actor's standing is the one admitted before the handler ran.
+/// A social request's context: its room, the acting participant on this
+/// connection and the standing admitted before the handler ran. The handler
+/// owns the room's write guard, a [`HeldRoom`], as a separate value: it gives
+/// the guard up around every await through [`release`], whose [`Released`]
+/// token [`SocialRequest::persist`] borrows and [`SocialRequest::reacquire`]
+/// takes back after checking that the room is still live and the actor still
+/// bound to this connection. The handlers reach the room's lock only through
+/// those two, which both need the token, so for the guard the dispatcher hands
+/// over and `reacquire` returns, using the room while it is not held, or
+/// reacquiring it while it is, does not compile. A guard taken from the
+/// manager's own room table is outside this scheme.
 struct SocialRequest<'a> {
     room_id: &'a RoomId,
     participant_id: &'a ParticipantId,
     expected_sender: &'a mpsc::Sender<crate::OutboundJson>,
     room_lock: &'a std::sync::Arc<tokio::sync::RwLock<Room>>,
-    room: Option<tokio::sync::RwLockWriteGuard<'a, Room>>,
     actor_role: roles::Role,
     actor_name: String,
     actor_authenticated: bool,
 }
 
-impl SocialRequest<'_> {
-    /// The room, held between awaits.
-    fn room(&mut self) -> &mut Room {
-        self.room
-            .as_deref_mut()
-            .expect("a social request holds the room between awaits")
-    }
+/// The room a social handler works under between its awaits.
+type HeldRoom<'a> = tokio::sync::RwLockWriteGuard<'a, Room>;
 
-    /// Gives the room up for an await.
-    fn release(&mut self) {
-        self.room = None;
-    }
+/// The release token in a module of its own: its field is private to this
+/// module, so no handler module can mint one except through [`release`].
+mod hand_off {
+    use super::HeldRoom;
 
+    /// Proof that the handler gave the room up for an await.
+    pub(super) struct Released(());
+
+    /// Gives the room up for an await. Only this mints the token that
+    /// [`SocialRequest::reacquire`](super::SocialRequest::reacquire) consumes
+    /// and [`SocialRequest::persist`](super::SocialRequest::persist) borrows,
+    /// so for the guard the dispatcher hands over and `reacquire` returns, a
+    /// handler holds either the room or the token, never both. A guard taken
+    /// from the manager's own room table is outside this scheme.
+    pub(super) fn release(room: HeldRoom<'_>) -> Released {
+        drop(room);
+        Released(())
+    }
+}
+
+impl<'a> SocialRequest<'a> {
     /// Takes the room back after an await: it must still be live and the actor
-    /// still bound to this connection.
-    async fn reacquire(&mut self) -> Result<()> {
+    /// still bound to this connection. A handler that needs only that check
+    /// drops the returned guard at once.
+    async fn reacquire(&self, _released: Released) -> Result<HeldRoom<'a>> {
         let lock = self.room_lock;
         let room = lock.write().await;
         room.ensure_live()?;
         RoomManager::participant_for_sender(&room, self.participant_id, self.expected_sender)?;
-        self.room = Some(room);
-        Ok(())
+        Ok(room)
+    }
+
+    /// Persists while the room is released: quarantining a commit in doubt takes its write lock.
+    async fn persist<T>(
+        &self,
+        manager: &RoomManager,
+        _released: &Released,
+        persistence: impl Future<Output = Result<T, RoomError>>,
+    ) -> Result<T, RoomError> {
+        manager
+            .persist_room(self.room_id, self.room_lock, persistence)
+            .await
+    }
+
+    /// The acting participant in the room this request holds. Admission and
+    /// [`Self::reacquire`] bind the actor under that same write lock, so the
+    /// refusal stands only for a request whose actor is gone.
+    fn actor<'r>(&self, room: &'r Room) -> Result<&'r Participant> {
+        room.participants
+            .get(self.participant_id)
+            .ok_or_else(|| not_found("Participant not found"))
+    }
+
+    /// [`Self::actor`], for a change to the acting participant.
+    fn actor_mut<'r>(&self, room: &'r mut Room) -> Result<&'r mut Participant> {
+        room.participants
+            .get_mut(self.participant_id)
+            .ok_or_else(|| not_found("Participant not found"))
     }
 }
 
@@ -2023,12 +2069,13 @@ impl RoomManager {
             bytes: receipt_bytes,
             message: message.clone(),
         });
-        if let Some(sequence) = sequence {
-            room.participants
-                .get_mut(sender_id)
-                .expect("current sender checked")
-                .social
-                .chat_high_water = sequence;
+        // The caller bound the sender under this lock; were it gone, it would
+        // have no watermark to advance, and the message is already delivered,
+        // so there is nothing to refuse.
+        if let Some(sequence) = sequence
+            && let Some(sender) = room.participants.get_mut(sender_id)
+        {
+            sender.social.chat_high_water = sequence;
         }
         room.social.remember(
             sender_session,
@@ -2245,12 +2292,13 @@ impl RoomManager {
                 }
             }
         }
-        let mut request = SocialRequest {
+        // Each arm hands the held room to its handler, which gives it up when
+        // it returns.
+        let request = SocialRequest {
             room_id,
             participant_id,
             expected_sender,
             room_lock: &room_lock,
-            room: Some(room),
             actor_role,
             actor_name,
             actor_authenticated,
@@ -2273,13 +2321,14 @@ impl RoomManager {
                     q: q.clone(),
                     limit: *limit,
                 };
-                self.chat_history(&mut request, query).await?
+                self.chat_history(&request, room, query).await?
             }
             ClientMessage::MarkChatRead { message_id, .. } => {
-                self.mark_chat_read(&mut request, message_id).await?
+                self.mark_chat_read(&request, room, message_id).await?
             }
             ClientMessage::SetRoomHistory { retention_days, .. } => {
-                self.set_room_history(&mut request, *retention_days).await?
+                self.set_room_history(&request, room, *retention_days)
+                    .await?
             }
             ClientMessage::SetChatPreferences {
                 allow_private_messages,
@@ -2287,17 +2336,18 @@ impl RoomManager {
                 ..
             } => {
                 self.set_chat_preferences(
-                    &mut request,
+                    &request,
+                    room,
                     *allow_private_messages,
                     ignored_participant_ids,
                 )
                 .await?
             }
             ClientMessage::ChangeNickname { nickname, .. } => {
-                self.change_nickname(&mut request, nickname)?
+                self.change_nickname(&request, room, nickname)?
             }
             ClientMessage::SetChatStyle { chat_style, .. } => {
-                self.set_chat_style(&mut request, chat_style).await?
+                self.set_chat_style(&request, room, chat_style).await?
             }
             ClientMessage::EditChatMessage {
                 message_id,
@@ -2309,42 +2359,42 @@ impl RoomManager {
                     content: content.clone(),
                     expected_revision: *expected_revision,
                 };
-                self.edit_chat_message(&mut request, message_id, edit)
+                self.edit_chat_message(&request, room, message_id, edit)
                     .await?
             }
             ClientMessage::GetPinnedMessages { .. } => {
-                self.pinned_messages(&mut request, None).await?
+                self.pinned_messages(&request, room, None).await?
             }
             ClientMessage::SetPinnedMessage {
                 message_id, pinned, ..
             } => {
-                self.pinned_messages(&mut request, Some((message_id, *pinned)))
+                self.pinned_messages(&request, room, Some((message_id, *pinned)))
                     .await?
             }
             ClientMessage::RemoveChatMessage { message_id, .. } => {
-                self.remove_chat_message(&mut request, message_id).await?
+                self.remove_chat_message(&request, room, message_id).await?
             }
             ClientMessage::ReactToMessage {
                 message_id, emoji, ..
             } => {
-                self.react_to_message(&mut request, message_id, emoji)
+                self.react_to_message(&request, room, message_id, emoji)
                     .await?
             }
             ClientMessage::ListRoomBans { offset, .. } => {
-                self.list_room_bans(&mut request, *offset).await?
+                self.list_room_bans(&request, room, *offset).await?
             }
             ClientMessage::RemoveRoomBan { ban_id, .. } => {
-                self.remove_room_ban(&mut request, ban_id).await?
+                self.remove_room_ban(&request, room, ban_id).await?
             }
             ClientMessage::ListRoomMembers { offset, .. } => {
-                self.list_room_members(&mut request, *offset).await?
+                self.list_room_members(&request, room, *offset).await?
             }
             ClientMessage::SetMemberRole {
                 target_user_id,
                 role,
                 ..
             } => {
-                self.set_member_role(&mut request, target_user_id, *role)
+                self.set_member_role(&request, room, target_user_id, *role)
                     .await?
             }
             ClientMessage::ReportParticipant {
@@ -2352,24 +2402,23 @@ impl RoomManager {
                 reason,
                 ..
             } => {
-                self.report_participant(&mut request, target_participant_id, reason)
+                self.report_participant(&request, room, target_participant_id, reason)
                     .await?
             }
             ClientMessage::ListRoomReports { offset, .. } => {
-                self.list_room_reports(&mut request, *offset).await?
+                self.list_room_reports(&request, room, *offset).await?
             }
             ClientMessage::ResolveRoomReport {
                 report_id, status, ..
             } => {
-                self.resolve_room_report(&mut request, report_id, *status)
+                self.resolve_room_report(&request, room, report_id, *status)
                     .await?
             }
             ClientMessage::ListModerationEvents { offset, .. } => {
-                self.list_moderation_events(&mut request, *offset).await?
+                self.list_moderation_events(&request, room, *offset).await?
             }
             _ => return Err(not_found("Unknown request")),
         };
-        request.release();
         if let Some(control) = &control {
             control.release();
         }

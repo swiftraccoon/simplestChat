@@ -9,7 +9,7 @@ fn boundary_properties_ticket_validity_requires_both_deadlines_and_exactly_one_u
     for remaining in [0_u64, 1, 2, 29, 30, 31, 60, 900] {
         for monotonic_ms in [0_u64, 999, 1000, 1999, 2000, 29_999, 30_000, 31_000] {
             for wall_delta in [-100_i64, 0, 1, 2, 29, 30, 900] {
-                let store = TicketStore::with_capacity(1);
+                let store = TicketStore::with_capacity(NonZeroUsize::MIN);
                 let claims = Claims {
                     sub: "11111111-1111-4111-8111-111111111111".into(),
                     name: "Synthetic identity".into(),

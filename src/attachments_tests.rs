@@ -613,6 +613,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     assert!(location.message_id.is_none());
     assert!(location.ephemeral_message_id.is_some());
     let access = grant_access(
+        server.attachment_grant_key(),
         &manager,
         &db.pool,
         &room,
@@ -639,6 +640,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     let other = db.upload(0, b"unpublished".to_vec()).await;
     assert!(
         grant_access(
+            server.attachment_grant_key(),
             &manager,
             &db.pool,
             &room,
@@ -683,6 +685,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     );
     assert!(
         grant_access(
+            server.attachment_grant_key(),
             &manager,
             &db.pool,
             &room,
@@ -696,6 +699,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         "retention-off rejoin cannot read prejoin files"
     );
     let owner_access = grant_access(
+        server.attachment_grant_key(),
         &manager,
         &db.pool,
         &room,
@@ -751,6 +755,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         .unwrap();
     assert!(
         grant_access(
+            server.attachment_grant_key(),
             &manager,
             &db.pool,
             &room,
@@ -764,6 +769,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     );
     assert!(
         grant_access(
+            server.attachment_grant_key(),
             &manager,
             &db.pool,
             &room,
@@ -776,6 +782,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         .is_err()
     );
     let own_access = grant_access(
+        server.attachment_grant_key(),
         &manager,
         &db.pool,
         &room,

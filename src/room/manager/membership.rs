@@ -3,6 +3,10 @@
 
 use super::super::*;
 
+/// The most producers one audio-level report names; a zero would fail the
+/// build, since a constant is evaluated at compile time.
+const AUDIO_LEVEL_ENTRIES: std::num::NonZeroU16 = std::num::NonZeroU16::new(10).unwrap();
+
 impl RoomManager {
     pub(in crate::room) fn failed_join_cleanup(&self) -> FailedJoinCleanup {
         FailedJoinCleanup {
@@ -260,7 +264,7 @@ impl RoomManager {
             };
 
             let mut options = AudioLevelObserverOptions::default();
-            options.max_entries = std::num::NonZeroU16::new(10).unwrap();
+            options.max_entries = AUDIO_LEVEL_ENTRIES;
             options.threshold = -50;
             options.interval = 800;
             let audio_level_observer = match router.create_audio_level_observer(options).await {
@@ -936,7 +940,6 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: Option<&mpsc::Sender<crate::OutboundJson>>,
     ) -> Result<bool> {
-        let mut removed = false;
         let mut removed_any = false;
         let mut room_empty = false;
         let mut media_session_id = None;
@@ -985,7 +988,6 @@ impl RoomManager {
             }
 
             if let Some(participant) = room.participants.remove(participant_id) {
-                removed = true;
                 removed_any = true;
                 media_session_id = Some(participant.media_session_id);
                 info!(
@@ -1028,13 +1030,11 @@ impl RoomManager {
             }
         }
 
-        if removed {
+        // Only a removed participant has a media session to close.
+        if let Some(media_session_id) = media_session_id {
             // Close transports, producers, consumers — releases FDs
-            let media_participant_id = Self::media_participant_id(
-                room_id,
-                participant_id,
-                media_session_id.expect("removed participants have a media session"),
-            );
+            let media_participant_id =
+                Self::media_participant_id(room_id, participant_id, media_session_id);
             if let Err(e) = self
                 .media_server
                 .transport_manager()

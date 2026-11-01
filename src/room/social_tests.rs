@@ -201,6 +201,44 @@ fn chat(
 }
 
 #[test]
+fn a_social_request_whose_actor_has_left_is_refused_as_not_found() {
+    let (mut room, alice, _bob, _carol, _receivers) = fixture();
+    let room_id = rid("social");
+    let gone = pid("gone");
+    let room_lock = Arc::new(TokioRwLock::new(Room::new(
+        room_id.clone(),
+        None,
+        false,
+        None,
+    )));
+    let request = SocialRequest {
+        room_id: &room_id,
+        participant_id: &gone,
+        expected_sender: &alice.sender,
+        room_lock: &room_lock,
+        actor_role: roles::Role::User,
+        actor_name: "Gone".into(),
+        actor_authenticated: false,
+    };
+    let refusals = [
+        request.actor(&room).map(|_| ()),
+        request.actor_mut(&mut room).map(|_| ()),
+    ];
+    for refusal in refusals {
+        let error = refusal.expect_err("an actor who is not in the room is refused");
+        let failure = error.downcast_ref::<SocialFailure>().unwrap();
+        assert_eq!(failure.code, ErrorCode::NotFound);
+        assert_eq!(failure.message, "Participant not found");
+    }
+    let present = SocialRequest {
+        participant_id: &alice.id,
+        ..request
+    };
+    assert_eq!(present.actor(&room).unwrap().id, alice.id);
+    assert_eq!(present.actor_mut(&mut room).unwrap().id, alice.id);
+}
+
+#[test]
 fn typing_reaches_the_conversations_recipients_only_and_is_throttled() {
     let (mut room, alice, bob, carol, mut receivers) = fixture();
     room.participants

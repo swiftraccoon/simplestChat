@@ -112,6 +112,7 @@ impl Fixture {
                                 claims,
                                 None,
                                 pool,
+                                crate::attachments::GrantKey::generate().unwrap(),
                                 revocations,
                                 renewal_authenticator,
                                 ConnectionTiming {

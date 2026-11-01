@@ -48,14 +48,18 @@ pub(crate) struct ClientIp(pub(crate) IpAddr);
 /// How long an avatar or room image request queues for the media lane.
 const PROFILE_PERMIT_WAIT: Duration = Duration::from_secs(5);
 const MAX_TRACKED_AUTH_IPS: usize = 10_000;
+/// [`MAX_TRACKED_AUTH_IPS`] as the rate table's capacity; a zero would fail the
+/// build, since a constant is evaluated at compile time.
+const TRACKED_AUTH_IPS_CAPACITY: std::num::NonZeroUsize =
+    std::num::NonZeroUsize::new(MAX_TRACKED_AUTH_IPS).unwrap();
 const PRINCIPAL_RATE_WINDOW: Duration = Duration::from_secs(60);
 // Four independently keyed 64K-wide rows cost 1 MiB per limiter. The
 // process-secret hashes prevent callers from manufacturing collisions, while
 // conservative updates make broad username churn much less polluting than a
 // conventional count-min sketch.
 const PRINCIPAL_SKETCH_DEPTH: usize = 4;
-const PRINCIPAL_SKETCH_WIDTH: usize = 65_536;
-const PRINCIPAL_SKETCH_WIDTH_U64: u64 = 65_536;
+/// One cell per `u16` value, so a hash's low 16 bits index a row.
+const PRINCIPAL_SKETCH_WIDTH: usize = 1 << u16::BITS;
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const HTTP_UPLOAD_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const HTTP_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -74,7 +78,7 @@ struct AuthRateTable {
 impl Default for AuthRateTable {
     fn default() -> Self {
         Self {
-            entries: lru::LruCache::new(std::num::NonZeroUsize::new(MAX_TRACKED_AUTH_IPS).unwrap()),
+            entries: lru::LruCache::new(TRACKED_AUTH_IPS_CAPACITY),
         }
     }
 }
@@ -176,9 +180,8 @@ impl PrincipalRateLimiter {
             let mut hasher = state.hashers[row].build_hasher();
             row.hash(&mut hasher);
             principal.hash(&mut hasher);
-            row * PRINCIPAL_SKETCH_WIDTH
-                + usize::try_from(hasher.finish() % PRINCIPAL_SKETCH_WIDTH_U64)
-                    .expect("sketch index fits usize")
+            let [low, high, ..] = hasher.finish().to_le_bytes();
+            row * PRINCIPAL_SKETCH_WIDTH + usize::from(u16::from_le_bytes([low, high]))
         });
         let estimate = indexes
             .iter()
@@ -320,6 +323,8 @@ pub(crate) struct SignalingServer {
     /// shared by every clone of the server.
     time_zone_names: Arc<crate::auth::notifications::TimeZoneNames>,
     jwt_secret: Option<crate::auth::jwt::JwtSecret>,
+    /// Signs and verifies attachment grants; drawn once when the server is built.
+    attachment_grant_key: crate::attachments::GrantKey,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
     /// `SOURCE_REVISION`: the 40-hexadecimal commit validated by `config.rs`,
@@ -364,6 +369,8 @@ impl SignalingServer {
         } else {
             info!("JWT_SECRET not set — authentication disabled");
         }
+        let attachment_grant_key = crate::attachments::GrantKey::generate()
+            .map_err(|error| anyhow::anyhow!("Attachment grant randomness unavailable: {error}"))?;
         let metrics_token = config
             .observability
             .metrics_token
@@ -442,6 +449,7 @@ impl SignalingServer {
             push_signer: None,
             time_zone_names: Arc::default(),
             jwt_secret,
+            attachment_grant_key,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
             source_revision: config
@@ -508,6 +516,11 @@ impl SignalingServer {
 
     pub(crate) fn db_pool(&self) -> Option<&PgPool> {
         self.db_pool.as_ref()
+    }
+
+    /// The key that signs and verifies this server's attachment grants.
+    pub(crate) fn attachment_grant_key(&self) -> &crate::attachments::GrantKey {
+        &self.attachment_grant_key
     }
 
     /// The server with `signer` attached: `push::start` passes the key it
@@ -1037,6 +1050,7 @@ async fn ws_handler(
                 authenticated_user,
                 Some(client_ip),
                 server.db_pool,
+                server.attachment_grant_key,
                 auth_revocations,
                 renewal_authenticator,
             )
@@ -1091,10 +1105,11 @@ async fn observe_http_request(
         response.status().as_u16(),
         started.elapsed(),
     );
-    response.headers_mut().insert(
-        "x-request-id",
-        HeaderValue::from_str(&request_id).expect("UUID is a header value"),
-    );
+    // A UUID's text is always a valid header value; were it ever refused, the
+    // handler's response would go out without the header rather than be lost.
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert("x-request-id", value);
+    }
     response
 }
 

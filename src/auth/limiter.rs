@@ -23,6 +23,9 @@ const FREE_PAIR_FAILURES: u32 = 3;
 const MAX_PAIR_DELAY: Duration = Duration::from_secs(300);
 const FAILURE_MEMORY: Duration = Duration::from_secs(3600);
 const MAX_TRACKED_KEYS: usize = 10_000;
+/// [`MAX_TRACKED_KEYS`] as the capacity both LRU tables take; a zero would fail
+/// the build, since a constant is evaluated at compile time.
+const TRACKED_KEYS_CAPACITY: NonZeroUsize = NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap();
 
 /// The wait after `failures`, once `free` of them have been forgiven: one
 /// second, then doubling to `ceiling`.
@@ -51,7 +54,7 @@ struct FailureTable<K> {
 impl<K: Eq + Hash> FailureTable<K> {
     fn new(free: u32, ceiling: Duration) -> Self {
         Self {
-            entries: LruCache::new(NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap()),
+            entries: LruCache::new(TRACKED_KEYS_CAPACITY),
             free,
             ceiling,
         }
@@ -167,7 +170,7 @@ pub(crate) struct WindowLimiter {
 impl WindowLimiter {
     pub(crate) fn new(allowance: u32, window: Duration) -> Self {
         Self {
-            entries: Mutex::new(LruCache::new(NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap())),
+            entries: Mutex::new(LruCache::new(TRACKED_KEYS_CAPACITY)),
             window,
             allowance,
         }

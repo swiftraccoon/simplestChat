@@ -44,7 +44,7 @@ pub(super) async fn handle(
                 ice_parameters: transport_info.ice_parameters,
                 ice_candidates: transport_info.ice_candidates,
                 dtls_parameters: transport_info.dtls_parameters,
-                ice_servers: make_ice_servers(turn_config),
+                ice_servers: make_ice_servers(turn_config)?,
             })?;
         }
 
@@ -71,7 +71,7 @@ pub(super) async fn handle(
                 ice_parameters: transport_info.ice_parameters,
                 ice_candidates: transport_info.ice_candidates,
                 dtls_parameters: transport_info.dtls_parameters,
-                ice_servers: make_ice_servers(turn_config),
+                ice_servers: make_ice_servers(turn_config)?,
             })?;
         }
 
@@ -91,7 +91,7 @@ pub(super) async fn handle(
                 ice_parameters: transport_info.ice_parameters,
                 ice_candidates: transport_info.ice_candidates,
                 dtls_parameters: transport_info.dtls_parameters,
-                ice_servers: make_ice_servers(turn_config),
+                ice_servers: make_ice_servers(turn_config)?,
             })?;
         }
 
@@ -263,7 +263,7 @@ pub(super) async fn handle(
                 ice_parameters,
                 // Relay credentials minted at transport creation may
                 // have expired; candidate gathering needs fresh ones.
-                ice_servers: make_ice_servers(turn_config),
+                ice_servers: make_ice_servers(turn_config)?,
             })?;
         }
 

@@ -384,6 +384,7 @@ pub(crate) async fn handle_connection(
     authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
+    attachment_grant_key: crate::attachments::GrantKey,
     auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
     renewal_authenticator: Option<RenewalAuthenticator>,
 ) {
@@ -397,6 +398,7 @@ pub(crate) async fn handle_connection(
         authenticated_user,
         client_ip,
         db_pool,
+        attachment_grant_key,
         auth_revocations,
         renewal_authenticator,
         ConnectionTiming::default(),
@@ -418,6 +420,7 @@ async fn handle_connection_with_timing(
     authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
+    attachment_grant_key: crate::attachments::GrantKey,
     mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
     renewal_authenticator: Option<RenewalAuthenticator>,
     timing: ConnectionTiming,
@@ -611,7 +614,14 @@ async fn handle_connection_with_timing(
                 }
                 continue;
             }
-            result = async { session.pending.as_mut().expect("guarded by is_some").await }, if session.pending.is_some() => {
+            // Without a validation in flight the arm is disabled and its future
+            // never polled; were it polled, it would wait rather than resolve.
+            result = async {
+                match session.pending.as_mut() {
+                    Some(pending) => pending.await,
+                    None => std::future::pending().await,
+                }
+            }, if session.pending.is_some() => {
                 if !session.settle(result, &mut auth_revocations, &drain) {
                     break;
                 }
@@ -967,8 +977,9 @@ async fn handle_connection_with_timing(
                                         let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
                                         let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
                                         let access = crate::attachments::grant_access(
-                                            &room_manager, pool, room_id, &participant_id, &tx,
-                                            attachment_claims.as_ref(), *attachment_id,
+                                            &attachment_grant_key, &room_manager, pool, room_id,
+                                            &participant_id, &tx, attachment_claims.as_ref(),
+                                            *attachment_id,
                                         ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
                                         reply.send(&ServerMessage::SocialResponse {
                                             request_id: request_id.clone(),
@@ -1380,10 +1391,12 @@ fn spawn_stats_task(
 }
 
 /// Generate ICE servers with an unlinkable TURN identity for each issuance.
-fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>) -> Vec<crate::turn::IceServer> {
+fn make_ice_servers(
+    turn_config: &Option<Arc<TurnConfig>>,
+) -> anyhow::Result<Vec<crate::turn::IceServer>> {
     match turn_config {
-        Some(tc) => vec![tc.generate_credentials()],
-        None => vec![],
+        Some(tc) => Ok(vec![tc.generate_credentials()?]),
+        None => Ok(vec![]),
     }
 }
 

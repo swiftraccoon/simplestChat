@@ -344,28 +344,28 @@ where
             return true;
         }
 
-        let fresh_window = match table.entries.get_mut(&key) {
-            Some(entry) if now.duration_since(entry.started_at) >= JOIN_RATE_WINDOW => {
-                entry.started_at = now;
-                entry.attempts = 0;
-                true
+        let RateTable { entries, order, .. } = &mut *table;
+        let (entry, fresh_window) = match entries.entry(key.clone()) {
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                let entry = occupied.into_mut();
+                let expired = now.duration_since(entry.started_at) >= JOIN_RATE_WINDOW;
+                if expired {
+                    entry.started_at = now;
+                    entry.attempts = 0;
+                }
+                (entry, expired)
             }
-            Some(_) => false,
-            None => {
-                table.entries.insert(
-                    key.clone(),
-                    RateWindow {
-                        started_at: now,
-                        attempts: 0,
-                    },
-                );
-                true
-            }
+            std::collections::hash_map::Entry::Vacant(vacant) => (
+                vacant.insert(RateWindow {
+                    started_at: now,
+                    attempts: 0,
+                }),
+                true,
+            ),
         };
         if fresh_window {
-            table.order.push_back((key.clone(), now));
+            order.push_back((key, now));
         }
-        let entry = table.entries.get_mut(&key).expect("window inserted above");
         if entry.attempts >= self.max_attempts {
             return false;
         }
@@ -644,10 +644,17 @@ impl Room {
             .chars()
             .take(crate::signaling::connection::MAX_PARTICIPANT_NAME_LEN - 6)
             .collect();
-        (2..)
-            .map(|n| format!("{} ({n})", base.trim_end()))
-            .find(|candidate| !occupied.contains(&crate::labels::comparison_key(candidate)))
-            .expect("some suffix is free")
+        // Each suffix gives a name whose comparison key no other suffix shares,
+        // so at most `occupied.len()` of them are taken and the search returns
+        // within that many more steps.
+        let mut suffix: usize = 2;
+        loop {
+            let candidate = format!("{} ({suffix})", base.trim_end());
+            if !occupied.contains(&crate::labels::comparison_key(&candidate)) {
+                return candidate;
+            }
+            suffix += 1;
+        }
     }
 
     fn lobby_counts(&self) -> (u32, u32) {

@@ -4,6 +4,9 @@
 //! `auth` and `db` provide optional persisted identity and settings.
 //! [`shutdown`] coordinates one-way drain; the binary owns runtime deadlines.
 
+#![deny(clippy::unwrap_used, clippy::expect_used)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 pub mod app;
 pub(crate) mod attachments;
 pub(crate) mod auth;

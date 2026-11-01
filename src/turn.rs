@@ -90,7 +90,7 @@ impl TurnConfig {
     ///
     /// coturn format: username = "expiry_timestamp:arbitrary_id"
     ///               credential = base64(HMAC-SHA1(secret, username))
-    pub(crate) fn generate_credentials(&self) -> IceServer {
+    pub(crate) fn generate_credentials(&self) -> anyhow::Result<IceServer> {
         let expiry = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -102,16 +102,16 @@ impl TurnConfig {
         let username = format!("{expiry}:{}", uuid::Uuid::new_v4());
 
         let mut mac = HmacSha1::new_from_slice(self.secret.expose_secret().as_bytes())
-            .expect("HMAC accepts any key size");
+            .map_err(|_| anyhow::anyhow!("The TURN secret cannot key HMAC-SHA1"))?;
         mac.update(username.as_bytes());
         let credential =
             base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
 
-        IceServer {
+        Ok(IceServer {
             urls: self.urls.clone(),
             username: Some(username),
             credential: Some(credential.into()),
-        }
+        })
     }
 }
 
@@ -156,7 +156,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let credentials = config.generate_credentials();
+        let credentials = config.generate_credentials().unwrap();
         let after = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -185,7 +185,7 @@ mod tests {
             secret: "a-secure-random-secret-with-32-bytes".into(),
             ttl_secs: 600,
         };
-        let credentials = config.generate_credentials();
+        let credentials = config.generate_credentials().unwrap();
         assert!(credentials.username.is_some());
         assert!(credentials.credential.is_some());
         assert_ne!(
@@ -199,7 +199,7 @@ mod tests {
         let opaque_id = username.split_once(':').unwrap().1;
         assert!(uuid::Uuid::parse_str(opaque_id).is_ok());
         assert_ne!(
-            config.generate_credentials().username,
+            config.generate_credentials().unwrap().username,
             credentials.username,
             "each credential issuance must use a fresh unlinkable identifier"
         );

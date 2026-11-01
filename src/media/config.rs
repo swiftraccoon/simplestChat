@@ -447,6 +447,8 @@ pub struct WorkerConfig {
 const OPUS_CLOCK_RATE: NonZeroU32 = NonZeroU32::new(48_000).unwrap();
 /// RTP video clocks run at 90 kHz.
 const VIDEO_CLOCK_RATE: NonZeroU32 = NonZeroU32::new(90_000).unwrap();
+/// Opus is negotiated as stereo.
+const OPUS_CHANNELS: NonZeroU8 = NonZeroU8::new(2).unwrap();
 
 impl Default for WorkerConfig {
     fn default() -> Self {
@@ -505,7 +507,7 @@ impl RouterConfig {
                 mime_type: MimeTypeAudio::Opus,
                 preferred_payload_type: Some(111),
                 clock_rate: OPUS_CLOCK_RATE,
-                channels: NonZeroU8::new(2).unwrap(),
+                channels: OPUS_CHANNELS,
                 parameters: RtpCodecParametersParameters::from([
                     ("minptime", 10_u32.into()),
                     ("useinbandfec", 1_u32.into()),

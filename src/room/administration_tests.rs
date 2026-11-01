@@ -223,6 +223,16 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         };
         assert_eq!(members.members.len(), 3);
         listing.transaction.take().unwrap().commit().await.unwrap();
+        // Database work on a committed admission is a definite refusal.
+        let Err(RoomError::Refused(refusal)) = listing.connection() else {
+            panic!("a committed admission still offered its transaction");
+        };
+        assert_eq!(
+            refusal,
+            Refusal::Unavailable(
+                "Room administration is unavailable; reload before retrying a change".into()
+            )
+        );
         drop(listing);
 
         let report = Uuid::new_v4();

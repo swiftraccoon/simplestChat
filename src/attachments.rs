@@ -47,16 +47,30 @@ static ACCOUNT_UPLOADS: LazyLock<crate::sync::Mutex<HashSet<Uuid>>> =
     LazyLock::new(|| crate::sync::Mutex::new(HashSet::new()));
 /// HS256 key for attachment grants: `grant_access` signs a 30-second token for
 /// one attachment, room, participant and media session (with the viewer's
-/// account claims, if any), and `allowed` verifies it. The key is per-process
-/// randomness drawn from the OS on first use and never stored, so grants do not
-/// survive a restart and no other server process accepts them.
-static GRANT_KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
-    let mut key = [0; 32];
-    SysRng
-        .try_fill_bytes(&mut key)
-        .expect("Attachment grant randomness unavailable");
-    key
-});
+/// account claims, if any), and `allowed` verifies it. `SignalingServer::new`
+/// draws the key from the OS once and keeps it in memory only, so grants do not
+/// survive a restart and no other server process accepts them. The type has no
+/// `Debug`, so the key cannot reach a log or debug output.
+#[derive(Clone)]
+pub(crate) struct GrantKey([u8; 32]);
+
+impl GrantKey {
+    /// A fresh key from the operating system's randomness, or the error when
+    /// the OS cannot supply it, which stops the server from starting.
+    pub(crate) fn generate() -> Result<Self, rand::rngs::SysError> {
+        let mut key = [0; 32];
+        SysRng.try_fill_bytes(&mut key)?;
+        Ok(Self(key))
+    }
+
+    fn encoding(&self) -> jsonwebtoken::EncodingKey {
+        jsonwebtoken::EncodingKey::from_secret(&self.0)
+    }
+
+    fn decoding(&self) -> jsonwebtoken::DecodingKey {
+        jsonwebtoken::DecodingKey::from_secret(&self.0)
+    }
+}
 
 fn unavailable() -> AuthError {
     AuthError::InvalidInput("Attachment unavailable")
@@ -361,7 +375,12 @@ async fn location(pool: &PgPool, id: Uuid) -> Result<AttachmentLocation, AuthErr
         .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or_else(unavailable)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a grant binds its key, room state, database, viewer, socket, account and file"
+)]
 pub(crate) async fn grant_access(
+    key: &GrantKey,
     manager: &crate::room::RoomManager,
     pool: &PgPool,
     room_id: &RoomId,
@@ -404,7 +423,7 @@ pub(crate) async fn grant_access(
     let token = jsonwebtoken::encode(
         &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
         &grant,
-        &jsonwebtoken::EncodingKey::from_secret(&*GRANT_KEY),
+        &key.encoding(),
     )
     .map_err(|_| unavailable())?;
     Ok(AttachmentAccess {
@@ -450,7 +469,7 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
         validation.leeway = 0;
         let grant = jsonwebtoken::decode::<Grant>(
             token,
-            &jsonwebtoken::DecodingKey::from_secret(&*GRANT_KEY),
+            &server.attachment_grant_key().decoding(),
             &validation,
         )
         .map_err(|_| unavailable())?

@@ -344,13 +344,8 @@ impl Diagnostics {
     }
 
     fn with_writer(writer: impl Write + Send + 'static, limits: Limits) -> io::Result<Self> {
-        let (diagnostics, receiver) = Self::channel(limits);
-        let shared = diagnostics
-            .inner
-            .as_ref()
-            .expect("enabled recorder")
-            .shared
-            .clone();
+        let (inner, receiver) = Inner::open(limits);
+        let shared = inner.shared.clone();
         // No join on a possibly blocked disk. Closing admission drains the
         // bounded channel; shutdown waits only SHUTDOWN_BUDGET for completion.
         std::thread::Builder::new()
@@ -358,10 +353,50 @@ impl Diagnostics {
             .spawn(move || {
                 write_records(writer, receiver, &shared);
             })?;
-        Ok(diagnostics)
+        Ok(Self { inner: Some(inner) })
     }
 
+    /// An enabled recorder whose records the test reads from the receiver.
+    #[cfg(test)]
     fn channel(limits: Limits) -> (Self, mpsc::Receiver<Record>) {
+        let (inner, receiver) = Inner::open(limits);
+        (Self { inner: Some(inner) }, receiver)
+    }
+
+    /// Begins one short operation. Call [`Operation::finish`] with its actual
+    /// result, or cancellation will be recorded when the guard is dropped.
+    pub(crate) fn operation(&self, kind: OperationKind, connection_id: Option<u64>) -> Operation {
+        let active = self.inner.as_ref().and_then(|inner| {
+            let id = next_id(&inner.next_operation)?;
+            if !inner.begin_record() {
+                return None;
+            }
+            Some(Active {
+                context: Context {
+                    inner: inner.clone(),
+                    id,
+                    kind,
+                    connection_id,
+                },
+                started: Instant::now(),
+                stage: None,
+            })
+        });
+        let span = match &active {
+            Some(active) => tracing::debug_span!(target: "simplestchat::diagnostics", "operation",
+                operation = ?kind, operation_id = active.context.id,
+                connection_id = connection_id, outcome = tracing::field::Empty),
+            None => tracing::Span::none(),
+        };
+        Operation { active, span }
+    }
+}
+
+impl Inner {
+    /// An enabled recorder and the receiving end its writer drains. Every
+    /// operation context holds the recorder itself, so recording never asks
+    /// whether diagnostics are enabled again.
+    fn open(limits: Limits) -> (Arc<Self>, mpsc::Receiver<Record>) {
         let (sender, receiver) = mpsc::channel(QUEUE_CAPACITY);
         let shared = Arc::new(Shared {
             started: Instant::now(),
@@ -381,69 +416,33 @@ impl Diagnostics {
             finished_notify: tokio::sync::Notify::new(),
         });
         (
-            Self {
-                inner: Some(Arc::new(Inner {
-                    sender,
-                    shared,
-                    next_operation: AtomicU64::new(0),
-                })),
-            },
+            Arc::new(Self {
+                sender,
+                shared,
+                next_operation: AtomicU64::new(0),
+            }),
             receiver,
         )
     }
 
-    /// Begins one short operation. Call [`Operation::finish`] with its actual
-    /// result, or cancellation will be recorded when the guard is dropped.
-    pub(crate) fn operation(&self, kind: OperationKind, connection_id: Option<u64>) -> Operation {
-        let active = self.inner.as_ref().and_then(|inner| {
-            let id = next_id(&inner.next_operation)?;
-            if !self.begin_record() {
-                return None;
-            }
-            Some(Active {
-                context: Context {
-                    diagnostics: self.clone(),
-                    id,
-                    kind,
-                    connection_id,
-                },
-                started: Instant::now(),
-                stage: None,
-            })
-        });
-        let span = match &active {
-            Some(active) => tracing::debug_span!(target: "simplestchat::diagnostics", "operation",
-                operation = ?kind, operation_id = active.context.id,
-                connection_id = connection_id, outcome = tracing::field::Empty),
-            None => tracing::Span::none(),
-        };
-        Operation { active, span }
-    }
-
     fn begin_record(&self) -> bool {
-        let Some(inner) = &self.inner else {
+        let Some(_section) = self.shared.enter() else {
             return false;
         };
-        let Some(_section) = inner.shared.enter() else {
-            return false;
-        };
-        if inner.shared.started.elapsed() >= inner.shared.limits.duration {
-            inner.shared.expired.fetch_add(1, Relaxed);
+        if self.shared.started.elapsed() >= self.shared.limits.duration {
+            self.shared.expired.fetch_add(1, Relaxed);
             return false;
         }
-        if inner.shared.accepted.load(Relaxed) >= inner.shared.limits.max_records {
-            inner.shared.dropped.fetch_add(1, Relaxed);
+        if self.shared.accepted.load(Relaxed) >= self.shared.limits.max_records {
+            self.shared.dropped.fetch_add(1, Relaxed);
             return false;
         }
-        inner.shared.started_records.fetch_add(1, Relaxed);
+        self.shared.started_records.fetch_add(1, Relaxed);
         true
     }
 
     fn record(&self, record: Record) {
-        let Some(inner) = &self.inner else {
-            return;
-        };
-        let shared = &inner.shared;
+        let shared = &self.shared;
         let Some(_section) = shared.enter() else {
             // Timers crossing the close boundary remain unfinished in the
             // terminal snapshot, even if they finish while the writer drains.
@@ -453,7 +452,7 @@ impl Diagnostics {
             shared.expired.fetch_add(1, Relaxed);
         } else if !shared.reserve_record() {
             shared.dropped.fetch_add(1, Relaxed);
-        } else if inner.sender.try_send(record).is_ok() {
+        } else if self.sender.try_send(record).is_ok() {
             shared.accepted.fetch_add(1, Relaxed);
             shared.wake_writer();
         } else {
@@ -462,7 +461,9 @@ impl Diagnostics {
         }
         shared.finalized_records.fetch_add(1, Relaxed);
     }
+}
 
+impl Diagnostics {
     /// Stops accepting records and waits at most 200ms for local output. A false
     /// result means the file may be incomplete. It must never change chat's
     /// success/failure result or extend an existing drain indefinitely. True
@@ -561,7 +562,7 @@ fn write_records(mut writer: impl Write, mut receiver: mpsc::Receiver<Record>, s
 
 #[derive(Clone)]
 struct Context {
-    diagnostics: Diagnostics,
+    inner: Arc<Inner>,
     id: u64,
     kind: OperationKind,
     connection_id: Option<u64>,
@@ -579,13 +580,7 @@ struct Active {
 
 impl Active {
     fn finish(self, outcome: Outcome) {
-        let shared = &self
-            .context
-            .diagnostics
-            .inner
-            .as_ref()
-            .expect("active recorder")
-            .shared;
+        let shared = &self.context.inner.shared;
         let record = Record {
             schema_version: 1,
             kind: if self.stage.is_some() {
@@ -601,7 +596,7 @@ impl Active {
             started_us: microseconds(self.started.duration_since(shared.started)),
             elapsed_us: microseconds(self.started.elapsed()),
         };
-        self.context.diagnostics.record(record);
+        self.context.inner.record(record);
     }
 }
 
@@ -653,7 +648,7 @@ impl StageGuard {
         Self(
             CURRENT_OPERATION
                 .try_with(|context| {
-                    context.diagnostics.begin_record().then(|| Active {
+                    context.inner.begin_record().then(|| Active {
                         context: context.clone(),
                         started: Instant::now(),
                         stage: Some(stage),

@@ -47,16 +47,20 @@ pub(crate) struct PasskeyLoginFinishRequest {
     credential: PublicKeyCredential,
 }
 
-fn refresh_cookie_headers(raw_token: &str) -> HeaderMap {
+/// The headers that set the refresh cookie. A server-generated token is
+/// base64url text and always forms a valid header value; anything else is
+/// refused as an internal failure, so callers build these before committing
+/// the session the cookie names.
+fn refresh_cookie_headers(raw_token: &str) -> Result<HeaderMap, AuthError> {
     let mut headers = no_store_headers();
     let cookie = format!(
         "{REFRESH_COOKIE_NAME}={raw_token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604800"
     );
-    headers.append(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&cookie).expect("server-generated refresh cookie is valid"),
-    );
-    headers
+    let cookie = HeaderValue::from_str(&cookie).map_err(|_| {
+        AuthError::DatabaseError("The refresh cookie is not a valid header value".into())
+    })?;
+    headers.append(header::SET_COOKIE, cookie);
+    Ok(headers)
 }
 
 pub(super) fn clear_refresh_cookie_headers() -> HeaderMap {
@@ -320,11 +324,12 @@ pub(crate) async fn register(
     let user_id = row.0.to_string();
     let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
     let token = jwt::create_session_token(&user_id, &row.2, secret, 0, session_id)?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
 
     info!(user_id, "User registered");
     Ok((
-        refresh_cookie_headers(&refresh_token.raw),
+        cookie,
         Json(AuthResponse {
             token: token.into(),
             user: UserInfo {
@@ -402,12 +407,13 @@ pub(crate) async fn login(
     }
     let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
     let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, session_id)?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
     server.note_sign_in_success(source_ip, &email);
 
     info!(user_id, "User logged in");
     Ok((
-        refresh_cookie_headers(&refresh_token.raw),
+        cookie,
         Json(AuthResponse {
             token: token.into(),
             user: UserInfo {
@@ -464,11 +470,12 @@ pub(crate) async fn refresh(
 
     let user_id_string = user_id.to_string();
     let token = jwt::create_session_token(&user_id_string, &row.1, secret, row.2, session_id)?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
     session::spawn_expired_cleanup(pool, server.session_cleanup());
 
     Ok((
-        refresh_cookie_headers(&refresh_token.raw),
+        cookie,
         Json(AuthResponse {
             token: token.into(),
             user: UserInfo {
@@ -606,11 +613,12 @@ pub(crate) async fn passkey_register_finish(
     let user_id = registration.user_id.to_string();
     let token =
         jwt::create_session_token(&user_id, &registration.display_name, secret, 0, session_id)?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User registered via passkey");
 
     Ok((
-        refresh_cookie_headers(&refresh_token.raw),
+        cookie,
         Json(AuthResponse {
             token: token.into(),
             user: UserInfo {
@@ -741,11 +749,12 @@ pub(crate) async fn passkey_login_finish(
 
     let user_id = account_id.to_string();
     let token = jwt::create_session_token(&user_id, &user.1, secret, user.2, session_id)?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
     info!(user_id, "User logged in via passkey");
 
     Ok((
-        refresh_cookie_headers(&refresh_token.raw),
+        cookie,
         Json(AuthResponse {
             token: token.into(),
             user: UserInfo {
@@ -929,7 +938,7 @@ mod tests {
 
     #[test]
     fn refresh_response_sets_and_clears_only_the_current_host_cookie() {
-        let headers = refresh_cookie_headers("safe-token");
+        let headers = refresh_cookie_headers("safe-token").unwrap();
         let cookies = headers
             .get_all(header::SET_COOKIE)
             .iter()
@@ -952,5 +961,18 @@ mod tests {
                 .and_then(|v| v.to_str().ok()),
             Some("no-store, max-age=0")
         );
+    }
+
+    #[test]
+    fn a_refresh_cookie_that_cannot_be_a_header_value_is_refused() {
+        for raw in ["line\nbreak", "nul\0byte", "delete\u{7f}"] {
+            match refresh_cookie_headers(raw) {
+                Err(AuthError::DatabaseError(detail)) => {
+                    assert!(!detail.contains(raw), "the refusal repeats the token");
+                }
+                Err(_) => panic!("{raw:?} was refused as something other than an internal failure"),
+                Ok(_) => panic!("{raw:?} became a Set-Cookie header"),
+            }
+        }
     }
 }

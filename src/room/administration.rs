@@ -232,6 +232,17 @@ fn private_headers() -> HeaderMap {
     headers
 }
 
+/// The refusal for database work on an admission whose transaction has already
+/// been committed. Every path commits last, so nothing reaches it; were
+/// something to, the request would end with this definite refusal, which never
+/// quarantines the room, instead of a panic.
+fn settled() -> RoomError {
+    Refusal::Unavailable(
+        "Room administration is unavailable; reload before retrying a change".into(),
+    )
+    .into()
+}
+
 impl Context {
     async fn admit(
         manager: RoomManager,
@@ -413,17 +424,18 @@ impl Context {
         Ok(())
     }
 
-    fn connection(&mut self) -> &mut PgConnection {
-        self.transaction
-            .as_mut()
-            .expect("admitted transaction remains owned")
+    /// The admitted transaction, until a path commits it. The transaction stays
+    /// an `Option` because `execute` commits it inside the persistence future
+    /// that borrows this context for the change before it.
+    fn connection(&mut self) -> Result<&mut PgConnection, RoomError> {
+        self.transaction.as_deref_mut().ok_or_else(settled)
     }
 
     async fn recheck_expiry(&mut self) -> Result<(), RoomError> {
         let session = self.session;
         let user = self.user;
         let expiry:Option<DateTime<Utc>>=sqlx::query_scalar("SELECT expires_at FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp()")
-            .bind(session).bind(user).fetch_optional(self.connection()).await?;
+            .bind(session).bind(user).fetch_optional(self.connection()?).await?;
         self.session_expires_at =
             expiry.ok_or_else(|| Refusal::Unauthorized("Sign-in expired; sign in again".into()))?;
         if Utc::now().timestamp() >= self.expires_at {
@@ -454,7 +466,7 @@ impl Context {
             self.recheck_expiry().await?;
             self.transaction
                 .take()
-                .expect("owned transaction")
+                .ok_or_else(settled)?
                 .commit()
                 .await?;
             Ok((publication, response))
@@ -568,7 +580,7 @@ impl Context {
             })?;
         self.transaction
             .take()
-            .expect("read-only lobby authorization")
+            .ok_or_else(settled)?
             .commit()
             .await?;
         Ok(json!({"updated":true}))
@@ -653,7 +665,7 @@ impl Context {
             applied_by: self.user,
         };
         moderation::write_punitive_state(
-            self.connection(),
+            self.connection()?,
             &room_id,
             sanction,
             kind,
@@ -661,7 +673,7 @@ impl Context {
         )
         .await?;
         moderation::record_event(
-            self.connection(),
+            self.connection()?,
             &room_id,
             &event,
             moderation::MAX_MODERATION_EVENTS,
@@ -701,7 +713,7 @@ impl Context {
             .bind(&room_id).bind(updated.moderated).bind(updated.lobby_enabled).bind(updated.guests_allowed).bind(updated.guests_can_broadcast)
             .bind(updated.max_broadcasters).bind(updated.max_participants).bind(updated.allow_screen_sharing).bind(updated.allow_chat).bind(updated.allow_video)
             .bind(updated.require_registration).bind(updated.invite_only).bind(updated.push_to_talk).bind(updated.secret).bind(hash.is_some()).bind(hash.clone().flatten())
-            .execute(self.connection()).await?;
+            .execute(self.connection()?).await?;
         let response = json!({"role":self.role.name(),"settings":updated});
         Ok((Publication::Settings(updated, hash), response))
     }
@@ -712,7 +724,7 @@ impl Context {
         new_role: roles::Role,
     ) -> Result<(Publication, Value), RoomError> {
         let room_id = self.room_id.clone();
-        let current = roles::current_role(self.connection(), &room_id, target).await?;
+        let current = roles::current_role(self.connection()?, &room_id, target).await?;
         let online = if let Some(runtime) = self.runtime.as_ref() {
             let room = runtime.read().await;
             room.participants
@@ -729,7 +741,7 @@ impl Context {
             return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
         let setter = self.user;
-        roles::set_role(self.connection(), &room_id, &target, new_role, &setter).await?;
+        roles::set_role(self.connection()?, &room_id, &target, new_role, &setter).await?;
         Ok((Publication::Role(target, new_role), json!({"updated":true})))
     }
 
@@ -739,7 +751,7 @@ impl Context {
         let actor = ParticipantId::from(self.user);
         let actor_name = self.actor_name.clone();
         let removed = moderation::remove_ban(
-            self.connection(),
+            self.connection()?,
             &room_id,
             id,
             moderation::Actor {
@@ -765,7 +777,7 @@ impl Context {
         let actor = ParticipantId::from(self.user);
         let actor_name = self.actor_name.clone();
         let resolved = moderation::resolve_report(
-            self.connection(),
+            self.connection()?,
             &room_id,
             id,
             status,
@@ -871,10 +883,10 @@ impl Context {
                 reason: request.reason.as_deref(),
                 applied_by: self.user,
             };
-            moderation::write_ban(self.connection(), &room_id, sanction, expiry).await?;
+            moderation::write_ban(self.connection()?, &room_id, sanction, expiry).await?;
         }
         moderation::record_event(
-            self.connection(),
+            self.connection()?,
             &room_id,
             &event,
             moderation::MAX_MODERATION_EVENTS,
@@ -977,7 +989,8 @@ pub(crate) async fn overview(
     context
         .transaction
         .take()
-        .expect("read transaction")
+        .ok_or_else(settled)
+        .map_err(database_error)?
         .commit()
         .await
         .map_err(database_error)?;
@@ -1099,7 +1112,8 @@ pub(crate) async fn list(
     context
         .transaction
         .take()
-        .expect("read transaction")
+        .ok_or_else(settled)
+        .map_err(database_error)?
         .commit()
         .await
         .map_err(database_error)?;
@@ -1249,7 +1263,7 @@ impl Context {
                 .bind(offset)
                 .bind(sqlx::types::Json(online))
                 .bind(limit)
-                .fetch_all(self.connection())
+                .fetch_all(self.connection()?)
                 .await?;
                 let (rows, has_more) = page(rows);
                 let members = rows
@@ -1267,13 +1281,13 @@ impl Context {
             Section::Bans => {
                 self.require(roles::Role::Admin)?;
                 let rows =
-                    moderation::list_bans(self.connection(), &room_id, offset, limit).await?;
+                    moderation::list_bans(self.connection()?, &room_id, offset, limit).await?;
                 let (bans, has_more) = page(rows);
                 AdministrationPage::Bans(BansPage { bans, has_more })
             }
             Section::Reports => {
                 let rows =
-                    moderation::list_reports(self.connection(), &room_id, offset, limit).await?;
+                    moderation::list_reports(self.connection()?, &room_id, offset, limit).await?;
                 let (reports, has_more) = page(rows);
                 AdministrationPage::Reports(ReportsPage { reports, has_more })
             }
@@ -1282,7 +1296,7 @@ impl Context {
                 // list_events also serves the socket from a pool; here it runs inside
                 // the current users -> sessions -> room authorization transaction.
                 let rows =
-                    moderation::list_events(self.connection(), &room_id, offset, limit).await?;
+                    moderation::list_events(self.connection()?, &room_id, offset, limit).await?;
                 let (rows, has_more) = page(rows);
                 let events = rows
                     .into_iter()

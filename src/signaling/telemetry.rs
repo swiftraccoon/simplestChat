@@ -22,12 +22,33 @@ macro_rules! vocabulary {
         #[serde(rename_all = "snake_case")]
         pub(crate) enum $name { $($variant),+ }
         impl $name {
+            /// The metric label: the value's wire name.
             fn label(self) -> String {
-                serde_json::to_value(self).expect("fixed enum serializes").as_str().expect("enum string").to_owned()
+                match self {
+                    $(Self::$variant => snake_case(stringify!($variant)),)+
+                }
             }
+            /// Every variant, for the test that pins each label to its wire name.
+            #[cfg(test)]
+            const ALL: &[Self] = &[$(Self::$variant),+];
         }
     };
 }
+
+/// A variant name as `rename_all = "snake_case"` spells it on the wire: serde's
+/// rule puts an underscore before each uppercase letter but the first, then
+/// lowercases every letter.
+fn snake_case(name: &str) -> String {
+    let mut label = String::with_capacity(name.len() + 4);
+    for (index, character) in name.char_indices() {
+        if index > 0 && character.is_uppercase() {
+            label.push('_');
+        }
+        label.push(character.to_ascii_lowercase());
+    }
+    label
+}
+
 vocabulary!(Browser {
     Firefox,
     Chromium,
@@ -716,5 +737,22 @@ mod tests {
         assert!(!text.contains("arbitrary"));
         assert!(text.contains("route=\"unmatched\",method=\"other\",status=\"429\""));
         assert!(text.contains("route=\"/api/auth/login\",method=\"POST\",status=\"408\""));
+    }
+
+    #[test]
+    fn every_client_label_is_the_wire_name_of_its_value() {
+        fn check<T: Serialize + Copy>(variants: &[T], label: impl Fn(T) -> String) {
+            for &variant in variants {
+                assert_eq!(serde_json::to_value(variant).unwrap(), label(variant));
+            }
+        }
+        check(Browser::ALL, Browser::label);
+        check(ClientName::ALL, ClientName::label);
+        check(ClientOutcome::ALL, ClientOutcome::label);
+        assert_eq!(
+            ClientOutcome::CancelledOrTimeout.label(),
+            "cancelled_or_timeout"
+        );
+        assert_eq!(ClientName::JsError.label(), "js_error");
     }
 }

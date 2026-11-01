@@ -271,7 +271,11 @@ impl RoomManager {
                         && participant.sender.same_channel(expected_sender)
                         && Self::participant_can_produce(&room, participant, kind, source)
                 });
-            if !allowed {
+            let Some(participant) = room
+                .participants
+                .get_mut(participant_id)
+                .filter(|_| allowed)
+            else {
                 drop(room);
                 let _ = self
                     .media_server
@@ -279,9 +283,7 @@ impl RoomManager {
                     .close_producer(&media_participant_id, producer_id)
                     .await;
                 anyhow::bail!("You are no longer allowed to produce this media type");
-            }
-
-            let participant = room.participants.get_mut(participant_id).unwrap();
+            };
             participant.producers.insert(
                 producer_id,
                 ProducerRecord {

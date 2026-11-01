@@ -90,9 +90,9 @@ impl RoomManager {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         room.ensure_live()?;
-        if !room.lobby.contains_key(target_id) {
+        let Some(authenticated) = room.lobby.get(target_id).map(|entry| entry.authenticated) else {
             anyhow::bail!("Participant not found in lobby");
-        }
+        };
         self.ensure_room_has_space(&room)?;
 
         room.prune_expired_bans(std::time::Instant::now());
@@ -115,7 +115,6 @@ impl RoomManager {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
-        let authenticated = room.lobby.get(target_id).unwrap().authenticated;
         drop(room);
         let account_preferences = self
             .membership_chat_preferences(authenticated, target_id)

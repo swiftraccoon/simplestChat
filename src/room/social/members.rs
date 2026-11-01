@@ -4,28 +4,28 @@
 use super::*;
 
 impl RoomManager {
-    pub(super) async fn list_room_bans(
+    pub(super) async fn list_room_bans<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         offset: Option<u32>,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Admin)?;
         let offset = page_offset(offset)?;
         let room_id = request.room_id;
-        let room = request.room();
         let mut bans: Vec<BanEntry> = if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Ban service unavailable"))?;
-            request.release();
+            let released = release(room);
             let bans = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 moderation::list_bans(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
             )
             .await
             .map_err(|_| timed_out("Ban service timed out"))??;
-            request.reacquire().await?;
+            drop(request.reacquire(released).await?);
             bans
         } else {
             room.social
@@ -40,9 +40,10 @@ impl RoomManager {
         Ok(SocialResponse::ListRoomBans { bans, has_more })
     }
 
-    pub(super) async fn remove_room_ban(
+    pub(super) async fn remove_room_ban<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        mut room: HeldRoom<'a>,
         ban_id: &str,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Admin)?;
@@ -50,16 +51,15 @@ impl RoomManager {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_name = request.actor_name.clone();
-        let room = request.room();
         let (user_id, guest_ip, ids) = if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Ban service unavailable"))?;
-            request.release();
+            let released = release(room);
             let actor_id = *participant_id;
-            let removed = self
-                .persist_room(room_id, request.room_lock, async {
+            let removed = request
+                .persist(self, &released, async {
                     let mut transaction = pool.begin().await?;
                     let removed = moderation::remove_ban(
                         &mut transaction,
@@ -75,7 +75,7 @@ impl RoomManager {
                     Ok(removed)
                 })
                 .await?;
-            request.reacquire().await?;
+            room = request.reacquire(released).await?;
             let removed = removed.ok_or_else(|| not_found("Ban not found"))?;
             (
                 removed.user_id.map(ParticipantId::from),
@@ -114,32 +114,31 @@ impl RoomManager {
             ));
             (target_id, ban.guest_ip, ban.participant_ids)
         };
-        request.room().publish_unban(user_id, guest_ip, ids);
+        room.publish_unban(user_id, guest_ip, ids);
         Ok(SocialResponse::RemoveRoomBan { removed: true })
     }
 
-    pub(super) async fn list_room_members(
+    pub(super) async fn list_room_members<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        room: HeldRoom<'a>,
         offset: Option<u32>,
     ) -> Result<SocialResponse> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let offset = page_offset(offset)?;
         let room_id = request.room_id;
-        let room = request.room();
         let mut members: Vec<MemberEntry> = if room.persisted {
             let pool = self
                 .db_pool
                 .as_ref()
                 .ok_or_else(|| unavailable("Member service unavailable"))?;
-            request.release();
+            let released = release(room);
             let rows: Vec<(Uuid, String, roles::Role)> = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
                     .bind(room_id).bind(offset as i64).fetch_all(pool),
             ).await.map_err(|_| timed_out("Member service timed out"))??;
-            request.reacquire().await?;
-            let room = request.room();
+            let room = request.reacquire(released).await?;
             rows.into_iter()
                 .map(|(id, name, role)| MemberEntry {
                     online: room.participants.contains_key(&ParticipantId::from(id)),
@@ -179,9 +178,10 @@ impl RoomManager {
 
     /// The offline role path; an online target is handled through room control
     /// before the request takes the room.
-    pub(super) async fn set_member_role(
+    pub(super) async fn set_member_role<'a>(
         &self,
-        request: &mut SocialRequest<'_>,
+        request: &SocialRequest<'a>,
+        room: HeldRoom<'a>,
         target_user_id: &UserId,
         role: roles::Role,
     ) -> Result<SocialResponse> {
@@ -190,7 +190,7 @@ impl RoomManager {
         let participant_id = request.participant_id;
         let actor_role = request.actor_role;
         let actor_authenticated = request.actor_authenticated;
-        if !request.room().persisted || !actor_authenticated {
+        if !room.persisted || !actor_authenticated {
             return Err(forbidden("Offline roles require a persistent room"));
         }
         let target: Uuid = target_user_id.as_uuid();
@@ -205,7 +205,7 @@ impl RoomManager {
             .db_pool
             .as_ref()
             .ok_or_else(|| unavailable("Member service unavailable"))?;
-        request.release();
+        let released = release(room);
         // Absent targets must already belong to this room's roster; no account enumeration.
         let current = tokio::time::timeout(
             control::PERSISTENCE_TIMEOUT,
@@ -217,14 +217,14 @@ impl RoomManager {
         if !actor_role.can_set_role(current, new_role) {
             return Err(forbidden("Insufficient role permissions"));
         }
-        self.persist_room(
-            room_id,
-            request.room_lock,
-            roles::set_role(pool, room_id, &target, new_role, &setter),
-        )
-        .await?;
-        request.reacquire().await?;
-        let room = request.room();
+        request
+            .persist(
+                self,
+                &released,
+                roles::set_role(pool, room_id, &target, new_role, &setter),
+            )
+            .await?;
+        let mut room = request.reacquire(released).await?;
         room.policy_revision = room.policy_revision.wrapping_add(1);
         Ok(SocialResponse::SetMemberRole { updated: true })
     }
