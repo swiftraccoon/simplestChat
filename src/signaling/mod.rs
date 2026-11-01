@@ -316,6 +316,9 @@ pub(crate) struct SignalingServer {
     /// through `push::start` whenever a database is configured. Without it the
     /// status route answers 503.
     push_signer: Option<crate::push::PushSigner>,
+    /// The copy of PostgreSQL's time zone names that saving quiet hours checks,
+    /// shared by every clone of the server.
+    time_zone_names: Arc<crate::auth::notifications::TimeZoneNames>,
     jwt_secret: Option<crate::auth::jwt::JwtSecret>,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
@@ -437,6 +440,7 @@ impl SignalingServer {
             )),
             db_pool,
             push_signer: None,
+            time_zone_names: Arc::default(),
             jwt_secret,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
@@ -517,6 +521,11 @@ impl SignalingServer {
     /// `run_server` does whenever a database is configured.
     pub(crate) fn push_signer(&self) -> Option<&crate::push::PushSigner> {
         self.push_signer.as_ref()
+    }
+
+    /// PostgreSQL's time zone names, which quiet hours are checked against.
+    pub(crate) fn time_zone_names(&self) -> &crate::auth::notifications::TimeZoneNames {
+        &self.time_zone_names
     }
 
     /// Contact URI for VAPID; configured origins are already validated at startup.

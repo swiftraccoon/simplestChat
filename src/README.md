@@ -345,6 +345,9 @@ when changing dependencies.
 Migration 032 stores global notification policy and at most 100 conversation
 overrides per account. Quiet hours use a validated PostgreSQL time-zone name,
 start inclusive/end exclusive, including midnight and daylight-saving changes.
+The name is checked against the server's copy of `pg_timezone_names`, read
+again once it is an hour old, so a time-zone database update reaches that check
+within the hour.
 Snoozes are limited to 30 days. Push eligibility rechecks current preferences,
 per-peer overrides, unread state and existing PM consent before dispatch.
 

@@ -6,7 +6,7 @@ use super::{
     sessions::lock_current_session,
     types::{AuthError, Claims},
 };
-use crate::signaling::SignalingServer;
+use crate::{signaling::SignalingServer, sync::RwLock};
 use axum::{
     Json,
     extract::{Path, State},
@@ -14,7 +14,11 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgConnection, PgPool, Postgres, Transaction};
+use std::{
+    collections::HashSet,
+    time::{Duration, Instant},
+};
 use uuid::Uuid;
 
 const MAX_CONVERSATIONS: i64 = 100;
@@ -153,8 +157,78 @@ fn validate_quiet_hours(quiet: &QuietHours) -> Result<(), AuthError> {
     Ok(())
 }
 
+/// How long a copy of PostgreSQL's time zone names answers lookups; the next
+/// lookup after that reads the names again.
+const TIME_ZONE_REFRESH: Duration = Duration::from_secs(3600);
+
+/// PostgreSQL's time zone names, which quiet hours must name. Saving a policy
+/// checks this copy, read again at most once an hour, instead of asking the
+/// database on every save.
+#[derive(Default)]
+pub(crate) struct TimeZoneNames {
+    names: RwLock<Option<(Instant, HashSet<String>)>>,
+    /// Held from the re-check of a stale copy until the new one is stored, so
+    /// callers that find the copy stale together run one query. Callers that
+    /// find it fresh never take it.
+    refresh: tokio::sync::Mutex<()>,
+}
+
+impl TimeZoneNames {
+    /// Whether `name` is exactly one of `pg_timezone_names`' names, compared
+    /// byte for byte as the database compared them. A copy older than
+    /// `TIME_ZONE_REFRESH` is read again on `connection`, the one the caller
+    /// already holds, so a lookup never asks the pool for another. One read
+    /// runs at a time; callers that waited for it answer from its copy. A
+    /// failed read is a database error and keeps the old copy, which the next
+    /// lookup reads again.
+    pub(crate) async fn contains(
+        &self,
+        connection: &mut PgConnection,
+        name: &str,
+    ) -> Result<bool, AuthError> {
+        self.contains_at(connection, name, Instant::now()).await
+    }
+
+    async fn contains_at(
+        &self,
+        connection: &mut PgConnection,
+        name: &str,
+        now: Instant,
+    ) -> Result<bool, AuthError> {
+        if let Some(known) = self.cached(name, now) {
+            return Ok(known);
+        }
+        let _refresh = self.refresh.lock().await;
+        // A caller that held the refresh lock may have stored a fresh copy.
+        if let Some(known) = self.cached(name, now) {
+            return Ok(known);
+        }
+        let names: HashSet<String> =
+            sqlx::query_scalar::<_, String>("SELECT name FROM pg_timezone_names")
+                .fetch_all(&mut *connection)
+                .await
+                .map_err(routes::database_error)?
+                .into_iter()
+                .collect();
+        let known = names.contains(name);
+        *self.names.write() = Some((now, names));
+        Ok(known)
+    }
+
+    /// The answer from a copy younger than `TIME_ZONE_REFRESH` at `now`, if
+    /// there is one. The read lock is released when this returns, so it is
+    /// never held across a query.
+    fn cached(&self, name: &str, now: Instant) -> Option<bool> {
+        let cached = self.names.read();
+        let (refreshed_at, names) = cached.as_ref()?;
+        (now.saturating_duration_since(*refreshed_at) < TIME_ZONE_REFRESH)
+            .then(|| names.contains(name))
+    }
+}
+
 async fn save_policy(
     pool: &PgPool,
+    zones: &TimeZoneNames,
     claims: &Claims,
     policy: &NotificationPolicy,
 ) -> Result<Uuid, AuthError> {
@@ -162,7 +236,7 @@ async fn save_policy(
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
     let (user, _) = lock_current_session(&mut tx, claims).await?;
     current_policy_session(&mut tx, claims, user).await?;
-    write_policy(&mut tx, user, policy).await?;
+    write_policy(&mut tx, zones, user, policy).await?;
     current_policy_session(&mut tx, claims, user).await?;
     tx.commit().await.map_err(routes::database_error)?;
     Ok(user)
@@ -184,6 +258,7 @@ async fn current_policy_session(
 
 async fn patch_policy(
     pool: &PgPool,
+    zones: &TimeZoneNames,
     claims: &Claims,
     patch: NotificationPatch,
 ) -> Result<Uuid, AuthError> {
@@ -216,7 +291,7 @@ async fn patch_policy(
     if let Some(value) = patch.quiet_hours {
         policy.quiet_hours = value;
     }
-    write_policy(&mut tx, user, &policy).await?;
+    write_policy(&mut tx, zones, user, &policy).await?;
     current_policy_session(&mut tx, claims, user).await?;
     tx.commit().await.map_err(routes::database_error)?;
     Ok(user)
@@ -224,22 +299,19 @@ async fn patch_policy(
 
 async fn write_policy(
     tx: &mut Transaction<'_, Postgres>,
+    zones: &TimeZoneNames,
     user: Uuid,
     policy: &NotificationPolicy,
 ) -> Result<(), AuthError> {
     if let Some(quiet) = &policy.quiet_hours {
         validate_quiet_hours(quiet)?;
     }
-    if let Some(quiet) = &policy.quiet_hours {
-        let recognized: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=$1)")
-                .bind(&quiet.time_zone)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(routes::database_error)?;
-        if !recognized {
-            return Err(AuthError::InvalidInput("Choose a valid IANA time zone"));
-        }
+    // The lookup reads on the transaction's own connection, so a save never
+    // needs a second pool connection.
+    if let Some(quiet) = &policy.quiet_hours
+        && !zones.contains(tx, &quiet.time_zone).await?
+    {
+        return Err(AuthError::InvalidInput("Choose a valid IANA time zone"));
     }
     sqlx::query("INSERT INTO account_notification_preferences(user_id,private_messages,mentions,quiet_start,quiet_end,quiet_timezone)
         VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(user_id) DO UPDATE SET private_messages=EXCLUDED.private_messages,
@@ -338,7 +410,7 @@ pub(crate) async fn put_preferences(
     let claims = authenticated_claims(&server, &headers).await?;
     let result = super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let user = save_policy(pool, &claims, &policy).await?;
+        let user = save_policy(pool, server.time_zone_names(), &claims, &policy).await?;
         server.room_manager().account_updates().changed(
             user,
             super::updates::Scope::Notifications,
@@ -359,7 +431,7 @@ pub(crate) async fn patch_preferences(
     let claims = authenticated_claims(&server, &headers).await?;
     let result = super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let user = patch_policy(pool, &claims, patch).await?;
+        let user = patch_policy(pool, server.time_zone_names(), &claims, patch).await?;
         server.room_manager().account_updates().changed(
             user,
             super::updates::Scope::Notifications,
@@ -463,9 +535,10 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
-    async fn database_notification_preferences_preserve_ownership_and_reject_revoked_writes() {
+    /// A pool of `connections` on the disposable database, which must be a
+    /// loopback database whose name ends in `_test`. A request for a connection
+    /// beyond those fails after five seconds instead of the default timeout.
+    async fn database_pool(connections: u32) -> PgPool {
         use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
         use std::str::FromStr;
         let url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
@@ -476,24 +549,32 @@ mod tests {
                     .get_database()
                     .is_some_and(|name| name.ends_with("_test"))
         );
-        let pool = PgPoolOptions::new()
-            .max_connections(2)
+        PgPoolOptions::new()
+            .max_connections(connections)
+            .acquire_timeout(Duration::from_secs(5))
             .connect_with(options)
             .await
-            .unwrap();
-        let mut users = Vec::new();
-        for _ in 0..2 {
-            let user: Uuid=sqlx::query_scalar("INSERT INTO users(email,display_name) VALUES($1,'Notification policy tester') RETURNING id")
-                .bind(format!("{}@notifications.invalid",Uuid::new_v4())).fetch_one(&pool).await.unwrap();
-            users.push(user);
-        }
-        let user = users[0];
-        let peer = users[1];
+            .unwrap()
+    }
+
+    /// A new account on the disposable database.
+    async fn account(pool: &PgPool) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO users(email,display_name) VALUES($1,'Notification policy tester') RETURNING id",
+        )
+        .bind(format!("{}@notifications.invalid", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    /// The claims of a new live session for `user`.
+    async fn signed_in(pool: &PgPool, user: Uuid) -> Claims {
         let refresh = super::super::session::generate_refresh_token().unwrap();
-        let sid = super::super::session::create_session(&pool, &user, &refresh)
+        let sid = super::super::session::create_session(pool, &user, &refresh)
             .await
             .unwrap();
-        let claims = Claims {
+        Claims {
             sub: user.to_string(),
             name: "tester".into(),
             iss: "simplestChat".into(),
@@ -501,8 +582,12 @@ mod tests {
             exp: (Utc::now().timestamp() + 3600) as usize,
             auth_version: 0,
             sid,
-        };
-        let mut policy = NotificationPolicy {
+        }
+    }
+
+    /// Private messages off, mentions on, quiet from 22:00 to 07:00 in New York.
+    fn quiet_policy() -> NotificationPolicy {
+        NotificationPolicy {
             private_messages: false,
             mentions: true,
             quiet_hours: Some(QuietHours {
@@ -510,8 +595,160 @@ mod tests {
                 end_minute: 420,
                 time_zone: "America/New_York".into(),
             }),
+        }
+    }
+
+    /// A transaction whose first statement failed, so any later query on it
+    /// fails too: a lookup that answers on it ran no query.
+    async fn aborted(pool: &PgPool) -> Transaction<'static, Postgres> {
+        let mut transaction = pool.begin().await.unwrap();
+        let refused = sqlx::query("SELECT 1/0")
+            .execute(&mut *transaction)
+            .await
+            .unwrap_err();
+        assert!(matches!(refused, sqlx::Error::Database(_)));
+        transaction
+    }
+
+    /// The first lookup reads PostgreSQL's names, and for the rest of the hour
+    /// the copy answers alone: lookups on an aborted transaction, where any
+    /// query fails, still answer. An hour on, the next lookup reads the names
+    /// again.
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn time_zone_names_are_cached_for_an_hour() {
+        let pool = database_pool(2).await;
+        let mut live = pool.acquire().await.unwrap();
+        let mut dead = aborted(&pool).await;
+        let zones = TimeZoneNames::default();
+        let start = Instant::now();
+        assert!(
+            zones
+                .contains_at(&mut live, "America/New_York", start)
+                .await
+                .unwrap()
+        );
+        let within = start + TIME_ZONE_REFRESH - Duration::from_secs(1);
+        assert!(
+            zones
+                .contains_at(&mut dead, "America/New_York", within)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !zones
+                .contains_at(&mut dead, "Unknown/Nowhere", within)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !zones
+                .contains_at(&mut dead, "america/new_york", within)
+                .await
+                .unwrap(),
+            "names compare exactly, as the database compared them"
+        );
+        let expired = start + TIME_ZONE_REFRESH;
+        assert!(
+            zones
+                .contains_at(&mut dead, "America/New_York", expired)
+                .await
+                .is_err(),
+            "an hour on, a lookup reads the names again"
+        );
+        assert!(
+            zones
+                .contains_at(&mut live, "Etc/GMT+5", expired)
+                .await
+                .unwrap()
+        );
+        assert!(
+            zones
+                .contains_at(
+                    &mut dead,
+                    "America/New_York",
+                    expired + Duration::from_secs(1)
+                )
+                .await
+                .unwrap(),
+            "the refresh starts a new hour"
+        );
+        dead.rollback().await.unwrap();
+        drop(live);
+        pool.close().await;
+    }
+
+    /// Two lookups that find the copy stale at the same time read the names
+    /// once: the second waits for the first one's read and answers from its
+    /// copy, on an aborted transaction where a read of its own would fail.
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn concurrent_stale_time_zone_lookups_read_the_names_once() {
+        let pool = database_pool(2).await;
+        let mut live = pool.acquire().await.unwrap();
+        let mut dead = aborted(&pool).await;
+        let zones = TimeZoneNames::default();
+        let now = Instant::now();
+        let (first, second) = {
+            let mut first = std::pin::pin!(zones.contains_at(&mut live, "America/New_York", now));
+            // #[tokio::test] runs a current-thread runtime, so nothing drives
+            // the I/O between this poll and the join's first poll: the first
+            // lookup cannot finish its read early, and it still holds the
+            // refresh lock when the second one starts.
+            assert!(
+                futures_util::poll!(&mut first).is_pending(),
+                "the first lookup is reading the names"
+            );
+            tokio::join!(first, zones.contains_at(&mut dead, "Etc/GMT+5", now))
         };
-        save_policy(&pool, &claims, &policy).await.unwrap();
+        assert!(first.unwrap());
+        assert!(
+            second.unwrap(),
+            "the second lookup answered from the first one's copy"
+        );
+        dead.rollback().await.unwrap();
+        drop(live);
+        pool.close().await;
+    }
+
+    /// A policy save checks its zone on the connection its transaction holds:
+    /// on a pool of one connection, with no copy of the names yet, the save
+    /// that reads them still completes. A lookup that asked the pool for a
+    /// second connection would wait for the transaction's own until the
+    /// acquire timeout failed it.
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn policy_saves_read_time_zones_on_their_own_connection() {
+        let pool = database_pool(1).await;
+        let user = account(&pool).await;
+        let claims = signed_in(&pool, user).await;
+        save_policy(&pool, &TimeZoneNames::default(), &claims, &quiet_policy())
+            .await
+            .unwrap();
+        let saved = preferences(&pool, user).await.unwrap().policy.quiet_hours;
+        assert_eq!(
+            saved.map(|quiet| quiet.time_zone).as_deref(),
+            Some("America/New_York")
+        );
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(user)
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn database_notification_preferences_preserve_ownership_and_reject_revoked_writes() {
+        let pool = database_pool(2).await;
+        let zones = TimeZoneNames::default();
+        let users = vec![account(&pool).await, account(&pool).await];
+        let user = users[0];
+        let peer = users[1];
+        let claims = signed_in(&pool, user).await;
+        let mut policy = quiet_policy();
+        save_policy(&pool, &zones, &claims, &policy).await.unwrap();
         assert!(
             !preferences(&pool, user)
                 .await
@@ -527,7 +764,7 @@ mod tests {
                 .private_messages
         );
         policy.quiet_hours.as_mut().unwrap().time_zone = "Unknown/Nowhere".into();
-        assert!(save_policy(&pool, &claims, &policy).await.is_err());
+        assert!(save_policy(&pool, &zones, &claims, &policy).await.is_err());
         let mute = ConversationPolicy {
             muted: true,
             snoozed_until: None,
@@ -570,7 +807,7 @@ mod tests {
                 .is_empty()
         );
         sqlx::query("DELETE FROM sessions WHERE id=$1")
-            .bind(sid)
+            .bind(claims.sid)
             .execute(&pool)
             .await
             .unwrap();
@@ -580,7 +817,7 @@ mod tests {
         ));
         policy.quiet_hours = None;
         assert!(matches!(
-            save_policy(&pool, &claims, &policy).await,
+            save_policy(&pool, &zones, &claims, &policy).await,
             Err(AuthError::InvalidToken)
         ));
         sqlx::query("DELETE FROM users WHERE id=ANY($1)")
