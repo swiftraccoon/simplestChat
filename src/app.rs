@@ -167,11 +167,13 @@ async fn run_server(config: Config, diagnostics: Diagnostics) -> Result<()> {
         None => info!("No TURN configured (set TURN_URLS and TURN_SECRET to enable)"),
     }
 
-    let signaling_server =
+    let mut signaling_server =
         SignalingServer::new(room_manager.clone(), metrics, db_pool.clone(), &config)?;
     if let Some(pool) = &db_pool {
-        let _notifications =
-            crate::push::spawn(pool.clone(), signaling_server.notification_origin()).await?;
+        // Push reads its signing key once and starts its worker; the server it
+        // returns holds the key for the status route.
+        let (server, _notifications) = crate::push::start(pool, signaling_server).await?;
+        signaling_server = server;
     }
 
     // Keep the HTTP future alive on signal: dropping it would skip Axum's

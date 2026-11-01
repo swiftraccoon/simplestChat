@@ -312,6 +312,10 @@ pub(crate) struct SignalingServer {
     sign_in_failures: crate::auth::limiter::FailureLimiter,
     registration_limiter: Arc<crate::auth::limiter::WindowLimiter>,
     db_pool: Option<PgPool>,
+    /// The push signing key. `new` leaves it `None`; `run_server` attaches it
+    /// through `push::start` whenever a database is configured. Without it the
+    /// status route answers 503.
+    push_signer: Option<crate::push::PushSigner>,
     jwt_secret: Option<crate::auth::jwt::JwtSecret>,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
@@ -432,6 +436,7 @@ impl SignalingServer {
                 Duration::from_secs(3600),
             )),
             db_pool,
+            push_signer: None,
             jwt_secret,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
@@ -499,6 +504,19 @@ impl SignalingServer {
 
     pub(crate) fn db_pool(&self) -> Option<&PgPool> {
         self.db_pool.as_ref()
+    }
+
+    /// The server with `signer` attached: `push::start` passes the key it
+    /// loaded, which the status route and the delivery worker then share.
+    pub(crate) fn with_push_signer(mut self, signer: crate::push::PushSigner) -> Self {
+        self.push_signer = Some(signer);
+        self
+    }
+
+    /// The push signing key: `None` until `push::start` attaches it, which
+    /// `run_server` does whenever a database is configured.
+    pub(crate) fn push_signer(&self) -> Option<&crate::push::PushSigner> {
+        self.push_signer.as_ref()
     }
 
     /// Contact URI for VAPID; configured origins are already validated at startup.

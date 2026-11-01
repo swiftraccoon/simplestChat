@@ -1,5 +1,6 @@
 use super::*;
 use aws_lc_rs::signature::{ECDSA_P256_SHA256_FIXED, UnparsedPublicKey};
+use axum::response::IntoResponse;
 use sqlx::{
     Connection as _, PgConnection,
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -205,6 +206,24 @@ impl IsolatedPushDatabase {
     }
 }
 
+/// The bearer header `account_server` accepts for `claims`' session.
+fn bearer(claims: &Claims) -> HeaderMap {
+    let token = crate::auth::jwt::create_session_token(
+        &claims.sub,
+        &claims.name,
+        &crate::auth::jwt::JwtSecret::from(crate::signaling::fixtures::jwt_secret().as_str()),
+        claims.auth_version,
+        claims.sid,
+    )
+    .unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        axum::http::header::AUTHORIZATION,
+        format!("Bearer {token}").parse().unwrap(),
+    );
+    headers
+}
+
 #[tokio::test]
 #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
 async fn database_notifications_keep_key_identity_and_require_current_owned_sessions() {
@@ -264,6 +283,59 @@ async fn database_notifications_keep_key_identity_and_require_current_owned_sess
         save_subscription(&db.pool, &first, endpoint).await,
         Err(AuthError::InvalidToken)
     ));
+    db.close().await;
+}
+
+/// After startup a status request answers from the key loaded then: with the
+/// key table dropped, a signed-in session still receives that public key, so
+/// the request read nothing from `push_keys`.
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn push_status_does_not_touch_the_key_table() {
+    let db = IsolatedPushDatabase::new().await;
+    let signer = PushSigner::load(&db.pool).await.unwrap();
+    let server = crate::signaling::fixtures::account_server(db.pool.clone())
+        .await
+        .with_push_signer(signer.clone());
+    let claims = db.session(db.user().await).await;
+    sqlx::query("DROP TABLE push_keys")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let (_, Json(answer)) = status(State(server), bearer(&claims)).await.unwrap();
+    assert_eq!(answer.public_key, signer.public_key());
+    assert!(!answer.enabled);
+    db.close().await;
+}
+
+/// run_server's wiring: on a fresh database, `start` creates the one signing
+/// key, starts the worker and returns the server with the key attached, so a
+/// signed-in session's status request answers 200 with the stored key.
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn push_start_attaches_the_key_it_creates() {
+    let db = IsolatedPushDatabase::new().await;
+    let keys = "SELECT count(*) FROM push_keys";
+    let before: i64 = sqlx::query_scalar(keys).fetch_one(&db.pool).await.unwrap();
+    assert_eq!(before, 0);
+    let server = crate::signaling::fixtures::account_server(db.pool.clone()).await;
+    let (server, worker) = start(&db.pool, server).await.unwrap();
+    let after: i64 = sqlx::query_scalar(keys).fetch_one(&db.pool).await.unwrap();
+    assert_eq!(after, 1, "the start created the signing key");
+    let stored = load_key(&db.pool).await.unwrap();
+    let claims = db.session(db.user().await).await;
+    let response = status(State(server), bearer(&claims)).await.into_response();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["publicKey"], stored.public.as_str());
+    assert_eq!(body["enabled"], false);
+    worker.abort();
+    assert!(worker.await.unwrap_err().is_cancelled());
     db.close().await;
 }
 

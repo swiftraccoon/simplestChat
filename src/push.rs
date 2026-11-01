@@ -22,7 +22,7 @@ use futures_util::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -127,16 +127,40 @@ async fn load_key(pool: &PgPool) -> anyhow::Result<VapidKey> {
     )
 }
 
+/// The VAPID signing identity, read once at startup. The status route and the
+/// delivery worker share this copy, so no request reads `push_keys`.
+#[derive(Clone)]
+pub(crate) struct PushSigner(Arc<VapidKey>);
+
+impl PushSigner {
+    /// Reads the stored identity, creating it on the first start. It lives in
+    /// the database so backup/restore and supported VPS migrations preserve
+    /// subscriptions; no third-party account is required. Fails when the key
+    /// cannot be read, created or parsed.
+    async fn load(pool: &PgPool) -> anyhow::Result<Self> {
+        Ok(Self(Arc::new(load_key(pool).await?)))
+    }
+
+    /// The application server key browsers subscribe with: the uncompressed
+    /// P-256 point as unpadded base64url.
+    pub(crate) fn public_key(&self) -> &str {
+        &self.0.public
+    }
+}
+
 pub(crate) async fn status(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PushStatus>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
+    // The key loaded at startup: answering never reads `push_keys`.
+    let public_key = server
+        .push_signer()
+        .ok_or(AuthError::NotConfigured)?
+        .public_key()
+        .to_owned();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let key = load_key(pool)
-        .await
-        .map_err(|_| AuthError::InvalidInput("Notifications are temporarily unavailable"))?;
     let enabled = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM push_subscriptions WHERE session_id=$1 AND auth_version=$2)",
     )
@@ -148,7 +172,7 @@ pub(crate) async fn status(
     Ok((
         routes::no_store_headers(),
         Json(PushStatus {
-            public_key: key.public,
+            public_key,
             enabled,
         }),
     ))
@@ -376,13 +400,15 @@ async fn deliver(
     }
 }
 
-/// The signing identity lives in the database so backup/restore and supported
-/// VPS migrations preserve subscriptions. No third-party account is required.
-pub(crate) async fn spawn(
+/// Starts the delivery worker, which signs every request with `signer`, the
+/// identity the status route hands to browsers. Fails when the worker's HTTP
+/// client cannot be built. It is synchronous, so it must be called inside a
+/// Tokio runtime: `tokio::spawn` panics outside one.
+fn spawn(
     pool: PgPool,
+    signer: PushSigner,
     origin: Option<String>,
 ) -> anyhow::Result<tokio::task::JoinHandle<()>> {
-    let key = load_key(&pool).await?;
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -398,7 +424,7 @@ pub(crate) async fn spawn(
                 Ok(pending) => {
                     stream::iter(pending)
                         .for_each_concurrent(4, |pending| {
-                            deliver(&pool, &client, &key, origin.as_deref(), pending)
+                            deliver(&pool, &client, &signer.0, origin.as_deref(), pending)
                         })
                         .await
                 }
@@ -406,6 +432,21 @@ pub(crate) async fn spawn(
             }
         }
     }))
+}
+
+/// Starts Web Push for a server with a database, as `run_server` does whenever
+/// one is configured: reads the signing key once, creating it on the first
+/// start, starts the delivery worker with it and returns the server with the
+/// key attached, so the status route and the worker use one key. Fails when
+/// the key cannot be read, created or parsed or the worker's HTTP client
+/// cannot be built; like `spawn`, it must run inside a Tokio runtime.
+pub(crate) async fn start(
+    pool: &PgPool,
+    server: SignalingServer,
+) -> anyhow::Result<(SignalingServer, tokio::task::JoinHandle<()>)> {
+    let signer = PushSigner::load(pool).await?;
+    let worker = spawn(pool.clone(), signer.clone(), server.notification_origin())?;
+    Ok((server.with_push_signer(signer), worker))
 }
 
 #[cfg(test)]

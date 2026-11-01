@@ -1239,8 +1239,10 @@ other account operations; responses use `Cache-Control: no-store`:
 account. `publicKey` is the uncompressed 65-byte P-256 VAPID public key encoded
 as unpadded base64url. The signing key is generated once and retained in
 PostgreSQL's `push_keys` table; ordinary database backup/restore and server
-migration preserve it and existing subscriptions. The private key is never
-returned to a browser.
+migration preserve it and existing subscriptions. The server reads it once at
+startup, and this route and the delivery worker both use that copy, so a key
+replaced in the database takes effect at the next start. The private key is
+never returned to a browser.
 
 Registration accepts only the endpoint field and stores one subscription per
 session, associated with that account's current authentication version. An
