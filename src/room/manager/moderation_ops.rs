@@ -902,7 +902,6 @@ impl RoomManager {
             return Ok(());
         }
 
-        let setter_name = setter.id.to_string();
         let setter_authenticated = setter.authenticated;
         let target_authenticated = target.authenticated;
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
@@ -935,7 +934,7 @@ impl RoomManager {
 
         let mut room = room_lock.write().await;
         room.ensure_live()?;
-        let revoked = room.publish_role(target_participant_id, new_role, setter_name);
+        let revoked = room.publish_role(target_participant_id, new_role, *setter_id);
         let active_observer = room.active_speaker_observer.clone();
         let audio_observer = room.audio_level_observer.clone();
         drop(room);

@@ -898,6 +898,9 @@ fn generate(root: &Path) -> Result<String> {
         ("PublicProfile", false),
         ("RoomListItem", false),
         ("CreateRoomRequest", true),
+        ("ModerationCommand", true),
+        ("LobbyAction", true),
+        ("SanctionKind", true),
     ];
     let mut body = String::new();
     let mut queue: Vec<(String, bool)> = roots

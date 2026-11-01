@@ -331,6 +331,48 @@ impl ModerationAction {
     }
 }
 
+/// What a moderator asks room administration to do to a live participant.
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ModerationCommand {
+    Kick,
+    Ban,
+}
+
+impl ModerationCommand {
+    /// Every command, so a test can require a wire string for each; nothing else lists them.
+    #[cfg(test)]
+    pub(crate) const ALL: [Self; 2] = [Self::Kick, Self::Ban];
+}
+
+/// A moderator's decision about a participant waiting in the lobby.
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum LobbyAction {
+    Admit,
+    Deny,
+}
+
+impl LobbyAction {
+    /// Every decision, so a test can require a wire string for each; nothing else lists them.
+    #[cfg(test)]
+    pub(crate) const ALL: [Self; 2] = [Self::Admit, Self::Deny];
+}
+
+/// The permission a sanction restricts or restores.
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum SanctionKind {
+    Camera,
+    Chat,
+}
+
+impl SanctionKind {
+    /// Every kind, so a test can require a wire string for each; nothing else lists them.
+    #[cfg(test)]
+    pub(crate) const ALL: [Self; 2] = [Self::Camera, Self::Chat];
+}
+
 /// Who acted, as the history names them.
 #[derive(Clone, Copy)]
 pub(crate) struct Actor<'a> {

@@ -93,8 +93,10 @@ the other lists retain their existing room-scoped shapes. Pages use offsets from
 0 through 10,000. Kick/ban and sanctions require a current participant. Offline
 reports can still be resolved or dismissed. Ban duration is optional, from one
 second through ten years; omission means until removed. Reasons are at most
-256 bytes without control characters. Lobby actions are `admit` or `deny`;
-sanction kinds are `camera` or `chat`, with an explicit boolean `enabled`.
+256 bytes without control characters. Moderation actions are `kick` or `ban`
+and lobby actions `admit` or `deny`; sanction kinds are `camera` or `chat`,
+with an explicit boolean `enabled`. Any other action or kind is a format error,
+refused with `422` before the sign-in is checked.
 Guest sanctions preserve the existing canonical-IP cohort and role hierarchy.
 Restoring permission never starts capture for the participant.
 

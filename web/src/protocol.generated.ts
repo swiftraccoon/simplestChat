@@ -838,6 +838,18 @@ export interface CreateRoomRequest {
   topic?: string;
 }
 
+/** What a moderator asks room administration to do to a live participant. */
+export const MODERATION_COMMANDS = ['kick', 'ban'] as const;
+export type ModerationCommand = (typeof MODERATION_COMMANDS)[number];
+
+/** A moderator's decision about a participant waiting in the lobby. */
+export const LOBBY_ACTIONS = ['admit', 'deny'] as const;
+export type LobbyAction = (typeof LOBBY_ACTIONS)[number];
+
+/** The permission a sanction restricts or restores. */
+export const SANCTION_KINDS = ['camera', 'chat'] as const;
+export type SanctionKind = (typeof SANCTION_KINDS)[number];
+
 export interface BanEntry {
   banId: string;
   displayName: string;

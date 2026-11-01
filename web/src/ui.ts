@@ -2,9 +2,13 @@ import { MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, MIN_PASSWORD_CHARS } from './pr
 import type {
   AccountProfile,
   CreateRoomRequest,
+  LobbyAction,
+  ModerationCommand,
   PreferencePatch,
+  ReportResolution,
   RoomListItem,
   RoomSettingsPatch,
+  SanctionKind,
 } from './protocol';
 import {
   decodeAccountProfile,
@@ -454,7 +458,7 @@ export const api = {
     token: string,
     id: string,
     report: string,
-    status: 'resolved' | 'dismissed',
+    status: ReportResolution,
     signal: AbortSignal,
   ) =>
     apiJson(
@@ -469,7 +473,7 @@ export const api = {
     token: string,
     id: string,
     request: {
-      action: 'kick' | 'ban';
+      action: ModerationCommand;
       targetParticipantId: string;
       reason?: string;
       durationSeconds?: number;
@@ -498,7 +502,7 @@ export const api = {
     token: string,
     id: string,
     target: string,
-    action: 'admit' | 'deny',
+    action: LobbyAction,
     reason: string | undefined,
     signal: AbortSignal,
   ) =>
@@ -515,7 +519,7 @@ export const api = {
     id: string,
     request: {
       targetParticipantId: string;
-      kind: 'camera' | 'chat';
+      kind: SanctionKind;
       enabled: boolean;
       reason?: string;
     },

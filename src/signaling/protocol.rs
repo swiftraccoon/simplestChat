@@ -730,7 +730,7 @@ pub enum ServerMessage {
     RoleChanged {
         participant_id: ParticipantId,
         new_role: Role,
-        granted_by: String,
+        granted_by: ParticipantId,
     },
     /// A participant requested voice (sent to Moderator+)
     VoiceRequested {

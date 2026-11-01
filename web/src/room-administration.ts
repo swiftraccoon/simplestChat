@@ -18,7 +18,13 @@ import {
   modal,
 } from './ui';
 import { ROLES, asRole, rank } from './protocol';
-import type { Role } from './protocol';
+import type {
+  LobbyAction,
+  ModerationCommand,
+  ReportResolution,
+  Role,
+  SanctionKind,
+} from './protocol';
 
 export interface RoomAdministrationView {
   role: Role;
@@ -42,7 +48,7 @@ export interface RoomAdministrationApi {
     token: string,
     id: string,
     target: string,
-    action: 'admit' | 'deny',
+    action: LobbyAction,
     reason: string | undefined,
     signal: AbortSignal,
   ): Promise<void>;
@@ -51,7 +57,7 @@ export interface RoomAdministrationApi {
     id: string,
     request: {
       targetParticipantId: string;
-      kind: 'camera' | 'chat';
+      kind: SanctionKind;
       enabled: boolean;
       reason?: string;
     },
@@ -85,14 +91,14 @@ export interface RoomAdministrationApi {
     token: string,
     id: string,
     report: string,
-    status: 'resolved' | 'dismissed',
+    status: ReportResolution,
     signal: AbortSignal,
   ): Promise<void>;
   moderate(
     token: string,
     id: string,
     request: {
-      action: 'kick' | 'ban';
+      action: ModerationCommand;
       targetParticipantId: string;
       reason?: string;
       durationSeconds?: number;
@@ -458,7 +464,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
               }
             });
           const moderate = (
-            action: 'kick' | 'ban',
+            action: ModerationCommand,
             target: string,
             name: string,
             reportId?: string,

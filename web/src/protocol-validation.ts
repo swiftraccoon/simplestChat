@@ -80,7 +80,7 @@ function requestId(value: unknown): string {
 }
 const optionalRequestId: Decoder<string | undefined> = (value) =>
   value === undefined ? undefined : requestId(value);
-const chatSessionId: Decoder<string> = (value) => {
+const uuid: Decoder<string> = (value) => {
   const id = text(value);
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ? id : invalid();
 };
@@ -122,7 +122,7 @@ const participant = object<ParticipantInfo>({
   chatStyle: lookOrAutomatic,
 });
 export const decodeAttachment = object<ChatAttachment>({
-  id: chatSessionId,
+  id: uuid,
   name: (value) => {
     const name = text(value);
     return name.length > 0 &&
@@ -214,7 +214,7 @@ const lobbyEntry = object<{ participantId: string; displayName: string; authenti
   authenticated: boolean,
 });
 const snapshot = object<RoomSnapshot>({
-  chatSessionId,
+  chatSessionId: uuid,
   participants: list(participant),
   messages: list(chat),
   yourRole: choice(...ROLES),
@@ -652,7 +652,7 @@ const messages = {
   roleChanged: message('roleChanged', {
     participantId: text,
     newRole: choice(...ROLES),
-    grantedBy: text,
+    grantedBy: uuid,
   }),
   voiceRequested: message('voiceRequested', { participantId: text, displayName: text }),
   roomSettingsChanged: message('roomSettingsChanged', { settings }),

@@ -345,7 +345,12 @@ const fixtures = [
     participantId: 'participant',
     reason: null,
   })),
-  { type: 'roleChanged', participantId: 'participant', newRole: 'user', grantedBy: 'moderator' },
+  {
+    type: 'roleChanged',
+    participantId: 'participant',
+    newRole: 'user',
+    grantedBy: '3f9c2a71-8d4e-4b6a-9e15-2c7d0b8a4f63',
+  },
   { type: 'voiceRequested', participantId: 'participant', displayName: 'Person' },
   { type: 'roomSettingsChanged', settings },
   { type: 'topicChanged', topic: '', changedBy: 'moderator' },
@@ -481,6 +486,20 @@ test('chat retry results use bounded identity and finite reasons; session bindin
     data: { ...snapshot, chatSessionId },
   });
   assert.equal(valid.data.chatSessionId, chatSessionId);
+});
+
+test('the roleChanged decoder requires a UUID grantedBy', () => {
+  const changed = fixtures.find((fixture) => fixture.type === 'roleChanged');
+  assert.equal(decode(changed).grantedBy, changed.grantedBy);
+  for (const grantedBy of [
+    'moderator',
+    '',
+    changed.grantedBy.slice(0, -1),
+    `${changed.grantedBy}0`,
+    changed.grantedBy.toUpperCase(),
+    42,
+  ])
+    assert.throws(() => decode({ ...changed, grantedBy }), invalid, JSON.stringify(grantedBy));
 });
 
 test('deferred authentication renewal requires bounded integer timing fields', () => {

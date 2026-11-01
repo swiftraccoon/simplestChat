@@ -186,7 +186,7 @@ impl Room {
         &mut self,
         target: &ParticipantId,
         role: roles::Role,
-        granted_by: String,
+        granted_by: ParticipantId,
     ) -> Vec<RevokedProducer> {
         if let Some(person) = self.participants.get_mut(target) {
             person.role = role;

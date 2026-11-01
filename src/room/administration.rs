@@ -106,7 +106,7 @@ pub(crate) struct ReportRequest {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct LobbyRequest {
-    pub action: String,
+    pub action: moderation::LobbyAction,
     pub reason: Option<String>,
 }
 
@@ -114,7 +114,7 @@ pub(crate) struct LobbyRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SanctionRequest {
     pub target_participant_id: ParticipantId,
-    pub kind: String,
+    pub kind: moderation::SanctionKind,
     pub enabled: bool,
     pub reason: Option<String>,
 }
@@ -122,7 +122,7 @@ pub(crate) struct SanctionRequest {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModerationRequest {
-    pub action: String,
+    pub action: moderation::ModerationCommand,
     pub target_participant_id: ParticipantId,
     pub reason: Option<String>,
     pub duration_seconds: Option<u64>,
@@ -131,17 +131,13 @@ pub(crate) struct ModerationRequest {
 
 impl ModerationRequest {
     fn validate(&self) -> Result<(), RoomError> {
-        if !matches!(self.action.as_str(), "kick" | "ban") {
-            return Err(Refusal::Invalid(
-                "Choose a participant and a supported moderation action".into(),
-            )
-            .into());
-        }
-        if self
-            .duration_seconds
-            .is_some_and(|seconds| seconds == 0 || seconds > 10 * 365 * 24 * 3600)
-            || (self.action == "kick" && self.duration_seconds.is_some())
-        {
+        let duration_allowed = match self.action {
+            moderation::ModerationCommand::Kick => self.duration_seconds.is_none(),
+            moderation::ModerationCommand::Ban => self
+                .duration_seconds
+                .is_none_or(|seconds| (1..=10 * 365 * 24 * 3600).contains(&seconds)),
+        };
+        if !duration_allowed {
             return Err(Refusal::Invalid(
                 "Ban duration must be between 1 second and 10 years".into(),
             )
@@ -509,13 +505,15 @@ impl Context {
         target: ParticipantId,
         request: LobbyRequest,
     ) -> Result<Value, RoomError> {
-        if !matches!(request.action.as_str(), "admit" | "deny")
-            || request
-                .reason
-                .as_ref()
-                .is_some_and(|value| !moderation::valid_reason(value))
+        if request
+            .reason
+            .as_ref()
+            .is_some_and(|value| !moderation::valid_reason(value))
         {
-            return Err(Refusal::Invalid("Invalid waiting-room action".into()).into());
+            return Err(Refusal::Invalid(
+                "Moderation reason must be at most 256 bytes without control characters".into(),
+            )
+            .into());
         }
         self.recheck_expiry().await?;
         let control = self
@@ -534,20 +532,23 @@ impl Context {
         // Retain users/session/room row locks across the helper's preference
         // lookup. Its final synchronous callback runs after the final await.
         let operation = async {
-            if request.action == "admit" {
-                self.manager
-                    .admit_authorized_lobby(&self.room_id, &target, control, authorize)
-                    .await
-            } else {
-                self.manager
-                    .deny_authorized_lobby(
-                        &self.room_id,
-                        &target,
-                        request.reason,
-                        control,
-                        authorize,
-                    )
-                    .await
+            match request.action {
+                moderation::LobbyAction::Admit => {
+                    self.manager
+                        .admit_authorized_lobby(&self.room_id, &target, control, authorize)
+                        .await
+                }
+                moderation::LobbyAction::Deny => {
+                    self.manager
+                        .deny_authorized_lobby(
+                            &self.room_id,
+                            &target,
+                            request.reason,
+                            control,
+                            authorize,
+                        )
+                        .await
+                }
             }
         };
         tokio::time::timeout(control::PERSISTENCE_TIMEOUT, operation)
@@ -577,12 +578,9 @@ impl Context {
         &mut self,
         request: SanctionRequest,
     ) -> Result<(Publication, Value), RoomError> {
-        let kind = match request.kind.as_str() {
-            "camera" => moderation::PunitiveKind::CamBanned,
-            "chat" => moderation::PunitiveKind::Muted,
-            _ => {
-                return Err(Refusal::Invalid("Choose a camera or chat restriction".into()).into());
-            }
+        let kind = match request.kind {
+            moderation::SanctionKind::Camera => moderation::PunitiveKind::CamBanned,
+            moderation::SanctionKind::Chat => moderation::PunitiveKind::Muted,
         };
         if request
             .reason
@@ -803,7 +801,10 @@ impl Context {
         if !self.role.can_moderate(target.role) {
             return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
-        let ban = request.action == "ban";
+        let ban = match request.action {
+            moderation::ModerationCommand::Ban => true,
+            moderation::ModerationCommand::Kick => false,
+        };
         let participants = if ban {
             super::moderation_cohort(&room, &request.target_participant_id, self.role)
                 .map_err(|_| Refusal::Forbidden("Insufficient room permissions".into()))?
@@ -903,9 +904,11 @@ impl Context {
                     "Room policy no longer permits this producer",
                 )
             }
-            Publication::Role(target, role) => {
-                room.publish_role(&ParticipantId::from(target), role, self.user.to_string())
-            }
+            Publication::Role(target, role) => room.publish_role(
+                &ParticipantId::from(target),
+                role,
+                ParticipantId::from(self.user),
+            ),
             Publication::Unban(user, ip) => {
                 room.publish_unban(user.map(ParticipantId::from), ip, Vec::new());
                 return;
@@ -1294,7 +1297,7 @@ impl Context {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::fixtures::rid;
+    use crate::ids::fixtures::{pid, rid};
 
     #[test]
     fn patch_preserves_nullable_contract_and_refuses_unknown_fields() {
@@ -1340,6 +1343,117 @@ mod tests {
         assert!(!roles::Role::Moderator.can_set_role(roles::Role::Admin, roles::Role::User));
         assert!(!roles::Role::Admin.can_set_role(roles::Role::User, roles::Role::Admin));
         assert!(roles::Role::Owner.can_set_role(roles::Role::Admin, roles::Role::Moderator));
+    }
+
+    #[test]
+    fn administration_actions_keep_their_wire_strings() {
+        use moderation::{LobbyAction, ModerationCommand, SanctionKind};
+        fn keep_wire_strings<T>(all: &[T], rows: &[(T, &str)], unknown: &[&str])
+        where
+            T: Copy + serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+        {
+            assert_eq!(rows.len(), all.len(), "one wire string per variant");
+            for &variant in all {
+                let (_, wire) = rows
+                    .iter()
+                    .find(|(row, _)| *row == variant)
+                    .unwrap_or_else(|| panic!("{variant:?} has no wire string"));
+                assert_eq!(serde_json::to_value(variant).unwrap(), json!(wire));
+                assert_eq!(serde_json::from_value::<T>(json!(wire)).unwrap(), variant);
+            }
+            for wire in unknown {
+                assert!(serde_json::from_value::<T>(json!(wire)).is_err(), "{wire}");
+            }
+        }
+        keep_wire_strings(
+            &LobbyAction::ALL,
+            &[(LobbyAction::Admit, "admit"), (LobbyAction::Deny, "deny")],
+            &["Admit", "approve", "kick", ""],
+        );
+        keep_wire_strings(
+            &SanctionKind::ALL,
+            &[
+                (SanctionKind::Camera, "camera"),
+                (SanctionKind::Chat, "chat"),
+            ],
+            &["Camera", "microphone", "mute", ""],
+        );
+        keep_wire_strings(
+            &ModerationCommand::ALL,
+            &[
+                (ModerationCommand::Kick, "kick"),
+                (ModerationCommand::Ban, "ban"),
+            ],
+            &["Kick", "unban", "mute", ""],
+        );
+        // The HTTP bodies carry the same vocabulary, so their extractor refuses anything else.
+        let target = pid("target").to_string();
+        let lobby: LobbyRequest = serde_json::from_value(json!({"action": "deny"})).unwrap();
+        assert_eq!(lobby.action, LobbyAction::Deny);
+        let sanction: SanctionRequest = serde_json::from_value(
+            json!({"targetParticipantId": target, "kind": "camera", "enabled": true}),
+        )
+        .unwrap();
+        assert_eq!(sanction.kind, SanctionKind::Camera);
+        let command: ModerationRequest =
+            serde_json::from_value(json!({"action": "ban", "targetParticipantId": target}))
+                .unwrap();
+        assert_eq!(command.action, ModerationCommand::Ban);
+        assert!(serde_json::from_value::<LobbyRequest>(json!({"action": "promote"})).is_err());
+        assert!(
+            serde_json::from_value::<SanctionRequest>(
+                json!({"targetParticipantId": target, "kind": "microphone", "enabled": true})
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<ModerationRequest>(
+                json!({"action": "mute", "targetParticipantId": target})
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn kicks_take_no_duration_and_bans_last_one_second_to_ten_years() {
+        use moderation::ModerationCommand::{Ban, Kick};
+        // Ten years of 365 days, in seconds.
+        let ten_years = 315_360_000;
+        for (action, duration_seconds, accepted) in [
+            (Kick, None, true),
+            (Kick, Some(0), false),
+            (Kick, Some(1), false),
+            (Kick, Some(ten_years), false),
+            (Ban, None, true),
+            (Ban, Some(0), false),
+            (Ban, Some(1), true),
+            (Ban, Some(ten_years), true),
+            (Ban, Some(ten_years + 1), false),
+        ] {
+            let outcome = ModerationRequest {
+                action,
+                target_participant_id: pid("target"),
+                reason: None,
+                duration_seconds,
+                report_id: None,
+            }
+            .validate();
+            if accepted {
+                assert!(
+                    outcome.is_ok(),
+                    "{action:?} {duration_seconds:?} is accepted"
+                );
+            } else {
+                assert!(
+                    matches!(
+                        &outcome,
+                        Err(RoomError::Refused(Refusal::Invalid(message)))
+                            if message == "Ban duration must be between 1 second and 10 years"
+                    ),
+                    "{action:?} {duration_seconds:?} is refused as an invalid duration"
+                );
+            }
+        }
     }
 }
 

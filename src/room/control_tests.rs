@@ -324,6 +324,48 @@ async fn queued_control_revalidates_sender_permissions_before_applying_a_topic()
 }
 
 #[tokio::test]
+async fn role_changes_name_the_granting_participant() {
+    with_fixture(|fixture| async move {
+        let (member, mut member_messages) = participant(roles::Role::User);
+        fixture
+            .room
+            .write()
+            .await
+            .participants
+            .insert(member.id, member.clone());
+        bounded(fixture.manager.set_participant_role(
+            &fixture.room_id,
+            &fixture.owner.id,
+            &fixture.owner.sender,
+            &member.id,
+            roles::Role::Moderator,
+        ))
+        .await
+        .unwrap();
+        let frame = bounded(member_messages.recv()).await.unwrap();
+        assert_eq!(
+            frame.as_str(),
+            format!(
+                "{{\"type\":\"roleChanged\",\"participantId\":\"{}\",\"newRole\":\"moderator\",\
+                 \"grantedBy\":\"{}\"}}",
+                member.id, fixture.owner.id
+            )
+        );
+        let ServerMessage::RoleChanged { granted_by, .. } = serde_json::from_str(&frame).unwrap()
+        else {
+            panic!("a role change broadcasts roleChanged");
+        };
+        assert_eq!(granted_by, fixture.owner.id);
+        let named = frame.replace(&fixture.owner.id.to_string(), &fixture.owner.name);
+        assert!(
+            serde_json::from_str::<ServerMessage>(&named).is_err(),
+            "grantedBy carries a participant id, never a name"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn chat_preference_ack_waits_for_inflight_durable_control() {
     with_fixture(|mut fixture| async move {
         // This proves the room-control ordering of a session preference, while

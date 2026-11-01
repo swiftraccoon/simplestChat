@@ -208,6 +208,11 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             room.read().await.participants[&ParticipantId::from(peer)].role,
             roles::Role::Admin
         );
+        let granted: Value = serde_json::from_str(&receiver.recv().await.unwrap()).unwrap();
+        assert_eq!(
+            granted,
+            json!({"type":"roleChanged","participantId":peer,"newRole":"admin","grantedBy":owner})
+        );
         let mut listing =
             Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
                 .await
@@ -272,14 +277,17 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             "a resolved report is a definite rejection, not an uncertain write"
         );
 
-        for kind in ["camera", "chat"] {
+        for kind in [
+            moderation::SanctionKind::Camera,
+            moderation::SanctionKind::Chat,
+        ] {
             for enabled in [true, false] {
                 Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
                     .await
                     .unwrap()
                     .execute(Command::Sanction(SanctionRequest {
                         target_participant_id: ParticipantId::from(peer),
-                        kind: kind.into(),
+                        kind,
                         enabled,
                         reason: None,
                     }))
@@ -289,7 +297,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                     .punitive
                     .clone();
                 assert_eq!(
-                    if kind == "camera" {
+                    if kind == moderation::SanctionKind::Camera {
                         state.cam_banned
                     } else {
                         state.text_muted
@@ -303,7 +311,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap()
             .execute(Command::Moderate(ModerationRequest {
-                action: "ban".into(),
+                action: moderation::ModerationCommand::Ban,
                 target_participant_id: ParticipantId::from(peer),
                 reason: Some("Test administration".into()),
                 duration_seconds: Some(3600),
@@ -395,7 +403,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .execute(Command::Lobby(
                 ParticipantId::from(outsider),
                 LobbyRequest {
-                    action: "admit".into(),
+                    action: moderation::LobbyAction::Admit,
                     reason: None,
                 },
             ))
@@ -415,7 +423,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap()
             .execute(Command::Moderate(ModerationRequest {
-                action: "kick".into(),
+                action: moderation::ModerationCommand::Kick,
                 target_participant_id: ParticipantId::from(outsider),
                 reason: None,
                 duration_seconds: None,
@@ -447,7 +455,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .execute(Command::Lobby(
                 denied_id,
                 LobbyRequest {
-                    action: "deny".into(),
+                    action: moderation::LobbyAction::Deny,
                     reason: Some("Closed meeting".into()),
                 },
             ))
