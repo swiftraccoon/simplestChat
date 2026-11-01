@@ -22,7 +22,7 @@ const MESSAGE_REACTIONS: usize = 64;
 const REPLY_EXCERPT_CHARS: usize = 140;
 const HISTORY_BYTES: usize = 256 * 1024;
 const MAX_IGNORED: usize = 100;
-const MAX_REPORTS: usize = 500;
+const MAX_REPORTS: u32 = 500;
 const MAX_RUNTIME_BANS: usize = 2000;
 /// History entries an unpersisted room keeps in memory.
 const MAX_RUNTIME_MODERATION_EVENTS: usize = 200;

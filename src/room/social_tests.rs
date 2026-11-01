@@ -3123,7 +3123,7 @@ async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, MAX_REPORTS as i64);
+    assert_eq!(count, i64::from(MAX_REPORTS));
     manager
         .get_room(&room_id)
         .unwrap()

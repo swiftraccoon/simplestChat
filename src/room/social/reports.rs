@@ -69,7 +69,7 @@ impl RoomManager {
             }
             request.reacquire().await?;
         } else {
-            if room.social.reports.len() >= MAX_REPORTS {
+            if room.social.reports.len() >= MAX_REPORTS as usize {
                 if let Some(index) = room
                     .social
                     .reports

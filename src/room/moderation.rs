@@ -85,8 +85,9 @@ pub(crate) struct Sanction<'a> {
     pub(crate) applied_by: Uuid,
 }
 
-/// Durable history entries kept per room; the oldest go when a new one arrives.
-pub(crate) const MAX_MODERATION_EVENTS: usize = 1000;
+/// Durable history entries kept per room: each write keeps the newest by time
+/// and deletes the rest.
+pub(crate) const MAX_MODERATION_EVENTS: u32 = 1000;
 
 /// Whom a moderation entry is about: a participant, or a ban that no longer
 /// names a participant (guest bans are keyed by their own identifier). Both
@@ -400,13 +401,16 @@ impl ModerationEvent {
 }
 
 /// Append an event inside the caller's transaction. The room keeps its newest
-/// `cap` entries. An event that answers a report resolves that report if it is
-/// still open, and refuses a report from another room or about someone else.
+/// `cap` entries by time: after the insert one statement deletes every older
+/// entry, so a write never counts the history, and an entry older than the
+/// newest `cap` gives way itself. An event that answers a report resolves that
+/// report if it is still open, and refuses a report from another room or about
+/// someone else.
 pub(crate) async fn record_event(
     transaction: &mut PgConnection,
     room_id: &RoomId,
     event: &ModerationEvent,
-    cap: usize,
+    cap: u32,
 ) -> Result<(), RoomError> {
     let report_id = event
         .report_id
@@ -440,23 +444,6 @@ pub(crate) async fn record_event(
         .execute(&mut *transaction)
         .await?;
     }
-    let count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM moderation_events WHERE room_id = $1")
-            .bind(room_id)
-            .fetch_one(&mut *transaction)
-            .await?;
-    let excess = (count + 1).saturating_sub(cap as i64);
-    if excess > 0 {
-        sqlx::query(
-            "DELETE FROM moderation_events WHERE id IN (
-                SELECT id FROM moderation_events WHERE room_id = $1
-                ORDER BY created_at, id LIMIT $2)",
-        )
-        .bind(room_id)
-        .bind(excess)
-        .execute(&mut *transaction)
-        .await?;
-    }
     let event_id = Uuid::parse_str(&event.event_id)
         .map_err(|_| sqlx::Error::Protocol("invalid event id".to_string()))?;
     sqlx::query(
@@ -478,6 +465,17 @@ pub(crate) async fn record_event(
     .bind(event.expires_at)
     .bind(report_id)
     .bind(event.created_at)
+    .execute(&mut *transaction)
+    .await?;
+    // The older entries are collected into an array first, so the sorted scan
+    // runs once; as an `IN` subquery the planner may rescan it for every row.
+    sqlx::query(
+        "DELETE FROM moderation_events WHERE room_id = $1 AND id = ANY(ARRAY(
+             SELECT id FROM moderation_events WHERE room_id = $1
+             ORDER BY created_at DESC, id DESC OFFSET $2))",
+    )
+    .bind(room_id)
+    .bind(i64::from(cap))
     .execute(&mut *transaction)
     .await?;
     Ok(())
@@ -819,7 +817,11 @@ pub(crate) async fn list_reports<'e>(
         .collect())
 }
 
-/// The newest `limit` entries after `offset`, newest first.
+/// The newest `limit` entries after `offset`, newest first. An entry this server
+/// cannot read (an unknown action, or an actor that is not a participant id) is
+/// left out of the page; the listing counts it as a database error and warns
+/// with the room's log handle, so a damaged history shows instead of silently
+/// shrinking.
 pub(crate) async fn list_events<'e>(
     executor: impl PgExecutor<'e>,
     room_id: &RoomId,
@@ -853,7 +855,8 @@ pub(crate) async fn list_events<'e>(
     .bind(offset)
     .fetch_all(executor)
     .await?;
-    Ok(rows
+    let stored = rows.len();
+    let events: Vec<ModerationEvent> = rows
         .into_iter()
         .filter_map(|row| {
             Some(ModerationEvent {
@@ -871,7 +874,19 @@ pub(crate) async fn list_events<'e>(
                 target_ip: row.target_ip.and_then(|ip| ip.parse().ok()),
             })
         })
-        .collect())
+        .collect();
+    let count = stored - events.len();
+    if count > 0 {
+        tracing::warn!(
+            room = %room_id.log_handle(),
+            undecodable = count,
+            "Moderation events could not be decoded"
+        );
+        crate::db::record_error(&sqlx::Error::Decode(
+            format!("{count} moderation events have an unknown action or actor id").into(),
+        ));
+    }
+    Ok(events)
 }
 
 /// Load durable camera/chat sanctions for a joining identity. Registered users
@@ -1222,11 +1237,13 @@ pub(crate) async fn resolve_report(
     resolution: ReportResolution,
     actor: Actor<'_>,
 ) -> Result<bool, RoomError> {
+    // The report keeps the participant id as text holding a UUID: casting that
+    // side compares UUIDs, so the account lookup uses the users primary key.
     let row: Option<(ParticipantId, String, bool)> = sqlx::query_as(
         "UPDATE room_reports r SET status = $3, resolved_at = now(), resolved_by = $4
          WHERE r.room_id = $1 AND r.id = $2 AND r.status = 'open'
          RETURNING r.target_participant_id, r.target_name,
-                   EXISTS(SELECT 1 FROM users u WHERE u.id::text = r.target_participant_id)",
+                   EXISTS(SELECT 1 FROM users u WHERE u.id = r.target_participant_id::uuid)",
     )
     .bind(room_id)
     .bind(report_id)
@@ -1261,7 +1278,7 @@ pub(crate) async fn file_report(
     connection: &mut PgConnection,
     room_id: &RoomId,
     report: &ReportEntry,
-    cap: usize,
+    cap: u32,
 ) -> Result<bool, RoomError> {
     let report_id = Uuid::parse_str(&report.report_id)
         .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
@@ -1273,7 +1290,7 @@ pub(crate) async fn file_report(
         .bind(room_id)
         .fetch_one(&mut *connection)
         .await?;
-    if count >= cap as i64 {
+    if count >= i64::from(cap) {
         let removed = sqlx::query(
             "DELETE FROM room_reports WHERE id IN (
                 SELECT id FROM room_reports WHERE room_id = $1 AND status <> 'open'
@@ -1391,34 +1408,81 @@ mod tests {
         assert!(RetentionConfig::parse(Some("400"), Some("365")).is_err());
     }
 
+    /// The migrated disposable database the ignored tests run against.
+    async fn database() -> PgPool {
+        PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap()
+    }
+
+    /// A saved account with this display name.
+    async fn account(pool: &PgPool, name: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
+            .bind(id)
+            .bind(format!("{id}@history.invalid"))
+            .bind(name)
+            .execute(pool)
+            .await
+            .unwrap();
+        id
+    }
+
+    /// A saved room of `owner`'s, named `prefix` and a fresh UUID.
+    async fn owned_room(pool: &PgPool, owner: Uuid, prefix: &str) -> RoomId {
+        let id = rid(&format!("{prefix}-{}", Uuid::new_v4()));
+        sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
+            .bind(&id)
+            .bind(owner)
+            .execute(pool)
+            .await
+            .unwrap();
+        id
+    }
+
+    /// Delete the accounts with the rooms they own; each room's history, reports
+    /// and invitations go with it.
+    async fn remove_accounts(pool: &PgPool, accounts: &[Uuid]) {
+        sqlx::query("DELETE FROM rooms WHERE owner_id = ANY($1)")
+            .bind(accounts)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = ANY($1)")
+            .bind(accounts)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    /// The owner kicking a fresh guest, as a history entry.
+    fn guest_kick(owner: &ParticipantId) -> ModerationEvent {
+        ModerationEvent::new(
+            ModerationAction::Kick,
+            Actor {
+                id: owner,
+                name: "Owner",
+            },
+            Target {
+                id: ParticipantId::random().into(),
+                name: "Guest",
+                authenticated: false,
+                ip: None,
+            },
+            None,
+            None,
+            None,
+        )
+    }
+
     #[tokio::test]
     #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
     async fn database_moderation_history_records_sanctions_and_answers_reports() {
-        let pool =
-            sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
-                .await
-                .unwrap();
-        let owner = Uuid::new_v4();
-        let member = Uuid::new_v4();
-        for (id, name) in [(owner, "Owner"), (member, "Maya")] {
-            sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-                .bind(id)
-                .bind(format!("{id}@history.invalid"))
-                .bind(name)
-                .execute(&pool)
-                .await
-                .unwrap();
-        }
-        let room_id = rid(&format!("history-{}", Uuid::new_v4()));
-        let other_room_id = rid(&format!("history-other-{}", Uuid::new_v4()));
-        for id in [&room_id, &other_room_id] {
-            sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
-                .bind(id)
-                .bind(owner)
-                .execute(&pool)
-                .await
-                .unwrap();
-        }
+        let pool = database().await;
+        let owner = account(&pool, "Owner").await;
+        let member = account(&pool, "Maya").await;
+        let room_id = owned_room(&pool, owner, "history").await;
+        let other_room_id = owned_room(&pool, owner, "history-other").await;
         let report = Uuid::new_v4();
         let foreign_report = Uuid::new_v4();
         for (id, room) in [(report, &room_id), (foreign_report, &other_room_id)] {
@@ -1694,17 +1758,172 @@ mod tests {
                 .unwrap();
         assert_eq!(receipts, 1);
 
-        for id in [&room_id, &other_room_id] {
-            sqlx::query("DELETE FROM rooms WHERE id=$1")
-                .bind(id)
-                .execute(&pool)
-                .await
-                .unwrap();
+        remove_accounts(&pool, &[owner, member]).await;
+    }
+
+    /// The room keeps its newest entries by time, whatever order they arrive in:
+    /// of 1,005 entries the three oldest arrive last, as when their times were
+    /// taken before slower transactions committed, and they give way themselves.
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn moderation_history_is_capped_without_a_count() {
+        let pool = database().await;
+        let owner = account(&pool, "Owner").await;
+        let room_id = owned_room(&pool, owner, "history-cap").await;
+        let owner_id = ParticipantId::from(owner);
+        let start = Utc::now() - chrono::Duration::hours(1);
+        let events: Vec<ModerationEvent> = (0..MAX_MODERATION_EVENTS + 5)
+            .map(|index| {
+                let mut event = guest_kick(&owner_id);
+                event.created_at = start + chrono::Duration::milliseconds(i64::from(index));
+                event
+            })
+            .collect();
+        for event in events[3..].iter().chain(&events[..3]) {
+            persist_event(&pool, &room_id, event).await.unwrap();
         }
-        sqlx::query("DELETE FROM users WHERE id = ANY($1)")
-            .bind(vec![owner, member])
+        let kept: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM moderation_events WHERE room_id = $1 ORDER BY created_at, id",
+        )
+        .bind(&room_id)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let newest: Vec<Uuid> = events[5..]
+            .iter()
+            .map(|event| Uuid::parse_str(&event.event_id).unwrap())
+            .collect();
+        assert_eq!(kept.len(), newest.len(), "the room keeps exactly its cap");
+        assert_eq!(
+            kept.iter()
+                .zip(&newest)
+                .position(|(kept, newest)| kept != newest),
+            None,
+            "the room kept an older entry instead of a newer one"
+        );
+        remove_accounts(&pool, &[owner]).await;
+    }
+
+    /// An entry this server cannot read is left out of the page, counted as a
+    /// database error and reported by the room's log handle, never by the room's
+    /// identifier.
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn undecodable_moderation_events_are_left_out_and_reported() {
+        use tracing::instrument::WithSubscriber;
+        let other_errors = || {
+            let mut metrics = String::new();
+            crate::db::append_error_metrics(&mut metrics);
+            metrics
+                .lines()
+                .find_map(|line| {
+                    line.strip_prefix("simplestchat_database_errors_total{kind=\"other\"} ")
+                })
+                .expect("the metrics report the other kind")
+                .parse::<u64>()
+                .unwrap()
+        };
+        let pool = database().await;
+        let owner = account(&pool, "Owner").await;
+        let room_id = owned_room(&pool, owner, "history-undecodable").await;
+        let readable = guest_kick(&ParticipantId::from(owner));
+        persist_event(&pool, &room_id, &readable).await.unwrap();
+        // An actor that is not a participant id, as an entry written before
+        // participant ids were UUIDs holds.
+        sqlx::query(
+            "INSERT INTO moderation_events (id, room_id, action, actor_id, actor_name,
+                 target_id, target_name, target_authenticated)
+             VALUES ($1, $2, 'kick', 'moderator-7', 'Moderator', 'guest-7', 'Guest', false)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(&room_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let errors = other_errors();
+        let capture = crate::security_canary_tests::Capture::default();
+        let events = list_events(&pool, &room_id, 0, 10)
+            .with_subscriber(capture.subscriber())
+            .await
+            .unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
+            [readable.event_id.as_str()]
+        );
+        assert_eq!(other_errors(), errors + 1);
+        let warnings: Vec<serde_json::Value> = capture
+            .records()
+            .into_iter()
+            .filter(|record| {
+                record["fields"]["message"] == "Moderation events could not be decoded"
+            })
+            .collect();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0]["level"], "WARN");
+        assert_eq!(warnings[0]["fields"]["room"], room_id.log_handle());
+        assert_eq!(warnings[0]["fields"]["undecodable"], 1);
+        assert!(!capture.text().contains(room_id.as_str()));
+        remove_accounts(&pool, &[owner]).await;
+    }
+
+    /// A report decision's entry says whether its target is an account: the
+    /// report keeps the target's participant id, an account's UUID, as text.
+    #[tokio::test]
+    #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+    async fn report_decisions_record_whether_the_target_is_an_account() {
+        let pool = database().await;
+        let owner = account(&pool, "Owner").await;
+        let member = account(&pool, "Maya").await;
+        let room_id = owned_room(&pool, owner, "history-decisions").await;
+        let owner_id = ParticipantId::from(owner);
+        let actor = Actor {
+            id: &owner_id,
+            name: "Owner",
+        };
+        for (target, name) in [
+            (ParticipantId::from(member), "Maya"),
+            (ParticipantId::random(), "Guest"),
+        ] {
+            let report = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO room_reports
+                     (id, room_id, reporter_id, reporter_name, target_participant_id, target_name,
+                      reason)
+                 VALUES ($1, $2, $3, 'Owner', $4, $5, 'spam')",
+            )
+            .bind(report)
+            .bind(&room_id)
+            .bind(owner_id)
+            .bind(target)
+            .bind(name)
             .execute(&pool)
             .await
             .unwrap();
+            let mut transaction = pool.begin().await.unwrap();
+            assert!(
+                resolve_report(
+                    &mut transaction,
+                    &room_id,
+                    report,
+                    ReportResolution::Dismissed,
+                    actor
+                )
+                .await
+                .unwrap()
+            );
+            transaction.commit().await.unwrap();
+        }
+        let events = list_events(&pool, &room_id, 0, 10).await.unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| (event.target_name.as_str(), event.target_authenticated))
+                .collect::<Vec<_>>(),
+            [("Guest", false), ("Maya", true)]
+        );
+        remove_accounts(&pool, &[owner, member]).await;
     }
 }
