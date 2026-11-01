@@ -234,6 +234,16 @@ pub(crate) async fn create_contact(
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 
+/// Accept `peer`'s pending request (`accept`), or end the pair's relationship:
+/// remove the contact, decline `peer`'s request or withdraw the caller's own.
+/// Both lock the two accounts in UUID order and recheck the caller's session.
+/// Accepting needs a request from `peer` made within the last 14 days while
+/// both accounts still allow contact, and is otherwise refused as unavailable.
+/// Ending marks the pair declined and returns whether anything changed; an
+/// already declined pair keeps its date. That date starts the pair's 30-day
+/// cooldown: until it has passed, `request_contact` stores no new request
+/// between the two accounts, from either side, and answers the requester as
+/// it answers any request.
 async fn change_contact(
     pool: &PgPool,
     claims: &Claims,

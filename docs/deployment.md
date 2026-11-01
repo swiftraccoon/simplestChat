@@ -465,6 +465,15 @@ and [development](development.md) for native build requirements.
 - Signed-in chat preferences, ignored accounts and saved-conversation read
   positions sync across devices. Guest-participant ignores are temporary.
   Device, layout, talk-mode and notification choices remain local to the browser.
+- Contacts pair two accounts explicitly: one sends a request with the other's
+  exact account identifier, and the other accepts it within 14 days. Removing a
+  contact, declining a request or withdrawing one starts a 30-day cooldown for
+  that pair: until 30 days after the removal, a new request from either account
+  gets the usual answer but stores nothing, so the other account sees no
+  request, and removing the pair again does not restart the period. A request
+  that goes unanswered holds the pair the same way for 30 days from when it was
+  sent. The period is fixed in the server, not a setting, so an accidental
+  removal cannot be undone sooner.
 - Private messages and SFU media are not application-layer end-to-end encrypted.
   DTLS/SRTP protects media hops, but the server terminates them and is inside the
   trust boundary.
