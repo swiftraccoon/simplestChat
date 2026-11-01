@@ -12,6 +12,28 @@ fn issuer_rule_names_the_stored_role_values_it_compares() {
 }
 
 #[test]
+fn unknown_invite_fields_are_rejected() {
+    let request: CreateRoomInviteRequest = serde_json::from_value(serde_json::json!(
+        {"role":"member","uses":1,"days":1}
+    ))
+    .unwrap();
+    assert_eq!(
+        (request.role, request.uses, request.days),
+        (Role::Member, Some(1), Some(1))
+    );
+    let refused = serde_json::from_value::<CreateRoomInviteRequest>(serde_json::json!(
+        {"role":"member","uses":1,"days":1,"extra":true}
+    ));
+    assert!(refused.is_err());
+    assert!(
+        refused
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field `extra`")
+    );
+}
+
+#[test]
 fn membership_query_accepts_only_the_optional_cursor() {
     for (uri, after) in [
         ("/api/rooms/memberships", None),

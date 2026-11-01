@@ -32,6 +32,50 @@ fn contact_preferences_match_private_message_optout_and_ignore() {
     assert_eq!(ordered_pair(own, peer), ordered_pair(peer, own));
 }
 
+/// The saved-room route reads its path as a `RoomId`: an identifier outside the
+/// room grammar is refused at extraction (400), before authentication and
+/// without repeating it, while a valid one reaches authentication (401).
+#[tokio::test]
+async fn saved_room_paths_are_room_ids() {
+    use axum::{
+        body::Body,
+        extract::ConnectInfo,
+        http::{Request, header},
+    };
+    use tower::ServiceExt;
+    let router = crate::signaling::fixtures::server_without_database()
+        .await
+        .router();
+    let put = |room: &str| {
+        let mut request = Request::put(format!("/api/auth/saved-rooms/{room}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"favorite":true}"#))
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(ConnectInfo(std::net::SocketAddr::from((
+                [127, 0, 0, 1],
+                40000,
+            ))));
+        request
+    };
+    for room in [
+        "room.name".to_owned(),
+        "a".repeat(crate::ids::MAX_ROOM_ID_LEN + 1),
+    ] {
+        let response = router.clone().oneshot(put(&room)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{room}");
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        assert!(!String::from_utf8_lossy(&body).contains(&room));
+    }
+    assert_eq!(
+        router.oneshot(put("lobby")).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+}
+
 async fn pool() -> PgPool {
     let url = std::env::var("TEST_DATABASE_URL").expect("migrated disposable TEST_DATABASE_URL");
     sqlx::postgres::PgPoolOptions::new()
@@ -190,7 +234,7 @@ async fn database_discovery_room_shortcuts_preserve_favorites_and_bound_recents(
     let bob = person(&pool, "Bob").await;
     let aid = account_id(&alice).unwrap();
     let bid = account_id(&bob).unwrap();
-    let private = format!("discovery-{}-private", Uuid::new_v4());
+    let private = rid(&format!("discovery-{}-private", Uuid::new_v4()));
     sqlx::query(
         "INSERT INTO rooms (id,owner_id,display_name,secret) VALUES ($1,$2,'Private',true)",
     )
@@ -237,8 +281,12 @@ async fn database_discovery_room_shortcuts_preserve_favorites_and_bound_recents(
     let counts: (i64,i64) = sqlx::query_as("SELECT count(*) FILTER (WHERE favorite),count(*) FILTER (WHERE NOT favorite) FROM saved_rooms WHERE user_id=$1")
         .bind(aid).fetch_one(&pool).await.unwrap();
     assert_eq!(counts, (1, MAX_RECENT));
-    save_favorite(&pool, &alice, &last, true).await.unwrap();
-    save_favorite(&pool, &alice, &last, false).await.unwrap();
+    save_favorite(&pool, &alice, &rid(&last), true)
+        .await
+        .unwrap();
+    save_favorite(&pool, &alice, &rid(&last), false)
+        .await
+        .unwrap();
     record_room_visit(&pool, aid, "nonexistent-ad-hoc-room")
         .await
         .unwrap();
@@ -318,13 +366,11 @@ async fn database_discovery_contact_and_favorite_caps_serialize_concurrent_write
             .await
             .unwrap();
         if index < 99 {
-            save_favorite(&pool, &alice, room.as_str(), true)
-                .await
-                .unwrap();
+            save_favorite(&pool, &alice, &room, true).await.unwrap();
         }
     }
-    let first_room = format!("discovery-cap-{aid}-99");
-    let second_room = format!("discovery-cap-{aid}-100");
+    let first_room = rid(&format!("discovery-cap-{aid}-99"));
+    let second_room = rid(&format!("discovery-cap-{aid}-100"));
     let (first, second) = tokio::join!(
         save_favorite(&pool, &alice, &first_room, true),
         save_favorite(&pool, &alice, &second_room, true)

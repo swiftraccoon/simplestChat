@@ -1,6 +1,7 @@
 use super::*;
 use crate::ids::fixtures::rid;
 use crate::ids::{MessageId, ParticipantId};
+use crate::signaling::fixtures::{account_server, jwt_secret, server_without_database};
 use axum::response::IntoResponse;
 
 #[test]
@@ -26,43 +27,6 @@ fn attachments_accept_bounded_unique_ids_and_sanitize_names() {
     );
     let png=base64::engine::general_purpose::STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCGUAAAAASUVORK5CYII=").unwrap();
     assert_eq!(content_type(&png), "image/png");
-}
-
-/// The JWT secret `account_server` validates bearer tokens with.
-fn jwt_secret() -> String {
-    "a".repeat(32)
-}
-
-/// A server with accounts configured over `pool`, on one media worker whose
-/// room manager has no database.
-async fn account_server(pool: PgPool) -> SignalingServer {
-    let mut config = crate::config::Config::for_tests();
-    config.auth.jwt_secret = Some(jwt_secret().into());
-    let mut media = crate::media::config::MediaConfig::default();
-    media.worker_config.num_workers = 1;
-    media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
-    let metrics = crate::metrics::ServerMetrics::new();
-    let manager = crate::room::RoomManager::new(
-        crate::room::ManagerSettings::default(),
-        media,
-        metrics.clone(),
-        None,
-    )
-    .await
-    .unwrap();
-    SignalingServer::new(Arc::new(manager), metrics, Some(pool), &config).unwrap()
-}
-
-/// `account_server` over a database that cannot be reached: the pool connects
-/// lazily to a closed port and is closed before any request, so any query
-/// fails as `PoolClosed` and answers 500. A 401 from this server therefore
-/// shows the refusal came before any database access.
-async fn server_without_database() -> SignalingServer {
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-    let pool =
-        PgPoolOptions::new().connect_lazy_with(PgConnectOptions::new().host("127.0.0.1").port(9));
-    pool.close().await;
-    account_server(pool).await
 }
 
 /// The status a refused handler call answers with.

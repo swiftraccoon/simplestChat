@@ -1349,3 +1349,49 @@ fn tuned_listener(
         }
     })
 }
+
+/// Servers for tests that drive the HTTP routes, on one media worker whose room
+/// manager has no database.
+#[cfg(test)]
+pub(crate) mod fixtures {
+    use super::SignalingServer;
+    use sqlx::PgPool;
+    use std::sync::Arc;
+
+    /// The JWT secret `account_server` validates bearer tokens with.
+    pub(crate) fn jwt_secret() -> String {
+        "a".repeat(32)
+    }
+
+    /// A server with accounts configured over `pool`, on one media worker whose
+    /// room manager has no database.
+    pub(crate) async fn account_server(pool: PgPool) -> SignalingServer {
+        let mut config = crate::config::Config::for_tests();
+        config.auth.jwt_secret = Some(jwt_secret().into());
+        let mut media = crate::media::config::MediaConfig::default();
+        media.worker_config.num_workers = 1;
+        media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
+        let metrics = crate::metrics::ServerMetrics::new();
+        let manager = crate::room::RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            media,
+            metrics.clone(),
+            None,
+        )
+        .await
+        .unwrap();
+        SignalingServer::new(Arc::new(manager), metrics, Some(pool), &config).unwrap()
+    }
+
+    /// `account_server` over a database that cannot be reached: the pool connects
+    /// lazily to a closed port and is closed before any request, so any query
+    /// fails as `PoolClosed` and answers 500. A 401 from this server therefore
+    /// shows the refusal came before any database access.
+    pub(crate) async fn server_without_database() -> SignalingServer {
+        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+        let pool = PgPoolOptions::new()
+            .connect_lazy_with(PgConnectOptions::new().host("127.0.0.1").port(9));
+        pool.close().await;
+        account_server(pool).await
+    }
+}

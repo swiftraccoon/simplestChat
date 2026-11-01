@@ -70,7 +70,11 @@ pub(crate) struct InviteCodeRequest {
     pub code: SecretString,
 }
 
+/// An admin's request for a room code: the role it grants, and its uses and
+/// days (1 and 7 when omitted). Any other field is refused, so a misspelt
+/// limit fails instead of quietly taking its default.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct CreateRoomInviteRequest {
     pub role: Role,
     pub uses: Option<i32>,

@@ -6,6 +6,7 @@ use super::{
     types::{AuthError, Claims},
 };
 use crate::{
+    ids::RoomId,
     room::api::{RoomListItem, RoomListRow, room_list_item},
     signaling::SignalingServer,
 };
@@ -408,7 +409,7 @@ async fn lock_room_account(
 async fn save_favorite(
     pool: &PgPool,
     claims: &Claims,
-    room: &str,
+    room: &RoomId,
     favorite: bool,
 ) -> Result<(), AuthError> {
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
@@ -462,17 +463,17 @@ async fn save_favorite(
     tx.commit().await.map_err(routes::database_error)
 }
 
+/// PUT /api/auth/saved-rooms/:id: star or unstar a room for the account. The
+/// path is a `RoomId`, so an identifier outside the room grammar is refused
+/// (400) when the request is extracted, before authentication.
 pub(crate) async fn save_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-    Path(room): Path<String>,
+    Path(room): Path<RoomId>,
     Json(request): Json<SaveRoomRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
-    if room.is_empty() || room.len() > 128 {
-        return Err(AuthError::InvalidInput("Room unavailable"));
-    }
     save_favorite(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
         &claims,
