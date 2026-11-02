@@ -197,7 +197,7 @@ impl Fixture {
                 )?;
             }
         }
-        require(expected.len() == 36)?;
+        require(expected.len() == super::super::sources::MIGRATIONS.len())?;
         let mut rows = BTreeMap::new();
         for line in std::str::from_utf8(&actual)
             .map_err(|_| Error::Refused)?

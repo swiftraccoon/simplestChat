@@ -3218,7 +3218,7 @@ The four-case launcher workflow selects the Rust outer entry
 `xtask ops-artifact maintain-runtime`; the previous Python controller remains an
 unchanged reference. The
 authenticated installed Ops binary now owns the explicit native guest role,
-with exactly 52 project source pins and 15 operational helper pins. Frozen Python
+with exactly 53 project source pins and 15 operational helper pins. Frozen Python
 still supplies Ops33, Ansible and operational helpers. The same 1,800-second
 outer limit and 120-second reserve apply,
 with a 510-second setup cap and 1,170 seconds required before GO.
@@ -3739,18 +3739,20 @@ the refusal case by comparison with the clean baseline. Those observations do
 not identify a unique failing Bash branch; the frozen launcher has silent checks
 that can share that exit status.
 
-The host fixture's guest DATA roster remains the 52 rendered-input source files
+The host fixture's guest DATA roster is the 53 rendered-input source files
 and 15 helper files. The new Rust host/controller implementation executes from the
 current authenticated Ops binary and is additionally bound by the expanded
-outer source catalogue; it is not interpreted from those 52 guest DATA files.
+outer source catalogue; it is not interpreted from those 53 guest DATA files.
 The migration case reconstructs a source-bound pre-035 generation: it seeds
 member and invitation rows, reverses both real role columns and validated
-constraints, and removes only the verified 035/036 ledger rows in one transaction.
-Independent reads require the exact source prefix, actual old data and checks
-before maintenance, then transformed data, both newly validated checks and the
-full source ledger afterward. The redemption role stays unchanged. This tests
-actual current migration execution against controlled older schema and data;
-it does not run a historical server. Ledger-only deletion is insufficient.
+constraints, drops `users.avatar_digest` (reversing 037) and removes the verified
+035–037 ledger rows, all in one transaction, so the ledger is the exact 1–34
+source prefix again. Independent reads require that prefix, actual old data and
+checks before maintenance, then transformed data, both newly validated checks and
+the full 37-row source ledger of the `post037` state afterward. The redemption
+role stays unchanged. This tests actual current migration execution against
+controlled older schema and data; it does not run a historical server.
+Ledger-only deletion is insufficient.
 
 The proxy case starts an actual legacy proxy using the exact historical
 Caddyfile from `51e70de6` and a count-checked removal of the asset-store mount.

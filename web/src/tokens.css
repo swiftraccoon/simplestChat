@@ -39,7 +39,7 @@
     --shadow-panel: none;
     --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.5);
     /* One chevron for every back and collapse control. */
-    --icon-chevron-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 5l-7 7 7 7'/%3E%3C/svg%3E");
+    --icon-chevron-left: url('/icons/chevron-left.svg');
     /* Shared stacking scale; values preserve the existing local stacking contexts. */
     --z-content: 1;
     --z-raised: 2;

@@ -423,7 +423,8 @@ class FixtureArchiveTests(unittest.TestCase):
             for fd in descriptors:
                 with self.assertRaises(OSError):
                     _ = os.fstat(fd)
-            self.assertEqual(len(descriptors), 42)
+            # One per packed member, the archive and the two destination directories.
+            self.assertEqual(len(descriptors), len(inputs.MEMBERS) + 3)
             self.assertIs(got.exception, primary)
 
     def test_member_read_error_beats_tar_close_and_closes_memory_owners(self) -> None:

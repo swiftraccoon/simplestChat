@@ -26,6 +26,8 @@ const thumbnail = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
   'base64',
 );
+// The signed-in account's picture comes the same way, from its profile's avatar route.
+const account = '5f0c1a2b-3c4d-4e5f-8a6b-7c8d9e0f1a2b';
 const rooms = Array.from({ length: 21 }, (_, index) => ({
   id: `layout-room-${index}`,
   display_name: index % 2 ? 'A welcoming room with a lengthy descriptive name' : 'Room'.repeat(24),
@@ -64,6 +66,7 @@ function productionAssets() {
   // Icons and the manifest are production assets too: Firefox fetches the touch icon as a
   // favicon candidate, and a request for any of them is never unexpected.
   for (const [name, type] of [
+    ['favicon.svg', 'image/svg+xml'],
     ['icon-192.png', 'image/png'],
     ['icon-512.png', 'image/png'],
     ['manifest.webmanifest', 'application/manifest+json'],
@@ -71,6 +74,14 @@ function productionAssets() {
   ])
     if (fs.existsSync(path.join(directory, name)))
       add(`/${name}`, path.join(directory, name), type);
+  // The stylesheet's icons are same-origin files: the content security policy admits no
+  // data: images.
+  const icons = path.join(directory, 'icons');
+  if (fs.existsSync(icons))
+    for (const entry of fs.readdirSync(icons, { withFileTypes: true })) {
+      if (!entry.isFile() || !/^[a-z0-9-]+\.svg$/.test(entry.name)) continue;
+      add(`/icons/${entry.name}`, path.join(icons, entry.name), 'image/svg+xml');
+    }
   // Self-hosted fonts as well.
   const fonts = path.join(directory, 'fonts');
   if (fs.existsSync(fonts))
@@ -471,12 +482,20 @@ async function run(env = process.env, runner = {}) {
                     conversations: [],
                   });
                 }
+                if (
+                  url.pathname === `/api/auth/profiles/${account}/avatar` &&
+                  request.method() === 'GET'
+                ) {
+                  assert.equal(signedIn, true, 'Guests must not request account pictures');
+                  assert.equal(url.search, '?v=0123456789abcdef', 'pictures are fetched by digest');
+                  return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
+                }
                 if (url.pathname.startsWith('/api/auth/profiles/') && request.method() === 'GET') {
                   assert.equal(signedIn, true, 'Guests must not request account profiles');
                   return json(200, {
-                    id: 'layout-owner',
+                    id: account,
                     display_name: 'Account'.repeat(12),
-                    avatar_url: null,
+                    avatar_url: `/api/auth/profiles/${account}/avatar?v=0123456789abcdef`,
                     bio: '',
                     profile_style: { color: null, style: 'accent' },
                   });
@@ -497,7 +516,7 @@ async function run(env = process.env, runner = {}) {
                       ? {
                           token: 'owned-layout-fixture',
                           user: {
-                            id: 'layout-owner',
+                            id: account,
                             email: 'layout@example.test',
                             display_name: 'Account'.repeat(12),
                           },
@@ -532,8 +551,12 @@ async function run(env = process.env, runner = {}) {
               () => document.querySelectorAll('#room-list .room-card').length === 20,
             );
             report.activeStep = `${name}-thumbnails-ready`;
-            await page.waitForFunction(() =>
-              [...document.images].every((image) => image.complete && image.naturalWidth > 0),
+            // A picture joins its card only once it loads: wait for every listed one.
+            await page.waitForFunction(
+              (pictured) =>
+                document.querySelectorAll('#room-list .room-card-image').length === pictured &&
+                [...document.images].every((image) => image.complete && image.naturalWidth > 0),
+              rooms.slice(0, 20).filter((room) => room.image_url).length,
             );
             report.activeStep = `${name}-auth-ready`;
             await page
@@ -541,6 +564,14 @@ async function run(env = process.env, runner = {}) {
               .waitFor({ state: 'visible' });
             assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
             if (signedIn) {
+              // The header shows the account's picture from its digest-named route.
+              report.activeStep = `${name}-avatar-ready`;
+              await page.waitForFunction((source) => {
+                const image = document.querySelector('#auth-avatar img');
+                return (
+                  image?.getAttribute('src') === source && image.complete && image.naturalWidth > 0
+                );
+              }, `/api/auth/profiles/${account}/avatar?v=0123456789abcdef`);
               // An account's saved rooms sit on the shelf under the toolbar, measured with the rest.
               report.activeStep = `${name}-saved-rooms-ready`;
               await page.waitForFunction(
@@ -687,7 +718,7 @@ async function run(env = process.env, runner = {}) {
   return report;
 }
 
-module.exports = { run, geometry, productionAssets };
+module.exports = { run, geometry, productionAssets, thumbnail };
 if (require.main === module) {
   try {
     require('./runner-cli.cjs').run('layout');

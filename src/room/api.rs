@@ -512,31 +512,10 @@ pub(crate) async fn owned_rooms(
     ))
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct RoomImageParams {
-    /// The current content digest; without it there is nothing to serve.
-    pub v: Option<String>,
-}
-
 fn not_found() -> RoomApiError {
     (StatusCode::NOT_FOUND, "Room image not found")
         .into_response()
         .into()
-}
-
-/// The bytes and type behind a stored raster data URL, as `validate_image_data_url` admitted it.
-fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
-    let (header, data) = image.split_once(',')?;
-    let content_type = match header {
-        "data:image/png;base64" => "image/png",
-        "data:image/jpeg;base64" => "image/jpeg",
-        "data:image/webp;base64" => "image/webp",
-        _ => return None,
-    };
-    let bytes = STANDARD.decode(data).ok()?;
-    (!bytes.is_empty() && bytes.len() <= account::MAX_IMAGE_BYTES).then_some((content_type, bytes))
 }
 
 /// `GET /api/rooms/:id/image?v=<version>`: the image a listing's `image_url`
@@ -549,19 +528,14 @@ fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
 pub(crate) async fn room_image(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
-    Query(params): Query<RoomImageParams>,
+    Query(params): Query<account::ImageVersion>,
 ) -> Result<Response, RoomApiError> {
-    let version = params.v.as_deref().unwrap_or_default();
     let Ok(room_id) = RoomId::new(id) else {
         return Err(not_found());
     };
-    if version.len() != 16
-        || !version
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
-    {
+    let Some(version) = params.digest() else {
         return Err(not_found());
-    }
+    };
     let _permit = server
         .acquire_profile_request()
         .await
@@ -579,24 +553,11 @@ pub(crate) async fn room_image(
     let Some(image) = image else {
         return Err(not_found());
     };
-    let (content_type, bytes) = decode_room_image(&image).ok_or_else(|| {
+    let (content_type, bytes) = account::decode_image_data_url(&image).ok_or_else(|| {
         warn!(room = %room_id.log_handle(), "Stored room image is not a raster data URL");
         not_found()
     })?;
-    Ok((
-        StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, content_type),
-            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
-            (
-                header::CONTENT_SECURITY_POLICY,
-                "default-src 'none'; sandbox",
-            ),
-            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
-        ],
-        bytes,
-    )
-        .into_response())
+    Ok(account::immutable_image(content_type, bytes))
 }
 
 /// PATCH /api/rooms/:id/identity — ownership is rechecked by the database mutation.
@@ -655,7 +616,7 @@ mod tests {
             "/api/rooms/lobby/image?v=0123456789abcdef"
         );
         let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-        let (content_type, bytes) = decode_room_image(image).unwrap();
+        let (content_type, bytes) = account::decode_image_data_url(image).unwrap();
         assert_eq!(content_type, "image/png");
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
         for rejected in [
@@ -664,7 +625,10 @@ mod tests {
             "data:image/png;base64,not base64!",
             "https://example.com/image.png",
         ] {
-            assert!(decode_room_image(rejected).is_none(), "{rejected}");
+            assert!(
+                account::decode_image_data_url(rejected).is_none(),
+                "{rejected}"
+            );
         }
         for (uri, parsed_version) in [
             (
@@ -678,7 +642,7 @@ mod tests {
             ),
             (format!("/api/rooms/lobby/image?v={version}&extra=1"), None),
         ] {
-            let parsed = Query::<RoomImageParams>::try_from_uri(&uri.parse().unwrap())
+            let parsed = Query::<account::ImageVersion>::try_from_uri(&uri.parse().unwrap())
                 .ok()
                 .map(|Query(params)| params.v);
             assert_eq!(parsed, parsed_version, "{uri}");

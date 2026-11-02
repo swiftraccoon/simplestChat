@@ -6,6 +6,10 @@ import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 
+// A profile names its picture by a same-origin path and a content digest, never inline bytes.
+const avatarPath =
+  '/api/auth/profiles/0f8fad5b-d9cb-469f-a165-70867728950e/avatar?v=0123456789abcdef';
+
 async function fixture({ rejectStaticQueries = false } = {}) {
   const dom = await uiFixture();
   const roomActions = dom.document.createElement('div');
@@ -59,7 +63,19 @@ async function fixture({ rejectStaticQueries = false } = {}) {
             ? []
             : { ...profile },
     upload: dom.ui.rasterUpload,
+    previews: [],
+    revokedPreviews: [],
   };
+  // A fresh upload previews through a blob URL: record what the picker creates and releases.
+  class PreviewURL extends URL {
+    static createObjectURL(blob) {
+      state.previews.push(blob);
+      return `blob:preview-${state.previews.length}`;
+    }
+    static revokeObjectURL(url) {
+      state.revokedPreviews.push(url);
+    }
+  }
   const request = async (...args) => {
     state.requests.push(args);
     return state.handle(...args);
@@ -206,7 +222,7 @@ async function fixture({ rejectStaticQueries = false } = {}) {
     globals: {
       document: dom.document,
       TextEncoder,
-      URL,
+      URL: PreviewURL,
       window: {
         location: { href: 'http://localhost:3000/?old=value#old-room' },
         confirm: () => true,
@@ -526,10 +542,42 @@ test("the own avatar paints its initial on the name tone at once, then the profi
   const picture = deferred();
   f.state.handle = () => picture.promise;
   f.community.decorateOwnAvatar(pictured, 'account-a', 'alice example');
-  picture.resolve({ ...f.profile, avatar_url: 'data:image/jpeg;base64,YQ==' });
+  picture.resolve({ ...f.profile, avatar_url: avatarPath });
   await flush();
-  assert.equal(pictured.children[0].tagName, 'IMG');
-  assert.equal(pictured.children[0].className, 'account-avatar');
+  assert.equal(pictured.textContent, 'A', 'the initial stays while the picture loads');
+  const image = f.created.findLast((node) => node.tagName === 'IMG');
+  assert.equal(image.src, avatarPath);
+  image.emit('load');
+  assert.equal(pictured.children[0], image);
+  assert.equal(image.className, 'account-avatar');
+});
+
+test('an avatar keeps its initial when its picture fails, and a superseded picture never lands', async () => {
+  const f = await fixture();
+  f.state.handle = async () => ({ ...f.profile, avatar_url: avatarPath });
+  const pictures = () =>
+    f.created.filter((node) => node.tagName === 'IMG' && node.src === avatarPath);
+  const roster = f.ui.el('div', 'A');
+  const own = f.ui.el('span');
+  f.document.body.append(roster, own);
+  f.community.decorateAvatar(roster, 'account-a', true);
+  f.community.decorateOwnAvatar(own, 'account-a', 'alice example');
+  await flush();
+  assert.equal(pictures().length, 2);
+  for (const picture of pictures()) picture.emit('error');
+  assert.equal(roster.textContent, 'A');
+  assert.equal(own.textContent, 'A');
+  assert.equal(roster.querySelector('img'), null);
+  assert.equal(own.querySelector('img'), null);
+  const [stale] = pictures();
+  f.community.decorateAvatar(roster, 'account-a', true);
+  await flush();
+  const current = pictures().at(-1);
+  assert.notEqual(current, stale);
+  stale.emit('load');
+  assert.equal(roster.textContent, 'A', 'a newer decoration owns the node');
+  current.emit('load');
+  assert.equal(roster.children[0], current);
 });
 
 test('avatars decorate connected authenticated nodes only and retain text for guests', async () => {
@@ -547,10 +595,14 @@ test('avatars decorate connected authenticated nodes only and retain text for gu
   f.community.decorateAvatar(live, 'account-a', true);
   f.community.decorateAvatar(removed, 'account-a', true);
   removed.remove();
-  pending.resolve({ ...f.profile, avatar_url: 'data:image/jpeg;base64,YQ==' });
+  pending.resolve({ ...f.profile, avatar_url: avatarPath });
   await flush();
   assert.equal(f.state.requests.length, 1, 'profile lookups should be shared');
-  assert.equal(live.children[0].tagName, 'IMG');
+  const images = f.created.filter((node) => node.tagName === 'IMG');
+  assert.equal(images.length, 1, 'a disconnected node starts no picture');
+  assert.equal(live.textContent, 'A', 'the initial stays while the picture loads');
+  images[0].emit('load');
+  assert.equal(live.children[0], images[0]);
   assert.equal(live.children[0].alt, '');
   assert.equal(removed.textContent, 'A');
   assert.equal(guest.textContent, 'Guest');
@@ -563,7 +615,7 @@ test('closing a profile while it loads prevents detached content from being rend
   const opening = f.community.showProfile('account-a');
   const view = dialog(f, 'Profile');
   view.close();
-  pending.resolve({ ...f.profile, avatar_url: 'data:image/jpeg;base64,YQ==' });
+  pending.resolve({ ...f.profile, avatar_url: avatarPath });
   await opening;
   assert.equal(view.querySelectorAll('img').length, 0);
   assert.equal(view.querySelectorAll('h3').length, 0);
@@ -589,7 +641,7 @@ test('image removal wins over a pending upload and cannot be undone by its late 
   const pending = deferred();
   f.state.upload = () => pending.promise;
   const error = f.ui.el('p');
-  const picker = f.community.imagePicker('data:image/jpeg;base64,YQ==', error);
+  const picker = f.community.imagePicker(avatarPath, error);
   const file = picker.wrapper.querySelectorAll('input')[0];
   file.files = [{ type: 'image/png', size: 1024 }];
   file.emit('change');
@@ -600,18 +652,70 @@ test('image removal wins over a pending upload and cannot be undone by its late 
   assert.equal(picker.value(), null);
   assert.equal(picker.wrapper.querySelectorAll('img')[0].hidden, true);
   assert.equal(file.disabled, false);
+  assert.equal(f.state.previews.length, 0, 'a superseded upload never gets a preview');
+});
+
+test('a fresh upload previews through a blob URL released once its image loads or fails', async () => {
+  const f = await fixture();
+  const uploads = [];
+  f.state.upload = () => {
+    uploads.push(deferred());
+    return uploads.at(-1).promise;
+  };
+  const picker = f.community.imagePicker(avatarPath, f.ui.el('p'));
+  const preview = picker.wrapper.querySelectorAll('img')[0];
+  const file = picker.wrapper.querySelectorAll('input')[0];
+  assert.equal(preview.src, avatarPath, 'the saved picture shows from its endpoint path');
+  const choose = async (picture) => {
+    file.files = [{ type: 'image/png', size: 1024 }];
+    file.emit('change');
+    uploads.at(-1).resolve(picture);
+    await flush();
+  };
+  await choose('data:image/jpeg;base64,YWJj');
+  assert.equal(preview.src, 'blob:preview-1', 'the upload shows from its bytes, never a data URL');
+  assert.equal(preview.hidden, false);
+  assert.equal(f.state.previews[0].type, 'image/jpeg');
+  assert.deepEqual([...new Uint8Array(await f.state.previews[0].arrayBuffer())], [97, 98, 99]);
+  assert.equal(
+    picker.change(),
+    'data:image/jpeg;base64,YWJj',
+    'the server still receives the upload',
+  );
+  assert.deepEqual(f.state.revokedPreviews, []);
+  preview.emit('load');
+  assert.deepEqual(f.state.revokedPreviews, ['blob:preview-1']);
+  await choose('data:image/png;base64,YQ==');
+  preview.emit('error');
+  assert.deepEqual(f.state.revokedPreviews, ['blob:preview-1', 'blob:preview-2']);
+  await choose('data:image/webp;base64,Yg==');
+  await choose('data:image/jpeg;base64,Yw==');
+  assert.deepEqual(
+    f.state.revokedPreviews,
+    ['blob:preview-1', 'blob:preview-2', 'blob:preview-3'],
+    'a replaced preview is released at once',
+  );
+  action(picker.wrapper, 'Remove image').click();
+  assert.equal(preview.hidden, true);
+  assert.deepEqual(
+    f.state.revokedPreviews,
+    ['blob:preview-1', 'blob:preview-2', 'blob:preview-3', 'blob:preview-4'],
+    'a removed preview is released at once',
+  );
+  preview.emit('load');
+  assert.equal(f.state.revokedPreviews.length, 4, 'a late event releases nothing twice');
 });
 
 test('invalid uploads preserve the current image and display the validation failure safely', async () => {
   const f = await fixture();
   const error = f.ui.el('p');
-  const picker = f.community.imagePicker('data:image/jpeg;base64,YQ==', error);
+  const picker = f.community.imagePicker(avatarPath, error);
   f.document.body.append(error, picker.wrapper);
   const file = picker.wrapper.querySelectorAll('input')[0];
   file.files = [{ type: 'image/svg+xml', size: 100 }];
   file.emit('change');
   await flush();
-  assert.equal(picker.value(), 'data:image/jpeg;base64,YQ==');
+  assert.equal(picker.value(), avatarPath);
   assert.match(error.textContent, /Choose a PNG, JPEG or WebP/);
   assert.equal(error.hidden, false);
   assert.equal(file.disabled, false);
@@ -812,14 +916,39 @@ test('Profile saves the separate hovercard appearance and updates its live name 
   action(view.body, 'Save profile').click();
   await flush();
   const request = f.state.requests.find((entry) => entry[2] === 'PATCH');
-  assert.deepEqual(request[3], {
-    display_name: 'Changed account name',
-    bio: '',
-    avatar_url: null,
-    profile_style: { color: 'violet', style: 'text' },
-  });
+  assert.deepEqual(
+    request[3],
+    {
+      display_name: 'Changed account name',
+      bio: '',
+      profile_style: { color: 'violet', style: 'text' },
+    },
+    'an untouched picture is kept by omitting avatar_url',
+  );
   assert.equal('chat_style' in request[3], false);
   assert.equal(f.state.updated.length, 1);
+});
+
+test('a profile save sends the avatar only after an upload or a removal', async () => {
+  const f = await fixture();
+  f.profile.avatar_url = avatarPath;
+  const saved = async (change) => {
+    const view = await accountScreen(f, 'profile');
+    change(view.body.querySelector('.image-picker'));
+    await flush();
+    action(view.body, 'Save profile').click();
+    await flush();
+    return f.state.requests.filter((entry) => entry[2] === 'PATCH').at(-1)[3];
+  };
+  const replaced = await saved((picker) => {
+    const file = picker.querySelectorAll('input')[0];
+    file.files = [{ type: 'image/png', size: 1024 }];
+    file.emit('change');
+  });
+  assert.equal(replaced.avatar_url, 'data:image/jpeg;base64,YQ==');
+  const removed = await saved((picker) => action(picker, 'Remove image').click());
+  assert.equal(removed.avatar_url, null);
+  assert.equal(f.state.updated.length, 2);
 });
 
 test('reopening a hovercard fetches current profile appearance without retaining stale cache', async () => {

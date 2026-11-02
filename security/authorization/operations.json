@@ -298,6 +298,19 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/auth/profiles/{id}/avatar",
+      "handler": "crate::auth::account::profile_avatar",
+      "policy": "public-profile",
+      "body": null,
+      "unauthenticated_status": 404,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary",
+        "avatar_responses_are_immutable_and_sandboxed",
+        "stale_digests_are_not_found"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/auth/recovery/key",
       "handler": "crate::auth::account::create_recovery_key",

@@ -332,11 +332,14 @@ export class DirectoryScreen {
     const info = document.createElement('div');
     info.className = 'room-card-info';
     if (safeRasterUrl(room.image_url)) {
+      // The tone and initial stand in until the picture loads, and stay if it fails.
       const image = document.createElement('img');
-      image.src = room.image_url;
       image.alt = '';
       image.className = 'room-card-image';
-      card.append(image);
+      image.addEventListener('load', () => card.insertBefore(image, card.firstChild), {
+        once: true,
+      });
+      image.src = room.image_url;
     }
 
     const nameRow = document.createElement('div');

@@ -16,13 +16,16 @@ use super::{
     sessions::lock_current_session,
     types::{AuthError, Claims},
 };
+use crate::ids::UserId;
+use crate::room::refusal::Refusal;
 use crate::secret::SecretString;
 use crate::signaling::protocol::{ChatStyle, deserialize_appearance_style};
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
     Extension, Json,
-    extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use base64::{
     Engine as _,
@@ -30,6 +33,7 @@ use base64::{
 };
 use rand::{TryRng, rngs::SysRng};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
@@ -37,33 +41,102 @@ pub(crate) const MAX_IMAGE_BYTES: usize = 128 * 1024;
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const RECOVERY_PREFIX: &str = "sc-recovery-";
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize)]
 pub(crate) struct AccountProfile {
     pub id: Uuid,
     pub email: String,
     pub display_name: String,
+    /// A same-origin path naming the current picture by a digest of its content
+    /// (`profile_avatar_url`), or `null`; never the image bytes themselves.
     pub avatar_url: Option<String>,
     pub bio: String,
-    #[sqlx(json)]
     pub profile_style: ChatStyle,
     pub recovery_enabled: bool,
 }
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize)]
 pub(crate) struct PublicProfile {
     pub id: Uuid,
     pub display_name: String,
+    /// A same-origin path naming the current picture by a digest of its content
+    /// (`profile_avatar_url`), or `null`; never the image bytes themselves.
     pub avatar_url: Option<String>,
     pub bio: String,
-    #[sqlx(json)]
     pub profile_style: ChatStyle,
+}
+
+/// A profile as every profile query selects it: the picture by its digest
+/// (`users.avatar_digest`), which the conversion renders as the link.
+#[derive(FromRow)]
+struct PublicProfileRow {
+    id: UserId,
+    display_name: String,
+    avatar_digest: Option<String>,
+    bio: String,
+    #[sqlx(json)]
+    profile_style: ChatStyle,
+}
+
+/// The signed-in account's own profile: the public columns and its private ones.
+#[derive(FromRow)]
+struct AccountProfileRow {
+    #[sqlx(flatten)]
+    public: PublicProfileRow,
+    email: String,
+    recovery_enabled: bool,
+}
+
+impl From<PublicProfileRow> for PublicProfile {
+    fn from(row: PublicProfileRow) -> Self {
+        Self {
+            avatar_url: row
+                .avatar_digest
+                .as_deref()
+                .map(|digest| profile_avatar_url(row.id, digest)),
+            id: row.id.into(),
+            display_name: row.display_name,
+            bio: row.bio,
+            profile_style: row.profile_style,
+        }
+    }
+}
+
+impl From<AccountProfileRow> for AccountProfile {
+    fn from(row: AccountProfileRow) -> Self {
+        let public = PublicProfile::from(row.public);
+        Self {
+            id: public.id,
+            email: row.email,
+            display_name: public.display_name,
+            avatar_url: public.avatar_url,
+            bio: public.bio,
+            profile_style: public.profile_style,
+            recovery_enabled: row.recovery_enabled,
+        }
+    }
+}
+
+/// A profile's `avatar_url`: `GET /api/auth/profiles/{id}/avatar?v=<digest>`,
+/// which the browser may cache for a year because the endpoint answers only
+/// the account's current digest.
+pub(crate) fn profile_avatar_url(id: UserId, digest: &str) -> String {
+    format!("/api/auth/profiles/{id}/avatar?v={digest}")
+}
+
+/// The version a stored picture's link carries: the first 16 hex characters of
+/// the SHA-256 of the stored text. Migration 037 backfilled `users.avatar_digest`
+/// with the same rule in SQL, and a test holds the two together.
+pub(crate) fn avatar_digest(data_url: &str) -> String {
+    hex::encode(&Sha256::digest(data_url.as_bytes())[..8])
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct UpdateProfileRequest {
     pub display_name: String,
-    pub avatar_url: Option<String>,
+    /// Omitted keeps the current picture, `null` removes it, a data URL replaces it.
+    #[serde(default, deserialize_with = "present")]
+    pub avatar_url: Option<Option<String>>,
     pub bio: String,
     #[serde(deserialize_with = "deserialize_appearance_style")]
     pub profile_style: ChatStyle,
@@ -618,9 +691,72 @@ pub(crate) fn validate_image_data_url(value: Option<&str>) -> Result<(), AuthErr
     Ok(())
 }
 
+/// The bytes and type behind a stored raster data URL, as `validate_image_data_url`
+/// admitted it. The type comes only from the PNG, JPEG or WebP prefix of the
+/// stored text, never from the bytes or the request.
+pub(crate) fn decode_image_data_url(image: &str) -> Option<(&'static str, Vec<u8>)> {
+    let (header, data) = image.split_once(',')?;
+    let content_type = match header {
+        "data:image/png;base64" => "image/png",
+        "data:image/jpeg;base64" => "image/jpeg",
+        "data:image/webp;base64" => "image/webp",
+        _ => return None,
+    };
+    let bytes = STANDARD.decode(data).ok()?;
+    (!bytes.is_empty() && bytes.len() <= MAX_IMAGE_BYTES).then_some((content_type, bytes))
+}
+
+/// The query of an image link that names its picture by content digest.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ImageVersion {
+    /// The current content digest; without it there is nothing to serve.
+    pub v: Option<String>,
+}
+
+impl ImageVersion {
+    /// The digest when it is spelled like one: 16 lowercase hex characters.
+    pub(crate) fn digest(&self) -> Option<&str> {
+        self.v.as_deref().filter(|version| {
+            version.len() == 16
+                && version
+                    .bytes()
+                    .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        })
+    }
+}
+
+/// A picture answered under the digest its link names: cacheable for a year,
+/// since another picture gets another digest, and served with the download
+/// sandbox policy and no type sniffing, so its bytes never run as a document.
+pub(crate) fn immutable_image(content_type: &'static str, bytes: Vec<u8>) -> Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; sandbox",
+            ),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
 async fn load_profile(pool: &PgPool, id: Uuid) -> Result<AccountProfile, AuthError> {
-    sqlx::query_as("SELECT id, email, display_name, avatar_url, bio, profile_style, recovery_key_hash IS NOT NULL AS recovery_enabled FROM users WHERE id = $1")
-        .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or(AuthError::UserNotFound)
+    let row: Option<AccountProfileRow> = sqlx::query_as(
+        "SELECT id, email, display_name, avatar_digest, bio, profile_style,
+                recovery_key_hash IS NOT NULL AS recovery_enabled
+         FROM users WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(routes::database_error)?;
+    row.map(AccountProfile::from).ok_or(AuthError::UserNotFound)
 }
 
 pub(crate) async fn get_profile(
@@ -648,35 +784,82 @@ pub(crate) async fn update_profile(
     if !validate_text(&request.bio, 1024, true) {
         return Err(profile_error());
     }
-    validate_image_data_url(request.avatar_url.as_deref())?;
+    // `None` keeps the stored picture and its digest; otherwise both are replaced
+    // together, cleared by `null`.
+    let change = request.avatar_url.as_ref().map(Option::as_deref);
+    let picture = change.flatten();
+    validate_image_data_url(picture)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    let profile: AccountProfile = sqlx::query_as(
-        "UPDATE users SET display_name = $2, avatar_url = $3, bio = $4, profile_style = $6, updated_at = now()
+    let row: AccountProfileRow = sqlx::query_as(
+        "UPDATE users SET display_name = $2, bio = $4, profile_style = $6,
+                avatar_url = CASE WHEN $7 THEN $3 ELSE avatar_url END,
+                avatar_digest = CASE WHEN $7 THEN $8 ELSE avatar_digest END,
+                updated_at = now()
          WHERE id = $1 AND auth_version = $5
-         RETURNING id, email, display_name, avatar_url, bio, profile_style, recovery_key_hash IS NOT NULL AS recovery_enabled",
+         RETURNING id, email, display_name, avatar_digest, bio, profile_style,
+                   recovery_key_hash IS NOT NULL AS recovery_enabled",
     )
-    .bind(id).bind(request.display_name.trim()).bind(request.avatar_url).bind(request.bio).bind(claims.auth_version).bind(sqlx::types::Json(request.profile_style))
-    .fetch_optional(pool).await.map_err(routes::database_error)?
+    .bind(id)
+    .bind(request.display_name.trim())
+    .bind(picture)
+    .bind(request.bio)
+    .bind(claims.auth_version)
+    .bind(sqlx::types::Json(request.profile_style))
+    .bind(change.is_some())
+    .bind(picture.map(avatar_digest))
+    .fetch_optional(pool)
+    .await
+    .map_err(routes::database_error)?
     .ok_or(AuthError::InvalidToken)?;
-    Ok((routes::no_store_headers(), Json(profile)))
+    Ok((routes::no_store_headers(), Json(row.into())))
 }
 
 pub(crate) async fn public_profile(
     State(server): State<SignalingServer>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<UserId>,
 ) -> Result<(HeaderMap, Json<PublicProfile>), AuthError> {
     let _permit = server.acquire_profile_request().await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let profile = sqlx::query_as(
-        "SELECT id, display_name, avatar_url, bio, profile_style FROM users WHERE id = $1",
+    let row: PublicProfileRow = sqlx::query_as(
+        "SELECT id, display_name, avatar_digest, bio, profile_style FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
     .await
     .map_err(routes::database_error)?
     .ok_or(AuthError::UserNotFound)?;
-    Ok((routes::no_store_headers(), Json(profile)))
+    Ok((routes::no_store_headers(), Json(row.into())))
+}
+
+/// `GET /api/auth/profiles/{id}/avatar?v=<digest>`: the picture a profile's
+/// `avatar_url` names. Like the public profile that names it, it needs no
+/// sign-in and is metered by the profile address budget and media lane. Only
+/// the account's current digest answers, so the response may be cached for a
+/// year; another digest, an account without a picture or an unknown account is
+/// a 404, and a malformed digest is refused before the lane or the database.
+pub(crate) async fn profile_avatar(
+    State(server): State<SignalingServer>,
+    Path(id): Path<UserId>,
+    Query(params): Query<ImageVersion>,
+) -> Result<Response, AuthError> {
+    let not_found = || AuthError::Refused(Refusal::NotFound("Avatar not found".into()));
+    let digest = params.digest().ok_or_else(not_found)?;
+    let _permit = server.acquire_profile_request().await?;
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let picture: Option<Option<String>> =
+        sqlx::query_scalar("SELECT avatar_url FROM users WHERE id = $1 AND avatar_digest = $2")
+            .bind(id)
+            .bind(digest)
+            .fetch_optional(pool)
+            .await
+            .map_err(routes::database_error)?;
+    let picture = picture.flatten().ok_or_else(not_found)?;
+    let (content_type, bytes) = decode_image_data_url(&picture).ok_or_else(|| {
+        tracing::warn!("Stored avatar is not a raster data URL");
+        not_found()
+    })?;
+    Ok(immutable_image(content_type, bytes))
 }
 
 /// Checks the signed-in account's current password and returns the stored hash it

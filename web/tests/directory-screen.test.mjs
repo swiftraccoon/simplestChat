@@ -94,7 +94,9 @@ async function fixture() {
         '../ui': {
           api,
           ApiError,
-          safeRasterUrl: () => false,
+          safeRasterUrl: (value) =>
+            typeof value === 'string' &&
+            /^\/api\/rooms\/[a-z-]+\/image\?v=[0-9a-f]{16}$/.test(value),
           el: (tag, text, className) => {
             const node = dom.document.createElement(tag);
             if (text !== undefined) node.textContent = text;
@@ -237,6 +239,27 @@ test('a newer directory read owns rendering even when an aborted read completes 
   f.screen.dispose();
   cards[0].click();
   assert.deepEqual(f.joins, ['new', 'new']);
+});
+
+test('a room picture replaces the card placeholder only once it loads, and a failed one leaves it', async () => {
+  const f = await fixture();
+  f.api.rooms = async () =>
+    ['pictured', 'broken'].map((id) => ({
+      ...room(id),
+      image_url: `/api/rooms/${id}/image?v=0123456789abcdef`,
+    }));
+  await f.screen.load();
+  const [pictured, broken] = f.elements.roomList.querySelectorAll('.room-card');
+  const images = f.created.filter((node) => node.tagName === 'IMG');
+  assert.deepEqual(
+    images.map((image) => image.src),
+    ['/api/rooms/pictured/image?v=0123456789abcdef', '/api/rooms/broken/image?v=0123456789abcdef'],
+  );
+  assert.equal(pictured.querySelector('.room-card-image'), null, 'the placeholder shows first');
+  images[0].emit('load');
+  assert.equal(pictured.children[0], images[0]);
+  images[1].emit('error');
+  assert.equal(broken.querySelector('.room-card-image'), null, 'a failed picture leaves it');
 });
 
 test('directory results and favorite controls belong to the account that requested them', async () => {

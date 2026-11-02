@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { productionAssets } = require('./homepage-layout.cjs');
+const { productionAssets, thumbnail } = require('./homepage-layout.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
 const { mediaLayout } = require('./media-layout.cjs');
@@ -16,6 +16,9 @@ const playwright = require('playwright');
 
 const origin = 'http://127.0.0.1:39879';
 const automaticStyle = { color: null, style: 'accent' };
+// The signed-in account's profile names its picture by a same-origin route and digest.
+const fixtureAccount = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const fixtureAvatar = `/api/auth/profiles/${fixtureAccount}/avatar`;
 const capabilities = {
   version: 1,
   accounts: true,
@@ -173,7 +176,7 @@ async function run(runner = {}) {
     const profileResponses = new Map();
     const profileWaiters = new Map();
     let account = signedIn
-      ? { id: 'fixture-account', email: 'fixture@example.test', display_name: 'Fixture owner' }
+      ? { id: fixtureAccount, email: 'fixture@example.test', display_name: 'Fixture owner' }
       : null;
     await context.routeWebSocket('**/ws', async (owned) => {
       connections++;
@@ -291,6 +294,10 @@ async function run(runner = {}) {
         if (holdTicket) return;
         return json({ ticket: 'a'.repeat(43), expires_in: 30 });
       }
+      if (url.pathname === fixtureAvatar) {
+        assert.equal(url.search, '?v=0123456789abcdef', 'Pictures are fetched by their digest');
+        return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
+      }
       if (url.pathname === '/api/auth/profiles/local-fixture')
         return json({
           id: 'local-fixture',
@@ -381,14 +388,16 @@ async function run(runner = {}) {
         });
       }
       // The header avatar reads the account's own public profile.
-      if (url.pathname.startsWith('/api/auth/profiles/'))
+      if (url.pathname.startsWith('/api/auth/profiles/')) {
+        const id = decodeURIComponent(url.pathname.slice('/api/auth/profiles/'.length));
         return json({
-          id: decodeURIComponent(url.pathname.slice('/api/auth/profiles/'.length)),
+          id,
           display_name: account?.display_name ?? 'Fixture account',
-          avatar_url: null,
+          avatar_url: id === fixtureAccount ? `${fixtureAvatar}?v=0123456789abcdef` : null,
           bio: '',
           profile_style: { color: null, style: 'accent' },
         });
+      }
       throw new Error(`Unexpected fixture path ${url.pathname}`);
     });
     const page = await context.newPage();
@@ -908,15 +917,15 @@ async function run(runner = {}) {
       await superseded.context.close();
 
       const signedOut = await fixture({ signedIn: true });
-      await signedOut.page.evaluate(() => {
+      await signedOut.page.evaluate((account) => {
         for (const [key, value] of [
           ['displayName', 'Private label'],
           ['simplestchat.capturePreferences', '{"microphoneId":"private-device"}'],
-          ['simplestchat.chat.v1.fixture-account', '{"ignored":["private-contact"]}'],
+          [`simplestchat.chat.v1.${account}`, '{"ignored":["private-contact"]}'],
           ['unrelated-app', 'keep'],
         ])
           localStorage.setItem(key, value);
-      });
+      }, fixtureAccount);
       // Sign-out clears the current document before reloading it. Read storage only
       // after the replacement document loads, even if the old UI already looks signed out.
       await Promise.all([signedOut.page.waitForEvent('domcontentloaded'), signOut(signedOut.page)]);

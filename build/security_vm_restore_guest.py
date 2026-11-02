@@ -42,7 +42,6 @@ MIN_SOURCE_PINS = 7
 MAX_SOURCE_PINS = 100
 MAX_SEED_READY_ATTEMPTS = 60
 FIXED_COMMANDS = 26
-MAX_COMMANDS = 36 + MAX_SEED_READY_ATTEMPTS + FIXED_COMMANDS
 PIDS = 64
 NANO_CPUS = 500000000
 SESSION_FAMILY_VERSION = 22
@@ -101,6 +100,7 @@ COMMIT;"""
 if __name__ == "__main__":
     sys.path[:0] = [str(ROOT), str(LIBRARY)]
 import security_vm_ops_guest as ops  # noqa: E402 -- Original root-staged imports.
+import security_vm_restore_inputs as inputs  # noqa: E402 -- Staged beside the guest.
 import security_vm_stage_guest as stage  # noqa: E402 -- Original root-staged imports.
 
 # isort: split
@@ -112,6 +112,10 @@ from runtime_profile import validate_environment_names  # noqa: E402 -- Fixed tr
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from typing import BinaryIO
+
+# One SQL command per packaged migration, the bounded seed readiness probes and
+# the fixed steps; the packaged migration list is the input archive's own.
+MAX_COMMANDS = len(inputs.MIGRATIONS) + MAX_SEED_READY_ATTEMPTS + FIXED_COMMANDS
 
 
 def require(value: object) -> None:
@@ -1084,7 +1088,7 @@ CREATE TABLE public._sqlx_migrations(version BIGINT PRIMARY KEY,
                 + ("COMMIT;" if transactional else "")
             )
             selected[str(version)] = checksum
-        require(set(packaged) == {str(i) for i in range(1, 37)})
+        require(set(packaged) == {str(i) for i in range(1, len(inputs.MIGRATIONS) + 1)})
         _ = self.sql(
             PRE_022_GRANTS
             if historical

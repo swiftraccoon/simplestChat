@@ -59,7 +59,7 @@ impl Fixture {
         result
     }
 
-    /// Independently observe actual transformed data/checks and full source36.
+    /// Independently observe actual transformed data/checks and full source37.
     /// The caller has already frozen and validated the tested operation epoch.
     pub(in super::super) async fn host_migration_observe(
         &mut self,
@@ -74,7 +74,7 @@ impl Fixture {
             let bytes = self
                 .sql(ctx, "host-migration-after", &migration::observation_sql())
                 .await?;
-            let observed = migration_observation(&sources, &bytes, Generation::After036)?;
+            let observed = migration_observation(&sources, &bytes, Generation::After037)?;
             ctx.check()?;
             Ok(observed)
         }

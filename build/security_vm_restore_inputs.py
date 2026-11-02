@@ -57,6 +57,7 @@ MIGRATIONS = (
     "migrations/034_room_image_version.sql",
     "migrations/035_role_numbering.sql",
     "migrations/036_validate_role_numbering.sql",
+    "migrations/037_users_avatar_digest.sql",
 )
 MEMBERS = (
     "monitoring-schema.sql",

@@ -16,6 +16,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | Browser method | HTTP route | Successful result |
 | --- | --- | --- |
 | `publicProfile` | `GET /api/auth/profiles/:id` | `PublicProfile` |
+| (`<img>`) | `GET /api/auth/profiles/:id/avatar?v=<digest>` | The picture a profile's `avatar_url` names; `404` without the exact current digest |
 | `accountProfile` | `GET /api/auth/profile` | `AccountProfile` |
 | `accountSessions` | `GET /api/auth/sessions` | `AccountSession[]`: nonsecret ID, current marker, sign-in/refresh/expiry timestamps |
 | `revokeSession` | `DELETE /api/auth/sessions/:id` | `204`, no body; revokes only an owned session |
@@ -321,6 +322,19 @@ public profiles, not with the room API allowance a directory page spends on its
 listing. `updateRoomIdentity` sends `image_url` only to change it: omitted keeps
 the current image, `null` removes it and a raster data URL (PNG, JPEG or WebP,
 at most 128 KiB and 2048 × 2048) replaces it.
+A profile never carries image bytes either: `avatar_url` is the same-origin path
+`/api/auth/profiles/:id/avatar?v=<digest>`, where the digest is the stored
+`users.avatar_digest` (written with the picture), the first 16 hex characters of
+the SHA-256 of the stored data URL. Like the public profile that names it, the
+endpoint needs no sign-in and is metered with public profiles; it answers only
+the account's current digest, with the picture's own `Content-Type` (PNG, JPEG or
+WebP, from the stored data URL), `Cache-Control: public, max-age=31536000,
+immutable`, the download sandbox policy and `X-Content-Type-Options: nosniff`,
+and any other digest or an account without a picture is a `404`.
+`updateProfile` sends `avatar_url` only to change it, with the same three states
+as a room image. The browser shows only these same-origin paths: the content
+security policy admits no `data:` images, so an upload's preview uses a `blob:`
+URL.
 Directory counts, description and visibility flags are also required.
 Unknown response fields are stripped before use. See the
 [HTTP decoders](../web/src/api-validation.ts), [account handlers](../src/auth/account.rs)

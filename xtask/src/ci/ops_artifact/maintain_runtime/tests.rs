@@ -748,7 +748,7 @@ fn successful_receipt_preserves_the_existing_summary_shape() {
     );
 }
 #[test]
-fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_six_migrations() {
+fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_seven_migrations() {
     let reference = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../build/security_vm_maintain_prerequisite_guest.py"
@@ -768,8 +768,8 @@ fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_six_migrati
     for (name, _) in catalog::OPS_CASES {
         assert!(ops.contains(&format!("\"{name}\"")));
     }
-    assert_eq!(catalog::MIGRATIONS.len(), 36);
-    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::MIGRATIONS.len(), 37);
+    assert_eq!(catalog::guest_sources().len(), 53);
     assert_eq!(catalog::HELPERS.len(), 15);
     for old_proof in [
         "build/security_vm_maintain_prerequisite_guest.py",
@@ -847,7 +847,7 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
     ] {
         assert!(sources.contains(file), "{file}");
     }
-    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::guest_sources().len(), 53);
     assert_eq!(catalog::HELPERS.len(), 15);
     assert!(
         !catalog::guest_sources()

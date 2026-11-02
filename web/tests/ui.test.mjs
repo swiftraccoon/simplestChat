@@ -203,11 +203,14 @@ test('API errors use server JSON text, cap long responses, and handle an empty b
   }
 });
 
-test('raster URL allowlist excludes remote, vector, malformed, and oversized image data', async () => {
+test('rasters render only from same-origin room image and avatar paths, never data URLs', async () => {
   const { ui } = await uiFixture();
-  for (const type of ['png', 'jpeg', 'webp'])
-    assert.equal(ui.safeRasterUrl(`data:image/${type};base64,YQ==`), true);
-  assert.equal(ui.safeRasterUrl('/api/rooms/lobby-2_b/image?v=0123456789abcdef'), true);
+  const avatar = '/api/auth/profiles/0f8fad5b-d9cb-469f-a165-70867728950e/avatar';
+  for (const value of [
+    '/api/rooms/lobby-2_b/image?v=0123456789abcdef',
+    `${avatar}?v=0123456789abcdef`,
+  ])
+    assert.equal(ui.safeRasterUrl(value), true, value);
   for (const value of [
     null,
     {},
@@ -219,15 +222,42 @@ test('raster URL allowlist excludes remote, vector, malformed, and oversized ima
     '/api/rooms/lobby/image?v=0123456789abcdef&x=1',
     '/api/rooms/../image?v=0123456789abcdef',
     '//evil.example/api/rooms/lobby/image?v=0123456789abcdef',
+    avatar,
+    `${avatar}?v=0123456789ABCDEF`,
+    `${avatar}?v=0123456789abcdef&x=1`,
+    `${avatar.toUpperCase()}?v=0123456789abcdef`,
+    '/api/auth/profiles/account/avatar?v=0123456789abcdef',
+    `https://example.com${avatar}?v=0123456789abcdef`,
+    `/${avatar}?v=0123456789abcdef`,
+    'data:image/png;base64,YQ==',
+    'data:image/jpeg;base64,YQ==',
+    'data:image/webp;base64,YQ==',
+    'data:image/svg+xml;base64,YQ==',
+    'data:text/html;base64,YQ==',
+  ]) {
+    assert.equal(ui.safeRasterUrl(value), false, String(value));
+  }
+});
+
+test('an upload becomes a blob of its own bytes and type for its preview', async () => {
+  const { ui } = await uiFixture();
+  for (const [type, data, bytes] of [
+    ['image/jpeg', 'YWJj', [97, 98, 99]],
+    ['image/png', 'AP8=', [0, 255]],
+    ['image/webp', 'YQ==', [97]],
+  ]) {
+    const blob = ui.rasterBlob(`data:${type};base64,${data}`);
+    assert.equal(blob.type, type);
+    assert.deepEqual([...new Uint8Array(await blob.arrayBuffer())], bytes);
+  }
+  for (const value of [
     'data:image/svg+xml;base64,YQ==',
     'data:text/html;base64,YQ==',
     'data:image/png,YQ==',
     'data:image/png;base64,Y Q==',
-    'data:image/png;base64,YQ=="',
-    'data:image/png;base64,' + 'A'.repeat(180_000),
-  ]) {
-    assert.equal(ui.safeRasterUrl(value), false);
-  }
+    '/api/rooms/lobby/image?v=0123456789abcdef',
+  ])
+    assert.throws(() => ui.rasterBlob(value), /could not be previewed/, value);
 });
 
 test('upload validates MIME and size before allocating image resources', async () => {

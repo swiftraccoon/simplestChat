@@ -247,9 +247,12 @@ impl SignalingServer {
             &self.guards.telemetry,
         );
         // Beside the nested auth router, on its own address budget: a room's
-        // avatars must never spend a viewer's sign-in and refresh allowance.
+        // profiles and the avatars they name must never spend a viewer's
+        // sign-in and refresh allowance.
         let profile_routes = budgeted(
-            Router::new().route("/{id}", get(crate::auth::account::public_profile)),
+            Router::new()
+                .route("/{id}", get(crate::auth::account::public_profile))
+                .route("/{id}/avatar", get(crate::auth::account::profile_avatar)),
             &self.guards.profile,
         );
         let routes = Router::new()

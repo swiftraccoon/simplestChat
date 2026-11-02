@@ -640,6 +640,34 @@ test('all serialized profile and directory fields remain required, including nul
   }
 });
 
+test('profile avatars decode only as null or a same-origin digest path, never image bytes', async () => {
+  const { ui, state } = await uiFixture();
+  const avatar =
+    '/api/auth/profiles/0f8fad5b-d9cb-469f-a165-70867728950e/avatar?v=0123456789abcdef';
+  for (const [request, valid] of [
+    [() => ui.api.accountProfile(null), account],
+    [() => ui.api.publicProfile('account', null), profile],
+  ]) {
+    for (const avatar_url of [null, avatar]) {
+      state.response = { ok: true, status: 200, json: async () => ({ ...valid, avatar_url }) };
+      assert.equal((await request()).avatar_url, avatar_url);
+    }
+    for (const avatar_url of [
+      'data:image/jpeg;base64,YQ==',
+      'https://example.test/avatar.png',
+      `https://example.test${avatar}`,
+      avatar.replace('?v=0123456789abcdef', '?v=0123456789ABCDEF'),
+      avatar.replace('?v=0123456789abcdef', ''),
+      `${avatar}&x=1`,
+      '/api/rooms/lobby/image?v=0123456789abcdef',
+      '/api/auth/profiles/account/avatar?v=0123456789abcdef',
+    ]) {
+      state.response = { ok: true, status: 200, json: async () => ({ ...valid, avatar_url }) };
+      await assert.rejects(request(), /server returned invalid data/, avatar_url);
+    }
+  }
+});
+
 test('only password, recovery redemption and deletion accept 204 and never parse its body', async () => {
   const { ui, state } = await uiFixture();
   const calls = [

@@ -395,6 +395,10 @@ web/public/**
 !web/public/sw.js
 !web/public/icon-192.png
 !web/public/icon-512.png
+!web/public/favicon.svg
+!web/public/icons/
+web/public/icons/**
+!web/public/icons/*.svg
 !web/public/fonts/
 web/public/fonts/**
 !web/public/fonts/outfit-latin.woff2

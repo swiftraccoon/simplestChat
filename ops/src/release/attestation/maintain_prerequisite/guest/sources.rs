@@ -27,7 +27,7 @@ pub(super) const HELPERS: [&str; 15] = [
     "force_release.py",
     "security_vm_ops_guest.py",
 ];
-pub(super) const MIGRATIONS: [&str; 36] = [
+pub(super) const MIGRATIONS: [&str; 37] = [
     "001_create_users.sql",
     "002_create_sessions.sql",
     "003_create_rooms.sql",
@@ -64,6 +64,7 @@ pub(super) const MIGRATIONS: [&str; 36] = [
     "034_room_image_version.sql",
     "035_role_numbering.sql",
     "036_validate_role_numbering.sql",
+    "037_users_avatar_digest.sql",
 ];
 pub(super) const DIRECT_SOURCES: [&str; 8] = [
     "Caddyfile",

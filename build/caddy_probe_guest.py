@@ -231,7 +231,7 @@ IMAGE = (
     "@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0"
 )
 CLOSURE = "20e5d12552abd99ef774a3b30f597ea38d9f39ff64ce11f8c4975298d9e29205"
-CADDYFILE = "c63bf202554c52938615d04c93f3162e254b27bad44bb70fe2207fbfaa3f6af5"
+CADDYFILE = "be32bb0bc9dcedb2fd327aca75592be087922a777febc8330bd9c8670816f115"
 DOMAIN = "maintain.localhost"
 QUALIFICATION = "TLS-only; no application or maintenance success claim"
 MATERIALS = (

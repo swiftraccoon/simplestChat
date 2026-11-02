@@ -535,7 +535,9 @@ fn profile_content_rejects_active_formats_and_unbounded_images() {
     ] {
         assert!(validate_image_data_url(Some(value)).is_err());
     }
-    let png = STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCGUAAAAASUVORK5CYII=").unwrap();
+    let png = STANDARD
+        .decode(FIRST_PICTURE.split_once(',').unwrap().1)
+        .unwrap();
     assert!(
         validate_image_data_url(Some(&format!(
             "data:image/png;base64,{}",
@@ -658,4 +660,378 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
         .execute(&pool)
         .await
         .unwrap();
+}
+
+#[test]
+fn avatar_links_name_the_account_and_a_sixteen_hex_digest() {
+    // SHA-256 of the empty string begins e3b0c44298fc1c14.
+    assert_eq!(avatar_digest(""), "e3b0c44298fc1c14");
+    assert_eq!(
+        profile_avatar_url(UserId::from(Uuid::nil()), &avatar_digest("")),
+        "/api/auth/profiles/00000000-0000-0000-0000-000000000000/avatar?v=e3b0c44298fc1c14"
+    );
+    for (version, digest) in [
+        (Some("0123456789abcdef"), Some("0123456789abcdef")),
+        (Some("0123456789ABCDEF"), None),
+        (Some("0123456789abcde"), None),
+        (Some("0123456789abcdef0"), None),
+        (Some("0123456789abcdeg"), None),
+        (None, None),
+    ] {
+        let query = ImageVersion {
+            v: version.map(str::to_owned),
+        };
+        assert_eq!(query.digest(), digest, "{version:?}");
+    }
+}
+
+/// Two different 1×1 PNG pictures, as the browser uploads them.
+const FIRST_PICTURE: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCGUAAAAASUVORK5CYII=";
+const SECOND_PICTURE: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+
+/// A 1×1 JPEG (start of image, baseline frame header, end of image) as a data URL.
+fn jpeg_picture() -> String {
+    let frame: [u8; 23] = [
+        0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x01, 0x00, 0x01, 0x03, 0x01, 0x11, 0x00,
+        0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+    ];
+    format!("data:image/jpeg;base64,{}", STANDARD.encode(frame))
+}
+
+/// A 1×1 lossless WebP header (RIFF size, VP8L signature, zero packed size) as a data URL.
+fn webp_picture() -> String {
+    let mut riff = Vec::with_capacity(30);
+    riff.extend_from_slice(b"RIFF");
+    riff.extend_from_slice(&22u32.to_le_bytes());
+    riff.extend_from_slice(b"WEBPVP8L");
+    riff.extend_from_slice(&10u32.to_le_bytes());
+    riff.push(0x2f);
+    riff.resize(30, 0);
+    format!("data:image/webp;base64,{}", STANDARD.encode(riff))
+}
+
+/// A signed-in account on `account_server`, driven through the server's own router
+/// the way the browser reaches its profile and avatar.
+struct ProfileFixture {
+    pool: PgPool,
+    server: SignalingServer,
+    claims: Claims,
+}
+
+impl ProfileFixture {
+    async fn new() -> Self {
+        let (pool, _) = preference_pool().await;
+        let claims = preference_account(&pool).await;
+        let server = crate::signaling::fixtures::account_server(pool.clone()).await;
+        Self {
+            pool,
+            server,
+            claims,
+        }
+    }
+
+    fn id(&self) -> Uuid {
+        Uuid::parse_str(&self.claims.sub).unwrap()
+    }
+
+    /// The avatar route for this account and `version`.
+    fn avatar(&self, version: &str) -> String {
+        format!("/api/auth/profiles/{}/avatar?v={version}", self.id())
+    }
+
+    async fn send(
+        &self,
+        request: axum::http::request::Builder,
+        body: axum::body::Body,
+        signed_in: bool,
+    ) -> axum::response::Response {
+        use tower::ServiceExt;
+        let mut request = request.body(body).unwrap();
+        if signed_in {
+            request
+                .headers_mut()
+                .extend(crate::signaling::fixtures::bearer(&self.claims));
+        }
+        request
+            .extensions_mut()
+            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                [192, 0, 2, 41],
+                41_000,
+            ))));
+        self.server.clone().router().oneshot(request).await.unwrap()
+    }
+
+    async fn get(&self, uri: &str, signed_in: bool) -> axum::response::Response {
+        let request = axum::http::Request::get(uri);
+        self.send(request, axum::body::Body::empty(), signed_in)
+            .await
+    }
+
+    /// Save the profile with `fields` over a fixed name, bio and appearance, and
+    /// return the profile the update answers with.
+    async fn save(&self, fields: serde_json::Value) -> serde_json::Value {
+        let mut body = serde_json::json!({
+            "display_name": "Profile fixture", "bio": "",
+            "profile_style": {"color": null, "style": "accent"}
+        });
+        body.as_object_mut()
+            .unwrap()
+            .extend(fields.as_object().unwrap().clone());
+        let request = axum::http::Request::patch("/api/auth/profile")
+            .header(axum::http::header::CONTENT_TYPE, "application/json");
+        let response = self
+            .send(request, axum::body::Body::from(body.to_string()), true)
+            .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        json_body(response).await
+    }
+
+    /// The stored picture and its digest.
+    async fn stored(&self) -> (Option<String>, Option<String>) {
+        sqlx::query_as("SELECT avatar_url, avatar_digest FROM users WHERE id=$1")
+            .bind(self.id())
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+    }
+
+    async fn close(self) {
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(self.id())
+            .execute(&self.pool)
+            .await
+            .unwrap();
+        self.pool.close().await;
+    }
+}
+
+async fn json_body(response: axum::response::Response) -> serde_json::Value {
+    serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+/// The digest a profile's `avatar_url` names; panics unless the field is this
+/// account's avatar route with a 16-hex digest.
+fn avatar_version(profile: &serde_json::Value, account: Uuid) -> String {
+    let url = profile["avatar_url"].as_str().unwrap_or_default();
+    let version = url
+        .strip_prefix(&format!("/api/auth/profiles/{account}/avatar?v="))
+        .unwrap_or_else(|| panic!("the profile names its avatar by path, not {url:.40}"));
+    assert!(
+        version.len() == 16
+            && version
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
+        "{version}"
+    );
+    version.to_owned()
+}
+
+#[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+async fn profiles_never_carry_data_urls() {
+    let fixture = ProfileFixture::new().await;
+    let saved = fixture
+        .save(serde_json::json!({"avatar_url": FIRST_PICTURE}))
+        .await;
+    let version = avatar_version(&saved, fixture.id());
+    let own = json_body(fixture.get("/api/auth/profile", true).await).await;
+    let public = format!("/api/auth/profiles/{}", fixture.id());
+    let public = json_body(fixture.get(&public, false).await).await;
+    for profile in [&saved, &own, &public] {
+        assert_eq!(profile["avatar_url"], fixture.avatar(&version));
+        assert!(!profile.to_string().contains("data:"), "{profile}");
+    }
+    assert_eq!(fixture.stored().await.1, Some(version));
+    fixture.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+async fn avatar_responses_are_immutable_and_sandboxed() {
+    let fixture = ProfileFixture::new().await;
+    for (picture, content_type) in [
+        (FIRST_PICTURE.to_owned(), "image/png"),
+        (jpeg_picture(), "image/jpeg"),
+        (webp_picture(), "image/webp"),
+    ] {
+        let saved = fixture
+            .save(serde_json::json!({"avatar_url": picture}))
+            .await;
+        let version = avatar_version(&saved, fixture.id());
+        // Anyone who can read the public profile can fetch the picture it names.
+        let response = fixture.get(&fixture.avatar(&version), false).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let headers = response.headers().clone();
+        for (name, value) in [
+            (axum::http::header::CONTENT_TYPE, content_type),
+            (
+                axum::http::header::CACHE_CONTROL,
+                "public, max-age=31536000, immutable",
+            ),
+            (
+                axum::http::header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; sandbox",
+            ),
+            (axum::http::header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ] {
+            assert_eq!(headers[&name], value, "{name}");
+        }
+        let (_, encoded) = picture.split_once(',').unwrap();
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 256 * 1024)
+                .await
+                .unwrap(),
+            STANDARD.decode(encoded).unwrap(),
+        );
+    }
+    fixture.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+async fn stale_digests_are_not_found() {
+    let fixture = ProfileFixture::new().await;
+    let first = avatar_version(
+        &fixture
+            .save(serde_json::json!({"avatar_url": FIRST_PICTURE}))
+            .await,
+        fixture.id(),
+    );
+    let second = avatar_version(
+        &fixture
+            .save(serde_json::json!({"avatar_url": SECOND_PICTURE}))
+            .await,
+        fixture.id(),
+    );
+    assert_ne!(first, second);
+    let current = fixture.avatar(&second);
+    assert_eq!(fixture.get(&current, false).await.status(), StatusCode::OK);
+    for stale in [
+        fixture.avatar(&first),
+        fixture.avatar(&second.to_uppercase()),
+        fixture.avatar(&second[..15]),
+        current.replace(&format!("?v={second}"), ""),
+        current.replace(&fixture.id().to_string(), &Uuid::new_v4().to_string()),
+    ] {
+        let status = fixture.get(&stale, false).await.status();
+        assert_eq!(status, StatusCode::NOT_FOUND, "{stale}");
+    }
+    fixture.save(serde_json::json!({"avatar_url": null})).await;
+    let status = fixture.get(&current, false).await.status();
+    assert_eq!(status, StatusCode::NOT_FOUND, "a removed picture");
+    fixture.close().await;
+}
+
+/// Omitting `avatar_url` keeps the picture, `null` removes it with its digest,
+/// and a new data URL replaces both.
+#[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+async fn a_profile_update_keeps_removes_or_replaces_the_avatar() {
+    let fixture = ProfileFixture::new().await;
+    fixture
+        .save(serde_json::json!({"avatar_url": FIRST_PICTURE}))
+        .await;
+    let first = fixture.stored().await;
+    assert_eq!(first.0.as_deref(), Some(FIRST_PICTURE));
+    assert_eq!(
+        first.1.as_deref(),
+        Some(avatar_digest(FIRST_PICTURE).as_str())
+    );
+    let kept = fixture.save(serde_json::json!({})).await;
+    assert_eq!(
+        fixture.stored().await,
+        first,
+        "an omitted avatar_url keeps it"
+    );
+    assert_eq!(
+        avatar_version(&kept, fixture.id()),
+        avatar_digest(FIRST_PICTURE)
+    );
+    fixture
+        .save(serde_json::json!({"avatar_url": SECOND_PICTURE}))
+        .await;
+    let replaced = fixture.stored().await;
+    assert_eq!(replaced.0.as_deref(), Some(SECOND_PICTURE));
+    assert_eq!(
+        replaced.1.as_deref(),
+        Some(avatar_digest(SECOND_PICTURE).as_str())
+    );
+    let removed = fixture.save(serde_json::json!({"avatar_url": null})).await;
+    assert_eq!(fixture.stored().await, (None, None), "null removes it");
+    assert_eq!(removed["avatar_url"], serde_json::Value::Null);
+    fixture.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+async fn backfill_digest_matches_runtime_digest() {
+    let fixture = ProfileFixture::new().await;
+    let migration = include_str!("../../migrations/037_users_avatar_digest.sql");
+    let backfill = migration
+        .lines()
+        .find(|line| line.starts_with("UPDATE users SET avatar_digest"))
+        .expect("the migration backfills the digest in one statement");
+    let jpeg = jpeg_picture();
+    let pictures = [
+        (FIRST_PICTURE, StatusCode::OK),
+        (SECOND_PICTURE, StatusCode::OK),
+        (jpeg.as_str(), StatusCode::OK),
+        ("data:image/png;base64,ÄÖ€", StatusCode::NOT_FOUND),
+    ];
+    // The migration's statement runs unmodified, yet touches only fixture rows:
+    // a temporary table named users shadows the permanent one on this
+    // transaction's connection, because PostgreSQL searches the session's
+    // temporary schema first for an unqualified table name. The fixture rows
+    // are written and read as pg_temp.users, so only the statement's own bare
+    // name relies on that lookup. ON COMMIT DROP and the rollback below leave
+    // nothing behind.
+    let mut transaction = fixture.pool.begin().await.unwrap();
+    sqlx::query(
+        "CREATE TEMPORARY TABLE users (avatar_url TEXT, avatar_digest TEXT) ON COMMIT DROP",
+    )
+    .execute(&mut *transaction)
+    .await
+    .unwrap();
+    for (picture, _) in pictures {
+        sqlx::query("INSERT INTO pg_temp.users(avatar_url) VALUES($1)")
+            .bind(picture)
+            .execute(&mut *transaction)
+            .await
+            .unwrap();
+    }
+    sqlx::query(backfill)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    let mut backfilled = Vec::with_capacity(pictures.len());
+    for (picture, status) in pictures {
+        let digest: String =
+            sqlx::query_scalar("SELECT avatar_digest FROM pg_temp.users WHERE avatar_url=$1")
+                .bind(picture)
+                .fetch_one(&mut *transaction)
+                .await
+                .unwrap();
+        assert_eq!(digest, avatar_digest(picture), "{picture:.40}");
+        backfilled.push((picture, digest, status));
+    }
+    transaction.rollback().await.unwrap();
+    // The route serves a backfilled picture by that digest, and a stored text
+    // that is not a raster data URL is a 404 under its own digest.
+    for (picture, digest, status) in backfilled {
+        sqlx::query("UPDATE users SET avatar_url=$2, avatar_digest=$3 WHERE id=$1")
+            .bind(fixture.id())
+            .bind(picture)
+            .bind(&digest)
+            .execute(&fixture.pool)
+            .await
+            .unwrap();
+        let response = fixture.get(&fixture.avatar(&digest), false).await;
+        assert_eq!(response.status(), status, "{picture:.40}");
+    }
+    fixture.close().await;
 }

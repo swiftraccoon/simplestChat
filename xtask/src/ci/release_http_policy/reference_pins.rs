@@ -83,8 +83,8 @@ pub(super) fn check() -> Result<()> {
         (
             "reference/security/http-policy.json",
             include_bytes!("reference/security/http-policy.json").as_slice(),
-            1040,
-            "31ae348a622e48ee9e06ccad100ebe58b05243782d5a45b841b4815685f3bd21",
+            1028,
+            "ab442721245e4ebab0e69ed1833e45fa38eed98d73a7721a56f08bff07a9f539",
         ),
     ] {
         if bytes.len() != length || crate::ci::io::sha256(bytes) != expected {

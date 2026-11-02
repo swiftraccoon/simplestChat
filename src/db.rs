@@ -118,7 +118,7 @@ pub(crate) async fn connect(settings: &crate::config::Database) -> anyhow::Resul
 /// One column from each table the newest migrations shaped. A deployment that ran
 /// the binary against an unmigrated database fails here, at startup, with a message
 /// naming the gap, instead of on the first request that touches it.
-const EXPECTED_COLUMNS: [(&str, &str); 27] = [
+const EXPECTED_COLUMNS: [(&str, &str); 28] = [
     ("attachments", "data"),
     ("contacts", "status"),
     ("saved_rooms", "favorite"),
@@ -133,6 +133,7 @@ const EXPECTED_COLUMNS: [(&str, &str); 27] = [
     ("chat_read_cursors", "message_id"),
     ("users", "preferences"),
     ("users", "profile_style"),
+    ("users", "avatar_digest"),
     ("rooms", "name_style"),
     ("rooms", "topic_style"),
     ("sessions", "refresh_token_family_hash"),

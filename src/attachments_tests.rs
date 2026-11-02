@@ -1,7 +1,7 @@
 use super::*;
 use crate::ids::fixtures::rid;
 use crate::ids::{MessageId, ParticipantId};
-use crate::signaling::fixtures::{account_server, jwt_secret, server_without_database};
+use crate::signaling::fixtures::{account_server, bearer, server_without_database};
 use axum::response::IntoResponse;
 
 #[test]
@@ -222,20 +222,12 @@ impl Database {
     /// An upload request from user `owner` carrying `body`, with a bearer token
     /// that `account_server` accepts for that user's session.
     fn upload_request(&self, owner: usize, body: Body) -> Request {
-        let claims = &self.claims[owner];
-        let token = crate::auth::jwt::create_session_token(
-            &claims.sub,
-            &claims.name,
-            &crate::auth::jwt::JwtSecret::from(jwt_secret().as_str()),
-            claims.auth_version,
-            claims.sid,
-        )
-        .unwrap();
-        Request::post("/api/auth/attachments")
-            .header("authorization", format!("Bearer {token}"))
+        let mut request = Request::post("/api/auth/attachments")
             .header("x-file-name", URL_SAFE_NO_PAD.encode("notes.txt"))
             .body(body)
-            .unwrap()
+            .unwrap();
+        request.headers_mut().extend(bearer(&self.claims[owner]));
+        request
     }
     async fn owner_of(&self, id: Uuid) -> Uuid {
         sqlx::query_scalar("SELECT owner_id FROM attachments WHERE id=$1")

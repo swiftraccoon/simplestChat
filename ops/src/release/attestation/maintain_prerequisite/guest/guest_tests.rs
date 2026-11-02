@@ -21,11 +21,11 @@ fn request_value() -> Value {
     json!({"schemaVersion":1,"scope":"MaintainLauncherPrerequisiteRequest","runId":"d".repeat(32),"revision":"e".repeat(40),"scenario":"positive","setupSeconds":510,"bodySeconds":1680,"endSeconds":1800,"binary":pin,"manifest":pin,"archive":pin,"sourceBundle":pin,"sourceTree":"f".repeat(40),"sourcePins":sources,"helperPins":helpers,"postgresImage":format!("postgres@sha256:{}","a".repeat(64)),"caddyImage":protocol::CADDY_IMAGE,"engineVersion":"29.0.0"})
 }
 #[test]
-fn exact_request_keeps_fifty_two_sources_fifteen_helpers_and_original_caps() {
+fn exact_request_keeps_fifty_three_sources_fifteen_helpers_and_original_caps() {
     let value = request_value();
     let request = Request::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 18);
-    assert_eq!(request.source_pins.len(), 52);
+    assert_eq!(request.source_pins.len(), 53);
     assert_eq!(request.helper_pins.len(), 15);
     for (pointer, bad) in [
         ("/schemaVersion", json!(true)),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::signaling::fixtures::bearer;
 use aws_lc_rs::signature::{ECDSA_P256_SHA256_FIXED, UnparsedPublicKey};
 use axum::response::IntoResponse;
 use sqlx::{
@@ -204,24 +205,6 @@ impl IsolatedPushDatabase {
             .await
             .unwrap();
     }
-}
-
-/// The bearer header `account_server` accepts for `claims`' session.
-fn bearer(claims: &Claims) -> HeaderMap {
-    let token = crate::auth::jwt::create_session_token(
-        &claims.sub,
-        &claims.name,
-        &crate::auth::jwt::JwtSecret::from(crate::signaling::fixtures::jwt_secret().as_str()),
-        claims.auth_version,
-        claims.sid,
-    )
-    .unwrap();
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        axum::http::header::AUTHORIZATION,
-        format!("Bearer {token}").parse().unwrap(),
-    );
-    headers
 }
 
 #[tokio::test]

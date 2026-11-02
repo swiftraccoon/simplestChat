@@ -1308,7 +1308,7 @@ fn is_loopback_host(host: &str) -> bool {
 /// The application's own content security policy. The reverse proxy carries
 /// the same text as a default for responses it answers itself (`Caddyfile`),
 /// so a handler's tighter policy is what the browser receives.
-pub(crate) const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'";
+pub(crate) const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'";
 
 /// The fixed security headers every response carries. `security/http-policy.json`
 /// (written by `cargo run -q -p xtask -- http-policy`) carries this table and the
@@ -1408,6 +1408,24 @@ pub(crate) mod fixtures {
     /// The JWT secret `account_server` validates bearer tokens with.
     pub(crate) fn jwt_secret() -> String {
         "a".repeat(32)
+    }
+
+    /// The bearer header `account_server` accepts for `claims`' session.
+    pub(crate) fn bearer(claims: &crate::auth::types::Claims) -> axum::http::HeaderMap {
+        let token = crate::auth::jwt::create_session_token(
+            &claims.sub,
+            &claims.name,
+            &crate::auth::jwt::JwtSecret::from(jwt_secret().as_str()),
+            claims.auth_version,
+            claims.sid,
+        )
+        .unwrap();
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {token}").parse().unwrap(),
+        );
+        headers
     }
 
     /// A server with accounts configured over `pool`, on one media worker whose

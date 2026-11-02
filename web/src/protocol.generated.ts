@@ -788,6 +788,10 @@ export interface AccountProfile {
   id: string;
   email: string;
   display_name: string;
+  /**
+   * A same-origin path naming the current picture by a digest of its content
+   * (`profile_avatar_url`), or `null`; never the image bytes themselves.
+   */
   avatar_url: string | null;
   bio: string;
   profile_style: ChatStyle;
@@ -797,6 +801,10 @@ export interface AccountProfile {
 export interface PublicProfile {
   id: string;
   display_name: string;
+  /**
+   * A same-origin path naming the current picture by a digest of its content
+   * (`profile_avatar_url`), or `null`; never the image bytes themselves.
+   */
   avatar_url: string | null;
   bio: string;
   profile_style: ChatStyle;

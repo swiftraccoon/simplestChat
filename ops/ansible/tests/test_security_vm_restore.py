@@ -520,7 +520,7 @@ class RestoreWorkflowTests(unittest.TestCase):
 
     def test_source_closure_contains_all_real_migrations_and_exact_verifier(self) -> None:
         """Current SQL checksums are real source bytes, not fake catalog values."""
-        self.assertEqual(len(keeper.MIGRATIONS), 36)
+        self.assertEqual(len(keeper.MIGRATIONS), 37)
         self.assertIn("ops/ansible/files/restore-verify.sql", keeper.GUEST_FILES)
         self.assertTrue(all((ROOT / path).is_file() for path in keeper.SOURCE_INPUTS))
         for path in keeper.MIGRATIONS:

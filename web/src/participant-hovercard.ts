@@ -339,12 +339,13 @@ export class ParticipantHovercard {
     }
   }
 
+  /** The initial stays until the picture loads, and stays if it never does. */
   private setAvatar(avatar: HTMLElement, url?: string): void {
     if (!safeRasterUrl(url)) return;
     const image = el('img');
     image.alt = '';
+    image.addEventListener('load', () => avatar.replaceChildren(image), { once: true });
     image.src = url;
-    avatar.replaceChildren(image);
   }
 
   private position(): void {

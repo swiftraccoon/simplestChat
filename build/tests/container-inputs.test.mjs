@@ -15,6 +15,10 @@ const pwaFiles = ['manifest.webmanifest', 'sw.js',
     assert.match(icon.src, /^\/[\w-]+\.png$/);
     return icon.src.slice(1);
   })].map(filename => `web/public/${filename}`);
+// The favicon and stylesheet icons are files: the content security policy admits no data: images.
+const iconFiles = ['web/public/favicon.svg',
+  ...globSync('web/public/icons/*.svg', { cwd: root })];
+assert.ok(iconFiles.length > 1, 'the stylesheet icons are static files');
 
 // Deliberately support only this file's exact paths, trailing /** and single
 // filename-extension wildcards. Docker matches a rule against parent paths too:
@@ -176,7 +180,7 @@ test('web-builder copies the complete production frontend input set', () => {
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json', ...projects,
     'web/vite.config.ts', 'web/index.html', 'web/src/main.ts',
     'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/bundle-budget.json',
-    'web/public/help.html', 'web/public/help.css', ...pwaFiles,
+    'web/public/help.html', 'web/public/help.css', ...pwaFiles, ...iconFiles,
   ];
   for (const filename of required) {
     assert.equal(copiedDestination(filename), `/${filename}`,
@@ -205,6 +209,8 @@ test('container context explicitly admits build configs, help and PWA files with
     '!web/public/', 'web/public/**', '!web/public/help.html', '!web/public/help.css',
     '!web/public/manifest.webmanifest', '!web/public/sw.js',
     '!web/public/icon-192.png', '!web/public/icon-512.png',
+    '!web/public/favicon.svg',
+    '!web/public/icons/', 'web/public/icons/**', '!web/public/icons/*.svg',
     '!web/public/fonts/', 'web/public/fonts/**', '!web/public/fonts/outfit-latin.woff2',
     '!web/public/fonts/Outfit-OFL.txt',
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
@@ -454,7 +460,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
     'web/scripts/mediasoup-runtime.mjs',
-    'web/public/help.html', 'web/public/help.css', ...pwaFiles,
+    'web/public/help.html', 'web/public/help.css', ...pwaFiles, ...iconFiles,
     'web/src/main.ts', 'web/src/style.css', 'web/src/screens/room.ts', 'web/src/chat/composer.ts',
     'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);

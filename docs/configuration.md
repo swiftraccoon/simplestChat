@@ -22,7 +22,7 @@
 | `WS_HANDSHAKES_PER_MINUTE` | `120` | Per-client IP (IPv6 `/64`) rate limit for WebSocket upgrade attempts |
 | `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for sign-in, refresh, credential/session management, registration and WebSocket tickets |
 | `ACCOUNT_REQUESTS_PER_MINUTE` | `300` | Independent per-IP rate limit for authenticated application data: inbox, contacts, own profile, preferences, saved rooms, push subscriptions and attachments; includes account-update stream opening only |
-| `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, used by avatars and freshly opened participant cards) and room images (`/api/rooms/:id/image`), kept apart from the sign-in, refresh and room API budgets |
+| `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, read for roster avatars and freshly opened participant cards), the avatars they name (`/api/auth/profiles/:id/avatar`) and room images (`/api/rooms/:id/image`), kept apart from the sign-in, refresh and room API budgets |
 | `AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` | `20` | Per-account limit on signed-in password checks (password change, recovery key, passkey management) and WebSocket-ticket issuance |
 | `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent authentication operations |
 | `ACCOUNT_MAX_CONCURRENCY` | `32` | Independent global cap on concurrent authenticated application-data operations; account-update stream opening releases its permit before the response body |

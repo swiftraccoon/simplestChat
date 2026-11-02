@@ -22,6 +22,7 @@ import {
   field,
   input,
   modal,
+  rasterBlob,
   rasterUpload,
   safeRasterUrl,
   validatePassword,
@@ -370,11 +371,20 @@ export class CommunityUI {
           return;
         }
         if (node.querySelector('img')?.getAttribute('src') === profile.avatar_url) return;
+        // The initial stays until the picture loads, and stays if it never does (a
+        // newer picture's digest, or a busy profile budget, answers with an error).
         const image = el('img');
-        image.src = profile.avatar_url;
         image.alt = '';
         image.className = 'account-avatar';
-        node.replaceChildren(image);
+        image.addEventListener(
+          'load',
+          () => {
+            if (node.isConnected && this.avatarVersions.get(node) === version)
+              node.replaceChildren(image);
+          },
+          { once: true },
+        );
+        image.src = profile.avatar_url;
       })
       .catch(() => {
         // Avatars are optional decoration; preserve the existing initials/name.
@@ -398,11 +408,19 @@ export class CommunityUI {
         if (!node.isConnected || this.avatarVersions.get(node) !== version || !profile) return;
         Object.assign(node.style, avatarColors(name, profile.profile_style.color));
         if (!profile.avatar_url || !safeRasterUrl(profile.avatar_url)) return;
+        // As in decorateAvatar: the initial gives way only to a picture that loaded.
         const image = el('img');
-        image.src = profile.avatar_url;
         image.alt = '';
         image.className = 'account-avatar';
-        node.replaceChildren(image);
+        image.addEventListener(
+          'load',
+          () => {
+            if (node.isConnected && this.avatarVersions.get(node) === version)
+              node.replaceChildren(image);
+          },
+          { once: true },
+        );
+        image.src = profile.avatar_url;
       })
       .catch(() => {
         // The initial on its tone stands in for a profile that cannot be read.
@@ -642,10 +660,13 @@ export class CommunityUI {
             'Save profile',
             async () => {
               if (!stillCurrent() || !flow?.canStart) return;
+              // value() refuses while an upload is processing; an untouched picture is
+              // left out, and the server keeps the one it holds.
+              const picture = avatar.value();
               const update = {
                 display_name: name.value.trim(),
                 bio: bio.value.trim(),
-                avatar_url: avatar.value(),
+                ...(avatar.change() !== undefined && { avatar_url: picture }),
                 profile_style: appearance.chosen(),
               };
               await flow.change(
@@ -1758,16 +1779,32 @@ export class CommunityUI {
     let value = initial;
     let touched = false;
     let selection = 0;
+    // A fresh upload is a data URL, which the content security policy keeps out of
+    // images: its preview shows the bytes through a blob URL this picker owns until
+    // that image loads or fails, or another source replaces it.
+    let previewUrl: string | null = null;
     const wrapper = el('div', undefined, 'image-picker');
     const preview = el('img');
     preview.className = room ? 'room-image-preview' : 'profile-image';
     preview.alt = room ? 'Room image preview' : 'Avatar preview';
-    const show = (): void => {
-      preview.hidden = !safeRasterUrl(value);
-      if (safeRasterUrl(value)) preview.src = value;
-      else preview.removeAttribute('src');
+    const release = (): void => {
+      if (previewUrl === null) return;
+      URL.revokeObjectURL(previewUrl);
+      previewUrl = null;
     };
-    show();
+    const settled = (): void => {
+      if (preview.src === previewUrl) release();
+    };
+    preview.addEventListener('load', settled);
+    preview.addEventListener('error', settled);
+    const show = (source: string | null, owned = false): void => {
+      release();
+      if (owned) previewUrl = source;
+      preview.hidden = source === null;
+      if (source === null) preview.removeAttribute('src');
+      else preview.src = source;
+    };
+    show(safeRasterUrl(initial) ? initial : null);
     const file = input('', 'file');
     file.accept = 'image/png,image/jpeg,image/webp';
     file.addEventListener('change', () => {
@@ -1778,9 +1815,9 @@ export class CommunityUI {
       rasterUpload(chosen, room ? 480 : 192, room ? 270 : 192)
         .then((result) => {
           if (selection === generation) {
+            show(URL.createObjectURL(rasterBlob(result)), true);
             value = result;
             touched = true;
-            show();
             file.disabled = false;
             onChange?.();
           }
@@ -1798,7 +1835,7 @@ export class CommunityUI {
         value = null;
         touched = true;
         file.value = '';
-        show();
+        show(null);
         onChange?.();
       }),
     );

@@ -178,10 +178,17 @@ export const decodeAppearance = object<ChatStyle>({
   style: choice('accent', 'text', 'bubble'),
 });
 
+/** A profile's picture: the same-origin route that names it by a content digest
+ * (src/auth/account.rs `profile_avatar_url`), never the image bytes. */
+export const PROFILE_AVATAR_PATH = /^\/api\/auth\/profiles\/[0-9a-f-]{36}\/avatar\?v=[0-9a-f]{16}$/;
+
 const profileFields = {
   id: text,
   display_name: text,
-  avatar_url: nullable(text),
+  avatar_url: nullable((value) => {
+    const path = text(value);
+    return PROFILE_AVATAR_PATH.test(path) ? path : invalid();
+  }),
   bio: text,
   profile_style: decodeAppearance,
 };

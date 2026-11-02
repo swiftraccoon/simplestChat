@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './native-fixtures.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 import { createDOM, deferred, flush } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
 
 async function fixture() {
-  const { document, Node } = createDOM();
+  const { document, Node, created } = createDOM();
+  // The card shows only profile pictures: the same-origin avatar route the decoders admit.
+  const { PROFILE_AVATAR_PATH } = (await loadContractModules())['./api-validation'];
   const timers = new Map();
   const observers = [];
   let timerId = 0;
@@ -52,8 +54,7 @@ async function fixture() {
       node.addEventListener('click', action);
       return node;
     },
-    safeRasterUrl: (value) =>
-      typeof value === 'string' && value.startsWith('data:image/png;base64,'),
+    safeRasterUrl: (value) => typeof value === 'string' && PROFILE_AVATAR_PATH.test(value),
   };
   const state = {
     session: {},
@@ -111,7 +112,7 @@ async function fixture() {
     timers.clear();
     pending.forEach((callback) => callback());
   };
-  return { controller, anchor, card, document, state, timers, events, tick, observers };
+  return { controller, anchor, card, document, state, timers, events, tick, observers, created };
 }
 
 test('hover waits, pointer transfer retains the card, and quick exits cancel opening', async () => {
@@ -198,6 +199,27 @@ test('profile content stays plain text, images are raster-only, and placement st
   assert.equal(f.card.querySelector('img'), null);
   assert.equal(f.card.style.left, '32px');
   assert.equal(f.card.style.top, '254px');
+});
+
+test('a profile picture from its avatar route replaces the initial once it loads, never on failure', async () => {
+  const avatarUrl =
+    '/api/auth/profiles/0f8fad5b-d9cb-469f-a165-70867728950e/avatar?v=0123456789abcdef';
+  for (const outcome of ['load', 'error']) {
+    const f = await fixture();
+    f.anchor.focus();
+    f.state.profiles[0].resolve({ displayName: 'Alice', bio: '', avatarUrl });
+    await flush();
+    const avatar = f.card.querySelector('.participant-hovercard-avatar');
+    assert.equal(avatar.textContent, 'A', 'the initial stays while the picture loads');
+    const images = f.created.filter((node) => node.tagName === 'IMG');
+    assert.deepEqual(
+      images.map((image) => image.src),
+      [avatarUrl],
+    );
+    images[0].emit(outcome);
+    assert.equal(f.card.querySelector('img'), outcome === 'load' ? images[0] : null, outcome);
+    if (outcome === 'error') assert.equal(avatar.textContent, 'A');
+  }
 });
 
 test('guests do not load account profiles and stale card actions cannot run', async () => {

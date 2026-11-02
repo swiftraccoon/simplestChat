@@ -28,6 +28,7 @@ import {
   decodeRoomListItem,
   decodePasskeyAction,
   decodePasskeySettings,
+  PROFILE_AVATAR_PATH,
   type PasskeyOperation,
 } from './api-validation';
 import {
@@ -758,7 +759,10 @@ export const api = {
     apiNoContent('/api/auth/sessions/others', token, 'DELETE', undefined, signal),
   updateProfile: (
     token: string | null,
-    data: Pick<AccountProfile, 'display_name' | 'bio' | 'avatar_url' | 'profile_style'>,
+    data: Pick<AccountProfile, 'display_name' | 'bio' | 'profile_style'> & {
+      /** Omitted keeps the current picture, null removes it, a data URL replaces it. */
+      avatar_url?: string | null;
+    },
     signal?: AbortSignal,
   ) => apiJson(decodeAccountProfile, '/api/auth/profile', token, 'PATCH', data, signal),
   changePassword: (
@@ -881,13 +885,24 @@ export async function rasterUpload(file: File, width = 192, height = 192): Promi
   }
 }
 
-/** A raster the browser may show: an inline PNG, JPEG or WebP data URL, or the
- * same-origin room image path a listing names by its content digest. */
+/** The bytes of an image `rasterUpload` produced, as a blob for its preview: the
+ * content security policy admits no `data:` images, only same-origin and `blob:` ones. */
+export function rasterBlob(dataUrl: string): Blob {
+  const [, type, data] =
+    /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]*={0,2})$/.exec(dataUrl) ?? [];
+  if (type === undefined || data === undefined) throw new Error('Image could not be previewed');
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type });
+}
+
+/** A raster the browser may show from the server: the same-origin path that names
+ * a room image or a profile's picture by its content digest, never inline bytes. */
 export function safeRasterUrl(value: unknown): value is string {
   return (
     typeof value === 'string' &&
-    ((value.length <= 180_000 &&
-      /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) ||
-      /^\/api\/rooms\/[A-Za-z0-9_-]{1,128}\/image\?v=[0-9a-f]{16}$/.test(value))
+    (/^\/api\/rooms\/[A-Za-z0-9_-]{1,128}\/image\?v=[0-9a-f]{16}$/.test(value) ||
+      PROFILE_AVATAR_PATH.test(value))
   );
 }
