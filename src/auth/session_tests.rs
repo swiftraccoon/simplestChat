@@ -270,10 +270,12 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
     assert_eq!(first.sid, sessions[0].1);
     assert!(validate_current_claims(&pool, &first).await.is_ok());
 
-    assert!(
+    assert_eq!(
         delete_session_by_token(&pool, &sessions[0].0.raw)
             .await
-            .unwrap()
+            .unwrap(),
+        Some(user_id),
+        "logout names the account whose session ended"
     );
     assert!(
         validate_current_claims(&pool, &first).await.is_err(),
@@ -323,6 +325,136 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
     delete_accounts(&pool, &[user_id, other_user]).await;
 }
 
+/// `request` from `192.0.2.octet` through `server`'s real router.
+async fn route(
+    server: &crate::signaling::SignalingServer,
+    mut request: axum::http::Request<axum::body::Body>,
+    octet: u8,
+) -> axum::response::Response {
+    use tower::ServiceExt;
+    request
+        .extensions_mut()
+        .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+            [192, 0, 2, octet],
+            52_000,
+        ))));
+    server.clone().router().oneshot(request).await.unwrap()
+}
+
+/// One committed `create_session_with` for `user_id`.
+async fn created_session(pool: &PgPool, user_id: Uuid) -> CreatedSession {
+    let mut transaction = pool.begin().await.unwrap();
+    let created = create_session_with(
+        &mut transaction,
+        &user_id,
+        &generate_refresh_token().unwrap(),
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    created
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn session_creation_reports_only_the_eviction_of_a_live_session() {
+    let pool = pool().await;
+    let user_id = account(&pool, "eviction test").await;
+    let mut sessions = Vec::new();
+    for _ in 0..MAX_ACTIVE_SESSIONS_PER_USER {
+        let created = created_session(&pool, user_id).await;
+        assert!(!created.evicted_live_session, "below the cap nothing ends");
+        sessions.push(created.id);
+    }
+    let exists = |id: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, bool>("SELECT EXISTS (SELECT 1 FROM sessions WHERE id = $1)")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap()
+        }
+    };
+    // The oldest session expires; the next creation removes it, which ends no
+    // live session.
+    sqlx::query("UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = $1")
+        .bind(sessions[0])
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        !created_session(&pool, user_id).await.evicted_live_session,
+        "removing an expired session is no eviction"
+    );
+    assert!(!exists(sessions[0]).await);
+    // Now at the cap, the next creation ends the oldest live session and says so.
+    assert!(created_session(&pool, user_id).await.evicted_live_session);
+    assert!(!exists(sessions[1]).await, "the oldest live session ended");
+    let live: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM sessions WHERE user_id = $1 AND expires_at > now()",
+    )
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(live, MAX_ACTIVE_SESSIONS_PER_USER);
+    delete_accounts(&pool, &[user_id]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn a_sign_in_that_evicts_a_live_session_notifies_the_accounts_sockets() {
+    let pool = pool().await;
+    let user_id = account(&pool, "eviction sign-in test").await;
+    let password = format!("eviction-sign-in-{}", Uuid::new_v4());
+    let email: String =
+        sqlx::query_scalar("UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING email")
+            .bind(user_id)
+            .bind(crate::auth::password::hash_password(&password).unwrap())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let server = crate::signaling::fixtures::account_server(pool.clone()).await;
+    let mut socket = server
+        .room_manager()
+        .account_updates()
+        .subscribe_revalidation(user_id);
+    let login = || {
+        axum::http::Request::post("/api/auth/login")
+            .header(axum::http::header::CONTENT_TYPE, "application/json")
+            .body(axum::body::Body::from(
+                serde_json::json!({"email": email, "password": password}).to_string(),
+            ))
+            .unwrap()
+    };
+    for _ in 1..MAX_ACTIVE_SESSIONS_PER_USER {
+        new_session(&pool, user_id).await;
+    }
+    // With one session to spare, a sign-in ends none and tells no one: the
+    // route would have sent its notice before it answered.
+    assert_eq!(
+        route(&server, login(), 61).await.status(),
+        axum::http::StatusCode::OK
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(200), socket.notice())
+            .await
+            .is_err(),
+        "a sign-in that ends no session sends no notice"
+    );
+    // At the cap, the next sign-in ends the oldest live session.
+    assert_eq!(
+        route(&server, login(), 62).await.status(),
+        axum::http::StatusCode::OK
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(2), socket.notice())
+        .await
+        .expect("the evicting sign-in tells the account's sockets to re-check");
+    drop(socket);
+    delete_accounts(&pool, &[user_id]).await;
+}
+
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_rotation_replay_grace_and_session_cap() {
@@ -356,7 +488,9 @@ async fn database_rotation_replay_grace_and_session_cap() {
                 successor_raw = Some(refresh_token.raw)
             }
             RefreshRotation::ConcurrentRequest => concurrent_requests += 1,
-            RefreshRotation::ReuseDetected => panic!("concurrent request revoked the family"),
+            RefreshRotation::ReuseDetected { .. } => {
+                panic!("concurrent request revoked the family")
+            }
         }
     }
     assert_eq!(concurrent_requests, 1);
@@ -381,9 +515,10 @@ async fn database_rotation_replay_grace_and_session_cap() {
     .execute(&pool)
     .await
     .unwrap();
+    // The revocation names its account, whose connections must hear of it.
     assert!(matches!(
         rotate_and_commit(&pool, &predecessor.raw).await.unwrap(),
-        RefreshRotation::ReuseDetected
+        RefreshRotation::ReuseDetected { user_id } if user_id == replay_user_id
     ));
     let replay_count: i64 = sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id = $1")
         .bind(replay_user_id)
@@ -410,7 +545,7 @@ async fn database_rotation_replay_grace_and_session_cap() {
     ));
     assert!(matches!(
         rotate_and_commit(&pool, &oldest.raw).await.unwrap(),
-        RefreshRotation::ReuseDetected
+        RefreshRotation::ReuseDetected { user_id } if user_id == older_user_id
     ));
 
     // A random token cannot identify or revoke an unrelated family.

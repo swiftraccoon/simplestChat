@@ -227,8 +227,12 @@ session; `DELETE /api/auth/sessions/others` keeps the caller's session and revok
 the rest. Neither listing nor revocation exposes refresh credentials or hashes.
 Mutations recheck the caller under users-then-sessions locks, so a revoked caller
 cannot complete a later revocation. Existing HTTP validation rejects the retired
-session immediately; active sockets and retained reconnect media check every five
-seconds. Revoking the current session clears its matching refresh cookie without
+session immediately; the account hub (`auth/updates.rs`) tells the account's update
+streams and sockets to re-check at once, while retained reconnect media checks every
+five seconds. Logout, refresh-token reuse and a sign-in that ends the account's
+oldest session under the per-account cap tell the hub the same way after they
+commit; a session that simply expires is not announced, and the periodic checks
+find it. Revoking the current session clears its matching refresh cookie without
 clearing a newer sign-in cookie installed by another tab.
 
 Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the

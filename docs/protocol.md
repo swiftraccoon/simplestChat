@@ -500,7 +500,11 @@ only its final `401` confirms sign-out, while transient failures offer the same
 explicit recovery control. A superseded check cannot publish over a newer identity.
 
 Open authenticated sockets revalidate account state every five seconds after the
-previous check completes. A database error or validation timeout permits retaining
+previous check completes, and at once when a session of the account ends (logout,
+session revocation, refresh-token reuse, a sign-in ending the oldest session under the
+per-account cap, a password change or recovery): the server discards the check
+in flight and requires a fresh successful one. A session that simply expires is not
+announced; its sockets find it gone at their next check. A database error or validation timeout permits retaining
 previously accepted credentials for at most 15 seconds from the first observed
 failure, capped by the accepted JWT expiry. Only successful revalidation before
 that deadline clears the allowance. Disconnecting carries the same deadline into

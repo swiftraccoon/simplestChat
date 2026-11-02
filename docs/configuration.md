@@ -225,7 +225,8 @@ Runtime PostgreSQL statement, lock and idle-transaction limits are 10, 5 and 15
 seconds respectively; they are not an end-to-end request deadline.
 
 Each active authenticated socket checks its account credential version every
-five seconds after the previous check completes. Checks are not shared between
+five seconds after the previous check completes, and once more whenever a
+session of its account is ended rather than left to expire. Checks are not shared between
 sockets for the same account. With fast queries, 10,000 active authenticated
 sockets would therefore approach 2,000 periodic queries per second, before
 handshakes, renewals, disconnect/grace checks and other application SQL. The

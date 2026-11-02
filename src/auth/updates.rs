@@ -88,6 +88,15 @@ struct Account {
 struct StateMap {
     accounts: HashMap<Uuid, Account>,
     total: usize,
+    /// Revalidation notices for signaling sockets, by account. Sockets are
+    /// bounded by the connection limit, so they count against neither
+    /// `capacity` nor `ACCOUNT_STREAMS`.
+    sockets: HashMap<Uuid, SocketNotices>,
+}
+
+struct SocketNotices {
+    sender: broadcast::Sender<()>,
+    subscribers: usize,
 }
 
 struct Inner {
@@ -108,6 +117,7 @@ impl Hub {
                 state: Mutex::new(StateMap {
                     accounts: HashMap::new(),
                     total: 0,
+                    sockets: HashMap::new(),
                 }),
                 capacity,
             }),
@@ -176,11 +186,74 @@ impl Hub {
         }
     }
 
+    /// Make every open stream and socket of `account` re-check its credentials
+    /// now instead of at its next periodic check: a session of the account
+    /// ended or its credentials changed.
     pub(crate) fn revalidate(&self, account: Uuid) {
         let state = self.inner.state.lock();
         if let Some(entry) = state.accounts.get(&account) {
             entry.generation.fetch_add(1, Ordering::SeqCst);
             let _ = entry.sender.send(Notice::Revalidate);
+        }
+        if let Some(entry) = state.sockets.get(&account) {
+            let _ = entry.sender.send(());
+        }
+    }
+
+    /// The revalidation notices of one signaling socket of `account`. The
+    /// account's entry is removed with its last subscription.
+    pub(crate) fn subscribe_revalidation(&self, account: Uuid) -> Revalidations {
+        let mut state = self.inner.state.lock();
+        let entry = state
+            .sockets
+            .entry(account)
+            .or_insert_with(|| SocketNotices {
+                sender: broadcast::channel(1).0,
+                subscribers: 0,
+            });
+        entry.subscribers += 1;
+        Revalidations {
+            receiver: entry.sender.subscribe(),
+            _lease: SocketLease {
+                inner: self.inner.clone(),
+                account,
+            },
+        }
+    }
+}
+
+/// One socket's revalidation notices (`Hub::subscribe_revalidation`).
+pub(crate) struct Revalidations {
+    receiver: broadcast::Receiver<()>,
+    _lease: SocketLease,
+}
+
+impl Revalidations {
+    /// Resolves at the next notice; notices a slow socket missed count as one.
+    /// Cancel-safe: a notice is never lost to a dropped wait.
+    pub(crate) async fn notice(&mut self) {
+        match self.receiver.recv().await {
+            Ok(()) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+            // The lease keeps the account's sender in the hub, so the channel
+            // cannot close while this subscription exists.
+            Err(broadcast::error::RecvError::Closed) => std::future::pending().await,
+        }
+    }
+}
+
+struct SocketLease {
+    inner: Arc<Inner>,
+    account: Uuid,
+}
+
+impl Drop for SocketLease {
+    fn drop(&mut self) {
+        let mut state = self.inner.state.lock();
+        if let Some(entry) = state.sockets.get_mut(&self.account) {
+            entry.subscribers -= 1;
+            if entry.subscribers == 0 {
+                state.sockets.remove(&self.account);
+            }
         }
     }
 }

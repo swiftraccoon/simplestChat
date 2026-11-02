@@ -859,3 +859,137 @@ async fn authorization_database_account_updates_commit_completion_survives_aband
     drop(feed);
     fixture.finish().await;
 }
+
+#[tokio::test]
+#[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
+async fn logout_pushes_revalidation_to_open_streams() {
+    let mut fixture = Fixture::new(1).await;
+    let refresh = session::generate_refresh_token().unwrap();
+    let second = session::create_session(&fixture.pool, &fixture.users[0], &refresh)
+        .await
+        .unwrap();
+    let token = fixture.token(fixture.users[0], second, 0);
+    fixture.tokens.push(token);
+    let mut socket = fixture
+        .server
+        .room_manager()
+        .account_updates()
+        .subscribe_revalidation(fixture.users[0]);
+    let mut ended = Feed::open(&fixture, 1, 31).await;
+    let mut sibling = Feed::open(&fixture, 0, 31).await;
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/api/auth/logout")
+        .header(
+            header::COOKIE,
+            format!("__Host-refresh_token={}", refresh.raw),
+        )
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([192, 0, 2, 31], 12345))));
+    let logout = fixture
+        .server
+        .clone()
+        .router()
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(logout.status(), StatusCode::NO_CONTENT);
+    // Both waits end well before the five-second periodic check.
+    tokio::time::timeout(Duration::from_secs(2), socket.notice())
+        .await
+        .expect("logout tells the account's sockets to re-check");
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), ended.0.next())
+            .await
+            .expect("the logged-out session's stream closes at once")
+            .is_none()
+    );
+    sibling.quiet().await;
+    drop((ended, sibling, socket));
+    fixture.finish().await;
+}
+
+/// POST /api/auth/refresh with `cookie` as the refresh token, from `octet`.
+async fn refresh(fixture: &Fixture, cookie: &str, octet: u8) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/api/auth/refresh")
+        .header(header::COOKIE, format!("__Host-refresh_token={cookie}"))
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([192, 0, 2, octet], 12345))));
+    fixture
+        .server
+        .clone()
+        .router()
+        .oneshot(request)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
+async fn refresh_token_reuse_pushes_revalidation_to_open_streams() {
+    let mut fixture = Fixture::new(1).await;
+    let predecessor = session::generate_refresh_token().unwrap();
+    let second = session::create_session(&fixture.pool, &fixture.users[0], &predecessor)
+        .await
+        .unwrap();
+    let token = fixture.token(fixture.users[0], second, 0);
+    fixture.tokens.push(token);
+    let rotated = refresh(&fixture, &predecessor.raw, 32).await;
+    assert_eq!(rotated.status(), StatusCode::OK);
+    // Past the concurrency grace, presenting the consumed token again is reuse.
+    sqlx::query(
+        "UPDATE sessions
+         SET refresh_token_rotated_at = clock_timestamp() - interval '1 minute'
+         WHERE id = $1",
+    )
+    .bind(second)
+    .execute(&fixture.pool)
+    .await
+    .unwrap();
+    let mut socket = fixture
+        .server
+        .room_manager()
+        .account_updates()
+        .subscribe_revalidation(fixture.users[0]);
+    let mut ended = Feed::open(&fixture, 1, 33).await;
+    let mut sibling = Feed::open(&fixture, 0, 34).await;
+    let replay = refresh(&fixture, &predecessor.raw, 35).await;
+    let unknown = refresh(
+        &fixture,
+        &session::generate_refresh_token().unwrap().raw,
+        36,
+    )
+    .await;
+    // The revocation answers exactly as any token the server does not know.
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(unknown.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        axum::body::to_bytes(replay.into_body(), 4096)
+            .await
+            .unwrap(),
+        axum::body::to_bytes(unknown.into_body(), 4096)
+            .await
+            .unwrap()
+    );
+    // Both waits end well before the five-second periodic check.
+    tokio::time::timeout(Duration::from_secs(2), socket.notice())
+        .await
+        .expect("reuse tells the account's sockets to re-check");
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), ended.0.next())
+            .await
+            .expect("the revoked session's stream closes at once")
+            .is_none()
+    );
+    sibling.quiet().await;
+    drop((ended, sibling, socket));
+    fixture.finish().await;
+}

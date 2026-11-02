@@ -728,6 +728,66 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
     );
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn an_ended_session_closes_its_socket_at_the_hubs_notice() {
+    let pool = disposable_account_pool().await;
+    let email = format!("revalidation-{}@example.test", Uuid::new_v4());
+    let account_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Notice fixture') RETURNING id",
+    )
+    .bind(email)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let refresh = crate::auth::session::generate_refresh_token().unwrap();
+    let session_id = crate::auth::session::create_session(&pool, &account_id, &refresh)
+        .await
+        .unwrap();
+    let secret = crate::auth::jwt::JwtSecret::from("hub-notice-fixture-secret-at-least-32-bytes");
+    let claims = crate::auth::jwt::validate_token(
+        &crate::auth::jwt::create_session_token(
+            &account_id.to_string(),
+            "Notice fixture",
+            &secret,
+            0,
+            session_id,
+        )
+        .unwrap(),
+        &secret,
+    )
+    .unwrap();
+    let mut fixture = Fixture::with_authentication(Some(claims), Some(pool.clone()), None).await;
+    let observed = async {
+        let joined = fixture.join().await?;
+        anyhow::ensure!(joined["type"] == "roomJoined", "fixture was not admitted");
+        // Let the socket's first account check settle; the next periodic one is
+        // five seconds after it.
+        fixture.observe_alive(Duration::from_millis(200)).await?;
+        crate::auth::session::delete_session_by_token(&pool, &refresh.raw)
+            .await
+            .map_err(|_| anyhow::anyhow!("the fixture session could not be ended"))?;
+        fixture.manager.account_updates().revalidate(account_id);
+        anyhow::ensure!(
+            fixture
+                .observe_alive(Duration::from_millis(1500))
+                .await
+                .is_err(),
+            "the socket outlived its ended session past the hub's notice"
+        );
+        Ok::<(), anyhow::Error>(())
+    }
+    .await;
+    fixture.finish().await;
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(account_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    assert!(observed.is_ok(), "{observed:?}");
+}
+
 fn joined_id(joined: &serde_json::Value) -> ParticipantId {
     joined["participantId"]
         .as_str()

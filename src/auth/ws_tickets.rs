@@ -308,7 +308,8 @@ mod tests {
             let mut transaction = pool.begin().await.unwrap();
             let sid = session::create_session_with(&mut transaction, &user, &refresh)
                 .await
-                .unwrap();
+                .unwrap()
+                .id;
             transaction.commit().await.unwrap();
             let mut identity = claims(epoch_seconds().unwrap());
             identity.sub = user.to_string();

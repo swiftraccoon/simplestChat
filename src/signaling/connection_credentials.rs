@@ -412,9 +412,7 @@ impl CredentialSession {
                 true
             }
             Err(broadcast::error::RecvError::Lagged(_)) => {
-                self.pending = None;
-                self.continuity.require_revalidation();
-                self.next_check = Instant::now();
+                self.recheck_now();
                 false
             }
             Err(broadcast::error::RecvError::Closed) => {
@@ -423,6 +421,16 @@ impl CredentialSession {
             }
             _ => false,
         }
+    }
+
+    /// Re-check the account now and accept only a successful answer: lost
+    /// revocation notices, or the account hub's word that a session of this
+    /// account ended. The check in flight may predate that change, so it is
+    /// discarded.
+    pub(super) fn recheck_now(&mut self) {
+        self.pending = None;
+        self.continuity.require_revalidation();
+        self.next_check = Instant::now();
     }
 
     /// Start the periodic account check; `false` means the accepted

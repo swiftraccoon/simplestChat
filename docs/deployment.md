@@ -446,14 +446,17 @@ and [development](development.md) for native build requirements.
   existing Member-or-higher role for explicit moderator admission; the room's
   ordinary lobby rules still apply as well.
 - Access tokens are bound to the refresh session they were issued with, so
-  logging that session out retires them: HTTP requests fail on the next call and
-  authenticated sockets within their revalidation interval (about 5 s). A logout
-  affects only its own session; other devices stay signed in. Each refresh keeps
-  a session for seven more days but never past 30 days after sign-in, when that
-  device must sign in again. Refresh-token replay outside the multi-tab race
-  window revokes the token family. Password changes and saved-key recovery revoke
-  existing tokens and active account connections. Ordinary logout relies on
-  the socket revalidation interval rather than an immediate disconnect broadcast.
+  logging that session out retires them: HTTP requests fail on the next call, and
+  the account's open update streams and authenticated sockets are told to
+  re-check at once, so those of the ended session close after one database
+  check. A logout affects only its own session; other devices stay signed in.
+  Each refresh keeps a session for seven more days but never past 30 days after
+  sign-in, when that device must sign in again; that end is not announced, and
+  the account's connections find it at their next check. Refresh-token replay
+  outside the multi-tab race window revokes the token family, and a sign-in
+  beyond the account's 32 live sessions ends its oldest; both tell the account's
+  connections at once, as logout does. Password changes and saved-key recovery
+  revoke existing tokens and active account connections.
 - Reconnect replay remains bounded memory (300 entries / 256 KiB per room) and
   respects the current membership. Saved chat is separate PostgreSQL data:
   account-to-account PMs have 90-day retention, while persisted rooms default to

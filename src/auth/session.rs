@@ -32,8 +32,17 @@ pub(crate) enum RefreshRotation {
     /// period. It is rejected, but does not revoke the winner's successor.
     ConcurrentRequest,
     /// A predecessor outside the grace period (or an older family token) was
-    /// replayed, and the current successor family has been revoked.
-    ReuseDetected,
+    /// replayed, and the current successor family has been revoked. `user_id`
+    /// names the account whose session that ended.
+    ReuseDetected { user_id: Uuid },
+}
+
+/// A session `create_session_with` inserted, and whether keeping the account
+/// within `MAX_ACTIVE_SESSIONS_PER_USER` ended another of its live sessions;
+/// removing the account's expired sessions alone does not count.
+pub(crate) struct CreatedSession {
+    pub(crate) id: Uuid,
+    pub(crate) evicted_live_session: bool,
 }
 
 pub(crate) fn generate_refresh_token() -> Result<RefreshToken, AuthError> {
@@ -109,14 +118,23 @@ pub(crate) async fn create_session(
         .commit()
         .await
         .map_err(crate::auth::routes::database_error)?;
-    Ok(session)
+    Ok(session.id)
 }
 
+/// Inserts a session for `user_id` inside the caller's transaction, then deletes
+/// the account's expired sessions and, beyond `MAX_ACTIVE_SESSIONS_PER_USER`
+/// live ones, its oldest. The result says whether a live session was ended to
+/// make room, so the caller can tell that account's open connections once it
+/// commits.
+///
+/// # Errors
+/// The `AuthError::DatabaseError` built by `routes::database_error` when a query
+/// fails.
 pub(crate) async fn create_session_with(
     transaction: &mut Transaction<'_, Postgres>,
     user_id: &Uuid,
     refresh_token: &RefreshToken,
-) -> Result<Uuid, AuthError> {
+) -> Result<CreatedSession, AuthError> {
     // Serialize login/session-cap maintenance per account. Refresh rotation
     // takes the same lock before mutating a session, so every path follows the
     // users->sessions lock order and the cap remains exact under concurrency.
@@ -129,29 +147,37 @@ pub(crate) async fn create_session_with(
 
     // A user who knows valid credentials must not be able to grow the sessions
     // table without bound by repeatedly logging in. Keep the newest sessions,
-    // and remove expired rows for this user in the same transaction.
-    sqlx::query(
-        "DELETE FROM sessions
-         WHERE user_id = $1
-           AND id <> $2
-           AND (
-             expires_at <= now()
-             OR id IN (
-               SELECT id
-               FROM sessions
-               WHERE user_id = $1 AND id <> $2 AND expires_at > now()
-               ORDER BY created_at DESC, id DESC
-               OFFSET $3
-             )
-           )",
+    // and remove expired rows for this user in the same transaction. A deleted
+    // row that has not expired is a live session the cap ended.
+    let evicted_live_session: bool = sqlx::query_scalar(
+        "WITH removed AS (
+             DELETE FROM sessions
+             WHERE user_id = $1
+               AND id <> $2
+               AND (
+                 expires_at <= now()
+                 OR id IN (
+                   SELECT id
+                   FROM sessions
+                   WHERE user_id = $1 AND id <> $2 AND expires_at > now()
+                   ORDER BY created_at DESC, id DESC
+                   OFFSET $3
+                 )
+               )
+             RETURNING expires_at > now() AS live
+         )
+         SELECT COALESCE(bool_or(live), false) FROM removed",
     )
     .bind(user_id)
     .bind(new_session_id)
     .bind(MAX_ACTIVE_SESSIONS_PER_USER - 1)
-    .execute(&mut **transaction)
+    .fetch_one(&mut **transaction)
     .await
     .map_err(crate::auth::routes::database_error)?;
-    Ok(new_session_id)
+    Ok(CreatedSession {
+        id: new_session_id,
+        evicted_live_session,
+    })
 }
 
 async fn insert_session_with<'e, E>(
@@ -323,31 +349,36 @@ pub(crate) async fn rotate_refresh_token_with(
         .execute(&mut **transaction)
         .await
         .map_err(crate::auth::routes::database_error)?;
-    Ok(RefreshRotation::ReuseDetected)
+    Ok(RefreshRotation::ReuseDetected {
+        user_id: candidate_user_id,
+    })
 }
 
-/// Revoke the family represented by either its current token or any predecessor.
-/// Logout remains idempotent, so an unknown or malformed token is not an error.
+/// Revoke the family represented by either its current token or any predecessor,
+/// returning the account whose session ended. Logout remains idempotent, so an
+/// unknown or malformed token is not an error: it ends nothing and names no one.
+/// Both digests are unique, and a token's family names its own session, so at
+/// most one session matches.
 pub(crate) async fn delete_session_by_token(
     pool: &PgPool,
     raw_token: &str,
-) -> Result<bool, AuthError> {
+) -> Result<Option<Uuid>, AuthError> {
     let token_hash = hash_token(raw_token);
     let Some(family_secret) = family_secret(raw_token) else {
-        return Ok(false);
+        return Ok(None);
     };
     let family_hash = hash_bytes(&family_secret);
-    let result = sqlx::query(
+    sqlx::query_scalar(
         "DELETE FROM sessions
          WHERE refresh_token_hash = $1
-            OR refresh_token_family_hash = $2",
+            OR refresh_token_family_hash = $2
+         RETURNING user_id",
     )
     .bind(token_hash)
     .bind(family_hash)
-    .execute(pool)
+    .fetch_optional(pool)
     .await
-    .map_err(crate::auth::routes::database_error)?;
-    Ok(result.rows_affected() > 0)
+    .map_err(crate::auth::routes::database_error)
 }
 
 /// Serializes the opportunistic expired-session sweep. A refresh burst must

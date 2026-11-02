@@ -439,6 +439,14 @@ async fn handle_connection_with_timing(
 
     let is_authenticated = authenticated_user.is_some();
     let mut session = CredentialSession::new(authenticated_user);
+    // The account hub wakes an authenticated socket when a session of its
+    // account is ended (logout, revocation, refresh-token reuse or the session
+    // cap), so the socket closes at once instead of at its next periodic check.
+    let mut account_notices = is_authenticated.then(|| {
+        room_manager
+            .account_updates()
+            .subscribe_revalidation(participant_id.as_uuid())
+    });
 
     let diagnostic_connection_id = Some(metrics.next_connection_id());
     info!(
@@ -606,6 +614,15 @@ async fn handle_connection_with_timing(
                 if session.revoked_by(notice) {
                     break;
                 }
+                continue;
+            }
+            () = async {
+                match account_notices.as_mut() {
+                    Some(notices) => notices.notice().await,
+                    None => std::future::pending().await,
+                }
+            }, if account_notices.is_some() => {
+                session.recheck_now();
                 continue;
             }
             _ = tokio::time::sleep_until(session.next_check.into()), if is_authenticated && session.pending.is_none() => {

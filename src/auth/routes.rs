@@ -63,6 +63,20 @@ fn refresh_cookie_headers(raw_token: &str) -> Result<HeaderMap, AuthError> {
     Ok(headers)
 }
 
+/// Tells `account`'s open update streams and sockets to re-check at once when
+/// creating `session` ended another of its live sessions to keep the account
+/// within its session cap. Call it only after the sign-in committed, so the
+/// re-check finds the ended session gone.
+fn announce_session_eviction(
+    server: &SignalingServer,
+    account: Uuid,
+    session: &session::CreatedSession,
+) {
+    if session.evicted_live_session {
+        server.room_manager().account_updates().revalidate(account);
+    }
+}
+
 pub(super) fn clear_refresh_cookie_headers() -> HeaderMap {
     let mut headers = no_store_headers();
     headers.append(
@@ -322,10 +336,11 @@ pub(crate) async fn register(
     .map_err(user_insert_error)?;
 
     let user_id = row.0.to_string();
-    let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
-    let token = jwt::create_session_token(&user_id, &row.2, secret, 0, session_id)?;
+    let created = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let token = jwt::create_session_token(&user_id, &row.2, secret, 0, created.id)?;
     let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
+    announce_session_eviction(&server, row.0, &created);
 
     info!(user_id, "User registered");
     Ok((
@@ -405,10 +420,11 @@ pub(crate) async fn login(
     if current != Some((row.3.clone(), row.4)) {
         return Err(AuthError::InvalidCredentials);
     }
-    let session_id = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
-    let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, session_id)?;
+    let created = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
+    let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, created.id)?;
     let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
+    announce_session_eviction(&server, row.0, &created);
     server.note_sign_in_success(source_ip, &email);
 
     info!(user_id, "User logged in");
@@ -450,11 +466,13 @@ pub(crate) async fn refresh(
                 transaction.commit().await.map_err(database_error)?;
                 return Err(AuthError::InvalidToken);
             }
-            session::RefreshRotation::ReuseDetected => {
+            session::RefreshRotation::ReuseDetected { user_id } => {
                 // Reuse revocation is a durable security action. Commit it
                 // before returning the same non-oracular error as any invalid
-                // token.
+                // token, then tell the account's open streams and sockets, so
+                // those of the revoked session close at once.
                 transaction.commit().await.map_err(database_error)?;
+                server.room_manager().account_updates().revalidate(user_id);
                 warn!("Refresh-token reuse detected; revoked session family");
                 return Err(AuthError::InvalidToken);
             }
@@ -506,7 +524,14 @@ pub(crate) async fn logout(
     };
 
     match session::delete_session_by_token(pool, raw_token).await {
-        Ok(_) => (response_headers, StatusCode::NO_CONTENT),
+        Ok(ended) => {
+            // The ended session's streams and sockets re-check at once rather
+            // than at their next periodic check.
+            if let Some(account) = ended {
+                server.room_manager().account_updates().revalidate(account);
+            }
+            (response_headers, StatusCode::NO_CONTENT)
+        }
         Err(error) => {
             warn!(?error, "Failed to revoke refresh session during logout");
             // Retain the HttpOnly cookie so the caller can retry revocation;
@@ -606,15 +631,16 @@ pub(crate) async fn passkey_register_finish(
     .execute(&mut *transaction)
     .await
     .map_err(credential_insert_error)?;
-    let session_id =
+    let created =
         session::create_session_with(&mut transaction, &registration.user_id, &refresh_token)
             .await?;
 
     let user_id = registration.user_id.to_string();
     let token =
-        jwt::create_session_token(&user_id, &registration.display_name, secret, 0, session_id)?;
+        jwt::create_session_token(&user_id, &registration.display_name, secret, 0, created.id)?;
     let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
+    announce_session_eviction(&server, registration.user_id, &created);
     info!(user_id, "User registered via passkey");
 
     Ok((
@@ -744,13 +770,14 @@ pub(crate) async fn passkey_login_finish(
     )
     .await?;
     let refresh_token = session::generate_refresh_token()?;
-    let session_id =
+    let created =
         session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
 
     let user_id = account_id.to_string();
-    let token = jwt::create_session_token(&user_id, &user.1, secret, user.2, session_id)?;
+    let token = jwt::create_session_token(&user_id, &user.1, secret, user.2, created.id)?;
     let cookie = refresh_cookie_headers(&refresh_token.raw)?;
     transaction.commit().await.map_err(database_error)?;
+    announce_session_eviction(&server, account_id, &created);
     info!(user_id, "User logged in via passkey");
 
     Ok((

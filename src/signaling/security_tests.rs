@@ -641,7 +641,8 @@ async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
     let mut transaction = pool.begin().await.unwrap();
     let sid = session::create_session_with(&mut transaction, &user, &refresh)
         .await
-        .unwrap();
+        .unwrap()
+        .id;
     transaction.commit().await.unwrap();
     let secret = "disposable-upgrade-test-secret-at-least-32-bytes";
     let token = jwt::create_session_token(

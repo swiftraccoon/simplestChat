@@ -114,8 +114,9 @@ pub(crate) async fn list(
     Ok((routes::no_store_headers(), Json(sessions)))
 }
 
-/// DELETE /api/auth/sessions/{id}: revoke one of the caller's sessions. Existing
-/// socket and reconnect-grace validation check the deleted row every 5 s.
+/// DELETE /api/auth/sessions/{id}: revoke one of the caller's sessions. The
+/// account's streams and sockets re-check at once; reconnect-grace validation
+/// finds the deleted row at its next 5 s check.
 pub(crate) async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,

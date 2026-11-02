@@ -121,3 +121,37 @@ async fn account_update_absolute_lifetime_closes_a_quiet_stream_without_replayin
     drop(connection);
     assert_eq!(hub.inner.state.lock().total, 0);
 }
+
+#[tokio::test]
+async fn socket_revalidation_reaches_only_its_account_and_leaves_with_the_last_subscriber() {
+    // Sockets are bounded by the connection limit, not by the stream budget.
+    let hub = Hub::with_capacity(0);
+    let account = Uuid::new_v4();
+    let mut first = hub.subscribe_revalidation(account);
+    let mut second = hub.subscribe_revalidation(account);
+    let mut outsider = hub.subscribe_revalidation(Uuid::new_v4());
+    assert!(matches!(
+        hub.subscribe(account),
+        Err(AuthError::ServiceBusy)
+    ));
+    hub.revalidate(account);
+    for notices in [&mut first, &mut second] {
+        tokio::time::timeout(Duration::from_secs(1), notices.notice())
+            .await
+            .expect("every socket of the account is told to re-check");
+    }
+    assert!(matches!(
+        outsider.receiver.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
+    drop(first);
+    assert_eq!(hub.inner.state.lock().sockets[&account].subscribers, 1);
+    drop(second);
+    assert!(
+        !hub.inner.state.lock().sockets.contains_key(&account),
+        "the account's entry goes with its last subscriber"
+    );
+    drop(outsider);
+    assert!(hub.inner.state.lock().sockets.is_empty());
+    assert_eq!(hub.inner.state.lock().total, 0);
+}
