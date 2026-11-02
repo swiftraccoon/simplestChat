@@ -155,8 +155,10 @@ three transient-error retries with curl's default backoff, a 180-second retry
 window, a 20-second connection timeout and a 120-second limit per attempt. An
 attempt already in progress may finish beyond the retry window; exhausted retries
 or a checksum mismatch fail the build. Python build tools use the constraints file.
-Run the server from the repository root so it can
-find `web/dist`; reload Rust Analyzer after the first native setup.
+Run the server from the repository root: it serves `web/dist` from its working
+directory and refuses to start without `web/dist/index.html`, reporting
+"web/dist/index.html is missing; run npm --prefix web run build". Reload Rust
+Analyzer after the first native setup.
 
 ### Rust toolchain troubleshooting
 

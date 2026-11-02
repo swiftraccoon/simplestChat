@@ -319,7 +319,7 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
     for (job, scope, count) in [
         ("automation", "automation", 18),
         ("rust-lint", "rust-lint", 13),
-        ("rust-test", "rust-test", 20),
+        ("rust-test", "rust-test", 21),
         ("browser", "browser-backend", 44),
     ] {
         let steps = workflow.jobs[job]["steps"].as_array().unwrap();

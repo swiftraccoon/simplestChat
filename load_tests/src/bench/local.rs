@@ -20,7 +20,9 @@ use super::{
     reports::NativeReports,
     sampling::{NativePorts, NativeResources},
 };
+use anyhow::Context as _;
 use std::ffi::OsString;
+use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -35,6 +37,10 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
     let result = (|| -> anyhow::Result<(bool, u8)> {
         let directory = std::env::current_dir()?;
         let options = super::options::parse(arguments, &directory)?;
+        if let Err(error) = lend_bundle(&options.candidate_root, &options.baseline_root) {
+            eprintln!("benchmark local: {error:#}");
+            return Err(error);
+        }
         let environment = std::env::vars_os().collect();
         let run_id = receipt::run_id(&environment)?;
         let host = Arc::new(NativeHost::default());
@@ -110,4 +116,54 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The server refuses to start without `web/dist/index.html`. A baseline root
+/// without one (the comparison's fresh worktree never builds it) receives, and
+/// keeps, a copy of the candidate's bundle; the workload drives WebSockets and
+/// media and never requests a page. Nothing is copied when the baseline has a
+/// bundle or the candidate has none. The baseline must already be a checkout
+/// with a `web` directory, and the copy creates `web/dist` and every directory
+/// below it, so it never creates a root or merges into a partial bundle.
+fn lend_bundle(candidate_root: &Path, baseline_root: &Path) -> anyhow::Result<()> {
+    let page = Path::new("web/dist/index.html");
+    if baseline_root.join(page).is_file() || !candidate_root.join(page).is_file() {
+        return Ok(());
+    }
+    anyhow::ensure!(
+        baseline_root.join("web").is_dir(),
+        "baseline root {} has no web directory to receive the candidate's bundle",
+        baseline_root.display()
+    );
+    let target = baseline_root.join("web/dist");
+    match std::fs::create_dir(&target) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => anyhow::bail!(
+            "{} exists without index.html; remove it or build the baseline's bundle",
+            target.display()
+        ),
+        Err(error) => {
+            return Err(error).with_context(|| format!("creating {}", target.display()));
+        }
+    }
+    copy_tree(&candidate_root.join("web/dist"), &target)
+        .context("copying the candidate's web/dist into the baseline root")
+}
+
+/// Copies the directories and regular files below `source` into the existing
+/// `target`, creating each subdirectory with `create_dir` so nothing is merged;
+/// links and other entries are skipped.
+fn copy_tree(source: &Path, target: &Path) -> anyhow::Result<()> {
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let destination = target.join(entry.file_name());
+        if kind.is_dir() {
+            std::fs::create_dir(&destination)?;
+            copy_tree(&entry.path(), &destination)?;
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), &destination)?;
+        }
+    }
+    Ok(())
 }

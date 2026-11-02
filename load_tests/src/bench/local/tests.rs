@@ -754,3 +754,92 @@ async fn ci_receipt_requires_six_existing_workload_finalizers_and_keeps_cleanup_
         fixture.clean();
     }
 }
+
+/// A private root holding a candidate checkout with a built bundle and a
+/// baseline checkout without one.
+fn bundle_roots() -> (PathBuf, PathBuf, PathBuf) {
+    let root = std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .join(format!("benchmark-local-bundle-{}", uuid::Uuid::new_v4()));
+    let (candidate, baseline) = (root.join("candidate"), root.join("baseline"));
+    std::fs::create_dir_all(candidate.join("web/dist/assets")).unwrap();
+    std::fs::create_dir_all(baseline.join("web")).unwrap();
+    std::fs::write(candidate.join("web/dist/index.html"), "candidate page").unwrap();
+    std::fs::write(candidate.join("web/dist/assets/app.js"), "candidate script").unwrap();
+    (root, candidate, baseline)
+}
+
+#[test]
+fn a_baseline_without_the_browser_bundle_borrows_the_candidates() {
+    let (root, candidate, baseline) = bundle_roots();
+    let read = |path: PathBuf| std::fs::read_to_string(path).unwrap();
+    std::os::unix::fs::symlink(
+        candidate.join("web/dist/index.html"),
+        candidate.join("web/dist/link.html"),
+    )
+    .unwrap();
+    super::lend_bundle(&candidate, &baseline).unwrap();
+    assert_eq!(read(baseline.join("web/dist/index.html")), "candidate page");
+    assert_eq!(
+        read(baseline.join("web/dist/assets/app.js")),
+        "candidate script"
+    );
+    assert!(
+        baseline
+            .join("web/dist/link.html")
+            .symlink_metadata()
+            .is_err()
+    );
+    // A baseline that has a bundle keeps its own.
+    std::fs::write(baseline.join("web/dist/index.html"), "baseline page").unwrap();
+    std::fs::write(candidate.join("web/dist/assets/app.js"), "changed").unwrap();
+    super::lend_bundle(&candidate, &baseline).unwrap();
+    assert_eq!(read(baseline.join("web/dist/index.html")), "baseline page");
+    assert_eq!(
+        read(baseline.join("web/dist/assets/app.js")),
+        "candidate script"
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_candidate_without_a_bundle_creates_nothing_in_the_baseline() {
+    let (root, candidate, baseline) = bundle_roots();
+    std::fs::remove_dir_all(candidate.join("web/dist")).unwrap();
+    super::lend_bundle(&candidate, &baseline).unwrap();
+    assert!(baseline.join("web/dist").symlink_metadata().is_err());
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_missing_baseline_root_or_partial_bundle_is_refused_and_nothing_is_created() {
+    let (root, candidate, baseline) = bundle_roots();
+    let mistyped = root.join("mistyped");
+    let refusal = super::lend_bundle(&candidate, &mistyped).unwrap_err();
+    assert!(
+        refusal
+            .to_string()
+            .contains(&mistyped.display().to_string()),
+        "{refusal:#}"
+    );
+    assert!(mistyped.symlink_metadata().is_err());
+    // A web/dist left without its page is not merged into.
+    std::fs::create_dir(baseline.join("web/dist")).unwrap();
+    std::fs::write(baseline.join("web/dist/stale.js"), "stale").unwrap();
+    let partial = super::lend_bundle(&candidate, &baseline).unwrap_err();
+    assert_eq!(
+        partial.to_string(),
+        format!(
+            "{} exists without index.html; remove it or build the baseline's bundle",
+            baseline.join("web/dist").display()
+        )
+    );
+    assert!(
+        baseline
+            .join("web/dist/index.html")
+            .symlink_metadata()
+            .is_err()
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}

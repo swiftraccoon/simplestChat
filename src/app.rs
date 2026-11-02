@@ -10,9 +10,10 @@ use crate::{
     room::{ManagerSettings, RoomManager},
     saturation::{SaturationMonitor, WorkerThreads},
     shutdown::run_stage,
-    signaling::SignalingServer,
+    signaling::{BROWSER_BUNDLE, SignalingServer},
 };
 use anyhow::Result;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -98,6 +99,9 @@ async fn run_server(config: Config, diagnostics: Diagnostics) -> Result<()> {
         .as_deref()
         .unwrap_or("unknown");
     info!(revision, "simplestChat server starting");
+    // The static route serves BROWSER_BUNDLE relative to the working directory.
+    // Refuse before media workers, migrations or the listener start.
+    require_browser_bundle(Path::new("."))?;
 
     let mut media_config = config.media.clone();
     crate::sizing::announce(
@@ -227,4 +231,44 @@ async fn run_server(config: Config, diagnostics: Diagnostics) -> Result<()> {
     );
     info!("Server shutdown complete");
     Ok(())
+}
+
+/// The browser bundle the static route serves from [`BROWSER_BUNDLE`] under
+/// `root`. Without its `index.html` every page would answer 404, so startup
+/// refuses with the command that builds it; `--check-config` returns before
+/// this.
+fn require_browser_bundle(root: &Path) -> Result<()> {
+    anyhow::ensure!(
+        root.join(BROWSER_BUNDLE).join("index.html").is_file(),
+        "{BROWSER_BUNDLE}/index.html is missing; run npm --prefix web run build"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn startup_refuses_a_missing_browser_bundle() {
+        let root = std::env::temp_dir().join(format!(
+            "simplestchat-browser-bundle-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let page = root.join("web/dist/index.html");
+        std::fs::create_dir_all(page.parent().unwrap()).unwrap();
+        let refusal = require_browser_bundle(&root).unwrap_err();
+        assert_eq!(
+            refusal.to_string(),
+            "web/dist/index.html is missing; run npm --prefix web run build"
+        );
+        // A directory in the page's place is not a bundle either.
+        std::fs::create_dir(&page).unwrap();
+        assert!(require_browser_bundle(&root).is_err());
+        std::fs::remove_dir(&page).unwrap();
+        std::fs::write(&page, "<!doctype html>").unwrap();
+        require_browser_bundle(&root).unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

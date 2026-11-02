@@ -260,7 +260,9 @@ Run from the candidate checkout:
 The runner starts and stops its own local servers, alternates baseline/candidate
 order, and records delivery, latency, CPU, memory, and cleanup results. The output
 directory must be new. Default ports are HTTP 3129 and UDP 41100; override them
-with `--port` and `--udp-port` if occupied.
+with `--port` and `--udp-port` if occupied. The server refuses to start without
+`web/dist/index.html`, so a baseline root without one receives, and keeps, a copy
+of the candidate's bundle; this workload never requests a page.
 
 The command uses the already built native binary; it does not install tools or
 build either server. `load_test bench local --help` starts no runtime or child.

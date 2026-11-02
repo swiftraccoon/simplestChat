@@ -521,6 +521,7 @@ After building the server, run the same process-lifecycle smoke used by CI:
 
 ```sh
 cargo build --locked --workspace --all-targets --profile test
+npm --prefix web run build
 ./target/debug/load_test bench shutdown-smoke --binary "$PWD/target/debug/simplestChat"
 ```
 
@@ -638,6 +639,7 @@ To validate the server's actual diagnostic JSONL schema with the same owned
 guest-only workflow, also run by CI:
 
 ```sh
+npm --prefix web run build
 ./target/debug/load_test bench diagnostics-smoke --binary "$PWD/target/debug/simplestChat"
 ```
 
@@ -801,6 +803,7 @@ With PostgreSQL tools on `PATH`, use the owned bootstrap:
 
 ```sh
 cargo build --locked --bin simplestChat
+npm --prefix web run build
 cargo run -q -p xtask -- test-env \
   cargo test --locked -p simplestchat -- --include-ignored --test-threads=1
 ```
@@ -1214,6 +1217,7 @@ export DATABASE_URL='postgres://test_owner@127.0.0.1:15434/simplestchat_test?ssl
 export DISPOSABLE_TEST_DATABASE=1
 
 cargo build --locked --bin simplestChat
+npm --prefix web run build
 cargo run -q -p xtask -- test-server \
   cargo test --locked -p simplestchat -- --include-ignored --test-threads=1
 ```

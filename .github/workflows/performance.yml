@@ -79,6 +79,13 @@ jobs:
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
           cargo run --locked -q -p xtask -- ci npm-path
 
+      # The candidate server starts from this checkout and refuses to start without
+      # the bundle; load_test bench local copies it into a baseline that has none.
+      - name: Build the browser bundle the server requires at startup
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+
       # The owner preserves the detached baseline's cwd and shared dependency
       # target, then settles all six local runs before removing its worktree.
       - name: Build and compare the baseline and candidate
@@ -311,8 +318,25 @@ jobs:
       - name: Require the hosted PostgreSQL query client
         run: command -v psql
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
       - name: Build the exact server and authenticated generator
         run: cargo build --locked --release --workspace --bins
+
+      # The measured server starts from this checkout and refuses to start
+      # without the bundle.
+      - name: Build the browser bundle the server requires at startup
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
 
       - name: Measure the fixed thirty-account room for twenty minutes
         timeout-minutes: 35

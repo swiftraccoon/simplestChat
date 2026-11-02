@@ -379,6 +379,16 @@ jobs:
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
           cargo run --locked -q -p xtask -- ci npm-path
 
+      # The shutdown, diagnostics, migration and media smoke steps below start
+      # the server from this checkout, and it refuses to start without the bundle.
+      - name: Build the browser bundle the server requires at startup
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
+        if: steps.verified.outputs.cache-hit != 'true'
+        run: |
+          npm --prefix web ci --ignore-scripts
+          npm --prefix web run build
+
       # Include development dependencies from the first build so cargo test
       # reuses the same feature graph and native worker. Explicitly use its
       # profile too; every test still executes in the test step below.
@@ -674,9 +684,6 @@ jobs:
           path: ${{ runner.temp }}/ci-verified-browser-backend
           key: ${{ steps.verified.outputs.cache-primary-key }}
 
-      - name: Migrate disposable test database with the real server
-        run: cargo run --locked -q -p xtask -- test-server true
-
       - name: Prefer official Ubuntu archive mirrors for browser dependencies
         if: ${{ !env.ACT }}
         timeout-minutes: 1
@@ -692,6 +699,10 @@ jobs:
           npm --prefix web/e2e ci --ignore-scripts
           npm --prefix web/e2e exec -- playwright install --with-deps chromium firefox
           npm --prefix web/e2e audit --audit-level=moderate
+
+      # After the UI build: the server refuses to start without the bundle.
+      - name: Migrate disposable test database with the real server
+        run: cargo run --locked -q -p xtask -- test-server true
 
       - name: Authentication dialog and diagnostic privacy in Chromium and Firefox
         if: matrix.group == 'accounts'

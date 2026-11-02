@@ -36,7 +36,7 @@ class PerformanceCompareCiTests(unittest.TestCase):
         return objects(self.job["steps"])
 
     def test_same_hosted_setup_cache_and_ninety_minute_ceiling_precede_owner(self) -> None:
-        """No new bootstrap, dependency or paid runner accompanies the owner."""
+        """No new bootstrap or paid runner; the pinned npm also builds the bundle."""
         self.assertEqual(self.job["runs-on"], "ubuntu-24.04")
         self.assertEqual(self.job["timeout-minutes"], "90")
         self.assertEqual(
@@ -49,6 +49,13 @@ class PerformanceCompareCiTests(unittest.TestCase):
         self.assertEqual(string(self.steps[1], "with", "cache-key"), "rust-release-benchmark")
         self.assertEqual(string(self.steps[2], "with", "node-version"), "26.10.0")
         self.assertEqual(self.steps[3]["name"], "Install checksum-pinned npm")
+        self.assertEqual(
+            self.steps[4]["name"], "Build the browser bundle the server requires at startup"
+        )
+        self.assertEqual(
+            self.steps[4]["run"],
+            "npm --prefix web ci --ignore-scripts\nnpm --prefix web run build\n",
+        )
         self.assertEqual(string(self.job, "env", "OPENSSL_STATIC"), "1")
         self.assertEqual(
             string(self.job, "env", "PIP_CONSTRAINT"),
@@ -56,8 +63,12 @@ class PerformanceCompareCiTests(unittest.TestCase):
         )
 
     def test_one_complete_owner_receives_only_the_existing_closed_profile_inputs(self) -> None:
-        """All builds and six runs belong to one owner rather than split shells."""
-        step = self.steps[4]
+        """The benchmark builds and six runs belong to one owner, not split shells.
+
+        Only the browser bundle is built beside the owner: the server refuses to
+        start without it, and the comparison never requests a page.
+        """
+        step = self.steps[5]
         self.assertEqual(step["name"], NAME)
         self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- ci performance-compare")
         self.assertEqual(
@@ -70,11 +81,11 @@ class PerformanceCompareCiTests(unittest.TestCase):
         )
         for key in ("if", "continue-on-error", "timeout-minutes", "working-directory"):
             self.assertNotIn(key, step)
-        self.assertEqual(len(self.steps), 7)
+        self.assertEqual(len(self.steps), 8)
 
     def test_threshold_and_artifact_guards_paths_and_retention_stay_separate(self) -> None:
         """Failed completed comparisons still reach the unchanged result readers."""
-        threshold, upload = self.steps[5:]
+        threshold, upload = self.steps[6:]
         self.assertEqual(threshold["name"], "Evaluate the regression budget")
         self.assertEqual(threshold["if"], "${{ !cancelled() }}")
         self.assertEqual(

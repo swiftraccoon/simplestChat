@@ -703,13 +703,18 @@ async fn drain_admission(
     next.run(request).await
 }
 
+/// The browser bundle the static fallback serves, relative to the working
+/// directory. Startup refuses to run without its `index.html`
+/// (`app::require_browser_bundle`), so the check and the route name one place.
+pub(crate) const BROWSER_BUNDLE: &str = "web/dist";
+
 fn with_static_fallback_and_security(router: Router) -> Router {
     // Router::layer only wraps routes and fallbacks that already exist, so the
     // static fallback must be installed before the security middleware. The
     // peer-address gate sits inside the security headers, so its refusal
     // carries them too.
     router
-        .fallback_service(ServeDir::new("web/dist"))
+        .fallback_service(ServeDir::new(BROWSER_BUNDLE))
         .layer(DefaultBodyLimit::max(64 * 1024))
         .layer(middleware::from_fn(require_peer_address))
         .layer(middleware::from_fn(security_headers))
