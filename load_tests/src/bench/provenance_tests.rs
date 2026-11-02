@@ -191,9 +191,13 @@ async fn private_exclusions_path_boundaries_and_executable_modes_match_actual_js
     );
     fixture.write("build.rs", b"// build input\n");
     fixture.write(".cargo/config", b"[build]\n");
+    let build_inputs = fixture.tree().await;
+    assert_ne!(build_inputs.source_tree_sha256, initial.source_tree_sha256);
+    // The server embeds its migrations, so they are compile-time inputs.
+    fixture.write("migrations/001_fixture.sql", b"SELECT 1;\n");
     assert_ne!(
         fixture.tree().await.source_tree_sha256,
-        initial.source_tree_sha256
+        build_inputs.source_tree_sha256
     );
 }
 

@@ -233,7 +233,7 @@ test('every Rust/browser source and migration in the repository reaches the buil
   // The context admits source directories one by one, so a new directory needs its own
   // rules: the Rust CI jobs build from the checkout and pass while only the image build
   // sees the hole (CI runs 39295831051 and 39302090481).
-  const sources = ['ops/src/**/*.rs', 'src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
+  const sources = ['build.rs', 'ops/src/**/*.rs', 'src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
     'web/src/**/*.ts', 'web/src/**/*.css']
     .flatMap(pattern => globSync(pattern, { cwd: root }));
   assert.ok(sources.length > 100, 'the source globs must find the crate sources');
@@ -404,7 +404,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/src/screens/private.env', 'web/src/screens/CLAUDE.md', 'web/src/chat/private.env', 'web/src/chat/CLAUDE.md',
   ]) assert.equal(excluded(filename), true, `${filename} must stay outside the build context`);
   for (const filename of [
-    'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock',
+    'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'build.rs',
     'build/pip-constraints.txt', 'build/install-openssl.sh',
     'security/exceptions.json', 'security/image-policy.json', 'security/runtime/nsswitch.conf',
     'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs', 'src/room/manager/membership.rs',

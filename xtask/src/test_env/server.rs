@@ -188,11 +188,11 @@ async fn plan(
     let workdir = env(environment, "TEST_SERVER_WORKDIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.to_path_buf());
-    if !workdir.join("Cargo.toml").is_file() || !workdir.join("migrations").is_dir() {
+    if !workdir.join("Cargo.toml").is_file() {
         return Err(Stop {
             code: 1,
             message: format!(
-                "TEST_SERVER_WORKDIR must hold Cargo.toml and migrations: {}",
+                "TEST_SERVER_WORKDIR must hold Cargo.toml: {}",
                 workdir.display()
             ),
         }

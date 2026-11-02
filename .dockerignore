@@ -7,6 +7,7 @@
 !.dockerignore
 !Cargo.toml
 !Cargo.lock
+!build.rs
 !build/
 build/**
 !build/pip-constraints.txt

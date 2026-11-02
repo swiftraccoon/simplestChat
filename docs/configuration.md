@@ -10,7 +10,7 @@
 | `DATABASE_MAX_CONNECTIONS` | `20` | Maximum connections in this process's application pool (1–1000); budget these against PostgreSQL connection slots |
 | `DATABASE_MIN_CONNECTIONS` | `2` | Warm connection floor (0–1000, at most the configured maximum) |
 | `DATABASE_ACQUIRE_TIMEOUT_SECS` | `3` | Maximum wait to acquire a pool connection (1–60 seconds); independent of statement and request deadlines |
-| `RUN_MIGRATIONS` | `false` | Apply migrations from `./migrations` at startup; intended only for local development |
+| `RUN_MIGRATIONS` | `false` | Apply the migrations compiled into the binary at startup; intended only for local development |
 | `JWT_SECRET` | (none) | HS256 secret of at least 32 bytes; **auth endpoints return 503 without it** |
 | `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); configure together with `WEBAUTHN_ORIGIN`, or leave both unset to disable passkeys |
 | `WEBAUTHN_ORIGIN` | (none) | Expected HTTPS origin for passkey ceremonies (e.g. `https://chat.example.com`), without a path; HTTP loopback origins are allowed for development |

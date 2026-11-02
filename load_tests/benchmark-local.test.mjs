@@ -927,7 +927,10 @@ test('ignored, private and generated paths do not enter the scoped source finger
   const buildScript = await sourceTreeIdentity(f.root);
   assert.notEqual(buildScript.sourceTreeSha256, before.sourceTreeSha256);
   await f.write('.cargo/config', '[build]\n');
-  assert.notEqual((await sourceTreeIdentity(f.root)).sourceTreeSha256, buildScript.sourceTreeSha256);
+  const cargoConfig = await sourceTreeIdentity(f.root);
+  assert.notEqual(cargoConfig.sourceTreeSha256, buildScript.sourceTreeSha256);
+  await f.write('migrations/001_fixture.sql', 'SELECT 1;\n');
+  assert.notEqual((await sourceTreeIdentity(f.root)).sourceTreeSha256, cargoConfig.sourceTreeSha256);
 });
 
 test('source fingerprints include stable path boundaries and executable modes, not timestamps or index order', async t => {

@@ -30,6 +30,7 @@ pub(super) const BROWSER_BACKEND_PREFIXES: &[&str] = &[
 pub(super) const BROWSER_BACKEND_FILES: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
+    "build.rs",
     "rust-toolchain",
     "rust-toolchain.toml",
     "ops/Cargo.toml",

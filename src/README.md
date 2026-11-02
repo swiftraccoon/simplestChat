@@ -295,7 +295,7 @@ as in [development](../docs/development.md):
 cargo build --locked --release --bin simplestChat
 ```
 
-Run from the repository root so `web/dist` and development migrations resolve.
+Run from the repository root so `web/dist` resolves.
 Production builds do not enable `load-test`; synthetic clients live separately
 under [load_tests](../load_tests/README.md).
 

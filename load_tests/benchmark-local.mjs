@@ -464,7 +464,7 @@ export async function generatorSourceIdentity(root) {
 }
 
 const trackedSourcePaths = ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'];
-const sourcePaths = [...trackedSourcePaths, 'build.rs', '.cargo/config', '.cargo/config.toml'];
+const sourcePaths = [...trackedSourcePaths, 'build.rs', 'migrations', '.cargo/config', '.cargo/config.toml'];
 const pathOrder = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
 
 /** Hash versioned and nonignored untracked source inputs, not the build environment.

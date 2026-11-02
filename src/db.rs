@@ -2,7 +2,6 @@ use anyhow::{Context, bail};
 use sqlx::Connection as _;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions, PgSslMode};
 use std::net::IpAddr;
-use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::info;
@@ -63,6 +62,12 @@ pub(crate) fn append_error_metrics(out: &mut String) {
     }
 }
 
+/// Every migration under `migrations/`, read at compile time, so `RUN_MIGRATIONS`
+/// applies the set this binary was built with whatever its working directory.
+/// The macro tracks the files it embedded; the build script makes Cargo
+/// recompile when a new one appears.
+pub(crate) static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
 pub(crate) async fn connect(settings: &crate::config::Database) -> anyhow::Result<Option<PgPool>> {
     let Some(url) = &settings.url else {
         info!("DATABASE_URL not set — running without database (anonymous-only mode)");
@@ -101,10 +106,7 @@ pub(crate) async fn connect(settings: &crate::config::Database) -> anyhow::Resul
             .context("invalid DATABASE_URL")?
             .options([("statement_timeout", "10min"), ("lock_timeout", "1min")]);
         let mut connection = sqlx::postgres::PgConnection::connect_with(&maintenance).await?;
-        sqlx::migrate::Migrator::new(Path::new("./migrations"))
-            .await?
-            .run(&mut connection)
-            .await?;
+        MIGRATOR.run(&mut connection).await?;
         sqlx::Connection::close(connection).await?;
         info!("Database migrations applied");
     }
@@ -338,5 +340,29 @@ mod tests {
         assert!(startup_options.contains("-c statement_timeout=10s"));
         assert!(startup_options.contains("-c lock_timeout=5s"));
         assert!(startup_options.contains("-c idle_in_transaction_session_timeout=15s"));
+    }
+
+    #[test]
+    fn embedded_migrations_match_the_directory() {
+        use sha2::{Digest, Sha384};
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+        let mut files: Vec<(i64, String)> = std::fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "sql"))
+            .map(|path| {
+                let name = path.file_name().unwrap().to_str().unwrap();
+                let version = name.split_once('_').unwrap().0.parse().unwrap();
+                let bytes = std::fs::read(&path).unwrap();
+                (version, hex::encode(Sha384::digest(bytes)))
+            })
+            .collect();
+        files.sort();
+        assert!(!files.is_empty());
+        let embedded: Vec<(i64, String)> = MIGRATOR
+            .iter()
+            .map(|migration| (migration.version, hex::encode(&migration.checksum)))
+            .collect();
+        assert_eq!(embedded, files);
     }
 }

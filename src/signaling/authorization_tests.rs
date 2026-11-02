@@ -406,16 +406,7 @@ impl Fixture {
             .connect_with(options)
             .await
             .unwrap();
-        sqlx::migrate::Migrator::new(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("migrations")
-                .as_path(),
-        )
-        .await
-        .unwrap()
-        .run(&pool)
-        .await
-        .unwrap();
+        crate::db::MIGRATOR.run(&pool).await.unwrap();
         let metrics = ServerMetrics::new();
         let mut media = crate::media::config::MediaConfig::default();
         media.worker_config.num_workers = 1;

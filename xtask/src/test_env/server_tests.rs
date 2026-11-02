@@ -51,7 +51,6 @@ impl Fixture {
 
     fn environment(&self) -> Environment {
         fs::write(self.root.join("Cargo.toml"), b"fixture only").unwrap();
-        fs::create_dir(self.root.join("migrations")).unwrap();
         let binary = self.tool("server", IDLE);
         let mut environment = Environment::from([
             ("DISPOSABLE_TEST_DATABASE".into(), "1".into()),

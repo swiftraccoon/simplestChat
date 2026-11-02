@@ -153,6 +153,8 @@ RUN mkdir -p src load_tests/src xtask/src ops/src \
         target/release/deps/simplestChat-* target/release/deps/libsimplestchat-* \
         target/release/.fingerprint/simplestChat-* target/release/.fingerprint/simplestchat-*
 COPY src ./src
+# After the dependency layer, so a build-script change rebuilds only this crate.
+COPY build.rs ./
 # Keep the workspace member real in build-only layers; no ops binary is built
 # or copied into the production runtime image.
 COPY ops/src ./ops/src

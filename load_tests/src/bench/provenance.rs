@@ -37,6 +37,7 @@ const SCOPE: &[&str] = &[
     "vendor",
     "build/pip-constraints.txt",
     "build.rs",
+    "migrations",
     ".cargo/config",
     ".cargo/config.toml",
 ];
