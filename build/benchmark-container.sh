@@ -72,7 +72,7 @@ for image in "$server_image" "$generator_image"; do
   [[ $(docker_owned image inspect --format '{{.Id}}' "$image") == "$image" ]]
   [[ $(docker_owned image inspect --format '{{.Config.User}}' "$image") == 10001:10001 ]]
   docker_owned image inspect --format '{{json .Config.Env}}' "$image" |
-    jq -e 'all(.[]; test("^(DATABASE_URL|JWT_SECRET|TURN_URLS|TURN_SECRET|DIAGNOSTICS_PATH|MEDIA_DIAGNOSTICS_ENABLED)=") | not)' >/dev/null
+    jq -e 'all(.[]; test("^(DATABASE_URL|TURN_URLS|TURN_SECRET|DIAGNOSTICS_PATH|MEDIA_DIAGNOSTICS_ENABLED)=") | not)' >/dev/null
 done
 docker_owned image inspect --format '{{json .Config}}' "$server_image" | jq -e '.Cmd == ["/app/simplestChat"] and ((.Entrypoint // []) == [])' >/dev/null
 docker_owned image inspect --format '{{json .Config.Entrypoint}}' "$generator_image" | jq -e '. == ["/app/load_test"]' >/dev/null

@@ -59,7 +59,7 @@ fn sources() -> Value {
         "release_assets.py":"314c91956f13e72a867ac624c8027bf9c5fff740e953255dd5fbf2d87b6e72f2",
         "release_json.py":"0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97",
         "browser_assets.py":"6fd40b970008481a27660e3a5389ce942adab98cf093143055fa27ddbf72e12d",
-        "release_public.py":"4d9a712aabee6432c98b2ebdd2b5a40c989deef5e0e16aa2c7c1dbd7284cb420",
+        "release_public.py":"07cb668c0c7dedde1d4bcc94bb20ee98a6e16b5127e05a93b32701b547e2c20e",
     })
 }
 const BROWSER: &str = r#"

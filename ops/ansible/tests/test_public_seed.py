@@ -119,7 +119,7 @@ class PublicSeedTests(unittest.TestCase):
         )
         origin, owner = seed.owner_configuration(
             "OTHER=private\nALLOWED_ORIGINS=https://chat.example.com\n",
-            {"owner_password": OWNER["password"], "jwt": "private"},
+            {"owner_password": OWNER["password"], "metrics_token": "private"},
         )
         self.assertEqual(origin, "https://chat.example.com")
         self.assertEqual(owner, OWNER)

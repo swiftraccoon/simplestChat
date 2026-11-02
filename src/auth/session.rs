@@ -1,4 +1,5 @@
 use crate::auth::types::AuthError;
+use crate::ids::UserId;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::{TryRng, rngs::SysRng};
 use sha2::{Digest, Sha256};
@@ -24,7 +25,7 @@ pub(crate) struct RefreshToken {
 
 pub(crate) enum RefreshRotation {
     Rotated {
-        user_id: Uuid,
+        user_id: UserId,
         session_id: Uuid,
         refresh_token: RefreshToken,
     },
@@ -34,7 +35,7 @@ pub(crate) enum RefreshRotation {
     /// A predecessor outside the grace period (or an older family token) was
     /// replayed, and the current successor family has been revoked. `user_id`
     /// names the account whose session that ended.
-    ReuseDetected { user_id: Uuid },
+    ReuseDetected { user_id: UserId },
 }
 
 /// A session `create_session_with` inserted, and whether keeping the account
@@ -311,7 +312,7 @@ pub(crate) async fn rotate_refresh_token_with(
         }
 
         return Ok(RefreshRotation::Rotated {
-            user_id: candidate_user_id,
+            user_id: UserId::from(candidate_user_id),
             session_id,
             refresh_token: successor,
         });
@@ -350,7 +351,7 @@ pub(crate) async fn rotate_refresh_token_with(
         .await
         .map_err(crate::auth::routes::database_error)?;
     Ok(RefreshRotation::ReuseDetected {
-        user_id: candidate_user_id,
+        user_id: UserId::from(candidate_user_id),
     })
 }
 
@@ -362,7 +363,7 @@ pub(crate) async fn rotate_refresh_token_with(
 pub(crate) async fn delete_session_by_token(
     pool: &PgPool,
     raw_token: &str,
-) -> Result<Option<Uuid>, AuthError> {
+) -> Result<Option<UserId>, AuthError> {
     let token_hash = hash_token(raw_token);
     let Some(family_secret) = family_secret(raw_token) else {
         return Ok(None);

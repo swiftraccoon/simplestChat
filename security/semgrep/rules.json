@@ -81,7 +81,7 @@
         {
           "metavariable-regex": {
             "metavariable": "$VALUE",
-            "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+            "regex": "^(?:password|access_token|refresh_token|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|authorization|cookie|database_url))$"
           }
         }
       ]
@@ -116,7 +116,7 @@
         {
           "metavariable-regex": {
             "metavariable": "$VALUE",
-            "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+            "regex": "^(?:password|access_token|refresh_token|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|authorization|cookie|database_url))$"
           }
         }
       ]
@@ -477,7 +477,7 @@
             {
               "metavariable-regex": {
                 "metavariable": "$VALUE",
-                "regex": "^(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url))$"
+                "regex": "^(?:password|access_token|refresh_token|authorization|cookie|database_url|(?:[a-z_][a-z_0-9]*\\.)+(?:password|access_token|refresh_token|authorization|cookie|database_url))$"
               }
             }
           ]
@@ -519,7 +519,7 @@
               ]
             },
             {
-              "pattern-regex": "\\b(?:password|access_token|refresh_token|jwt_secret|authorization|cookie|database_url)\\s*=\\s*[%?]?[A-Za-z_][A-Za-z_0-9.]*"
+              "pattern-regex": "\\b(?:password|access_token|refresh_token|authorization|cookie|database_url)\\s*=\\s*[%?]?[A-Za-z_][A-Za-z_0-9.]*"
             }
           ]
         }

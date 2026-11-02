@@ -17,9 +17,25 @@ impl Exchange {
         serde_json::from_str(&self.body).expect("JSON response")
     }
 
+    /// The opaque access token and refresh cookie a sign-in or refresh issued,
+    /// each recorded (the token with its stored digest) as a value no log,
+    /// metric, diagnostic or URL may contain. The response states the token's
+    /// expiry, about fifteen minutes ahead.
     fn credentials(&self, secrets: &mut SensitiveValues) -> (String, String) {
         assert_eq!(self.status, StatusCode::OK);
-        let token = self.json()["token"].as_str().unwrap().to_owned();
+        let body = self.json();
+        let token = body["token"].as_str().unwrap().to_owned();
+        assert!(
+            crate::auth::access_tokens::valid_shape(&token),
+            "the access token is an opaque handle"
+        );
+        let expires_at: chrono::DateTime<chrono::Utc> =
+            serde_json::from_value(body["expires_at"].clone()).expect("the response states expiry");
+        let remaining = expires_at - chrono::Utc::now();
+        assert!(
+            remaining > chrono::TimeDelta::minutes(14)
+                && remaining <= chrono::TimeDelta::minutes(15)
+        );
         let cookie = self.headers[header::SET_COOKIE]
             .to_str()
             .unwrap()
@@ -28,6 +44,7 @@ impl Exchange {
             .unwrap()
             .to_owned();
         secrets.add("issued access token", &token);
+        secrets.add("stored access token digest", &session::hash_token(&token));
         secrets.add("issued refresh token", cookie.split_once('=').unwrap().1);
         (token, cookie)
     }
@@ -111,10 +128,6 @@ async fn runtime_canary_auth_requests_keep_secrets_out_of_logs_metrics_diagnosti
         ("display name", name.as_str()),
         ("malformed credential", malformed.as_str()),
         ("absent invite", absent_invite.as_str()),
-        (
-            "JWT signing key",
-            fixture.server.jwt_secret.as_ref().unwrap().expose_secret(),
-        ),
         (
             "metrics credential",
             fixture.server.metrics_token.as_deref().unwrap(),

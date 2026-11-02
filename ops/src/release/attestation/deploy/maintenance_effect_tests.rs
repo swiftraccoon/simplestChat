@@ -196,7 +196,7 @@ impl Prepared {
         let candidate = if matches!(fault, Fault::Identity | Fault::Settings) {
             let path = data.access.config.join("app.env.candidate");
             let change = if fault == Fault::Identity {
-                "JWT_SECRET=changed\n"
+                "METRICS_TOKEN=changed\n"
             } else {
                 "MAX_CONNECTIONS=200\n"
             };

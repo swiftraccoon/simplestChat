@@ -1,22 +1,24 @@
-//! One-use WebSocket upgrade capabilities. Bearer JWTs stay in authenticated
-//! HTTP requests and established signaling frames, never handshake protocols.
+//! One-use WebSocket upgrade capabilities. Bearer access tokens stay in
+//! authenticated HTTP requests and established signaling frames, never
+//! handshake protocols.
 
 use super::{
-    account, jwt, routes,
-    types::{AuthError, Claims},
+    access_tokens, account, routes,
+    types::{AuthError, Principal},
 };
 use crate::secret::SecretString;
 use crate::signaling::SignalingServer;
 use crate::sync::Mutex;
 use axum::{Json, extract::State, http::HeaderMap};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use chrono::{DateTime, Utc};
 use lru::LruCache;
 use rand::{TryRng, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     num::NonZeroUsize,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 #[cfg(test)]
@@ -29,7 +31,7 @@ const MAX_PENDING: NonZeroUsize = NonZeroUsize::new(10_000).unwrap();
 const TICKET_TTL_SECONDS: u64 = 30;
 
 struct Ticket {
-    claims: Claims,
+    principal: Principal,
     deadline: Instant,
 }
 
@@ -47,13 +49,6 @@ pub(crate) struct TicketRequest {}
 pub(crate) struct TicketResponse {
     ticket: SecretString,
     expires_in: u64,
-}
-
-fn epoch_seconds() -> Result<u64, AuthError> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .map_err(|_| AuthError::ServiceBusy)
 }
 
 fn key(ticket: &str) -> [u8; 32] {
@@ -78,18 +73,21 @@ impl TicketStore {
         }
     }
 
-    fn issue(&self, claims: Claims) -> Result<TicketResponse, AuthError> {
-        self.issue_at(claims, Instant::now(), epoch_seconds()?)
+    fn issue(&self, principal: Principal) -> Result<TicketResponse, AuthError> {
+        self.issue_at(principal, Instant::now(), Utc::now())
     }
 
+    /// A ticket lives whole seconds within the token's remaining lifetime at
+    /// `wall`, at most `TICKET_TTL_SECONDS`; less than one second left issues
+    /// none.
     fn issue_at(
         &self,
-        claims: Claims,
+        principal: Principal,
         now: Instant,
-        epoch: u64,
+        wall: DateTime<Utc>,
     ) -> Result<TicketResponse, AuthError> {
-        let expires_in = (claims.exp as u64)
-            .saturating_sub(epoch)
+        let expires_in = u64::try_from((principal.expires_at - wall).num_seconds())
+            .unwrap_or(0)
             .min(TICKET_TTL_SECONDS);
         if expires_in == 0 {
             return Err(AuthError::TokenExpired);
@@ -100,7 +98,7 @@ impl TicketStore {
             .map_err(|_| AuthError::ServiceBusy)?;
         let ticket = URL_SAFE_NO_PAD.encode(bytes);
         let mut entries = self.entries.lock();
-        // Lifetimes can differ near JWT expiry, so retire every expired entry
+        // Lifetimes can differ near token expiry, so retire every expired entry
         // only at capacity. Normal issuance and consumption remain O(1).
         if entries.len() == entries.cap().get() {
             let expired: Vec<_> = entries
@@ -118,7 +116,7 @@ impl TicketStore {
         entries.put(
             key(&ticket),
             Ticket {
-                claims,
+                principal,
                 deadline: now + Duration::from_secs(expires_in),
             },
         );
@@ -128,7 +126,7 @@ impl TicketStore {
         })
     }
 
-    fn take_at(&self, token: &str, now: Instant, epoch: u64) -> Result<Ticket, AuthError> {
+    fn take_at(&self, token: &str, now: Instant, wall: DateTime<Utc>) -> Result<Ticket, AuthError> {
         if !valid_shape(token) {
             return Err(AuthError::InvalidToken);
         }
@@ -137,25 +135,28 @@ impl TicketStore {
             .lock()
             .pop(&key(token))
             .ok_or(AuthError::InvalidToken)?;
-        if ticket.deadline <= now || ticket.claims.exp as u64 <= epoch {
+        if ticket.deadline <= now || ticket.principal.expires_at <= wall {
             return Err(AuthError::InvalidToken);
         }
         Ok(ticket)
     }
 
-    /// Validate session/account revocation again at use, not only at issuance.
-    /// An invalid or failed attempt still spends the one-use capability.
+    /// Validate session/account revocation again at use, not only at issuance:
+    /// the ticket's principal must still name a live session of its account at
+    /// the same version (`access_tokens::revalidate_principal`), so a refresh in
+    /// another tab, which issues that tab its own token, does not spend it. An
+    /// invalid or failed attempt still spends the one-use capability.
     pub(crate) async fn redeem(
         &self,
         pool: &sqlx::PgPool,
         token: &str,
-    ) -> Result<Claims, AuthError> {
-        let ticket = self.take_at(token, Instant::now(), epoch_seconds()?)?;
-        jwt::validate_current_claims(pool, &ticket.claims).await?;
-        if ticket.deadline <= Instant::now() || ticket.claims.exp as u64 <= epoch_seconds()? {
+    ) -> Result<Principal, AuthError> {
+        let ticket = self.take_at(token, Instant::now(), Utc::now())?;
+        access_tokens::revalidate_principal(pool, &ticket.principal).await?;
+        if ticket.deadline <= Instant::now() || ticket.principal.expires_at <= Utc::now() {
             return Err(AuthError::InvalidToken);
         }
-        Ok(ticket.claims)
+        Ok(ticket.principal)
     }
 }
 
@@ -168,44 +169,47 @@ pub(crate) async fn issue(
     Json(_request): Json<TicketRequest>,
 ) -> Result<(HeaderMap, Json<TicketResponse>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    if !server.allow_auth_principal(&claims.sub) {
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    if !server.allow_auth_principal(principal.user) {
         return Err(AuthError::RateLimited);
     }
-    let ticket = server.websocket_tickets().issue(claims)?;
+    let ticket = server.websocket_tickets().issue(principal)?;
     Ok((routes::no_store_headers(), Json(ticket)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::UserId;
 
-    fn claims(epoch: u64) -> Claims {
-        Claims {
-            sub: uuid::Uuid::new_v4().to_string(),
-            name: "Ticket test".into(),
-            iss: "simplestchat".into(),
-            aud: "simplestchat".into(),
-            exp: (epoch + 900) as usize,
-            auth_version: 0,
+    fn at(seconds: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp(seconds, 0).unwrap()
+    }
+
+    /// A principal whose token is valid until `expires_at` (Unix seconds).
+    fn principal(expires_at: i64) -> Principal {
+        Principal {
+            user: UserId::random(),
             sid: uuid::Uuid::new_v4(),
+            auth_version: 0,
+            expires_at: at(expires_at),
         }
     }
 
     #[test]
-    fn tickets_are_one_use_bounded_and_expire_without_extending_the_jwt() {
+    fn tickets_are_one_use_bounded_and_expire_without_extending_the_token() {
         let store = TicketStore::with_capacity(NonZeroUsize::new(2).unwrap());
         let now = Instant::now();
-        let identity = claims(1000);
-        let first = store.issue_at(identity.clone(), now, 1000).unwrap();
+        let identity = principal(1900);
+        let first = store.issue_at(identity.clone(), now, at(1000)).unwrap();
         assert!(valid_shape(first.ticket.expose_secret()));
         assert_eq!(first.expires_in, 30);
         let mut near_expiry = identity.clone();
-        near_expiry.exp = 1004;
-        let second = store.issue_at(near_expiry, now, 1000).unwrap();
+        near_expiry.expires_at = at(1004);
+        let second = store.issue_at(near_expiry, now, at(1000)).unwrap();
         assert_eq!(second.expires_in, 4);
         assert!(matches!(
-            store.issue_at(identity.clone(), now, 1000),
+            store.issue_at(identity.clone(), now, at(1000)),
             Err(AuthError::ServiceBusy)
         ));
         assert!(
@@ -213,19 +217,18 @@ mod tests {
                 .take_at(
                     second.ticket.expose_secret(),
                     now + Duration::from_secs(4),
-                    1004
+                    at(1004)
                 )
                 .is_err()
         );
-        let third = store.issue_at(identity.clone(), now, 1000).unwrap();
+        let third = store.issue_at(identity.clone(), now, at(1000)).unwrap();
         let used = store
-            .take_at(first.ticket.expose_secret(), now, 1000)
+            .take_at(first.ticket.expose_secret(), now, at(1000))
             .unwrap();
-        assert_eq!(used.claims.sub, identity.sub);
-        assert_eq!(used.claims.sid, identity.sid);
+        assert_eq!(used.principal, identity);
         assert!(
             store
-                .take_at(first.ticket.expose_secret(), now, 1000)
+                .take_at(first.ticket.expose_secret(), now, at(1000))
                 .is_err()
         );
         assert!(
@@ -233,16 +236,30 @@ mod tests {
                 .take_at(
                     third.ticket.expose_secret(),
                     now + Duration::from_secs(30),
-                    1030
+                    at(1030)
                 )
                 .is_err()
         );
     }
 
     #[test]
+    fn less_than_a_whole_second_of_token_lifetime_issues_no_ticket() {
+        let store = TicketStore::with_capacity(NonZeroUsize::MIN);
+        let mut identity = principal(1001);
+        identity.expires_at -= chrono::TimeDelta::milliseconds(1);
+        assert!(matches!(
+            store.issue_at(identity, Instant::now(), at(1000)),
+            Err(AuthError::TokenExpired)
+        ));
+        assert!(store.entries.lock().is_empty());
+    }
+
+    #[test]
     fn issued_tickets_serialize_in_full_and_redact_their_debug_output() {
         let store = TicketStore::with_capacity(NonZeroUsize::MIN);
-        let issued = store.issue_at(claims(1000), Instant::now(), 1000).unwrap();
+        let issued = store
+            .issue_at(principal(1900), Instant::now(), at(1000))
+            .unwrap();
         let wire = serde_json::to_value(&issued).unwrap();
         let ticket = wire["ticket"].as_str().unwrap_or_default();
         assert!(valid_shape(ticket), "the response carries the whole ticket");
@@ -258,9 +275,9 @@ mod tests {
     fn capacity_reclaims_expired_tickets_and_concurrent_consumers_have_one_winner() {
         let store = std::sync::Arc::new(TicketStore::with_capacity(NonZeroUsize::MIN));
         let now = Instant::now();
-        store.issue_at(claims(1000), now, 1000).unwrap();
+        store.issue_at(principal(1900), now, at(1000)).unwrap();
         let ticket = store
-            .issue_at(claims(1030), now + Duration::from_secs(30), 1030)
+            .issue_at(principal(1930), now + Duration::from_secs(30), at(1030))
             .unwrap();
         let winners = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..8)
@@ -270,7 +287,7 @@ mod tests {
                             .take_at(
                                 ticket.ticket.expose_secret(),
                                 now + Duration::from_secs(30),
-                                1030,
+                                at(1030),
                             )
                             .is_ok()
                     })
@@ -311,9 +328,7 @@ mod tests {
                 .unwrap()
                 .id;
             transaction.commit().await.unwrap();
-            let mut identity = claims(epoch_seconds().unwrap());
-            identity.sub = user.to_string();
-            identity.sid = sid;
+            let identity = access_tokens::fixtures::principal(&pool, sid).await;
             identities.push((identity, refresh));
         }
         let first = store.issue(identities[0].0.clone()).unwrap();
@@ -342,6 +357,17 @@ mod tests {
                 .await
                 .is_err(),
             "one-use even with live session"
+        );
+        // Another tab's token for the same session does not spend this one.
+        let refreshed = store.issue(identities[1].0.clone()).unwrap();
+        access_tokens::fixtures::issue(&pool, identities[1].0.sid).await;
+        assert_eq!(
+            store
+                .redeem(&pool, refreshed.ticket.expose_secret())
+                .await
+                .unwrap()
+                .sid,
+            identities[1].0.sid
         );
         let changed = store.issue(identities[1].0.clone()).unwrap();
         sqlx::query("UPDATE users SET auth_version=auth_version+1 WHERE id=$1")

@@ -780,7 +780,13 @@ export interface PreferencePatch {
 }
 
 export interface AuthResponse {
+  /**
+   * An opaque access token for `Authorization: Bearer`; clients never read
+   * anything from it.
+   */
   token: string;
+  /** When the token stops being accepted; refresh before then. */
+  expires_at: string;
   user: UserInfo;
 }
 

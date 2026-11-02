@@ -527,25 +527,23 @@ fn grace_entry(token: &str) -> GraceEntry {
 #[tokio::test]
 async fn credential_revocation_only_removes_older_account_grace_entries() {
     let map = GracePeriodMap::new();
+    let alice = UserId::random();
+    let bob = UserId::random();
     for (token, subject, version) in [
-        ("old", Some("alice"), Some(0)),
-        ("new", Some("alice"), Some(1)),
-        ("other", Some("bob"), Some(0)),
+        ("old", Some(alice), Some(0)),
+        ("new", Some(alice), Some(1)),
+        ("other", Some(bob), Some(0)),
         ("guest", None, None),
     ] {
         let mut entry = grace_entry(token);
-        entry.authenticated_subject = subject.map(str::to_owned);
+        entry.authenticated_subject = subject;
         entry.authenticated_version = version;
         assert!(map.insert(rid("room"), pid(token), entry));
     }
-    let removed = map.take_revoked("alice", 1);
+    let removed = map.take_revoked(alice, 1);
     assert_eq!(removed.len(), 1);
     assert_eq!(removed[0].1, pid("old"));
-    for (token, subject) in [
-        ("new", Some("alice")),
-        ("other", Some("bob")),
-        ("guest", None),
-    ] {
+    for (token, subject) in [("new", Some(alice)), ("other", Some(bob)), ("guest", None)] {
         map.remove_if_token_matches(&rid("room"), &pid(token), token, subject)
             .expect("unaffected session retained")
             .timer
@@ -669,7 +667,7 @@ async fn authenticated_grace_requires_same_refreshed_identity() {
     let participant_id = ParticipantId::random();
     let token = Uuid::new_v4().to_string();
     let mut entry = grace_entry(&token);
-    entry.authenticated_subject = Some(participant_id.to_string());
+    entry.authenticated_subject = Some(UserId::from(participant_id.as_uuid()));
     map.insert(rid("room-a"), participant_id, entry);
 
     assert!(
@@ -681,7 +679,7 @@ async fn authenticated_grace_requires_same_refreshed_identity() {
             &rid("room-a"),
             &participant_id,
             &token,
-            Some(&participant_id.to_string()),
+            Some(UserId::from(participant_id.as_uuid())),
         )
         .unwrap();
     entry.timer.abort();

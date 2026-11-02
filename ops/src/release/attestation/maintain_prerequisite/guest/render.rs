@@ -11,9 +11,8 @@ pub(super) const CADDY: &str = concat!(
     "2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071",
     "@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0"
 );
-pub(super) const SECRET_NAMES: [&str; 7] = [
+pub(super) const SECRET_NAMES: [&str; 6] = [
     "database_password",
-    "jwt_secret",
     "metrics_token",
     "migration_password",
     "owner_password",
@@ -24,7 +23,7 @@ const TEMPLATES: [(&str, &str, &str); 8] = [
     (
         "app.env",
         "app.env",
-        "79843435a487687e783936259d404058b44c7b974c6bb1127d23fa7bbd3b66d7",
+        "70e2800f20af4e551ed4fe24992437dd063bbf195b60131021cbf99267a0b3ec",
     ),
     (
         "migration.env",
@@ -54,7 +53,7 @@ const TEMPLATES: [(&str, &str, &str); 8] = [
     (
         "runtime-grants.sql",
         "runtime-grants.sql",
-        "d133f5e28e5a30c9adf83bb22a03c4d000f1ab90884dfb6cc26aeb52c61d8cf2",
+        "f820bfc3cda0d4a3c899291998ee1401ebe5b08cd28d6ed377578af9134a5bfa",
     ),
     (
         "postgres-admin-password",
@@ -182,7 +181,6 @@ pub(super) fn render(
     ];
     for (name, count) in [
         ("database_password", 2),
-        ("jwt_secret", 1),
         ("metrics_token", 1),
         ("proxy_secret", 2),
         ("migration_password", 2),

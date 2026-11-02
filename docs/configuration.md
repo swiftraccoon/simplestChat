@@ -11,7 +11,6 @@
 | `DATABASE_MIN_CONNECTIONS` | `2` | Warm connection floor (0–1000, at most the configured maximum) |
 | `DATABASE_ACQUIRE_TIMEOUT_SECS` | `3` | Maximum wait to acquire a pool connection (1–60 seconds); independent of statement and request deadlines |
 | `RUN_MIGRATIONS` | `false` | Apply the migrations compiled into the binary at startup; intended only for local development |
-| `JWT_SECRET` | (none) | HS256 secret of at least 32 bytes; **auth endpoints return 503 without it** |
 | `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); configure together with `WEBAUTHN_ORIGIN`, or leave both unset to disable passkeys |
 | `WEBAUTHN_ORIGIN` | (none) | Expected HTTPS origin for passkey ceremonies (e.g. `https://chat.example.com`), without a path; HTTP loopback origins are allowed for development |
 | `ALLOWED_ORIGINS` | same host only | Exact WebSocket origin allowlist; required for non-loopback binds, such as Compose |
@@ -137,7 +136,8 @@ deployment addresses, credentials, counts or dependency error details:
 }
 ```
 
-Accounts require both the database and JWT configuration. Passkeys additionally
+Accounts require only the database: access tokens are opaque handles stored as
+digests beside their session, with no signing secret. Passkeys additionally
 require WebAuthn configuration. Password registration is `open`, `invite` or
 `disabled`; passkey registration is `open` or `disabled`. A configured feature
 can still be temporarily unavailable, and all API authorization, admission and

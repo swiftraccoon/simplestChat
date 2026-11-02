@@ -6,13 +6,12 @@
 use super::*;
 use std::{collections::BTreeSet, path::Path};
 
-const IDENTITY_KEYS: [&str; 16] = [
+const IDENTITY_KEYS: [&str; 15] = [
     "ALLOWED_ORIGINS",
     "ANNOUNCE_IP",
     "ANNOUNCE_IPV6",
     "BIND_ADDR",
     "DATABASE_URL",
-    "JWT_SECRET",
     "METRICS_TOKEN",
     "PORT",
     "RUN_MIGRATIONS",

@@ -65,7 +65,6 @@ VALUES: JsonObject = {
                 "postgres_admin_password",
                 "migration_password",
                 "database_password",
-                "jwt_secret",
                 "metrics_token",
                 "proxy_secret",
                 "owner_password",
@@ -306,7 +305,7 @@ class PublicTemplateTests(unittest.TestCase):
         self.assertEqual(migration["REGISTRATION_ENABLED"], "false")
         self.assertEqual(proxy["TRUSTED_PROXY_SECRET"], app["TRUSTED_PROXY_SECRET"])
         self.assertEqual(proxy["CADDY_UPSTREAM"], "simplestchat:3000")
-        self.assertNotIn("JWT_SECRET", migration)
+        self.assertNotIn("METRICS_TOKEN", migration)
         self.assertNotIn("DATABASE_URL", proxy)
         self.assertNotIn(string(VALUES, "scpub_secrets", "owner_password"), "\n".join(app.values()))
 
@@ -587,7 +586,7 @@ fn runtime() { query("UPDATE rooms SET name = 'current'"); }
                 granted[table.strip().removeprefix("public.")] = rights
         tables = (
             "users|webauthn_credentials|sessions|rooms|room_roles|room_states|room_reports"
-            + "|moderation_events|invites|invite_redemptions"
+            + "|moderation_events|invites|invite_redemptions|session_access_tokens"
         )
         statement = re.compile(r"\b(INSERT INTO|UPDATE|DELETE FROM)\s+(" + tables + r")\b")
         needed: dict[str, set[str]] = {}
@@ -601,6 +600,8 @@ fn runtime() { query("UPDATE rooms SET name = 'current'"); }
             for found in statement.finditer(production):
                 needed.setdefault(str(found.group(2)), set()).add(str(found.group(1)).split()[0])
         self.assertEqual(needed["webauthn_credentials"], {"INSERT", "UPDATE", "DELETE"})
+        # Access tokens are issued and pruned, never rewritten.
+        self.assertEqual(needed["session_access_tokens"], {"INSERT", "DELETE"})
         self.assertNotIn("DELETE", needed.get("users", set()))
         for table, rights in needed.items():
             self.assertLessEqual(rights, granted.get(table, set()), table)

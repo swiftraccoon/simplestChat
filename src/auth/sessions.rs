@@ -2,9 +2,9 @@
 //! credentials; refresh secrets and their digests are never returned.
 
 use super::{
-    account::authenticated_claims,
+    account::authenticated_principal,
     routes, session,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::signaling::SignalingServer;
 use axum::{
@@ -26,16 +26,18 @@ pub(crate) struct AccountSession {
     pub expires_at: DateTime<Utc>,
 }
 
-async fn list_sessions(pool: &PgPool, claims: &Claims) -> Result<Vec<AccountSession>, AuthError> {
-    let user = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+async fn list_sessions(
+    pool: &PgPool,
+    principal: &Principal,
+) -> Result<Vec<AccountSession>, AuthError> {
     sqlx::query_as(
         "SELECT id, id = $2 AS current, created_at,
                 COALESCE(refresh_token_rotated_at, created_at) AS refreshed_at, expires_at
          FROM sessions WHERE user_id = $1 AND expires_at > clock_timestamp()
          ORDER BY (id = $2) DESC, created_at DESC, id LIMIT $3",
     )
-    .bind(user)
-    .bind(claims.sid)
+    .bind(principal.user)
+    .bind(principal.sid)
     .bind(session::MAX_ACTIVE_SESSIONS_PER_USER)
     .fetch_all(pool)
     .await
@@ -46,23 +48,23 @@ async fn list_sessions(pool: &PgPool, claims: &Claims) -> Result<Vec<AccountSess
 /// and refresh. A revoked session cannot race a later session-management write.
 pub(crate) async fn lock_current_session(
     transaction: &mut Transaction<'_, Postgres>,
-    claims: &Claims,
+    principal: &Principal,
 ) -> Result<(Uuid, String), AuthError> {
-    let user = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let user = principal.user.as_uuid();
     let version: Option<i64> =
         sqlx::query_scalar("SELECT auth_version FROM users WHERE id = $1 FOR NO KEY UPDATE")
             .bind(user)
             .fetch_optional(&mut **transaction)
             .await
             .map_err(routes::database_error)?;
-    if version != Some(claims.auth_version) {
+    if version != Some(principal.auth_version) {
         return Err(AuthError::InvalidToken);
     }
     let current: Option<String> = sqlx::query_scalar(
         "SELECT refresh_token_hash FROM sessions WHERE id = $1 AND user_id = $2
          AND expires_at > clock_timestamp() FOR UPDATE",
     )
-    .bind(claims.sid)
+    .bind(principal.sid)
     .bind(user)
     .fetch_optional(&mut **transaction)
     .await
@@ -72,15 +74,15 @@ pub(crate) async fn lock_current_session(
 
 async fn revoke_sessions(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     target: Option<Uuid>,
     cookie: Option<&str>,
 ) -> Result<bool, AuthError> {
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-    let (user, current_hash) = lock_current_session(&mut transaction, claims).await?;
+    let (user, current_hash) = lock_current_session(&mut transaction, principal).await?;
     // Another tab may have installed a newer cookie since this bearer was
     // issued. Revoke the requested session without clearing that other cookie.
-    let clear_cookie = target == Some(claims.sid)
+    let clear_cookie = target == Some(principal.sid)
         && cookie.is_some_and(|cookie| session::hash_token(cookie) == current_hash);
     if let Some(target) = target {
         // Missing and foreign handles have the same idempotent response.
@@ -93,7 +95,7 @@ async fn revoke_sessions(
     } else {
         sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND id <> $2")
             .bind(user)
-            .bind(claims.sid)
+            .bind(principal.sid)
             .execute(&mut *transaction)
             .await
             .map_err(routes::database_error)?;
@@ -108,9 +110,12 @@ pub(crate) async fn list(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<Vec<AccountSession>>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
-    let sessions =
-        list_sessions(server.db_pool().ok_or(AuthError::NotConfigured)?, &claims).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
+    let sessions = list_sessions(
+        server.db_pool().ok_or(AuthError::NotConfigured)?,
+        &principal,
+    )
+    .await?;
     Ok((routes::no_store_headers(), Json(sessions)))
 }
 
@@ -123,17 +128,18 @@ pub(crate) async fn revoke(
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let clear_cookie = revoke_sessions(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
+        &principal,
         Some(id),
         routes::refresh_token_from_headers(&headers),
     )
     .await?;
-    if let Ok(account) = claims.sub.parse() {
-        server.room_manager().account_updates().revalidate(account);
-    }
+    server
+        .room_manager()
+        .account_updates()
+        .revalidate(principal.user);
     let headers = if clear_cookie {
         routes::clear_refresh_cookie_headers()
     } else {
@@ -148,17 +154,18 @@ pub(crate) async fn revoke_others(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     revoke_sessions(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
+        &principal,
         None,
         None,
     )
     .await?;
-    if let Ok(account) = claims.sub.parse() {
-        server.room_manager().account_updates().revalidate(account);
-    }
+    server
+        .room_manager()
+        .account_updates()
+        .revalidate(principal.user);
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 

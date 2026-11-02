@@ -7,7 +7,7 @@ use super::settings::SettingsPatch;
 use super::{IdentityUpdateGuard, Room, RoomManager, api, control, moderation, roles, settings};
 use crate::auth::{
     account, sessions,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::room::refusal::{Refusal, RoomError};
@@ -181,7 +181,8 @@ struct Context {
     room_id: RoomId,
     user: Uuid,
     session: Uuid,
-    expires_at: i64,
+    /// When the access token that admitted this change stops being accepted.
+    expires_at: DateTime<Utc>,
     session_expires_at: DateTime<Utc>,
     actor_name: String,
     role: roles::Role,
@@ -247,7 +248,7 @@ impl Context {
     async fn admit(
         manager: RoomManager,
         room_id: RoomId,
-        claims: Claims,
+        principal: Principal,
     ) -> Result<Self, api::RoomApiError> {
         let creation = tokio::time::timeout(
             control::ADMISSION_TIMEOUT,
@@ -310,10 +311,10 @@ impl Context {
                 .execute(&mut *transaction)
                 .await
                 .map_err(database_error)?;
-            if Utc::now().timestamp() >= claims.exp as i64 {
+            if Utc::now() >= principal.expires_at {
                 return Err(AuthError::TokenExpired.into_response().into());
             }
-            let (user, _) = sessions::lock_current_session(&mut transaction, &claims)
+            let (user, _) = sessions::lock_current_session(&mut transaction, &principal)
                 .await
                 .map_err(IntoResponse::into_response)?;
             let owner: Uuid =
@@ -355,10 +356,10 @@ impl Context {
             // FOR UPDATE predicates may have been evaluated before a row-lock
             // wait. Check the current clock again after every admission lock.
             let session_expires_at: Option<DateTime<Utc>> = sqlx::query_scalar("SELECT expires_at FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp()")
-                .bind(claims.sid).bind(user).fetch_optional(&mut *transaction).await.map_err(database_error)?;
+                .bind(principal.sid).bind(user).fetch_optional(&mut *transaction).await.map_err(database_error)?;
             let session_expires_at =
                 session_expires_at.ok_or_else(|| AuthError::InvalidToken.into_response())?;
-            if Utc::now().timestamp() >= claims.exp as i64 {
+            if Utc::now() >= principal.expires_at {
                 return Err(AuthError::TokenExpired.into_response().into());
             }
             Ok((
@@ -404,8 +405,8 @@ impl Context {
             manager,
             room_id,
             user,
-            session: claims.sid,
-            expires_at: claims.exp as i64,
+            session: principal.sid,
+            expires_at: principal.expires_at,
             session_expires_at,
             actor_name,
             role,
@@ -438,7 +439,7 @@ impl Context {
             .bind(session).bind(user).fetch_optional(self.connection()?).await?;
         self.session_expires_at =
             expiry.ok_or_else(|| Refusal::Unauthorized("Sign-in expired; sign in again".into()))?;
-        if Utc::now().timestamp() >= self.expires_at {
+        if Utc::now() >= self.expires_at {
             return Err(Refusal::Unauthorized("Sign-in expired; sign in again".into()).into());
         }
         Ok(())
@@ -532,12 +533,9 @@ impl Context {
             ._control
             .take()
             .ok_or_else(|| Refusal::NotFound("The waiting room is no longer active".into()))?;
-        let expires = self.expires_at.min(self.session_expires_at.timestamp());
+        let expires = self.expires_at.min(self.session_expires_at);
         let authorize = move || {
-            anyhow::ensure!(
-                Utc::now().timestamp() < expires,
-                "Sign-in expired; sign in again"
-            );
+            anyhow::ensure!(Utc::now() < expires, "Sign-in expired; sign in again");
             Ok(())
         };
         let control = super::control::RoomControl::from_guard(control);
@@ -569,7 +567,7 @@ impl Context {
                 Refusal::TimedOut("Waiting-room change timed out; refresh this room".into())
             })?
             .map_err(|_| {
-                if Utc::now().timestamp() >= expires {
+                if Utc::now() >= expires {
                     Refusal::Unauthorized("Sign-in expired; sign in again".into())
                 } else {
                     Refusal::Conflict(
@@ -967,12 +965,12 @@ async fn admit(
     headers: &HeaderMap,
     id: String,
 ) -> Result<Context, api::RoomApiError> {
-    let claims = account::authenticated_claims(server, headers)
+    let principal = account::authenticated_principal(server, headers)
         .await
         .map_err(IntoResponse::into_response)?;
     let room_id =
         RoomId::new(id).map_err(|_| response_error(StatusCode::BAD_REQUEST, "Invalid room"))?;
-    Context::admit(server.room_manager().clone(), room_id, claims).await
+    Context::admit(server.room_manager().clone(), room_id, principal).await
 }
 
 type Response = (HeaderMap, Json<Value>);

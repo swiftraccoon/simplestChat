@@ -43,7 +43,7 @@ async fn saved_room_paths_are_room_ids() {
         http::{Request, header},
     };
     use tower::ServiceExt;
-    let router = crate::signaling::fixtures::server_without_database()
+    let router = crate::signaling::fixtures::server_with_unreachable_database()
         .await
         .router();
     let put = |room: &str| {
@@ -85,7 +85,7 @@ async fn pool() -> PgPool {
         .unwrap()
 }
 
-async fn person(pool: &PgPool, name: &str) -> Claims {
+async fn person(pool: &PgPool, name: &str) -> Principal {
     let id = Uuid::new_v4();
     sqlx::query("INSERT INTO users (id,email,display_name) VALUES ($1,$2,$3)")
         .bind(id)
@@ -101,19 +101,7 @@ async fn person(pool: &PgPool, name: &str) -> Claims {
     )
     .await
     .unwrap();
-    let token = crate::auth::jwt::create_session_token(
-        &id.to_string(),
-        name,
-        &crate::auth::jwt::JwtSecret::from("discovery-test-secret-at-least-32-bytes"),
-        0,
-        sid,
-    )
-    .unwrap();
-    crate::auth::jwt::validate_token(
-        &token,
-        &crate::auth::jwt::JwtSecret::from("discovery-test-secret-at-least-32-bytes"),
-    )
-    .unwrap()
+    crate::auth::access_tokens::fixtures::principal(pool, sid).await
 }
 
 async fn cleanup(pool: &PgPool, ids: &[Uuid]) {
@@ -135,8 +123,8 @@ async fn database_discovery_contacts_require_acceptance_and_current_session() {
     let pool = pool().await;
     let alice = person(&pool, "Alice").await;
     let bob = person(&pool, "Bob").await;
-    let aid = account_id(&alice).unwrap();
-    let bid = account_id(&bob).unwrap();
+    let aid = alice.user.as_uuid();
+    let bid = bob.user.as_uuid();
     request_contact(&pool, &alice, bid).await.unwrap();
     let mut connection = pool.acquire().await.unwrap();
     assert!(!accepted_contact(&mut connection, aid, bid).await.unwrap());
@@ -181,8 +169,8 @@ async fn database_discovery_contact_requests_respect_optout_ignore_and_expiry() 
     let pool = pool().await;
     let alice = person(&pool, "Alice").await;
     let bob = person(&pool, "Bob").await;
-    let aid = account_id(&alice).unwrap();
-    let bid = account_id(&bob).unwrap();
+    let aid = alice.user.as_uuid();
+    let bid = bob.user.as_uuid();
     for preferences in [
         serde_json::json!({"allowPrivateMessages":false}),
         serde_json::json!({"ignored":[{"id":aid,"name":"Alice"}]}),
@@ -232,8 +220,8 @@ async fn database_discovery_room_shortcuts_preserve_favorites_and_bound_recents(
     let pool = pool().await;
     let alice = person(&pool, "Alice").await;
     let bob = person(&pool, "Bob").await;
-    let aid = account_id(&alice).unwrap();
-    let bid = account_id(&bob).unwrap();
+    let aid = alice.user.as_uuid();
+    let bid = bob.user.as_uuid();
     let private = rid(&format!("discovery-{}-private", Uuid::new_v4()));
     sqlx::query(
         "INSERT INTO rooms (id,owner_id,display_name,secret) VALUES ($1,$2,'Private',true)",
@@ -312,8 +300,8 @@ async fn database_discovery_contact_and_favorite_caps_serialize_concurrent_write
     let pool = pool().await;
     let alice = person(&pool, "Alice").await;
     let bob = person(&pool, "Bob").await;
-    let aid = account_id(&alice).unwrap();
-    let bid = account_id(&bob).unwrap();
+    let aid = alice.user.as_uuid();
+    let bid = bob.user.as_uuid();
     let mut ids = vec![aid, bid];
     for _ in 0..MAX_REQUESTS_PER_DAY {
         let target = Uuid::new_v4();

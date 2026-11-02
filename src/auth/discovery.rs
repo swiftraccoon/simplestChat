@@ -3,7 +3,7 @@
 
 use super::{
     account, routes,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::{
     ids::RoomId,
@@ -63,10 +63,6 @@ pub(crate) struct ContactRequest {
     account_id: Uuid,
 }
 
-fn account_id(claims: &Claims) -> Result<Uuid, AuthError> {
-    claims.sub.parse().map_err(|_| AuthError::InvalidToken)
-}
-
 fn ordered_pair(own: Uuid, peer: Uuid) -> (Uuid, Uuid) {
     if own < peer { (own, peer) } else { (peer, own) }
 }
@@ -82,10 +78,10 @@ fn allows_contact(preferences: &serde_json::Value, own: Uuid, peer: Uuid) -> boo
 /// then recheck the current session. This preserves auth's users → sessions order.
 async fn lock_contact_accounts(
     connection: &mut PgConnection,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
 ) -> Result<Option<bool>, AuthError> {
-    let own = account_id(claims)?;
+    let own = principal.user.as_uuid();
     let people: Vec<(Uuid, i64, serde_json::Value)> = sqlx::query_as(
         "SELECT id,auth_version,preferences FROM users WHERE id=ANY($1) ORDER BY id FOR UPDATE",
     )
@@ -97,10 +93,10 @@ async fn lock_contact_accounts(
         .iter()
         .find(|person| person.0 == own)
         .ok_or(AuthError::InvalidToken)?;
-    if actor.1 != claims.auth_version {
+    if actor.1 != principal.auth_version {
         return Err(AuthError::InvalidToken);
     }
-    require_session(connection, claims, own).await?;
+    require_session(connection, principal, own).await?;
     Ok(people
         .iter()
         .find(|person| person.0 == peer)
@@ -109,12 +105,12 @@ async fn lock_contact_accounts(
 
 async fn require_session(
     connection: &mut PgConnection,
-    claims: &Claims,
+    principal: &Principal,
     own: Uuid,
 ) -> Result<(), AuthError> {
     let live: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE")
-        .bind(claims.sid).bind(own).fetch_optional(connection).await.map_err(routes::database_error)?;
+        .bind(principal.sid).bind(own).fetch_optional(connection).await.map_err(routes::database_error)?;
     live.map(|_| ()).ok_or(AuthError::InvalidToken)
 }
 
@@ -123,8 +119,8 @@ pub(crate) async fn list_contacts(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ContactsPage>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own = principal.user.as_uuid();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let rows: Vec<(Uuid, String, String, Uuid)> = sqlx::query_as(
         "SELECT u.id,u.display_name,c.status,c.requester_id FROM contacts c JOIN users u
@@ -155,13 +151,17 @@ pub(crate) async fn list_contacts(
     ))
 }
 
-async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<bool, AuthError> {
-    let own = account_id(claims)?;
+async fn request_contact(
+    pool: &PgPool,
+    principal: &Principal,
+    peer: Uuid,
+) -> Result<bool, AuthError> {
+    let own = principal.user.as_uuid();
     if own == peer {
         return Err(AuthError::InvalidInput("Choose another account"));
     }
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let allowed = lock_contact_accounts(&mut tx, claims, peer).await?;
+    let allowed = lock_contact_accounts(&mut tx, principal, peer).await?;
     // Missing, opted-out and ignoring accounts have the same response.
     if allowed != Some(true) {
         return Ok(false);
@@ -215,12 +215,12 @@ pub(crate) async fn create_contact(
     Json(request): Json<ContactRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own = principal.user.as_uuid();
     let peer = request.account_id;
     super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let changed = request_contact(pool, &claims, peer).await?;
+        let changed = request_contact(pool, &principal, peer).await?;
         if changed {
             server.room_manager().account_updates().pair(
                 own,
@@ -246,13 +246,13 @@ pub(crate) async fn create_contact(
 /// it answers any request.
 async fn change_contact(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
     accept: bool,
 ) -> Result<bool, AuthError> {
-    let own = account_id(claims)?;
+    let own = principal.user.as_uuid();
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let allowed = lock_contact_accounts(&mut tx, claims, peer).await?;
+    let allowed = lock_contact_accounts(&mut tx, principal, peer).await?;
     let (low, high) = ordered_pair(own, peer);
     let changed = if accept {
         if allowed != Some(true) {
@@ -279,11 +279,11 @@ pub(crate) async fn accept_contact(
     Path(peer): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own = principal.user.as_uuid();
     super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let changed = change_contact(pool, &claims, peer, true).await?;
+        let changed = change_contact(pool, &principal, peer, true).await?;
         if changed {
             server.room_manager().account_updates().pair(
                 own,
@@ -303,11 +303,11 @@ pub(crate) async fn remove_contact(
     Path(peer): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own = principal.user.as_uuid();
     super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let changed = change_contact(pool, &claims, peer, false).await?;
+        let changed = change_contact(pool, &principal, peer, false).await?;
         if changed {
             server.room_manager().account_updates().pair(
                 own,
@@ -368,8 +368,8 @@ pub(crate) async fn saved_rooms(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<SavedRoomsPage>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own = principal.user.as_uuid();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let entries = visible_saved_entries(pool, own)
         .await
@@ -400,30 +400,30 @@ pub(crate) async fn saved_rooms(
 
 async fn lock_room_account(
     connection: &mut PgConnection,
-    claims: &Claims,
+    principal: &Principal,
 ) -> Result<Uuid, AuthError> {
-    let own = account_id(claims)?;
+    let own = principal.user.as_uuid();
     let version: Option<i64> =
         sqlx::query_scalar("SELECT auth_version FROM users WHERE id=$1 FOR UPDATE")
             .bind(own)
             .fetch_optional(&mut *connection)
             .await
             .map_err(routes::database_error)?;
-    if version != Some(claims.auth_version) {
+    if version != Some(principal.auth_version) {
         return Err(AuthError::InvalidToken);
     }
-    require_session(connection, claims, own).await?;
+    require_session(connection, principal, own).await?;
     Ok(own)
 }
 
 async fn save_favorite(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     room: &RoomId,
     favorite: bool,
 ) -> Result<(), AuthError> {
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let own = lock_room_account(&mut tx, claims).await?;
+    let own = lock_room_account(&mut tx, principal).await?;
     if favorite {
         let visible: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM rooms r WHERE r.id=$1
             AND (r.secret=false OR r.owner_id=$2 OR EXISTS(SELECT 1 FROM room_roles m WHERE m.room_id=r.id AND m.user_id=$2)))")
@@ -483,10 +483,10 @@ pub(crate) async fn save_room(
     Json(request): Json<SaveRoomRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
     save_favorite(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
+        &principal,
         &room,
         request.favorite,
     )

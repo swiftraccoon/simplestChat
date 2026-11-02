@@ -61,7 +61,6 @@ server_id="$(docker run --detach \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
   --env DATABASE_URL='postgres://test_owner:disposable-container-password@127.0.0.1:5432/simplestchat_test?sslmode=disable' \
-  --env JWT_SECRET=disposable-container-jwt-secret-at-least-32-bytes \
   --env RUN_MIGRATIONS=true --env REGISTRATION_ENABLED=true \
   --env BIND_ADDR=0.0.0.0 --env PORT=3000 --env ANNOUNCE_IP=127.0.0.1 \
   --env ALLOWED_ORIGINS="${test_origin}" --env MEDIA_WORKERS=1 \
@@ -102,7 +101,7 @@ applied="$(docker exec "${database_id}" psql -X -U test_owner -d simplestchat_te
 test "${applied}" -eq "${#migrations[@]}"
 test "${applied}" -gt 0
 
-# Exercise one real auth write without retaining the returned JWT or refresh cookie.
+# Exercise one real auth write without retaining the returned access token or refresh cookie.
 curl --fail --silent --show-error --max-time 15 \
   --header 'Content-Type: application/json' --header "Origin: ${test_origin}" \
   --data '{"email":"container-smoke@example.test","password":"Disposable-container-password-2026!","display_name":"Container smoke"}' \

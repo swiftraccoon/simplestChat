@@ -1,12 +1,14 @@
 import { ROLES, TIMESTAMP_FORMATS } from './protocol';
 import type {
   AccountProfile,
+  AuthResponse,
   ChatPreferences,
   ChatStyle,
   IgnoredPerson,
   PublicProfile,
   Role,
   RoomListItem,
+  UserInfo,
 } from './protocol';
 import { CHAT_PALETTE } from './avatar-colors';
 import {
@@ -45,6 +47,14 @@ export const decodeServerCapabilities = object<ServerCapabilities>({
   adHocRooms: boolean,
 });
 
+/** A sign-in or refresh. The token is opaque: it goes back as a bearer and is
+ * never read. Its lifetime is the server's stated `expires_at`. */
+export const decodeAuthResponse = object<AuthResponse>({
+  token: (value) => boundedText(value, 128),
+  expires_at: timestamp,
+  user: object<UserInfo>({ id: filled, email: filled, display_name: filled }),
+});
+
 export interface PasskeySettings {
   password_enabled: boolean;
   recovery_enabled: boolean;
@@ -61,15 +71,6 @@ export interface AccountSession {
 }
 
 export function decodeAccountSessions(value: unknown): AccountSession[] {
-  const timestamp = (value: unknown): string => {
-    const result = boundedText(value, 40);
-    if (
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(result) ||
-      !Number.isFinite(Date.parse(result))
-    )
-      invalid();
-    return result;
-  };
   const sessions = list((value: unknown): AccountSession => {
     const entry = exact(value, ['id', 'current', 'created_at', 'refreshed_at', 'expires_at']);
     return {
@@ -110,6 +111,20 @@ function boundedText(value: unknown, maximum: number): string {
   const result = text(value);
   return result.length > 0 && result.length <= maximum ? result : invalid();
 }
+function filled(value: unknown): string {
+  const result = text(value);
+  return result ? result : invalid();
+}
+/** An RFC 3339 instant as the server writes it. */
+function timestamp(value: unknown): string {
+  const result = boundedText(value, 40);
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(result) ||
+    !Number.isFinite(Date.parse(result))
+  )
+    invalid();
+  return result;
+}
 function recordId(value: unknown): string {
   const result = text(value);
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result)
@@ -121,13 +136,7 @@ export function decodePasskeySettings(value: unknown): PasskeySettings {
   const maximum = integer(10, 1)(result['maximum']);
   const passkeys = list((entry: unknown) => {
     const key = exact(entry, ['id', 'created_at']);
-    const created = boundedText(key['created_at'], 40);
-    if (
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(created) ||
-      !Number.isFinite(Date.parse(created))
-    )
-      invalid();
-    return { id: recordId(key['id']), created_at: created };
+    return { id: recordId(key['id']), created_at: timestamp(key['created_at']) };
   })(result['passkeys']);
   if (passkeys.length > maximum || new Set(passkeys.map((key) => key.id)).size !== passkeys.length)
     invalid();

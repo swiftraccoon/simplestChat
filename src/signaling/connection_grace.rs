@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 /// Grace period entry for a disconnected participant
 pub(super) struct GraceEntry {
     pub(super) reconnect_token: String,
-    pub(super) authenticated_subject: Option<String>,
+    pub(super) authenticated_subject: Option<UserId>,
     pub(super) authenticated_version: Option<i64>,
     /// Media limiter state for this exact room-session incarnation.
     pub(super) media_rate_state: MediaSessionRateState,
@@ -66,13 +66,13 @@ impl GracePeriodMap {
 
     pub(crate) fn take_revoked(
         &self,
-        user_id: &str,
+        user: UserId,
         minimum_version: i64,
     ) -> Vec<(RoomId, ParticipantId, mpsc::Sender<crate::OutboundJson>)> {
         let mut map = self.inner.write();
         let mut removed = Vec::new();
         map.retain(|(room_id, participant_id, _), entry| {
-            if entry.authenticated_subject.as_deref() == Some(user_id)
+            if entry.authenticated_subject == Some(user)
                 && entry
                     .authenticated_version
                     .is_none_or(|version| version < minimum_version)
@@ -134,7 +134,7 @@ impl GracePeriodMap {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         reconnect_token: &str,
-        authenticated_subject: Option<&str>,
+        authenticated_subject: Option<UserId>,
     ) -> Option<GraceEntry> {
         let mut map = self.inner.write();
         let key = (
@@ -144,7 +144,7 @@ impl GracePeriodMap {
         );
         if map
             .get(&key)
-            .is_some_and(|entry| entry.authenticated_subject.as_deref() == authenticated_subject)
+            .is_some_and(|entry| entry.authenticated_subject == authenticated_subject)
         {
             map.remove(&key)
         } else {
@@ -162,7 +162,7 @@ pub(super) struct DisconnectedMember {
     pub(super) sender: mpsc::Sender<crate::OutboundJson>,
     pub(super) disconnected_at: Instant,
     /// Owned copies: the session's check in flight cannot be shared across an await.
-    pub(super) claims: Option<Claims>,
+    pub(super) principal: Option<Principal>,
     pub(super) continuity: CredentialContinuity,
     pub(super) credential_deadline: Option<Instant>,
 }
@@ -176,7 +176,7 @@ pub(super) async fn retain_for_reconnect(
     grace_periods: &GracePeriodMap,
     room_manager: &Arc<RoomManager>,
     db_pool: Option<sqlx::PgPool>,
-    mut auth_revocations: broadcast::Receiver<(String, i64)>,
+    mut auth_revocations: broadcast::Receiver<(UserId, i64)>,
     drain: &DrainSignal,
 ) {
     let DisconnectedMember {
@@ -186,7 +186,7 @@ pub(super) async fn retain_for_reconnect(
         media_rate_state,
         sender,
         disconnected_at,
-        claims,
+        principal,
         continuity,
         credential_deadline,
     } = member;
@@ -195,11 +195,11 @@ pub(super) async fn retain_for_reconnect(
     let pid = participant_id;
     let timer_room_id = room_id.clone();
     let timer_token = reconnect_token.clone();
-    let authenticated_subject = claims.as_ref().map(|claims| claims.sub.clone());
-    let authenticated_version = claims.as_ref().map(|claims| claims.auth_version);
-    let timer_subject = authenticated_subject.clone();
+    let authenticated_subject = principal.as_ref().map(|principal| principal.user);
+    let authenticated_version = principal.as_ref().map(|principal| principal.auth_version);
+    let timer_subject = authenticated_subject;
     let timer_sender = sender.clone();
-    let timer_claims = claims;
+    let timer_principal = principal;
     let timer_pool = db_pool;
     let mut timer_continuity = continuity;
     let timer_drain = drain.clone();
@@ -223,10 +223,11 @@ pub(super) async fn retain_for_reconnect(
                 biased;
                 _ = timer_drain.wait() => return,
                 _ = tokio::time::sleep_until(deadline.into()) => break,
-                _ = tokio::time::sleep_until(next_check.into()), if timer_claims.is_some() => {
-                    if let Some(claims) = timer_claims.as_ref() {
-                        match revalidate_account(timer_pool.as_ref(), claims, &mut timer_continuity,
-                            &mut auth_revocations, &timer_drain, grace_deadline).await {
+                _ = tokio::time::sleep_until(next_check.into()), if timer_principal.is_some() => {
+                    if let Some(principal) = timer_principal.as_ref() {
+                        match revalidate_account(timer_pool.as_ref(), principal,
+                            &mut timer_continuity, &mut auth_revocations, &timer_drain,
+                            grace_deadline).await {
                             Some(true) => {},
                             Some(false) => break,
                             None => return,
@@ -234,10 +235,10 @@ pub(super) async fn retain_for_reconnect(
                     }
                     next_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 },
-                notice = auth_revocations.recv(), if timer_claims.is_some() => {
+                notice = auth_revocations.recv(), if timer_principal.is_some() => {
                     match notice {
-                        Ok((subject, version)) if timer_claims.as_ref().is_some_and(|claims|
-                            claims.sub == subject && claims.auth_version < version) => break,
+                        Ok((user, version)) if timer_principal.as_ref().is_some_and(|principal|
+                            principal.user == user && principal.auth_version < version) => break,
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                             timer_continuity.require_revalidation();
@@ -253,7 +254,7 @@ pub(super) async fn retain_for_reconnect(
         // win the race at the deadline without being torn down by an
         // older task.
         if grace_map
-            .remove_if_token_matches(&timer_room_id, &pid, &timer_token, timer_subject.as_deref())
+            .remove_if_token_matches(&timer_room_id, &pid, &timer_token, timer_subject)
             .is_some()
         {
             info!(
@@ -328,7 +329,7 @@ pub(super) async fn handle_reconnect(
     participant_id: &ParticipantId,
     room_id: &RoomId,
     client_token: &str,
-    authenticated_subject: Option<&str>,
+    authenticated_subject: Option<UserId>,
     grace_periods: &GracePeriodMap,
     room_manager: &Arc<RoomManager>,
     new_sender: &mpsc::Sender<crate::OutboundJson>,

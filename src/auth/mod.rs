@@ -1,8 +1,8 @@
+pub(crate) mod access_tokens;
 pub(crate) mod account;
 pub(crate) mod common_passwords;
 pub(crate) mod discovery;
 pub(crate) mod invites;
-pub(crate) mod jwt;
 pub(crate) mod limiter;
 pub(crate) mod notifications;
 pub(crate) mod passkeys;

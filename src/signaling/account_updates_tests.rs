@@ -107,7 +107,7 @@ async fn authorization_database_notification_patch_merges_current_fields_and_pre
     )
     .await
     .unwrap();
-    let second_token = fixture.token(fixture.users[0], second_session, 0);
+    let second_token = fixture.token(second_session).await;
     let path = "/api/auth/notification-preferences";
     let quiet = json!({"startMinute":1320,"endMinute":420,"timeZone":"America/New_York"});
     // A remote device disables PM alerts while this device still has an older
@@ -227,7 +227,7 @@ async fn authorization_database_notification_patch_merges_current_fields_and_pre
 #[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
 async fn authorization_database_account_updates_publish_committed_scoped_mutations_without_room_join()
  {
-    let mut fixture = Fixture::new(3).await;
+    let fixture = Fixture::new(3).await;
     let alice = fixture.users[0];
     let bob = fixture.users[1];
     let mut first = Feed::open(&fixture, 0, 1).await;
@@ -362,23 +362,15 @@ async fn authorization_database_account_updates_publish_committed_scoped_mutatio
     // Reconnect always starts a new resync; there is no mutation replay.
     let reconnected = Feed::open(&fixture, 0, 1).await;
     drop(reconnected);
-    // The JWT deadline, independently of a still-live issuing session, ends a
-    // connected stream exactly rather than inheriting a decoder grace period.
-    let mut claims =
-        jwt::validate_token(&fixture.tokens[2], fixture.server.jwt_secret().unwrap()).unwrap();
-    claims.exp = (chrono::Utc::now().timestamp() + 5) as usize;
-    fixture.tokens[2] = jsonwebtoken::encode(
-        &jsonwebtoken::Header::default(),
-        &claims,
-        &jsonwebtoken::EncodingKey::from_secret(
-            fixture
-                .server
-                .jwt_secret()
-                .unwrap()
-                .expose_secret()
-                .as_bytes(),
-        ),
+    // The token's own expiry, independently of a still-live issuing session,
+    // ends a connected stream exactly rather than inheriting a grace period.
+    sqlx::query(
+        "UPDATE session_access_tokens SET expires_at = clock_timestamp() + interval '5 seconds'
+         WHERE token_hash=$1",
     )
+    .bind(session::hash_token(&fixture.tokens[2]))
+    .execute(&fixture.pool)
+    .await
     .unwrap();
     let mut token_expiry = Feed::open(&fixture, 2, 1).await;
     token_expiry.closed().await;
@@ -613,7 +605,7 @@ async fn authorization_database_account_updates_bound_leases_and_close_on_revoca
         .unwrap();
     fixture
         .server
-        .revoke_account_sessions(fixture.users[2].to_string(), 1);
+        .revoke_account_sessions(crate::ids::UserId::from(fixture.users[2]), 1);
     old_version.closed().await;
     assert_eq!(
         fixture
@@ -622,7 +614,7 @@ async fn authorization_database_account_updates_bound_leases_and_close_on_revoca
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    fixture.tokens[2] = fixture.token(fixture.users[2], fixture.sessions[2], 1);
+    fixture.tokens[2] = fixture.token(fixture.sessions[2]).await;
     let mut drain = Feed::open(&fixture, 2, 2).await;
     fixture.server.begin_draining();
     drain.closed().await;
@@ -868,13 +860,13 @@ async fn logout_pushes_revalidation_to_open_streams() {
     let second = session::create_session(&fixture.pool, &fixture.users[0], &refresh)
         .await
         .unwrap();
-    let token = fixture.token(fixture.users[0], second, 0);
+    let token = fixture.token(second).await;
     fixture.tokens.push(token);
     let mut socket = fixture
         .server
         .room_manager()
         .account_updates()
-        .subscribe_revalidation(fixture.users[0]);
+        .subscribe_revalidation(UserId::from(fixture.users[0]));
     let mut ended = Feed::open(&fixture, 1, 31).await;
     let mut sibling = Feed::open(&fixture, 0, 31).await;
     let mut request = Request::builder()
@@ -940,7 +932,7 @@ async fn refresh_token_reuse_pushes_revalidation_to_open_streams() {
     let second = session::create_session(&fixture.pool, &fixture.users[0], &predecessor)
         .await
         .unwrap();
-    let token = fixture.token(fixture.users[0], second, 0);
+    let token = fixture.token(second).await;
     fixture.tokens.push(token);
     let rotated = refresh(&fixture, &predecessor.raw, 32).await;
     assert_eq!(rotated.status(), StatusCode::OK);
@@ -958,7 +950,7 @@ async fn refresh_token_reuse_pushes_revalidation_to_open_streams() {
         .server
         .room_manager()
         .account_updates()
-        .subscribe_revalidation(fixture.users[0]);
+        .subscribe_revalidation(UserId::from(fixture.users[0]));
     let mut ended = Feed::open(&fixture, 1, 33).await;
     let mut sibling = Feed::open(&fixture, 0, 34).await;
     let replay = refresh(&fixture, &predecessor.raw, 35).await;

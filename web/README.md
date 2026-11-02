@@ -77,7 +77,7 @@ npm --prefix web run dev -- --host 127.0.0.1
 
 Open the localhost URL printed by Vite. Both `/api` and `/ws` proxy to the local
 Rust backend; Vite supplies assets, not authentication or media services.
-PostgreSQL/JWT/registration setup still belongs to the backend. If changing its
+PostgreSQL and registration setup still belong to the backend. If changing its
 port, update both proxy targets in [vite.config.ts](vite.config.ts).
 
 Passkey configuration must match the **browser** origin (including Vite's port),
@@ -492,7 +492,7 @@ normalization, with a 512-byte raw UTF-8 limit; confirmation uses the same norma
 Authenticated WebSocket connections first mint a one-use upgrade ticket through
 `POST /api/auth/ws-ticket` with the access token in the ordinary HTTP Authorization
 header. The handshake carries only `simplestchat` and `ticket.<ticket>` protocols;
-it never carries the reusable JWT. Tickets expire within 30 seconds, and every
+it never carries the reusable access token. Tickets expire within 30 seconds, and every
 reconnect mints a fresh one. Client preparation has a 15-second deadline within the
 existing reconnect budget. Replacing the account/token, disconnecting or exhausting
 recovery cancels the owned preparation; late responses cannot open another identity's

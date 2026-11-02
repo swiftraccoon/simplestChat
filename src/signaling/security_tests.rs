@@ -486,9 +486,7 @@ async fn database_membership_handler_always_returns_a_private_cursor_page() {
         .execute(&pool)
         .await
         .unwrap();
-    let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
-    let secret = "disposable-membership-handler-secret-at-least-32-bytes";
-    server.jwt_secret = Some(secret.into());
+    let server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     let session_id = crate::auth::session::create_session(
         &pool,
         &user,
@@ -496,19 +494,7 @@ async fn database_membership_handler_always_returns_a_private_cursor_page() {
     )
     .await
     .unwrap();
-    let token = crate::auth::jwt::create_session_token(
-        &user.to_string(),
-        "Page test",
-        &crate::auth::jwt::JwtSecret::from(secret),
-        0,
-        session_id,
-    )
-    .unwrap();
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::AUTHORIZATION,
-        format!("Bearer {token}").parse().unwrap(),
-    );
+    let headers = crate::signaling::fixtures::bearer(&pool, session_id).await;
     for after in [None, Some("room-100".to_string())] {
         let (response_headers, axum::Json(page)) = list_memberships(
             State(server.clone()),
@@ -559,9 +545,6 @@ async fn database_password_and_passkey_signup_share_taken_email_budget() {
         .unwrap();
     let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     server.registration_enabled = true;
-    server.jwt_secret = Some(crate::auth::jwt::JwtSecret::from(
-        format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()).as_str(),
-    ));
     server.webauthn = Some(Arc::new(
         webauthn_rs::prelude::WebauthnBuilder::new(
             "localhost",
@@ -625,7 +608,7 @@ async fn database_password_and_passkey_signup_share_taken_email_budget() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
-    use crate::auth::{jwt, session};
+    use crate::auth::{access_tokens, session};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
         .await
@@ -644,17 +627,8 @@ async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
         .unwrap()
         .id;
     transaction.commit().await.unwrap();
-    let secret = "disposable-upgrade-test-secret-at-least-32-bytes";
-    let token = jwt::create_session_token(
-        &user.to_string(),
-        "Upgrade test",
-        &jwt::JwtSecret::from(secret),
-        0,
-        sid,
-    )
-    .unwrap();
-    let mut server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
-    server.jwt_secret = Some(secret.into());
+    let token = access_tokens::fixtures::issue(&pool, sid).await;
+    let server = test_server(Some(pool.clone()), &crate::config::Config::for_tests()).await;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
         .unwrap();
@@ -754,38 +728,42 @@ async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
 #[test]
 fn account_rate_sketch_keeps_distinct_principals_usable() {
     let limiter = PrincipalRateLimiter::new(2);
-    assert!(limiter.allow("alice@example.com"));
-    assert!(limiter.allow("alice@example.com"));
-    assert!(!limiter.allow("alice@example.com"));
-    assert!(limiter.allow("bob@example.com"));
-    assert!(limiter.allow("bob@example.com"));
-    assert!(!limiter.allow("bob@example.com"));
+    let (alice, bob) = (UserId::random(), UserId::random());
+    assert!(limiter.allow(alice));
+    assert!(limiter.allow(alice));
+    assert!(!limiter.allow(alice));
+    assert!(limiter.allow(bob));
+    assert!(limiter.allow(bob));
+    assert!(!limiter.allow(bob));
 }
 
 #[test]
 fn account_rate_sketch_churn_cannot_reset_a_limited_victim() {
     let limiter = PrincipalRateLimiter::new(8);
     let now = Instant::now();
+    let victim = UserId::random();
     for _ in 0..8 {
-        assert!(limiter.allow_at("victim@example.test", now));
+        assert!(limiter.allow_at(victim, now));
     }
-    assert!(!limiter.allow_at("victim@example.test", now));
+    assert!(!limiter.allow_at(victim, now));
 
     for index in 0..(MAX_TRACKED_AUTH_IPS + 1_000) {
-        let _ = limiter.allow_at(&format!("attacker-{index}@example.test"), now);
+        let attacker = UserId::from(uuid::Uuid::from_u128(u128::try_from(index).unwrap()));
+        let _ = limiter.allow_at(attacker, now);
     }
 
-    assert!(!limiter.allow_at("victim@example.test", now));
-    assert!(limiter.allow_at("legitimate@example.test", now));
+    assert!(!limiter.allow_at(victim, now));
+    assert!(limiter.allow_at(UserId::random(), now));
 }
 
 #[test]
 fn account_rate_sketch_resets_after_the_window() {
     let limiter = PrincipalRateLimiter::new(1);
     let now = Instant::now();
-    assert!(limiter.allow_at("alice@example.test", now));
-    assert!(!limiter.allow_at("alice@example.test", now));
-    assert!(limiter.allow_at("alice@example.test", now + PRINCIPAL_RATE_WINDOW));
+    let alice = UserId::random();
+    assert!(limiter.allow_at(alice, now));
+    assert!(!limiter.allow_at(alice, now));
+    assert!(limiter.allow_at(alice, now + PRINCIPAL_RATE_WINDOW));
 }
 
 #[test]
@@ -1119,5 +1097,32 @@ async fn build_info_reports_the_configured_source_revision() {
             String::from_utf8_lossy(&body).contains(&expected),
             "expected build_info to report {reported}"
         );
+    }
+}
+
+/// Accounts need only the database now that access tokens live there: a server
+/// with a pool and no further account configuration offers sign-in, and one
+/// without a pool offers none.
+#[tokio::test]
+async fn capabilities_offer_accounts_whenever_a_database_is_configured() {
+    for (server, accounts) in [
+        (
+            crate::signaling::fixtures::server_with_unreachable_database().await,
+            true,
+        ),
+        (
+            test_server(None, &crate::config::Config::for_tests()).await,
+            false,
+        ),
+    ] {
+        let response = capabilities_handler(State(server)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(value["accounts"], accounts);
+        assert_eq!(value["passwordLogin"], accounts);
+        assert_eq!(value["roomCreation"], accounts);
     }
 }

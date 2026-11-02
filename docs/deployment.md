@@ -153,7 +153,8 @@ Ansible keep their documented roles.
    ports on both families, and each family gets its own listener.
 3. Keep runtime secrets outside the repository in an owner-readable file
    (mode `0600`). Generate each with `openssl rand -base64 48`; use independent
-   JWT, metrics, proxy and TURN secrets.
+   metrics, proxy and TURN secrets. Access tokens need no secret: they are opaque
+   handles the database holds as digests.
 
 Example `/etc/simplestchat/runtime.env`:
 
@@ -162,7 +163,6 @@ ANNOUNCE_IP=203.0.113.10
 ALLOWED_ORIGINS=https://chat.example.com
 REGISTRATION_ENABLED=false
 ALLOW_AD_HOC_ROOMS=false
-JWT_SECRET=<independent-random-value-at-least-32-bytes>
 METRICS_TOKEN=<independent-random-value-at-least-32-bytes>
 TRUSTED_PROXY_SECRET=<independent-random-value-at-least-32-bytes>
 DATABASE_URL=postgres://app_user:password@db.example.com/chat?sslmode=verify-full
@@ -451,10 +451,10 @@ and [development](development.md) for native build requirements.
   re-check at once, so those of the ended session close after one database
   check. A logout affects only its own session; other devices stay signed in.
   Each refresh keeps a session for seven more days but never past 30 days after
-  sign-in, when that device must sign in again; that end is not announced, and
-  the account's connections find it at their next check. Refresh-token replay
-  outside the multi-tab race window revokes the token family, and a sign-in
-  beyond the account's 32 live sessions ends its oldest; both tell the account's
+  sign-in, when that device must sign in again; no access token outlives its
+  session, so that end is not announced. Refresh-token replay outside the
+  multi-tab race window revokes the token family, and a sign-in beyond the
+  account's 32 live sessions ends its oldest; both tell the account's
   connections at once, as logout does. Password changes and saved-key recovery
   revoke existing tokens and active account connections.
 - Reconnect replay remains bounded memory (300 entries / 256 KiB per room) and
@@ -800,8 +800,8 @@ Keep `Authorization`, `Cookie`, `Set-Cookie` and `Sec-WebSocket-Protocol` header
 query strings and URL fragments out of custom proxy/APM/access logs. The supplied
 proxy does not enable raw access logging. The WebSocket subprotocol carries a
 short-lived, single-use upgrade ticket issued through authenticated HTTP. It
-remains a credential until consumed or expired; reusable access JWTs are rejected
-in the upgrade subprotocol.
+remains a credential until consumed or expired; reusable access tokens are
+rejected in the upgrade subprotocol.
 
 Passkey login starts with an empty JSON object and no account lookup or credential
 allowlist. The browser selects a discoverable credential; the server binds its

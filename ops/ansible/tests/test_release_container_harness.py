@@ -932,7 +932,7 @@ class HarnessEvidenceTests(HarnessTestCase):
             backupSha256="a" * 64,
             databaseDump=private_value,
             databasePassword=private_value,
-            environment={"JWT_SECRET": private_value},
+            environment={"METRICS_TOKEN": private_value},
             arbitraryExtra=private_value,
         )
 

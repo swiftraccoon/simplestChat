@@ -44,7 +44,7 @@ async fn both_complete_smokes_preserve_core_fields_and_retire_before_report() {
         let env = fixture.state.environment.lock().unwrap();
         assert_eq!(env["REGISTRATION_ENABLED"], "false");
         assert_eq!(env["RUN_MIGRATIONS"], "false");
-        assert!(env.get("DATABASE_URL").is_none() && env.get("JWT_SECRET").is_none());
+        assert!(env.get("DATABASE_URL").is_none() && env.get("METRICS_TOKEN").is_none());
         if diagnostics {
             let value = outcome.diagnostic.unwrap();
             assert_eq!(value["passed"], true);

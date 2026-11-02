@@ -2,10 +2,10 @@
 //! providers; the service worker displays a generic private-message notification.
 use crate::{
     auth::{
-        account::authenticated_claims,
+        account::authenticated_principal,
         routes,
         sessions::lock_current_session,
-        types::{AuthError, Claims},
+        types::{AuthError, Principal},
     },
     secret::SecretString,
     signaling::SignalingServer,
@@ -153,7 +153,7 @@ pub(crate) async fn status(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PushStatus>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     // The key loaded at startup: answering never reads `push_keys`.
     let public_key = server
         .push_signer()
@@ -164,8 +164,8 @@ pub(crate) async fn status(
     let enabled = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM push_subscriptions WHERE session_id=$1 AND auth_version=$2)",
     )
-    .bind(claims.sid)
-    .bind(claims.auth_version)
+    .bind(principal.sid)
+    .bind(principal.auth_version)
     .fetch_one(pool)
     .await
     .map_err(routes::database_error)?;
@@ -180,13 +180,13 @@ pub(crate) async fn status(
 
 async fn save_subscription(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     endpoint: &str,
 ) -> Result<(), AuthError> {
     let endpoint = endpoint_url(endpoint)?.to_string();
     let hash = hex::encode(Sha256::digest(endpoint.as_bytes()));
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
+    let (user, _) = lock_current_session(&mut tx, principal).await?;
     // An origin-wide browser subscription may follow a new session of the same
     // account. Another account must obtain a fresh browser subscription first.
     let owner: Option<Uuid> = sqlx::query_scalar(
@@ -204,14 +204,14 @@ async fn save_subscription(
     sqlx::query(
         "DELETE FROM push_subscriptions WHERE session_id=$1 OR (endpoint_hash=$2 AND user_id=$3)",
     )
-    .bind(claims.sid)
+    .bind(principal.sid)
     .bind(&hash)
     .bind(user)
     .execute(&mut *tx)
     .await
     .map_err(routes::database_error)?;
     sqlx::query("INSERT INTO push_subscriptions(id,session_id,user_id,auth_version,endpoint,endpoint_hash) VALUES($1,$2,$3,$4,$5,$6)")
-        .bind(Uuid::new_v4()).bind(claims.sid).bind(user).bind(claims.auth_version).bind(endpoint).bind(hash)
+        .bind(Uuid::new_v4()).bind(principal.sid).bind(user).bind(principal.auth_version).bind(endpoint).bind(hash)
         .execute(&mut *tx).await.map_err(routes::database_error)?;
     tx.commit().await.map_err(routes::database_error)
 }
@@ -222,21 +222,21 @@ pub(crate) async fn subscribe(
     Json(body): Json<SubscriptionRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     save_subscription(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
+        &principal,
         body.endpoint.expose_secret(),
     )
     .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 
-async fn delete_subscription(pool: &PgPool, claims: &Claims) -> Result<(), AuthError> {
+async fn delete_subscription(pool: &PgPool, principal: &Principal) -> Result<(), AuthError> {
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
+    let (user, _) = lock_current_session(&mut tx, principal).await?;
     sqlx::query("DELETE FROM push_subscriptions WHERE session_id=$1 AND user_id=$2")
-        .bind(claims.sid)
+        .bind(principal.sid)
         .bind(user)
         .execute(&mut *tx)
         .await
@@ -249,8 +249,12 @@ pub(crate) async fn unsubscribe(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
-    delete_subscription(server.db_pool().ok_or(AuthError::NotConfigured)?, &claims).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
+    delete_subscription(
+        server.db_pool().ok_or(AuthError::NotConfigured)?,
+        &principal,
+    )
+    .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 

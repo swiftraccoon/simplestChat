@@ -13,7 +13,7 @@ interface InvitationStore {
   readonly room: RoomClient | null;
 }
 interface InvitationServices {
-  readonly auth: Pick<AuthManager, 'userId' | 'jwt' | 'isLoggedIn'>;
+  readonly auth: Pick<AuthManager, 'userId' | 'accessToken' | 'isLoggedIn'>;
   readonly navigation: Pick<RoomNavigation, 'revision' | 'selectRoom' | 'cancelPendingJoin'>;
   readonly appNavigation: Pick<AppNavigation, 'preserveLocation' | 'retire'>;
   readonly community: Pick<CommunityUI, 'requestContact'>;
@@ -131,7 +131,7 @@ export function createInvitations(store: InvitationStore, services: InvitationSe
     const description = el('p', 'Loading invitation…');
     view.body.append(description);
     try {
-      const offer = await api.previewInvite(services.auth.jwt, code);
+      const offer = await api.previewInvite(services.auth.accessToken, code);
       if (!ownsIntent()) return;
       description.textContent = `Room: ${offer.display_name} (${offer.room_id}). Offered role: ${offer.role}.`;
       view.body.append(
@@ -148,7 +148,7 @@ export function createInvitations(store: InvitationStore, services: InvitationSe
           services.observe(
             (async () => {
               try {
-                const accepted = await api.redeemInvite(services.auth.jwt, code);
+                const accepted = await api.redeemInvite(services.auth.accessToken, code);
                 if (!ownsIntent()) return;
                 view.close();
                 const alreadyJoined = store.room?.currentRoomId === accepted.room_id;

@@ -28,8 +28,6 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 const CHILD_GRACE: Duration = Duration::from_secs(10);
 const PRESENTATION_LOG_FILTER: &str = "simplestchat=info,mediasoup=warn,sqlx::pool=warn,\
 simplestchat::signaling::connection=debug,simplestchat::media::transport_manager=debug";
-/// Disposable, test-only; the owned server never reads a deployment's secret.
-const TEST_JWT_SECRET: &str = "disposable-test-only-jwt-secret-at-least-32-bytes";
 
 /// Everything the opt-ins decided before any process started.
 struct Plan {
@@ -417,7 +415,6 @@ impl Harness {
             .env("ALLOW_AD_HOC_ROOMS", "true")
             .env("REGISTRATIONS_PER_IP_PER_HOUR", "100")
             .env("AUTH_REQUESTS_PER_MINUTE", "300")
-            .env("JWT_SECRET", TEST_JWT_SECRET)
             .env("RUN_MIGRATIONS", "true")
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))

@@ -376,8 +376,10 @@ cargo run -q -p xtask -- test-postgres \
 The database case registers an owned account, checks accepted and rejected
 password login, reads its profile, issues a WebSocket ticket, rotates its refresh
 cookie, rejects malformed credentials and an absent invitation, then checks
-logout revocation. Submitted canaries and issued access, refresh and WebSocket
-credentials must remain absent from real tracing JSON, the authenticated metrics
+logout revocation. Each sign-in and refresh must return an opaque 43-character
+access token whose stated `expires_at` is about fifteen minutes ahead. Submitted
+canaries, issued access tokens with their stored digests, refresh cookies and
+WebSocket credentials must remain absent from real tracing JSON, the authenticated metrics
 response, the enabled media snapshot, request URIs and URL-bearing response
 headers. Intended authentication bodies, refresh cookies and profile data remain
 observable only to their test client; they are not mistaken for logging leaks.
@@ -1310,7 +1312,7 @@ require no symlink ancestors/finals, four assets at most 16MiB each, and at most
 4096 migration-directory entries; SQL is counted without reading its contents.
 The bounded HTTP subset rejects folded/control-bearing headers and duplicate
 Content-Type. Curl ignores inherited configuration, uses literal loopback URLs,
-and never saves registration JWT/cookie output. Each container log retains both
+and never saves registration token/cookie output. Each container log retains both
 channels privately, capped at 1MiB; raw guest logs are not echoed on failure.
 
 The summary records individual assertion, engine, CLI-group and source-close
@@ -3218,7 +3220,7 @@ The four-case launcher workflow selects the Rust outer entry
 `xtask ops-artifact maintain-runtime`; the previous Python controller remains an
 unchanged reference. The
 authenticated installed Ops binary now owns the explicit native guest role,
-with exactly 53 project source pins and 15 operational helper pins. Frozen Python
+with exactly 54 project source pins and 15 operational helper pins. Frozen Python
 still supplies Ops33, Ansible and operational helpers. The same 1,800-second
 outer limit and 120-second reserve apply,
 with a 510-second setup cap and 1,170 seconds required before GO.
@@ -3739,17 +3741,18 @@ the refusal case by comparison with the clean baseline. Those observations do
 not identify a unique failing Bash branch; the frozen launcher has silent checks
 that can share that exit status.
 
-The host fixture's guest DATA roster is the 53 rendered-input source files
+The host fixture's guest DATA roster is the 54 rendered-input source files
 and 15 helper files. The new Rust host/controller implementation executes from the
 current authenticated Ops binary and is additionally bound by the expanded
-outer source catalogue; it is not interpreted from those 53 guest DATA files.
+outer source catalogue; it is not interpreted from those 54 guest DATA files.
 The migration case reconstructs a source-bound pre-035 generation: it seeds
 member and invitation rows, reverses both real role columns and validated
-constraints, drops `users.avatar_digest` (reversing 037) and removes the verified
-035–037 ledger rows, all in one transaction, so the ledger is the exact 1–34
+constraints, drops `users.avatar_digest` (reversing 037) and the
+`session_access_tokens` table (reversing 038), and removes the verified 035–038
+ledger rows, all in one transaction, so the ledger is the exact 1–34
 source prefix again. Independent reads require that prefix, actual old data and
 checks before maintenance, then transformed data, both newly validated checks and
-the full 37-row source ledger of the `post037` state afterward. The redemption
+the full 38-row source ledger of the `post038` state afterward. The redemption
 role stays unchanged. This tests actual current migration execution against
 controlled older schema and data; it does not run a historical server.
 Ledger-only deletion is insufficient.

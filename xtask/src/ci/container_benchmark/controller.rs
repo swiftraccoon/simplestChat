@@ -172,7 +172,6 @@ async fn images<E: Executor, C: Clock>(
         if env.iter().any(|v| {
             [
                 "DATABASE_URL",
-                "JWT_SECRET",
                 "TURN_URLS",
                 "TURN_SECRET",
                 "DIAGNOSTICS_PATH",

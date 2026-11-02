@@ -191,7 +191,7 @@ function fixture(options, signal) {
       if (trace.environment.DIAGNOSTICS_PATH)
         trace.environment.DIAGNOSTICS_PATH = "<diagnostics>";
       assert.equal(init.env.DATABASE_URL, undefined);
-      assert.equal(init.env.JWT_SECRET, undefined);
+      assert.equal(init.env.METRICS_TOKEN, undefined);
       queueMicrotask(() => {
         if (options.spawnError) child.emit("error", Error(privateText));
         if (options.earlyExit) finish(9);

@@ -1,7 +1,7 @@
 //! Registration invitations: any account holds a few single-use codes that let
 //! someone register while registration is closed.
 
-use super::{account::authenticated_claims, routes, types::AuthError};
+use super::{account::authenticated_principal, routes, types::AuthError};
 use crate::invite_codes;
 use crate::secret::SecretString;
 use crate::signaling::SignalingServer;
@@ -66,8 +66,10 @@ async fn caller(
     server: &SignalingServer,
     headers: &HeaderMap,
 ) -> Result<(Uuid, PgPool), AuthError> {
-    let claims = authenticated_claims(server, headers).await?;
-    let user = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let user = authenticated_principal(server, headers)
+        .await?
+        .user
+        .as_uuid();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
     Ok((user, pool))
 }

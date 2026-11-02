@@ -18,6 +18,6 @@ GRANT SELECT, INSERT
   ON public.push_keys
   TO simplestchat_app;
 GRANT SELECT, INSERT, DELETE
-  ON public.invite_redemptions
+  ON public.invite_redemptions, public.session_access_tokens
   TO simplestchat_app;
 COMMIT;

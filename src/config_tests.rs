@@ -20,7 +20,6 @@ fn an_empty_source_yields_the_documented_defaults() {
     assert_eq!(config.limits.max_connections, 10_000);
     assert_eq!(config.limits.max_password_workers, None);
     assert_eq!(config.rates.join_attempts_per_ip_per_minute, 30);
-    assert!(config.auth.jwt_secret.is_none());
     assert!(!config.auth.registration_enabled);
     assert!(!config.rooms.allow_ad_hoc);
     assert!(config.database.url.is_none());
@@ -107,7 +106,7 @@ fn flags_accept_one_grammar_and_default_closed() {
 fn secrets_need_thirty_two_bytes_and_are_never_echoed() {
     let short = "0123456789abcdef";
     let long = "disposable-fixture-value-of-32-bytes";
-    for name in ["JWT_SECRET", "METRICS_TOKEN", "TRUSTED_PROXY_SECRET"] {
+    for name in ["METRICS_TOKEN", "TRUSTED_PROXY_SECRET"] {
         assert_eq!(
             error(&[(name, short)]),
             format!("{name} must contain at least 32 bytes")

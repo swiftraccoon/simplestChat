@@ -1442,7 +1442,7 @@ async fn one_worker_manager(pool: Option<sqlx::PgPool>, metrics: ServerMetrics) 
 }
 
 /// Alice and Bob as saved accounts in one live room of a database-backed
-/// manager, with its signaling server and Alice's signed-in HTTP claims.
+/// manager, with its signaling server and Alice's signed-in HTTP principal.
 struct AccountRoomFixture {
     pool: sqlx::PgPool,
     manager: Arc<RoomManager>,
@@ -1451,7 +1451,7 @@ struct AccountRoomFixture {
     room_id: RoomId,
     alice: Participant,
     bob: Participant,
-    claims: crate::auth::types::Claims,
+    principal: crate::auth::types::Principal,
     receivers: Vec<mpsc::Receiver<crate::OutboundJson>>,
 }
 
@@ -1468,15 +1468,7 @@ impl AccountRoomFixture {
         )
         .await
         .unwrap();
-        let claims = crate::auth::types::Claims {
-            sub: own.to_string(),
-            name: "Alice".into(),
-            iss: "fixture".into(),
-            aud: "fixture".into(),
-            exp: (chrono::Utc::now().timestamp() + 3600) as usize,
-            auth_version: 0,
-            sid,
-        };
+        let principal = crate::auth::access_tokens::fixtures::principal(&pool, sid).await;
         let room_id = rid(&format!("account-room-{}", Uuid::new_v4()));
         room.id.clone_from(&room_id);
         let metrics = ServerMetrics::new();
@@ -1498,7 +1490,7 @@ impl AccountRoomFixture {
             room_id,
             alice,
             bob,
-            claims,
+            principal,
             receivers,
         }
     }
@@ -1537,7 +1529,7 @@ impl AccountRoomFixture {
     ) -> Result<(ChatEntry, bool), crate::auth::types::AuthError> {
         history::save_private_message(
             &self.server,
-            &self.claims,
+            &self.principal,
             self.bob.id.as_uuid(),
             history::SendRequest {
                 client_message_id: client_message_id.into(),
@@ -1575,7 +1567,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         room_id,
         alice,
         bob,
-        claims,
+        principal,
         ..
     } = &fixture;
     let own: Uuid = alice.id.as_uuid();
@@ -1591,7 +1583,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     assert!(
         history::save_private_message(
             server,
-            claims,
+            principal,
             peer,
             request(None, "First account PM", None)
         )
@@ -1608,7 +1600,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     assert!(
         history::save_private_message(
             server,
-            claims,
+            principal,
             peer,
             request(Some(room_id.to_string()), "First account PM", None)
         )
@@ -1624,7 +1616,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         .text_muted = false;
     let (saved, created) = history::save_private_message(
         server,
-        claims,
+        principal,
         peer,
         request(Some(room_id.to_string()), "First account PM", None),
     )
@@ -1635,7 +1627,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     room.write().await.participants.remove(&bob.id);
     let (retry, created) = history::save_private_message(
         server,
-        claims,
+        principal,
         peer,
         request(Some("departed-room".into()), "First account PM", None),
     )
@@ -1644,14 +1636,19 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
     assert!(!created);
     assert_eq!(retry.message_id, saved.message_id);
     assert!(
-        history::save_private_message(server, claims, peer, request(None, "Changed content", None))
-            .await
-            .is_err()
+        history::save_private_message(
+            server,
+            principal,
+            peer,
+            request(None, "Changed content", None)
+        )
+        .await
+        .is_err()
     );
     assert!(
         history::save_private_message(
             server,
-            claims,
+            principal,
             peer,
             request(None, "First account PM", Some(saved.message_id.as_uuid()))
         )
@@ -1665,7 +1662,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         reply_to: Some(saved.message_id.as_uuid()),
         room_id: None,
     };
-    let (reply, created) = history::save_private_message(server, claims, peer, reply)
+    let (reply, created) = history::save_private_message(server, principal, peer, reply)
         .await
         .unwrap();
     assert!(created);
@@ -1676,8 +1673,8 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         .execute(&mut *blocking)
         .await
         .unwrap();
-    let mut expiring = claims.clone();
-    expiring.exp = (chrono::Utc::now().timestamp() + 1) as usize;
+    let mut expiring = principal.clone();
+    expiring.expires_at = chrono::Utc::now() + chrono::TimeDelta::seconds(1);
     let server_copy = server.clone();
     let expired_write = tokio::spawn(async move {
         history::save_private_message(

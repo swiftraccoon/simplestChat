@@ -160,7 +160,6 @@ def render_fixture(
                 "postgres_admin_password",
                 "migration_password",
                 "database_password",
-                "jwt_secret",
                 "metrics_token",
                 "proxy_secret",
                 "owner_password",

@@ -1,7 +1,6 @@
 // Owned account authentication for the opt-in, loopback-only media/chat cohort.
 // Credentials and cookies remain private; reports contain identities and timing only.
 use anyhow::{Context, Result};
-use base64::Engine;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, ORIGIN, SET_COOKIE};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
@@ -83,22 +82,18 @@ impl Credentials {
     }
 }
 
+/// A sign-in or refresh: an opaque access token, the expiry the server states
+/// for it and the account. The token carries nothing a client may read.
 #[derive(Deserialize)]
 struct AuthResponse {
     token: String,
+    expires_at: chrono::DateTime<chrono::Utc>,
     user: AuthUser,
 }
 
 #[derive(Deserialize)]
 struct AuthUser {
     id: String,
-}
-
-#[derive(Deserialize)]
-struct TokenClaims {
-    sub: String,
-    exp: u64,
-    sid: uuid::Uuid,
 }
 
 #[derive(Deserialize)]
@@ -121,7 +116,6 @@ pub struct AccountSession {
     account_id: String,
     token: String,
     cookie: String,
-    session_id: uuid::Uuid,
     original_expires_at: u64,
     expires_at: u64,
     socket_expires_at: u64,
@@ -186,7 +180,7 @@ impl AccountSession {
             }))?);
         let (headers, authentication): (_, AuthResponse) = request_json(request).await?;
         let now = epoch_seconds()?;
-        let claims = token_claims(&authentication, &credentials.account_id, now)?;
+        let expires_at = accepted_expiry(&authentication, &credentials.account_id, now)?;
         let cookie = refresh_cookie(&headers)?;
         Ok(Self {
             http,
@@ -194,11 +188,10 @@ impl AccountSession {
             account_id: credentials.account_id.clone(),
             token: authentication.token,
             cookie,
-            session_id: claims.sid,
-            original_expires_at: claims.exp,
-            expires_at: claims.exp,
-            socket_expires_at: claims.exp,
-            refresh_at: refresh_deadline(claims.exp, now),
+            original_expires_at: expires_at,
+            expires_at,
+            socket_expires_at: expires_at,
+            refresh_at: refresh_deadline(expires_at, now),
             pending: None,
             refresh_latencies_ms: Vec::new(),
             renewal_latencies_ms: Vec::new(),
@@ -278,18 +271,22 @@ impl AccountSession {
             .body("{}");
         let (headers, authentication): (_, AuthResponse) = request_json(request).await?;
         let now = epoch_seconds()?;
-        let claims = token_claims(&authentication, &self.account_id, now)?;
+        let expires_at = accepted_expiry(&authentication, &self.account_id, now)?;
         let cookie = refresh_cookie(&headers)?;
+        // An opaque token names no session to compare; a client sees a rotated
+        // cookie, a new token and a later expiry.
         anyhow::ensure!(
-            cookie != self.cookie && claims.exp > self.expires_at && claims.sid == self.session_id,
-            "Account refresh must rotate its cookie and extend the same session"
+            cookie != self.cookie
+                && authentication.token != self.token
+                && expires_at > self.expires_at,
+            "Account refresh must rotate its cookie and issue a new token with a later expiry"
         );
         self.refresh_latencies_ms
             .push(started.elapsed().as_millis() as u64);
         self.cookie = cookie;
         self.token = authentication.token;
-        self.expires_at = claims.exp;
-        self.refresh_at = refresh_deadline(claims.exp, now);
+        self.expires_at = expires_at;
+        self.refresh_at = refresh_deadline(expires_at, now);
         let request_id = uuid::Uuid::new_v4().to_string();
         let message = renewal_message(&self.token, &request_id)?;
         self.pending = Some(PendingRenewal {
@@ -427,29 +424,23 @@ fn url_symbol(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
 }
 
-fn token_claims(response: &AuthResponse, account: &str, now: u64) -> Result<TokenClaims> {
+/// The stated expiry of a sign-in or refresh, in the whole Unix seconds the
+/// socket protocol uses, once the response names this account, carries a token
+/// of the issued shape (43 base64url characters, never read further) and
+/// states the unmodified fifteen-minute lifetime.
+fn accepted_expiry(response: &AuthResponse, account: &str, now: u64) -> Result<u64> {
     anyhow::ensure!(
-        response.user.id == account && response.token.len() <= 16_384,
-        "Authentication response belongs to a different account or exceeds its bound"
+        response.user.id == account
+            && response.token.len() == 43
+            && response.token.bytes().all(url_symbol),
+        "Authentication response belongs to a different account or carries another token shape"
     );
-    let parts: Vec<_> = response.token.split('.').collect();
+    let expires_at = u64::try_from(response.expires_at.timestamp()).unwrap_or(0);
     anyhow::ensure!(
-        parts.len() == 3
-            && parts
-                .iter()
-                .all(|part| !part.is_empty() && part.bytes().all(url_symbol)),
-        "Invalid account token envelope"
+        expires_at > now + 600 && expires_at <= now + 960,
+        "Account token's stated fifteen-minute lifetime did not match"
     );
-    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(parts[1])
-        .map_err(|_| anyhow::anyhow!("Invalid account token payload"))?;
-    let claims: TokenClaims = serde_json::from_slice(&payload)
-        .map_err(|_| anyhow::anyhow!("Invalid account token claims"))?;
-    anyhow::ensure!(
-        claims.sub == account && claims.exp > now + 600 && claims.exp <= now + 960,
-        "Account token identity or unmodified fifteen-minute lifetime did not match"
-    );
-    Ok(claims)
+    Ok(expires_at)
 }
 
 fn refresh_cookie(headers: &reqwest::header::HeaderMap) -> Result<String> {
@@ -525,15 +516,12 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    fn authentication(account: &str, session: uuid::Uuid, expiry: u64) -> AuthResponse {
-        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-            serde_json::to_vec(&serde_json::json!({
-                "sub": account, "sid": session, "exp": expiry,
-            }))
-            .unwrap(),
-        );
+    /// A sign-in or refresh answer for `account`: `token` and its stated expiry.
+    fn authentication(account: &str, expiry: u64, token: &str) -> AuthResponse {
         AuthResponse {
-            token: format!("e30.{payload}.fixture"),
+            token: token.to_owned(),
+            expires_at: chrono::DateTime::from_timestamp(i64::try_from(expiry).unwrap(), 0)
+                .unwrap(),
             user: AuthUser {
                 id: account.to_owned(),
             },
@@ -543,7 +531,71 @@ mod tests {
     fn authentication_json(authentication: &AuthResponse) -> serde_json::Value {
         serde_json::json!({
             "token": authentication.token,
+            "expires_at": authentication.expires_at,
             "user": {"id": authentication.user.id},
+        })
+    }
+
+    /// An owned loopback account API answering each request in `exchanges`
+    /// (path, refresh cookie to set, JSON body) in turn. It requires the ticket
+    /// request to carry `bearer` and a refresh to carry only the cookie.
+    fn serve(
+        listener: tokio::net::TcpListener,
+        bearer: String,
+        exchanges: Vec<(&'static str, Option<&'static str>, serde_json::Value)>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            for (path, cookie, body) in exchanges {
+                let (mut stream, peer) = listener.accept().await.unwrap();
+                assert_eq!(peer.ip(), "127.0.0.1".parse::<IpAddr>().unwrap());
+                let mut request = Vec::new();
+                let mut chunk = [0; 1024];
+                loop {
+                    let size = stream.read(&mut chunk).await.unwrap();
+                    assert!(size > 0);
+                    request.extend_from_slice(&chunk[..size]);
+                    assert!(request.len() <= 16_384);
+                    if let Some(boundary) = request.windows(4).position(|part| part == b"\r\n\r\n")
+                    {
+                        let header = std::str::from_utf8(&request[..boundary]).unwrap();
+                        let length = header
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        if request.len() >= boundary + 4 + length {
+                            break;
+                        }
+                    }
+                }
+                let request = String::from_utf8(request).unwrap();
+                assert!(request.starts_with(&format!("POST {path} HTTP/1.1\r\n")));
+                if path == "/api/auth/ws-ticket" {
+                    assert!(request.to_ascii_lowercase().contains(&format!(
+                        "authorization: bearer {}",
+                        bearer.to_ascii_lowercase()
+                    )));
+                }
+                if path == "/api/auth/refresh" {
+                    assert!(request.contains("__Host-refresh_token=fixture-initial"));
+                    assert!(!request.to_ascii_lowercase().contains("authorization:"));
+                }
+                let cookie = cookie.map_or_else(String::new, |cookie| {
+                    format!(
+                        "Set-Cookie: __Host-refresh_token={cookie}; Secure; HttpOnly; Path=/\r\n"
+                    )
+                });
+                let bytes = serde_json::to_vec(&body).unwrap();
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{cookie}\r\n",
+                    bytes.len()
+                );
+                stream.write_all(header.as_bytes()).await.unwrap();
+                stream.write_all(&bytes).await.unwrap();
+            }
         })
     }
 
@@ -570,13 +622,21 @@ mod tests {
     }
 
     #[test]
-    fn account_tokens_require_the_expected_identity_and_real_lifetime() {
+    fn account_responses_require_the_expected_identity_an_opaque_token_and_real_lifetime() {
         let id = uuid::Uuid::new_v4().to_string();
-        let authentication = authentication(&id, uuid::Uuid::new_v4(), 1900);
-        assert_eq!(token_claims(&authentication, &id, 1000).unwrap().exp, 1900);
-        assert!(token_claims(&authentication, &uuid::Uuid::new_v4().to_string(), 1000).is_err());
-        assert!(token_claims(&authentication, &id, 1300).is_err());
-        assert!(token_claims(&authentication, &id, 1).is_err());
+        let response = authentication(&id, 1900, &"A".repeat(43));
+        assert_eq!(accepted_expiry(&response, &id, 1000).unwrap(), 1900);
+        assert!(accepted_expiry(&response, &uuid::Uuid::new_v4().to_string(), 1000).is_err());
+        assert!(accepted_expiry(&response, &id, 1300).is_err());
+        assert!(accepted_expiry(&response, &id, 1).is_err());
+        for token in [
+            String::new(),
+            "e30.e30.fixture".to_owned(),
+            "A".repeat(44),
+            "+".repeat(43),
+        ] {
+            assert!(accepted_expiry(&authentication(&id, 1900, &token), &id, 1000).is_err());
+        }
     }
 
     #[test]
@@ -643,78 +703,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn login_ticket_refresh_and_correlated_socket_renewal_share_the_real_session() {
+    async fn login_ticket_refresh_and_correlated_socket_renewal_follow_the_rotated_credentials() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let endpoint = format!("ws://{}/ws", listener.local_addr().unwrap());
         let account_id = uuid::Uuid::new_v4().to_string();
-        let session_id = uuid::Uuid::new_v4();
         let now = epoch_seconds().unwrap();
-        let initial = authentication(&account_id, session_id, now + 900);
-        let refreshed = authentication(&account_id, session_id, now + 901);
-        let initial_json = authentication_json(&initial);
-        let refreshed_json = authentication_json(&refreshed);
-        let initial_bearer = initial.token;
-        let server = tokio::spawn(async move {
-            for (path, cookie, body) in [
-                ("/api/auth/login", Some("fixture-initial"), initial_json),
+        let initial = authentication(&account_id, now + 900, &"A".repeat(43));
+        let refreshed = authentication(&account_id, now + 901, &"B".repeat(43));
+        let server = serve(
+            listener,
+            initial.token.clone(),
+            vec![
+                (
+                    "/api/auth/login",
+                    Some("fixture-initial"),
+                    authentication_json(&initial),
+                ),
                 (
                     "/api/auth/ws-ticket",
                     None,
                     serde_json::json!({"ticket":"t".repeat(43),"expires_in":30}),
                 ),
-                ("/api/auth/refresh", Some("fixture-rotated"), refreshed_json),
-            ] {
-                let (mut stream, peer) = listener.accept().await.unwrap();
-                assert_eq!(peer.ip(), "127.0.0.1".parse::<IpAddr>().unwrap());
-                let mut request = Vec::new();
-                let mut chunk = [0; 1024];
-                loop {
-                    let size = stream.read(&mut chunk).await.unwrap();
-                    assert!(size > 0);
-                    request.extend_from_slice(&chunk[..size]);
-                    assert!(request.len() <= 16_384);
-                    if let Some(boundary) = request.windows(4).position(|part| part == b"\r\n\r\n")
-                    {
-                        let header = std::str::from_utf8(&request[..boundary]).unwrap();
-                        let length = header
-                            .lines()
-                            .find_map(|line| {
-                                let (name, value) = line.split_once(':')?;
-                                name.eq_ignore_ascii_case("content-length")
-                                    .then(|| value.trim().parse::<usize>().unwrap())
-                            })
-                            .unwrap_or(0);
-                        if request.len() >= boundary + 4 + length {
-                            break;
-                        }
-                    }
-                }
-                let request = String::from_utf8(request).unwrap();
-                assert!(request.starts_with(&format!("POST {path} HTTP/1.1\r\n")));
-                if path == "/api/auth/ws-ticket" {
-                    assert!(request.to_ascii_lowercase().contains(&format!(
-                        "authorization: bearer {}",
-                        initial_bearer.to_ascii_lowercase()
-                    )));
-                }
-                if path == "/api/auth/refresh" {
-                    assert!(request.contains("__Host-refresh_token=fixture-initial"));
-                    assert!(!request.to_ascii_lowercase().contains("authorization:"));
-                }
-                let cookie = cookie.map_or_else(String::new, |cookie| {
-                    format!(
-                        "Set-Cookie: __Host-refresh_token={cookie}; Secure; HttpOnly; Path=/\r\n"
-                    )
-                });
-                let bytes = serde_json::to_vec(&body).unwrap();
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{cookie}\r\n",
-                    bytes.len()
-                );
-                stream.write_all(header.as_bytes()).await.unwrap();
-                stream.write_all(&bytes).await.unwrap();
-            }
-        });
+                (
+                    "/api/auth/refresh",
+                    Some("fixture-rotated"),
+                    authentication_json(&refreshed),
+                ),
+            ],
+        );
         let credentials = Credentials {
             email: "owned@example.test".to_owned(),
             password: "owned test credential".to_owned(),
@@ -772,5 +788,60 @@ mod tests {
         assert!(!serialized.contains("fixture"));
         assert!(!serialized.contains("token"));
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_refresh_must_rotate_the_cookie_and_issue_a_new_token_with_a_later_expiry() {
+        let now = epoch_seconds().unwrap();
+        let account_id = uuid::Uuid::new_v4().to_string();
+        let initial = authentication(&account_id, now + 900, &"A".repeat(43));
+        for (cookie, refreshed) in [
+            // The same token again, though the cookie rotated and expiry moved.
+            (
+                "fixture-rotated",
+                authentication(&account_id, now + 901, &"A".repeat(43)),
+            ),
+            // A new token whose expiry did not move.
+            (
+                "fixture-rotated",
+                authentication(&account_id, now + 900, &"B".repeat(43)),
+            ),
+            // A new, later token without a rotated cookie.
+            (
+                "fixture-initial",
+                authentication(&account_id, now + 901, &"B".repeat(43)),
+            ),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let endpoint = format!("ws://{}/ws", listener.local_addr().unwrap());
+            let server = serve(
+                listener,
+                initial.token.clone(),
+                vec![
+                    (
+                        "/api/auth/login",
+                        Some("fixture-initial"),
+                        authentication_json(&initial),
+                    ),
+                    (
+                        "/api/auth/refresh",
+                        Some(cookie),
+                        authentication_json(&refreshed),
+                    ),
+                ],
+            );
+            let credentials = Credentials {
+                email: "owned@example.test".to_owned(),
+                password: "owned test credential".to_owned(),
+                account_id: account_id.clone(),
+            };
+            let mut session =
+                AccountSession::login(&endpoint, &credentials, Some(Ipv4Addr::LOCALHOST))
+                    .await
+                    .unwrap();
+            assert!(session.refresh().await.is_err());
+            assert_eq!(session.report().failures, 1);
+            server.await.unwrap();
+        }
     }
 }

@@ -252,56 +252,45 @@ async fn database_current_session_migration_preserves_accounts_and_requires_fami
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn database_logout_retires_the_access_token_issued_with_its_session() {
-    use crate::auth::jwt::{create_session_token, validate_current_claims, validate_token};
+    use crate::auth::access_tokens::{fixtures, revalidate_principal, validate_access_token};
     let pool = pool().await;
     let user_id = account(&pool, "logout test").await;
-    let secret =
-        crate::auth::jwt::JwtSecret::from("logout-revocation-test-secret-with-enough-bytes");
     let mut sessions = Vec::new();
     for _ in 0..2 {
         sessions.push(new_session(&pool, user_id).await);
     }
-    let subject = user_id.to_string();
-    let token = |session: Uuid| {
-        let issued = create_session_token(&subject, "logout test", &secret, 0, session).unwrap();
-        validate_token(&issued, &secret).unwrap()
-    };
-    let (first, second) = (token(sessions[0].1), token(sessions[1].1));
+    let first_token = fixtures::issue(&pool, sessions[0].1).await;
+    let second_token = fixtures::issue(&pool, sessions[1].1).await;
+    let first = validate_access_token(&pool, &first_token).await.unwrap();
+    let second = validate_access_token(&pool, &second_token).await.unwrap();
     assert_eq!(first.sid, sessions[0].1);
-    assert!(validate_current_claims(&pool, &first).await.is_ok());
 
     assert_eq!(
         delete_session_by_token(&pool, &sessions[0].0.raw)
             .await
             .unwrap(),
-        Some(user_id),
+        Some(UserId::from(user_id)),
         "logout names the account whose session ended"
     );
     assert!(
-        validate_current_claims(&pool, &first).await.is_err(),
+        validate_access_token(&pool, &first_token).await.is_err(),
         "logging a session out retires the token issued with it"
     );
+    assert!(revalidate_principal(&pool, &first).await.is_err());
     assert!(
-        validate_current_claims(&pool, &second).await.is_ok(),
+        validate_access_token(&pool, &second_token).await.is_ok(),
         "another session's token is untouched"
     );
-    let missing_session = token(Uuid::new_v4());
-    assert!(
-        validate_current_claims(&pool, &missing_session)
-            .await
-            .is_err()
-    );
+    let mut missing_session = second.clone();
+    missing_session.sid = Uuid::new_v4();
+    assert!(revalidate_principal(&pool, &missing_session).await.is_err());
     let other_user = account(&pool, "Other account").await;
     let mut wrong_account = second.clone();
-    wrong_account.sub = other_user.to_string();
-    assert!(
-        validate_current_claims(&pool, &wrong_account)
-            .await
-            .is_err()
-    );
+    wrong_account.user = crate::ids::UserId::from(other_user);
+    assert!(revalidate_principal(&pool, &wrong_account).await.is_err());
 
-    // A refresh rotates the token but keeps the session, so the next access
-    // token names the same session and stays valid.
+    // A refresh rotates the refresh token but keeps the session, so the token
+    // issued before it stays valid for the tab still holding it.
     let mut transaction = pool.begin().await.unwrap();
     let rotated = rotate_refresh_token_with(&mut transaction, &sessions[1].0.raw)
         .await
@@ -311,7 +300,7 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
         RefreshRotation::Rotated { session_id, .. } => assert_eq!(session_id, sessions[1].1),
         _ => panic!("a fresh refresh token rotates"),
     }
-    assert!(validate_current_claims(&pool, &second).await.is_ok());
+    assert!(validate_access_token(&pool, &second_token).await.is_ok());
 
     sqlx::query("UPDATE sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1")
         .bind(second.sid)
@@ -319,10 +308,88 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
         .await
         .unwrap();
     assert!(
-        validate_current_claims(&pool, &second).await.is_err(),
-        "an expired session cannot authorize an unexpired JWT"
+        validate_access_token(&pool, &second_token).await.is_err(),
+        "an expired session cannot authorize an unexpired access token"
     );
+    assert!(revalidate_principal(&pool, &second).await.is_err());
     delete_accounts(&pool, &[user_id, other_user]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn refresh_mints_an_opaque_token_for_a_session_without_one() {
+    use tower::ServiceExt;
+    let pool = pool().await;
+    let user_id = account(&pool, "refresh test").await;
+    // A session created before access tokens were stored has no token rows.
+    let (refresh, sid) = new_session(&pool, user_id).await;
+    let rows = || async {
+        sqlx::query_as::<_, (String, chrono::DateTime<chrono::Utc>)>(
+            "SELECT token_hash, expires_at FROM session_access_tokens WHERE session_id=$1",
+        )
+        .bind(sid)
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+    };
+    assert!(rows().await.is_empty());
+    let server = crate::signaling::fixtures::account_server(pool.clone()).await;
+    let mut request = axum::http::Request::post("/api/auth/refresh")
+        .header(
+            axum::http::header::COOKIE,
+            format!("__Host-refresh_token={}", refresh.raw),
+        )
+        .body(axum::body::Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+            [192, 0, 2, 52],
+            52_000,
+        ))));
+    let response = server.router().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get_all(axum::http::header::SET_COOKIE)
+            .iter()
+            .any(|cookie| cookie
+                .to_str()
+                .unwrap()
+                .starts_with("__Host-refresh_token=")),
+        "the refresh cookie rotates"
+    );
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let mut keys = body.as_object().unwrap().keys().collect::<Vec<_>>();
+    keys.sort();
+    assert_eq!(keys, ["expires_at", "token", "user"]);
+    let token = body["token"].as_str().unwrap();
+    assert!(crate::auth::access_tokens::valid_shape(token));
+    let stored = rows().await;
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        stored[0].0,
+        hash_token(token),
+        "only the token's digest is kept"
+    );
+    let expires_at: chrono::DateTime<chrono::Utc> =
+        serde_json::from_value(body["expires_at"].clone()).unwrap();
+    assert_eq!(
+        expires_at, stored[0].1,
+        "the response states the stored expiry"
+    );
+    let principal = crate::auth::access_tokens::validate_access_token(&pool, token)
+        .await
+        .unwrap();
+    assert_eq!(principal.sid, sid);
+    assert_eq!(principal.expires_at, expires_at);
+    delete_accounts(&pool, &[user_id]).await;
 }
 
 /// `request` from `192.0.2.octet` through `server`'s real router.
@@ -339,6 +406,54 @@ async fn route(
             52_000,
         ))));
     server.clone().router().oneshot(request).await.unwrap()
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
+async fn a_token_issued_near_its_sessions_end_expires_with_the_session() {
+    let pool = pool().await;
+    let user_id = account(&pool, "session end test").await;
+    let (refresh, sid) = new_session(&pool, user_id).await;
+    // Signed in five minutes short of the absolute lifetime: a refresh keeps
+    // the session only until that end, five minutes from now.
+    sqlx::query(
+        "UPDATE sessions
+         SET created_at = clock_timestamp() - make_interval(days => $2::integer)
+             + interval '5 minutes'
+         WHERE id = $1",
+    )
+    .bind(sid)
+    .bind(SESSION_ABSOLUTE_LIFETIME_DAYS)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let server = crate::signaling::fixtures::account_server(pool.clone()).await;
+    let request = axum::http::Request::post("/api/auth/refresh")
+        .header(
+            axum::http::header::COOKIE,
+            format!("__Host-refresh_token={}", refresh.raw),
+        )
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let response = route(&server, request, 53).await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let stated: chrono::DateTime<chrono::Utc> =
+        serde_json::from_value(body["expires_at"].clone()).unwrap();
+    let session_end: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT expires_at FROM sessions WHERE id = $1")
+            .bind(sid)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stated, session_end, "the token expires with its session");
+    assert!(session_end - chrono::Utc::now() <= chrono::TimeDelta::minutes(5));
+    delete_accounts(&pool, &[user_id]).await;
 }
 
 /// One committed `create_session_with` for `user_id`.
@@ -419,7 +534,7 @@ async fn a_sign_in_that_evicts_a_live_session_notifies_the_accounts_sockets() {
     let mut socket = server
         .room_manager()
         .account_updates()
-        .subscribe_revalidation(user_id);
+        .subscribe_revalidation(UserId::from(user_id));
     let login = || {
         axum::http::Request::post("/api/auth/login")
             .header(axum::http::header::CONTENT_TYPE, "application/json")
@@ -518,7 +633,7 @@ async fn database_rotation_replay_grace_and_session_cap() {
     // The revocation names its account, whose connections must hear of it.
     assert!(matches!(
         rotate_and_commit(&pool, &predecessor.raw).await.unwrap(),
-        RefreshRotation::ReuseDetected { user_id } if user_id == replay_user_id
+        RefreshRotation::ReuseDetected { user_id } if user_id == UserId::from(replay_user_id)
     ));
     let replay_count: i64 = sqlx::query_scalar("SELECT count(*) FROM sessions WHERE user_id = $1")
         .bind(replay_user_id)
@@ -545,7 +660,7 @@ async fn database_rotation_replay_grace_and_session_cap() {
     ));
     assert!(matches!(
         rotate_and_commit(&pool, &oldest.raw).await.unwrap(),
-        RefreshRotation::ReuseDetected { user_id } if user_id == older_user_id
+        RefreshRotation::ReuseDetected { user_id } if user_id == UserId::from(older_user_id)
     ));
 
     // A random token cannot identify or revoke an unrelated family.

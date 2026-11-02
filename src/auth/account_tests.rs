@@ -140,25 +140,19 @@ fn repeated_ignore_and_unignore_are_sets_and_preserve_other_fields() {
 }
 
 #[test]
-fn expired_and_unrepresentable_claims_cannot_write_preferences() {
-    let mut claims = Claims {
-        sub: Uuid::new_v4().to_string(),
-        name: "Privacy fixture".into(),
-        iss: "simplestChat".into(),
-        aud: "simplestChat".into(),
-        exp: 0,
-        auth_version: 0,
+fn an_expired_principal_cannot_write_preferences() {
+    let mut principal = Principal {
+        user: UserId::random(),
         sid: Uuid::new_v4(),
+        auth_version: 0,
+        expires_at: chrono::Utc::now(),
     };
     assert!(matches!(
-        ensure_unexpired_claim(&claims),
+        principal.ensure_unexpired(),
         Err(AuthError::TokenExpired)
     ));
-    claims.exp = usize::MAX;
-    assert!(matches!(
-        ensure_unexpired_claim(&claims),
-        Err(AuthError::InvalidToken)
-    ));
+    principal.expires_at += chrono::TimeDelta::seconds(60);
+    assert!(principal.ensure_unexpired().is_ok());
 }
 
 async fn preference_pool() -> (PgPool, String) {
@@ -193,7 +187,7 @@ async fn preference_pool() -> (PgPool, String) {
     (pool, application)
 }
 
-async fn preference_account(pool: &PgPool) -> Claims {
+async fn preference_account(pool: &PgPool) -> Principal {
     let account: Uuid = sqlx::query_scalar(
         "INSERT INTO users(email,display_name) VALUES($1,'Privacy patch fixture') RETURNING id",
     )
@@ -204,15 +198,7 @@ async fn preference_account(pool: &PgPool) -> Claims {
     let sid = session::create_session(pool, &account, &session::generate_refresh_token().unwrap())
         .await
         .unwrap();
-    Claims {
-        sub: account.to_string(),
-        name: "Privacy fixture".into(),
-        iss: "simplestChat".into(),
-        aud: "simplestChat".into(),
-        exp: usize::try_from(chrono::Utc::now().timestamp() + 3600).unwrap(),
-        auth_version: 0,
-        sid,
-    }
+    access_tokens::fixtures::principal(pool, sid).await
 }
 
 async fn wait_for_preference_lock(pool: &PgPool, application: &str) {
@@ -246,24 +232,24 @@ async fn wait_for_preference_query_lock(pool: &PgPool, application: &str, query:
 #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
 async fn database_preference_patches_merge_concurrent_fields_and_repeat_ignore_safely() {
     let (pool, _) = preference_pool().await;
-    let claims = preference_account(&pool).await;
-    let peer_claims = preference_account(&pool).await;
-    let account = Uuid::parse_str(&claims.sub).unwrap();
-    let peer = Uuid::parse_str(&peer_claims.sub).unwrap();
+    let principal = preference_account(&pool).await;
+    let peer_principal = preference_account(&pool).await;
+    let account = principal.user.as_uuid();
+    let peer = peer_principal.user.as_uuid();
     let (privacy, appearance, ignored) = tokio::join!(
         save_preferences(
             &pool,
-            &claims,
+            &principal,
             preference_patch(serde_json::json!({"allowPrivateMessages": false}))
         ),
         save_preferences(
             &pool,
-            &claims,
+            &principal,
             preference_patch(serde_json::json!({"largeText": true, "sounds": true}))
         ),
         save_preferences(
             &pool,
-            &claims,
+            &principal,
             preference_patch(serde_json::json!({"ignore": {"id": peer, "name": "Peer"}}))
         ),
     );
@@ -274,7 +260,7 @@ async fn database_preference_patches_merge_concurrent_fields_and_repeat_ignore_s
     assert!(!saved.allow_private_messages && saved.large_text && saved.sounds);
     assert_eq!(saved.ignored.len(), 1);
     for _ in 0..2 {
-        save_preferences(&pool, &claims, preference_patch(serde_json::json!({"ignore": {"id": peer.to_string().to_uppercase(), "name": "Peer"}}))).await.unwrap();
+        save_preferences(&pool, &principal, preference_patch(serde_json::json!({"ignore": {"id": peer.to_string().to_uppercase(), "name": "Peer"}}))).await.unwrap();
     }
     assert_eq!(
         load_chat_preferences(&pool, account)
@@ -287,7 +273,7 @@ async fn database_preference_patches_merge_concurrent_fields_and_repeat_ignore_s
     for _ in 0..2 {
         save_preferences(
             &pool,
-            &claims,
+            &principal,
             preference_patch(serde_json::json!({"unignore": peer})),
         )
         .await
@@ -308,8 +294,8 @@ async fn database_preference_patches_merge_concurrent_fields_and_repeat_ignore_s
 #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
 async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_for_locks() {
     let (pool, application) = preference_pool().await;
-    let mut claims = preference_account(&pool).await;
-    let account = Uuid::parse_str(&claims.sub).unwrap();
+    let mut principal = preference_account(&pool).await;
+    let account = principal.user.as_uuid();
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
         .bind(account)
@@ -317,18 +303,18 @@ async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_
         .await
         .unwrap();
     let request_pool = pool.clone();
-    let request_claims = claims.clone();
+    let request_principal = principal.clone();
     let queued = tokio::spawn(async move {
         save_preferences(
             &request_pool,
-            &request_claims,
+            &request_principal,
             preference_patch(serde_json::json!({"allowPrivateMessages": false})),
         )
         .await
     });
     wait_for_preference_lock(&pool, &application).await;
     sqlx::query("DELETE FROM sessions WHERE id=$1")
-        .bind(claims.sid)
+        .bind(principal.sid)
         .execute(&mut *blocker)
         .await
         .unwrap();
@@ -344,11 +330,11 @@ async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_
             .allow_private_messages
     );
 
-    claims.sid =
+    principal.sid =
         session::create_session(&pool, &account, &session::generate_refresh_token().unwrap())
             .await
             .unwrap();
-    claims.exp = usize::try_from(chrono::Utc::now().timestamp() + 5).unwrap();
+    principal.expires_at = chrono::Utc::now() + chrono::TimeDelta::seconds(5);
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
         .bind(account)
@@ -356,17 +342,17 @@ async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_
         .await
         .unwrap();
     let request_pool = pool.clone();
-    let request_claims = claims.clone();
+    let request_principal = principal.clone();
     let queued = tokio::spawn(async move {
         save_preferences(
             &request_pool,
-            &request_claims,
+            &request_principal,
             preference_patch(serde_json::json!({"allowPrivateMessages": false})),
         )
         .await
     });
     wait_for_preference_lock(&pool, &application).await;
-    while usize::try_from(chrono::Utc::now().timestamp()).unwrap() < claims.exp {
+    while chrono::Utc::now() < principal.expires_at {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     blocker.commit().await.unwrap();
@@ -392,8 +378,8 @@ async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_
 #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
 async fn database_preference_read_rechecks_revocation_after_waiting_for_locks() {
     let (pool, application) = preference_pool().await;
-    let claims = preference_account(&pool).await;
-    let account = Uuid::parse_str(&claims.sub).unwrap();
+    let principal = preference_account(&pool).await;
+    let account = principal.user.as_uuid();
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
         .bind(account)
@@ -401,12 +387,12 @@ async fn database_preference_read_rechecks_revocation_after_waiting_for_locks() 
         .await
         .unwrap();
     let request_pool = pool.clone();
-    let request_claims = claims.clone();
+    let request_principal = principal.clone();
     let queued =
-        tokio::spawn(async move { current_preferences(&request_pool, &request_claims).await });
+        tokio::spawn(async move { current_preferences(&request_pool, &request_principal).await });
     wait_for_preference_lock(&pool, &application).await;
     sqlx::query("DELETE FROM sessions WHERE id=$1")
-        .bind(claims.sid)
+        .bind(principal.sid)
         .execute(&mut *blocker)
         .await
         .unwrap();
@@ -429,12 +415,12 @@ async fn database_preference_read_and_write_recheck_natural_session_expiry_after
 {
     let (pool, application) = preference_pool().await;
     for write in [false, true] {
-        let claims = preference_account(&pool).await;
-        let account = Uuid::parse_str(&claims.sub).unwrap();
+        let principal = preference_account(&pool).await;
+        let account = principal.user.as_uuid();
         sqlx::query(
             "UPDATE sessions SET expires_at=clock_timestamp()+interval '3 seconds' WHERE id=$1",
         )
-        .bind(claims.sid)
+        .bind(principal.sid)
         .execute(&pool)
         .await
         .unwrap();
@@ -442,22 +428,22 @@ async fn database_preference_read_and_write_recheck_natural_session_expiry_after
         // Hold the unchanged session row: the waiting query can qualify it
         // before expiry without seeing any subsequent row-version update.
         sqlx::query("SELECT id FROM sessions WHERE id=$1 FOR UPDATE")
-            .bind(claims.sid)
+            .bind(principal.sid)
             .execute(&mut *blocker)
             .await
             .unwrap();
         let request_pool = pool.clone();
-        let request_claims = claims.clone();
+        let request_principal = principal.clone();
         let queued = tokio::spawn(async move {
             if write {
                 save_preferences(
                     &request_pool,
-                    &request_claims,
+                    &request_principal,
                     preference_patch(serde_json::json!({"allowPrivateMessages": false})),
                 )
                 .await
             } else {
-                current_preferences(&request_pool, &request_claims).await
+                current_preferences(&request_pool, &request_principal).await
             }
         });
         wait_for_preference_query_lock(
@@ -471,7 +457,7 @@ async fn database_preference_read_and_write_recheck_natural_session_expiry_after
                 let expired: bool = sqlx::query_scalar(
                     "SELECT expires_at<=clock_timestamp() FROM sessions WHERE id=$1",
                 )
-                .bind(claims.sid)
+                .bind(principal.sid)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
@@ -579,7 +565,6 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
     let key_hash = recovery_hash(&key).unwrap();
     let id: Uuid = sqlx::query_scalar("INSERT INTO users (email, display_name, password_hash, recovery_key_hash) VALUES ($1, 'Recovery test', 'old-hash', $2) RETURNING id")
             .bind(&email).bind(&key_hash).fetch_one(&pool).await.unwrap();
-    let secret = jwt::JwtSecret::from("account-recovery-test-secret-at-least-32-bytes");
     let original_session =
         session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
             .await
@@ -587,17 +572,9 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
     session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
         .await
         .unwrap();
-    let old_token = jwt::create_session_token(
-        &id.to_string(),
-        "Recovery test",
-        &secret,
-        0,
-        original_session,
-    )
-    .unwrap();
-    let old_claims = jwt::validate_token(&old_token, &secret).unwrap();
+    let old_token = access_tokens::fixtures::issue(&pool, original_session).await;
     assert!(
-        jwt::validate_current_claims(&pool, &old_claims)
+        access_tokens::validate_access_token(&pool, &old_token)
             .await
             .is_ok()
     );
@@ -634,21 +611,21 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
         .unwrap();
     assert_eq!(remaining, 0);
     assert!(matches!(
-        jwt::validate_current_claims(&pool, &old_claims).await,
+        access_tokens::validate_access_token(&pool, &old_token).await,
         Err(AuthError::InvalidToken)
     ));
     let new_session =
         session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
             .await
             .unwrap();
-    let current_token =
-        jwt::create_session_token(&id.to_string(), "Recovery test", &secret, 1, new_session)
-            .unwrap();
-    let current_claims = jwt::validate_token(&current_token, &secret).unwrap();
-    assert!(
-        jwt::validate_current_claims(&pool, &current_claims)
+    let current_token = access_tokens::fixtures::issue(&pool, new_session).await;
+    assert_eq!(
+        access_tokens::validate_access_token(&pool, &current_token)
             .await
-            .is_ok()
+            .unwrap()
+            .auth_version,
+        1,
+        "a token issued after recovery records the new version"
     );
     assert!(
         consume_recovery(&pool, &email, &key_hash, "replay")
@@ -715,23 +692,23 @@ fn webp_picture() -> String {
 struct ProfileFixture {
     pool: PgPool,
     server: SignalingServer,
-    claims: Claims,
+    principal: Principal,
 }
 
 impl ProfileFixture {
     async fn new() -> Self {
         let (pool, _) = preference_pool().await;
-        let claims = preference_account(&pool).await;
+        let principal = preference_account(&pool).await;
         let server = crate::signaling::fixtures::account_server(pool.clone()).await;
         Self {
             pool,
             server,
-            claims,
+            principal,
         }
     }
 
     fn id(&self) -> Uuid {
-        Uuid::parse_str(&self.claims.sub).unwrap()
+        self.principal.user.as_uuid()
     }
 
     /// The avatar route for this account and `version`.
@@ -750,7 +727,7 @@ impl ProfileFixture {
         if signed_in {
             request
                 .headers_mut()
-                .extend(crate::signaling::fixtures::bearer(&self.claims));
+                .extend(crate::signaling::fixtures::bearer(&self.pool, self.principal.sid).await);
         }
         request
             .extensions_mut()

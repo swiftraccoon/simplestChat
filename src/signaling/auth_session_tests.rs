@@ -30,7 +30,7 @@ async fn authorization_database_session_controls_scope_reads_and_revocation_to_t
     )
     .await
     .unwrap();
-    let second_token = fixture.token(fixture.users[0], second, 0);
+    let second_token = fixture.token(second).await;
     let response = session_request(&fixture, "GET", "/api/auth/sessions", &fixture.tokens[0]).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(

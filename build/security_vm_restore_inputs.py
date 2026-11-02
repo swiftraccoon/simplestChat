@@ -58,6 +58,7 @@ MIGRATIONS = (
     "migrations/035_role_numbering.sql",
     "migrations/036_validate_role_numbering.sql",
     "migrations/037_users_avatar_digest.sql",
+    "migrations/038_session_access_tokens.sql",
 )
 MEMBERS = (
     "monitoring-schema.sql",

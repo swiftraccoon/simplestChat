@@ -1,3 +1,4 @@
+import { decodeAuthResponse } from './api-validation';
 import type { AuthResponse, UserInfo } from './protocol';
 import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 
@@ -30,6 +31,12 @@ const REFRESH_RETRY_WINDOW_MS = 15_000;
 const REFRESH_MAX_ATTEMPTS = 3;
 const REFRESH_RETRY_DELAY_MS = 3_000;
 const REFRESH_RETRY_JITTER_MS = 250;
+// Refresh once this share of the token's remaining lifetime has passed, as the
+// response states it: twelve minutes for a fifteen-minute token.
+const REFRESH_AT_FRACTION = 0.8;
+// Never wait longer than this, so a local clock running behind the server's
+// cannot hold a token past its real expiry.
+const MAX_REFRESH_DELAY_MS = 12 * 60 * 1000;
 
 interface RefreshBudget {
   deadline: number;
@@ -119,7 +126,8 @@ export class AuthManager {
     return this._user?.id ?? null;
   }
 
-  get jwt(): string | null {
+  /** The opaque bearer for `Authorization` and socket renewal; never decoded. */
+  get accessToken(): string | null {
     return this._token;
   }
 
@@ -502,7 +510,7 @@ export class AuthManager {
       const work = async (): Promise<void> => {
         assertLive();
         submitted = true;
-        const data = parseSession(
+        const data = decodeAuthResponse(
           await this.requestJson(path, body, failure, generation, controller.signal, true),
         );
         assertLive();
@@ -547,12 +555,14 @@ export class AuthManager {
     this.clearRefreshBudget();
     this._token = data.token;
     this._user = data.user;
-    this.tokenExpiresAt = acceptedTokenExpiry(data.token);
-    this.tokenExpiryDeadline =
-      this.tokenExpiresAt === null
-        ? null
-        : performance.now() + Math.max(0, this.tokenExpiresAt - Date.now());
-    this.scheduleRefresh();
+    // The server states the expiry; the token itself is never read.
+    this.tokenExpiresAt = Date.parse(data.expires_at);
+    const remaining = Math.max(0, this.tokenExpiresAt - Date.now());
+    const now = performance.now();
+    this.tokenExpiryDeadline = now + remaining;
+    this.scheduleRefresh(
+      now + Math.min(MAX_REFRESH_DELAY_MS, Math.floor(remaining * REFRESH_AT_FRACTION)),
+    );
     this.onChange?.(true, sameAccount);
   }
 
@@ -636,11 +646,10 @@ export class AuthManager {
     return this.requestRefresh(generation, scheduled, restoreSignal, restoreLive);
   }
 
-  private scheduleRefresh(deadline = performance.now() + 12 * 60 * 1000): void {
+  private scheduleRefresh(deadline: number): void {
     if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
     this.refreshDeadline = Math.min(deadline, this.tokenExpiryDeadline ?? deadline);
     const generation = this.generation;
-    // JWT lifetime is 15 minutes — refresh at 12 minutes
     this.refreshTimer = setTimeout(
       () => {
         if (generation !== this.generation) return;
@@ -726,7 +735,7 @@ export class AuthManager {
       this.clearSession();
       return;
     }
-    // Refresh updates the signaling JWT without treating it as a new login.
+    // Refresh updates the signaling token without treating it as a new login.
     this.setSession(data, true);
   }
 
@@ -798,28 +807,6 @@ function refreshRetryDelay(): number {
   return REFRESH_RETRY_DELAY_MS + Math.floor(Math.random() * REFRESH_RETRY_JITTER_MS);
 }
 
-/** Decode only expiry from an already accepted server response to shorten local
- * retention. This does not verify a signature or authorize any identity; the
- * server still validates every token. Unknown expiry disables transient retry. */
-function acceptedTokenExpiry(token: string): number | null {
-  try {
-    if (token.length > 4096) return null;
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const decoded: unknown = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    if (!isRecord(decoded)) return null;
-    const expiry = decoded['exp'];
-    return typeof expiry === 'number' &&
-      Number.isSafeInteger(expiry) &&
-      expiry > 0 &&
-      Number.isSafeInteger(expiry * 1000)
-      ? expiry * 1000
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -835,22 +822,9 @@ function string(value: unknown): string {
   return value;
 }
 
-function parseSession(value: unknown): AuthResponse {
-  const data = record(value);
-  const user = record(data['user']);
-  return {
-    token: string(data['token']),
-    user: {
-      id: string(user['id']),
-      email: string(user['email']),
-      display_name: string(user['display_name']),
-    },
-  };
-}
-
 async function readSession(response: Response): Promise<AuthResponse> {
   const data: unknown = await response.json();
-  return parseSession(data);
+  return decodeAuthResponse(data);
 }
 
 async function isRejectedRefreshToken(response: Response): Promise<boolean> {

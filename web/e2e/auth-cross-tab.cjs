@@ -86,11 +86,9 @@ async function runSuite(runner = {}) {
   /** Keep the departing fixture's counters across the deliberate sign-out reload. */
 
   function accountSession(name, revision) {
-    const payload = Buffer.from(
-      JSON.stringify({ sub: name, exp: Math.floor(Date.now() / 1000) + 900 }),
-    ).toString('base64url');
     return {
-      token: `fixture.${payload}.signature-${revision}`,
+      token: `opaque-${name}-signature-${revision}`,
+      expires_at: new Date(Date.now() + 900_000).toISOString(),
       user: { id: name, email: `${name}@example.test`, display_name: name },
     };
   }

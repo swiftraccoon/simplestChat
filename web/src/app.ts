@@ -349,7 +349,7 @@ function initializeApp(
     if (loggedIn && tokenRefresh) {
       // Renew the existing socket as well as the next handshake, preserving room
       // membership and media across the original token's expiry.
-      signaling.setToken(auth.jwt ?? undefined);
+      signaling.setToken(auth.accessToken ?? undefined);
       return;
     }
     // Identity changes leave the old membership before reconnecting.
@@ -358,7 +358,7 @@ function initializeApp(
     createRoomScreen.resetIdentity();
     if (room) observeUiTask(roomController.leaveCurrentRoom(), 'Could not finish leaving the room');
     signaling.disconnect();
-    signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
+    signaling.connect(loggedIn ? (auth.accessToken ?? undefined) : undefined);
     if (loggedIn) observeUiTask(invitations.previewPendingInvite(), 'Invitation not reviewed');
     if (loggedIn) invitations.reviewPendingContact();
   });
@@ -520,7 +520,7 @@ function initializeApp(
   });
   cleanups.appUpdates = () => appUpdates.dispose();
   const notificationPreferences = new NotificationPreferences({
-    getToken: () => auth.jwt,
+    getToken: () => auth.accessToken,
     getAccountId: () => auth.userId,
     notify: (message) => showToast(message),
   });
@@ -533,12 +533,12 @@ function initializeApp(
     notificationPreferences.mountConversation(container, peerId, current);
   };
   const accountUpdates = new AccountUpdates({
-    getToken: () => auth.jwt,
+    getToken: () => auth.accessToken,
     getAccountId: () => auth.userId,
   });
   cleanups.accountUpdates = () => accountUpdates.dispose();
   const accountPreferences = new AccountPreferences({
-    getToken: () => auth.jwt,
+    getToken: () => auth.accessToken,
     getAccountId: () => auth.userId,
     notify: (message) => showToast(message),
   });
@@ -553,7 +553,7 @@ function initializeApp(
   };
   function openAccountConversation(peerId: string, peerName: string): void {
     openPrivateConversation(peerId, peerName, {
-      getToken: () => auth.jwt,
+      getToken: () => auth.accessToken,
       getAccountId: () => auth.userId,
       getRoomId: () => room?.currentRoomId ?? null,
       mountConversationNotifications,
@@ -566,7 +566,7 @@ function initializeApp(
       return;
     }
     openPrivateInbox({
-      getToken: () => auth.jwt,
+      getToken: () => auth.accessToken,
       getAccountId: () => auth.userId,
       getRoomId: () => room?.currentRoomId ?? null,
       mountConversationNotifications,
@@ -590,7 +590,7 @@ function initializeApp(
     telemetry: telemetry.record,
     getRoom: () => room,
     getViewerKey: () => auth.userId ?? 'guest',
-    getToken: () => auth.jwt,
+    getToken: () => auth.accessToken,
     notify: (message) => showToast(message),
     bindParticipantName: (anchor, id, name) => participantHovercard.bind(anchor, id, name),
     allowsNotification: (kind, peer) => notificationPreferences.allows(kind, peer),
@@ -600,7 +600,7 @@ function initializeApp(
   });
   cleanups.socialChat = () => socialChat.dispose();
   const pwa = new PwaControls({
-    getToken: () => auth.jwt,
+    getToken: () => auth.accessToken,
     getAccountId: () => auth.userId,
     mountNotificationPreferences: (container, current) =>
       notificationPreferences.mountAccount(container, current),
@@ -754,7 +754,7 @@ function initializeApp(
         return auth.userId;
       },
       get token() {
-        return auth.jwt;
+        return auth.accessToken;
       },
       get isLoggedIn() {
         return auth.isLoggedIn;
@@ -783,7 +783,7 @@ function initializeApp(
         return auth.userId;
       },
       get token() {
-        return auth.jwt;
+        return auth.accessToken;
       },
       get isLoggedIn() {
         return auth.isLoggedIn;

@@ -371,14 +371,11 @@ pub(crate) async fn create_room(
     Json(req): Json<CreateRoomRequest>,
 ) -> Result<Json<RoomSettings>, RoomApiError> {
     let _request_permit = acquire_room_api_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers)
+    let principal = account::authenticated_principal(&server, &headers)
         .await
         .map_err(IntoResponse::into_response)?;
-    let owner_id: uuid::Uuid = claims
-        .sub
-        .parse()
-        .map_err(|_| AuthError::InvalidToken.into_response())?;
-    if !server.allow_room_creation(&claims.sub) {
+    let owner_id = principal.user.as_uuid();
+    if !server.allow_room_creation(principal.user) {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
             "Room creation is rate limited",
@@ -449,13 +446,11 @@ pub(crate) async fn delete_room(
         return Err(AuthError::NotConfigured.into_response().into());
     }
     let _request_permit = acquire_room_api_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers)
+    let user_id = account::authenticated_principal(&server, &headers)
         .await
-        .map_err(IntoResponse::into_response)?;
-    let user_id: uuid::Uuid = claims
-        .sub
-        .parse()
-        .map_err(|_| AuthError::InvalidToken.into_response())?;
+        .map_err(IntoResponse::into_response)?
+        .user
+        .as_uuid();
     let result = server
         .room_manager()
         .delete_persisted_room(&room_id, &user_id)
@@ -487,13 +482,11 @@ pub(crate) async fn owned_rooms(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<Vec<RoomListItem>>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers)
+    let owner = account::authenticated_principal(&server, &headers)
         .await
-        .map_err(IntoResponse::into_response)?;
-    let owner: uuid::Uuid = claims
-        .sub
-        .parse()
-        .map_err(|_| AuthError::InvalidToken.into_response())?;
+        .map_err(IntoResponse::into_response)?
+        .user
+        .as_uuid();
     let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
         .await.map_err(room_database_error)?;
@@ -573,12 +566,12 @@ pub(crate) async fn update_room_identity(
             .into());
     };
     let _permit = acquire_room_api_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers)
+    let owner = account::authenticated_principal(&server, &headers)
         .await
-        .map_err(IntoResponse::into_response)?;
+        .map_err(IntoResponse::into_response)?
+        .user
+        .as_uuid();
     request.validate().map_err(IntoResponse::into_response)?;
-    let owner =
-        uuid::Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken.into_response())?;
     if !server
         .room_manager()
         .update_room_identity(&id, owner, request)

@@ -7,7 +7,7 @@ async function fixture() {
   const f = await uiFixture();
   const preview = Promise.withResolvers();
   const redemption = Promise.withResolvers();
-  const auth = { userId: 'first-account', jwt: 'first-token', isLoggedIn: true };
+  const auth = { userId: 'first-account', accessToken: 'first-token', isLoggedIn: true };
   const selected = [];
   const navigation = { revision: 1, selectRoom: (id) => selected.push(id) };
   const previews = [],
@@ -109,7 +109,7 @@ test('refreshing the same account token preserves the displayed invitation', asy
   const f = await fixture();
   f.preview.resolve(offer);
   await f.previewPendingInvite();
-  f.auth.jwt = 'renewed-token';
+  f.auth.accessToken = 'renewed-token';
   f.accept().click();
   assert.equal(f.redemptions[0].token, 'renewed-token');
   f.redemption.resolve(offer);
@@ -214,7 +214,7 @@ async function linkFixture(suffix) {
   const controller = createInvitations(
     { capabilities: null, restoredAccount: false, room: null },
     {
-      auth: { userId: null, jwt: null, isLoggedIn: false },
+      auth: { userId: null, accessToken: null, isLoggedIn: false },
       navigation: {},
       appNavigation: {},
       community: {},

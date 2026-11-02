@@ -1,9 +1,11 @@
+use crate::ids::UserId;
 use crate::secret::SecretString;
 use axum::{
     Json,
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -126,7 +128,11 @@ pub(crate) struct LoginRequest {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct AuthResponse {
+    /// An opaque access token for `Authorization: Bearer`; clients never read
+    /// anything from it.
     pub token: SecretString,
+    /// When the token stops being accepted; refresh before then.
+    pub expires_at: DateTime<Utc>,
     pub user: UserInfo,
 }
 
@@ -137,17 +143,31 @@ pub(crate) struct UserInfo {
     pub display_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct Claims {
-    pub sub: String,
-    pub name: String,
-    pub iss: String,
-    pub aud: String,
-    pub exp: usize,
-    pub auth_version: i64,
-    /// The refresh session this token was issued with. Validation requires that
-    /// live session to belong to the account, so logout retires the token.
+/// Whom an access token speaks for, as `access_tokens::validate_access_token`
+/// resolved it; never the token itself. Attachment grants carry it inside
+/// their signed payload, hence the serde derives.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Principal {
+    pub user: UserId,
+    /// The session the token belongs to: ending it refuses the token.
     pub sid: uuid::Uuid,
+    /// The account version the token was issued at; a credential change
+    /// advances the account past it.
+    pub auth_version: i64,
+    /// When the token stops being accepted.
+    pub expires_at: DateTime<Utc>,
+}
+
+impl Principal {
+    /// Refuses a principal whose token has expired since it was accepted, for
+    /// work that began while it was valid and must not finish after.
+    pub(crate) fn ensure_unexpired(&self) -> Result<(), AuthError> {
+        if self.expires_at <= Utc::now() {
+            Err(AuthError::TokenExpired)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

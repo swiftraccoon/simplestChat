@@ -1,7 +1,7 @@
 use super::*;
 use crate::ids::fixtures::rid;
 use crate::ids::{MessageId, ParticipantId};
-use crate::signaling::fixtures::{account_server, bearer, server_without_database};
+use crate::signaling::fixtures::{account_server, bearer, server_with_unreachable_database};
 use axum::response::IntoResponse;
 
 #[test]
@@ -43,7 +43,7 @@ fn refusal<T>(result: Result<T, AuthError>) -> StatusCode {
 /// database, so the 401 also shows no query ran first.
 #[tokio::test]
 async fn uploads_authenticate_before_taking_a_slot() {
-    let server = server_without_database().await;
+    let server = server_with_unreachable_database().await;
     let anonymous = || {
         upload(
             State(server.clone()),
@@ -66,7 +66,7 @@ async fn uploads_authenticate_before_taking_a_slot() {
 /// four permits. As for uploads, the 401 also shows no query ran first.
 #[tokio::test]
 async fn downloads_authenticate_before_taking_a_slot() {
-    let server = server_without_database().await;
+    let server = server_with_unreachable_database().await;
     let anonymous = || {
         download(
             State(server.clone()),
@@ -153,7 +153,9 @@ fn apng_is_detected_by_chunk_type_only() {
 struct Database {
     pool: PgPool,
     users: Vec<Uuid>,
-    claims: Vec<Claims>,
+    principals: Vec<Principal>,
+    /// A bearer header per user, for a token issued once through the session row.
+    bearers: Vec<axum::http::HeaderMap>,
     rooms: Vec<String>,
 }
 impl Database {
@@ -176,7 +178,8 @@ impl Database {
         let mut db = Self {
             pool,
             users: Vec::new(),
-            claims: Vec::new(),
+            principals: Vec::new(),
+            bearers: Vec::new(),
             rooms: Vec::new(),
         };
         for _ in 0..2 {
@@ -195,15 +198,9 @@ impl Database {
             .await
             .unwrap();
             db.users.push(user);
-            db.claims.push(Claims {
-                sub: user.to_string(),
-                name: "Attachment tester".into(),
-                iss: "simplestChat".into(),
-                aud: "simplestChat".into(),
-                exp: (Utc::now().timestamp() + 3600) as usize,
-                auth_version: 0,
-                sid,
-            });
+            let principal = crate::auth::access_tokens::fixtures::principal(&db.pool, sid).await;
+            db.principals.push(principal);
+            db.bearers.push(bearer(&db.pool, sid).await);
         }
         db
     }
@@ -215,9 +212,14 @@ impl Database {
         id
     }
     async fn upload(&self, owner: usize, data: Vec<u8>) -> ChatAttachment {
-        store_upload(&self.pool, &self.claims[owner], "notes.txt".into(), data)
-            .await
-            .unwrap()
+        store_upload(
+            &self.pool,
+            &self.principals[owner],
+            "notes.txt".into(),
+            data,
+        )
+        .await
+        .unwrap()
     }
     /// An upload request from user `owner` carrying `body`, with a bearer token
     /// that `account_server` accepts for that user's session.
@@ -226,7 +228,7 @@ impl Database {
             .header("x-file-name", URL_SAFE_NO_PAD.encode("notes.txt"))
             .body(body)
             .unwrap();
-        request.headers_mut().extend(bearer(&self.claims[owner]));
+        request.headers_mut().extend(self.bearers[owner].clone());
         request
     }
     async fn owner_of(&self, id: Uuid) -> Uuid {
@@ -410,7 +412,7 @@ async fn database_attachments_enforce_logical_byte_quota_and_current_session() {
     assert!(
         store_upload(
             &db.pool,
-            &db.claims[0],
+            &db.principals[0],
             "too much.bin".into(),
             vec![1; MAX_FILE_BYTES]
         )
@@ -419,16 +421,16 @@ async fn database_attachments_enforce_logical_byte_quota_and_current_session() {
     );
     db.upload(1, b"independent account".to_vec()).await;
     sqlx::query("DELETE FROM sessions WHERE id=$1")
-        .bind(db.claims[1].sid)
+        .bind(db.principals[1].sid)
         .execute(&db.pool)
         .await
         .unwrap();
     assert!(
-        store_upload(&db.pool, &db.claims[1], "revoked.txt".into(), vec![1])
+        store_upload(&db.pool, &db.principals[1], "revoked.txt".into(), vec![1])
             .await
             .is_err()
     );
-    assert!(validate_account(&db.pool, &db.claims[1]).await.is_err());
+    assert!(validate_account(&db.pool, &db.principals[1]).await.is_err());
     db.close().await;
 }
 
@@ -697,7 +699,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         &room,
         &owner,
         &senders[0],
-        Some(&db.claims[0]),
+        Some(&db.principals[0]),
         file.id,
     )
     .await
@@ -780,13 +782,13 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         &room,
         &owner,
         &senders[0],
-        Some(&db.claims[0]),
+        Some(&db.principals[0]),
         private.id,
     )
     .await
     .unwrap();
     sqlx::query("DELETE FROM sessions WHERE id=$1")
-        .bind(db.claims[0].sid)
+        .bind(db.principals[0].sid)
         .execute(&db.pool)
         .await
         .unwrap();

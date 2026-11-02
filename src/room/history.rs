@@ -5,7 +5,7 @@
 //! Expiry is enforced by every read, independently of background deletion.
 use crate::auth::{
     account, routes,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::{SignalingServer, protocol::ChatEntry};
@@ -299,7 +299,7 @@ fn private_accounts_allow(sender: &ChatAccount, recipient: &ChatAccount) -> bool
 /// One account's private-messaging write. Both accounts and the session row
 /// stay share-locked until the commit, so a logout, a credential reset or a
 /// preference change lands after this write or refuses it, never between its
-/// steps: the session is validated once, and the accepted claim's expiry
+/// steps: the session is validated once, and the accepted token's expiry
 /// checked again at the commit.
 struct PrivateWrite {
     tx: Transaction<'static, Postgres>,
@@ -311,7 +311,7 @@ struct PrivateWrite {
 impl PrivateWrite {
     async fn begin(
         pool: &PgPool,
-        claims: &Claims,
+        principal: &Principal,
         own: Uuid,
         peer: Uuid,
         lock_error: impl FnOnce(RoomError) -> AuthError,
@@ -320,10 +320,10 @@ impl PrivateWrite {
         let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
             .await
             .map_err(lock_error)?;
-        if sender.auth_version != claims.auth_version {
+        if sender.auth_version != principal.auth_version {
             return Err(AuthError::InvalidToken);
         }
-        validate_private_session(&mut tx, claims, own).await?;
+        validate_private_session(&mut tx, principal, own).await?;
         Ok(Self {
             tx,
             sender,
@@ -347,9 +347,9 @@ impl PrivateWrite {
         Ok(())
     }
 
-    /// Commit while the accepted claim is still unexpired.
-    async fn commit(self, claims: &Claims) -> Result<(), AuthError> {
-        account::ensure_unexpired_claim(claims)?;
+    /// Commit while the accepted token is still unexpired.
+    async fn commit(self, principal: &Principal) -> Result<(), AuthError> {
+        principal.ensure_unexpired()?;
         self.tx.commit().await.map_err(routes::database_error)
     }
 }
@@ -900,12 +900,12 @@ pub(crate) async fn edit_message(
     Json(request): Json<EditRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
         let saved = tokio::time::timeout(
             std::time::Duration::from_secs(15),
-            save_private_edit(&server, &claims, peer, message, request),
+            save_private_edit(&server, &principal, peer, message, request),
         )
         .await
         .map_err(|_| AuthError::ServiceBusy)??;
@@ -919,15 +919,15 @@ pub(crate) async fn edit_message(
 
 async fn save_private_edit(
     server: &SignalingServer,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
     message: Uuid,
     request: EditRequest,
 ) -> Result<ChatEntry, AuthError> {
-    account::ensure_unexpired_claim(claims)?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    principal.ensure_unexpired()?;
+    let own: Uuid = principal.user.as_uuid();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let mut write = PrivateWrite::begin(pool, claims, own, peer, edit_error).await?;
+    let mut write = PrivateWrite::begin(pool, principal, own, peer, edit_error).await?;
     if !write.allowed() {
         return Err(AuthError::InvalidInput("Private message unavailable"));
     }
@@ -942,7 +942,7 @@ async fn save_private_edit(
     )
     .await
     .map_err(edit_error)?;
-    write.commit(claims).await?;
+    write.commit(principal).await?;
     Ok(edited)
 }
 
@@ -1016,12 +1016,12 @@ pub(crate) async fn set_private_reaction(
     Json(request): Json<SetReactionRequest>,
 ) -> Result<(HeaderMap, Json<ReactionResult>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
         let saved = tokio::time::timeout(
             std::time::Duration::from_secs(15),
-            save_private_reaction(&server, &claims, peer, message, request),
+            save_private_reaction(&server, &principal, peer, message, request),
         )
         .await
         .map_err(|_| AuthError::ServiceBusy)??;
@@ -1041,18 +1041,18 @@ pub(crate) async fn set_private_reaction(
 
 async fn save_private_reaction(
     server: &SignalingServer,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
     message: Uuid,
     request: SetReactionRequest,
 ) -> Result<ChatEntry, AuthError> {
-    account::ensure_unexpired_claim(claims)?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    principal.ensure_unexpired()?;
+    let own: Uuid = principal.user.as_uuid();
     if own == peer || !crate::signaling::protocol::REACTIONS.contains(&request.emoji.as_str()) {
         return Err(AuthError::InvalidInput("Private reaction unavailable"));
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let mut write = PrivateWrite::begin(pool, claims, own, peer, edit_error).await?;
+    let mut write = PrivateWrite::begin(pool, principal, own, peer, edit_error).await?;
     if !write.allowed() {
         return Err(AuthError::InvalidInput("Private reaction unavailable"));
     }
@@ -1066,7 +1066,7 @@ async fn save_private_reaction(
     )
     .await
     .map_err(edit_error)?;
-    write.commit(claims).await?;
+    write.commit(principal).await?;
     Ok(saved)
 }
 
@@ -1178,8 +1178,8 @@ pub(crate) async fn inbox(
     Query(query): Query<HistoryQuery>,
 ) -> Result<(HeaderMap, Json<InboxPage>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own: Uuid = principal.user.as_uuid();
     query.validate().map_err(AuthError::InvalidInput)?;
     let cursor = decode_cursor(query.before.as_deref()).map_err(AuthError::InvalidInput)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
@@ -1234,8 +1234,8 @@ pub(crate) async fn unread_summary(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<UnreadSummary>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own: Uuid = principal.user.as_uuid();
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let unread_count:i64 = sqlx::query_scalar("SELECT count(*) FROM (
         SELECT 1 FROM chat_messages m LEFT JOIN chat_read_cursors r ON r.user_id=$1 AND r.conversation=m.conversation
@@ -1255,8 +1255,8 @@ pub(crate) async fn messages(
     Query(query): Query<HistoryQuery>,
 ) -> Result<(HeaderMap, Json<HistoryPage>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own: Uuid = principal.user.as_uuid();
     query.validate().map_err(AuthError::InvalidInput)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let result = page(
@@ -1278,8 +1278,8 @@ pub(crate) async fn read(
     Json(request): Json<ReadRequest>,
 ) -> Result<(HeaderMap, Json<ReadResult>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let own: Uuid = principal.user.as_uuid();
     let result = crate::auth::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
         let result = mark_read(
@@ -1315,12 +1315,12 @@ pub(crate) async fn send_message(
     Json(request): Json<SendRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
         let (saved, created) = tokio::time::timeout(
             std::time::Duration::from_secs(15),
-            save_private_message(&server, &claims, peer, request),
+            save_private_message(&server, &principal, peer, request),
         )
         .await
         .map_err(|_| AuthError::ServiceBusy)??;
@@ -1349,26 +1349,26 @@ async fn private_relationship(
 
 async fn validate_private_session(
     connection: &mut PgConnection,
-    claims: &Claims,
+    principal: &Principal,
     own: Uuid,
 ) -> Result<(), AuthError> {
-    account::ensure_unexpired_claim(claims)?;
+    principal.ensure_unexpired()?;
     let current: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE)")
-        .bind(claims.sid).bind(own).fetch_one(connection).await.map_err(routes::database_error)?;
+        .bind(principal.sid).bind(own).fetch_one(connection).await.map_err(routes::database_error)?;
     if !current {
         return Err(AuthError::InvalidToken);
     }
-    account::ensure_unexpired_claim(claims)
+    principal.ensure_unexpired()
 }
 
 pub(super) async fn save_private_message(
     server: &SignalingServer,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
     request: SendRequest,
 ) -> Result<(ChatEntry, bool), AuthError> {
-    account::ensure_unexpired_claim(claims)?;
-    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    principal.ensure_unexpired()?;
+    let own: Uuid = principal.user.as_uuid();
     if own == peer
         || !crate::signaling::protocol::valid_correlation_id(&request.client_message_id)
         || (request.content.trim().is_empty() && request.attachment_ids.is_empty())
@@ -1406,7 +1406,7 @@ pub(super) async fn save_private_message(
     } else {
         None
     };
-    let mut write = PrivateWrite::begin(pool, claims, own, peer, |error| match error {
+    let mut write = PrivateWrite::begin(pool, principal, own, peer, |error| match error {
         RoomError::Refused(_) => AuthError::InvalidInput("Private message unavailable"),
         RoomError::Database(error) => routes::database_error(error),
     })
@@ -1493,7 +1493,7 @@ pub(super) async fn save_private_message(
         RoomError::Refused(Refusal::RateLimited(_)) => AuthError::RateLimited,
         error => route_error(error),
     })?;
-    write.commit(claims).await?;
+    write.commit(principal).await?;
     Ok((saved, true))
 }
 

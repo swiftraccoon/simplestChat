@@ -13,9 +13,9 @@ const SOURCE_036: &str = concat!(
     "b09b687fb28c635090e0a104d9c0a5e74137b0f69c"
 );
 // Hashes of the checked source prefix: version|t|SHA384, LF-separated without
-// a trailing LF. Both generations are fixed by the existing 37-file catalogue.
+// a trailing LF. Both generations are fixed by the existing 38-file catalogue.
 const LEDGER_BEFORE: &str = "1cc29ac8d0c6bf270c1587ac24b245e94a01afcb77b4b8c209ef89ae9efd3895";
-const LEDGER_AFTER: &str = "441289c35b1ba898ff6728f44e71278b9ae1fe6600293f6005b0bfda49c12cb8";
+const LEDGER_AFTER: &str = "690610be8a665fa61eb778bab61e1eb73cb2affc6cf2c748b6b9b520bd7d369b";
 const LEGACY_CADDY: &str = "ea24dcb24b1285b4529e3aa70083550d25431c56cc3a762b8891a53f1306f3ab";
 
 fn migration(value: &Value, after: bool) -> Result<()> {
@@ -34,8 +34,8 @@ fn migration(value: &Value, after: bool) -> Result<()> {
     )?;
     if value["schemaVersion"].as_u64() != Some(1)
         || value["scope"] != "PreparedHostRoleNumberingObservation"
-        || value["generation"] != if after { "post037" } else { "pre035" }
-        || value["ledgerRows"].as_u64() != Some(if after { 37 } else { 34 })
+        || value["generation"] != if after { "post038" } else { "pre035" }
+        || value["ledgerRows"].as_u64() != Some(if after { 38 } else { 34 })
         || value["ledgerSha256"] != if after { LEDGER_AFTER } else { LEDGER_BEFORE }
         || value["source035Sha384"] != SOURCE_035
         || value["source036Sha384"] != SOURCE_036
@@ -194,7 +194,7 @@ fn migration_fixture(after: bool) -> Value {
         "CHECK (((role >= 1) AND (role <= 3)))"
     };
     json!({"schemaVersion":1,"scope":"PreparedHostRoleNumberingObservation",
-        "generation":if after {"post037"} else {"pre035"},
+        "generation":if after {"post038"} else {"pre035"},
         "snapshot":{"schemaVersion":1,"scope":"PreparedHostRoleNumberingFixture",
             "usersCount":2,"lobbyCount":1,"fixtureUserCount":1,"roomRolesCount":1,
             "invitesCount":1,"redemptionsCount":1,
@@ -203,7 +203,7 @@ fn migration_fixture(after: bool) -> Value {
                 {"table":"invites","name":"invites_role_check","validated":true,"check":check},
                 {"table":"room_roles","name":"room_roles_role_check",
                     "validated":true,"check":check}]},
-        "ledgerRows":if after {37} else {34},
+        "ledgerRows":if after {38} else {34},
         "ledgerSha256":if after {LEDGER_AFTER} else {LEDGER_BEFORE},
         "source035Sha384":SOURCE_035,"source036Sha384":SOURCE_036})
 }
@@ -278,9 +278,9 @@ mod tests {
                 ("/schemaVersion", json!(1.0)),
                 (
                     "/generation",
-                    json!(if after { "pre035" } else { "post037" }),
+                    json!(if after { "pre035" } else { "post038" }),
                 ),
-                ("/ledgerRows", json!(if after { 34 } else { 37 })),
+                ("/ledgerRows", json!(if after { 34 } else { 38 })),
                 ("/ledgerRows", json!(true)),
                 ("/ledgerSha256", json!("a".repeat(64))),
                 ("/source035Sha384", json!("a".repeat(96))),

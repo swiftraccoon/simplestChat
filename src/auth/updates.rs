@@ -1,9 +1,10 @@
 //! Content-free account invalidations. Every connection starts with a resync;
 //! durable HTTP APIs remain authoritative and no mutation is replayed here.
 use super::{
-    account, jwt,
-    types::{AuthError, Claims},
+    access_tokens, account,
+    types::{AuthError, Principal},
 };
+use crate::ids::UserId;
 use crate::sync::Mutex;
 use crate::{shutdown::DrainSignal, signaling::SignalingServer};
 use axum::{
@@ -124,7 +125,8 @@ impl Hub {
         }
     }
 
-    fn subscribe(&self, account: Uuid) -> Result<Subscription, AuthError> {
+    fn subscribe(&self, account: UserId) -> Result<Subscription, AuthError> {
+        let account = account.as_uuid();
         let mut state = self.inner.state.lock();
         if state.total >= self.inner.capacity {
             return Err(AuthError::ServiceBusy);
@@ -189,7 +191,8 @@ impl Hub {
     /// Make every open stream and socket of `account` re-check its credentials
     /// now instead of at its next periodic check: a session of the account
     /// ended or its credentials changed.
-    pub(crate) fn revalidate(&self, account: Uuid) {
+    pub(crate) fn revalidate(&self, account: UserId) {
+        let account = account.as_uuid();
         let state = self.inner.state.lock();
         if let Some(entry) = state.accounts.get(&account) {
             entry.generation.fetch_add(1, Ordering::SeqCst);
@@ -202,7 +205,8 @@ impl Hub {
 
     /// The revalidation notices of one signaling socket of `account`. The
     /// account's entry is removed with its last subscription.
-    pub(crate) fn subscribe_revalidation(&self, account: Uuid) -> Revalidations {
+    pub(crate) fn subscribe_revalidation(&self, account: UserId) -> Revalidations {
+        let account = account.as_uuid();
         let mut state = self.inner.state.lock();
         let entry = state
             .sockets
@@ -284,7 +288,7 @@ struct Subscription {
 
 struct Connection {
     subscription: Subscription,
-    claims: Claims,
+    principal: Principal,
     pool: sqlx::PgPool,
     drain: DrainSignal,
     next_validation: Instant,
@@ -297,16 +301,18 @@ impl Connection {
     async fn valid(&mut self) -> bool {
         if self.drain.is_draining()
             || Instant::now() >= self.deadline
-            || account::ensure_unexpired_claim(&self.claims).is_err()
+            || self.principal.ensure_unexpired().is_err()
         {
             return false;
         }
         let generation = self.subscription.generation.load(Ordering::SeqCst);
         if Instant::now() >= self.next_validation || generation != self.validated_generation {
+            // The session, not the token: another tab's refresh issues that
+            // tab its own token and must not end this stream.
             if !matches!(
                 tokio::time::timeout_at(
                     self.deadline.min(Instant::now() + REVALIDATE),
-                    jwt::validate_current_claims(&self.pool, &self.claims)
+                    access_tokens::revalidate_principal(&self.pool, &self.principal)
                 )
                 .await,
                 Ok(Ok(()))
@@ -316,7 +322,7 @@ impl Connection {
             self.next_validation = Instant::now() + REVALIDATE;
             self.validated_generation = generation;
         }
-        account::ensure_unexpired_claim(&self.claims).is_ok()
+        self.principal.ensure_unexpired().is_ok()
             && !self.drain.is_draining()
             && Instant::now() < self.deadline
             && self.subscription.generation.load(Ordering::SeqCst) == self.validated_generation
@@ -331,10 +337,8 @@ impl Connection {
                 self.ready = false;
                 return Some(Update::Ready);
             }
-            let remaining = i64::try_from(self.claims.exp)
-                .ok()
-                .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
-                .and_then(|expiry| (expiry - chrono::Utc::now()).to_std().ok())
+            let remaining = (self.principal.expires_at - chrono::Utc::now())
+                .to_std()
                 .unwrap_or_default();
             let expiry = tokio::time::sleep(remaining);
             tokio::select! {
@@ -369,15 +373,17 @@ pub(crate) async fn stream(
     AuthError,
 > {
     let _admission = super::routes::acquire_account_request(&server)?;
-    let claims = tokio::time::timeout(REVALIDATE, account::authenticated_claims(&server, &headers))
-        .await
-        .map_err(|_| AuthError::ServiceBusy)??;
-    let account = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let principal = tokio::time::timeout(
+        REVALIDATE,
+        account::authenticated_principal(&server, &headers),
+    )
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
     let rooms = server.room_manager();
-    let subscription = rooms.account_updates().subscribe(account)?;
+    let subscription = rooms.account_updates().subscribe(principal.user)?;
     let connection = Connection {
         subscription,
-        claims,
+        principal,
         pool: server.db_pool().ok_or(AuthError::NotConfigured)?.clone(),
         drain: rooms.drain_signal(),
         next_validation: Instant::now(),

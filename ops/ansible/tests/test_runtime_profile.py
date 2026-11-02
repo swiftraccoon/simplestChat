@@ -72,7 +72,11 @@ class RuntimeProfileTests(unittest.TestCase):
         profile.validate_image(image())
         value = compose()
         obj(value, "services", "simplestchat", "environment").update(
-            {"JWT_SECRET": "inert-test-value", "MEDIA_WORKERS": "2", "LOCALDOMAIN": "example.test"}
+            {
+                "METRICS_TOKEN": "inert-test-value",
+                "MEDIA_WORKERS": "2",
+                "LOCALDOMAIN": "example.test",
+            }
         )
         profile.validate_compose(value, SOCKET, IMAGE_ID)
         del obj(value, "services")["migrate"]

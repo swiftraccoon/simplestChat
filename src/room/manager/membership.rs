@@ -1183,7 +1183,7 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         participant_id: &ParticipantId,
-        authenticated_subject: Option<&str>,
+        authenticated_subject: Option<crate::ids::UserId>,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         new_sender: mpsc::Sender<crate::OutboundJson>,
     ) -> Result<bool> {
@@ -1201,8 +1201,9 @@ impl RoomManager {
                 );
                 return Ok(false);
             }
+            // An account participates as its own UUID.
             let identity_matches = match (participant.authenticated, authenticated_subject) {
-                (true, Some(subject)) => subject == participant_id.to_string(),
+                (true, Some(subject)) => subject.as_uuid() == participant_id.as_uuid(),
                 (false, None) => true,
                 _ => false,
             };

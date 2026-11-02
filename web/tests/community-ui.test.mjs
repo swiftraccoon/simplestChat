@@ -28,7 +28,7 @@ async function fixture({ rejectStaticQueries = false } = {}) {
       throw new Error(`Static shell was queried again: ${selector}`);
     };
   }
-  const auth = { isLoggedIn: true, userId: 'account-a', jwt: 'token-a' };
+  const auth = { isLoggedIn: true, userId: 'account-a', accessToken: 'token-a' };
   const profile = {
     id: 'account-a',
     email: 'a@example.test',
@@ -735,7 +735,7 @@ for (const [label, method] of [['My rooms', 'openRooms']]) {
     f.community[method] = () => second.promise;
     action(f.header, label).click();
     f.auth.userId = 'account-b';
-    f.auth.jwt = 'token-b';
+    f.auth.accessToken = 'token-b';
     f.community.refresh();
     second.reject(new Error('Retired action failed'));
     await flush();
@@ -808,7 +808,7 @@ test('session revocation uses refreshed credentials, owns the screen and signs o
   const view = await accountScreen(f, 'security');
   const pending = deferred();
   f.state.handle = () => pending.promise;
-  f.auth.jwt = 'refreshed-token';
+  f.auth.accessToken = 'refreshed-token';
   const revoke = action(view.body, 'Sign out this session');
   revoke.click();
   revoke.click();
@@ -830,7 +830,7 @@ test('a late revoke completion cannot affect a new account', async () => {
   f.state.handle = () => pending.promise;
   action(view.body, 'Sign out this session').click();
   f.auth.userId = 'account-b';
-  f.auth.jwt = 'token-b';
+  f.auth.accessToken = 'token-b';
   f.community.refresh();
   assert.equal(f.state.accountChanges, 1, 'an identity change closes the sheet');
   view.leave();
@@ -967,7 +967,7 @@ test('identity changes close account screens and reject actions from stale contr
   const view = await accountScreen(f, 'profile');
   const save = action(view.body, 'Save profile');
   f.auth.userId = 'account-b';
-  f.auth.jwt = 'token-b';
+  f.auth.accessToken = 'token-b';
   f.community.refresh();
   assert.equal(f.state.accountChanges, 1);
   view.leave();
@@ -1004,7 +1004,7 @@ test('an initial account response cannot render after an identity change', async
   f.state.handle = () => pending.promise;
   const view = await accountScreen(f, 'profile', { settle: false });
   f.auth.userId = 'account-b';
-  f.auth.jwt = 'token-b';
+  f.auth.accessToken = 'token-b';
   f.community.refresh();
   pending.resolve(f.profile);
   const body = await view.opening;
@@ -1067,7 +1067,7 @@ for (const reason of ['leave', 'identity change']) {
     if (reason === 'leave') account.leave();
     else {
       f.auth.userId = 'account-b';
-      f.auth.jwt = 'token-b';
+      f.auth.accessToken = 'token-b';
       f.community.refresh();
       account.leave();
     }
@@ -1094,7 +1094,7 @@ for (const changedIdentity of [false, true]) {
     assert.equal(view.screen.canLeave(), false, 'a submitted password mutation owns leaving');
     if (changedIdentity) {
       f.auth.userId = 'account-b';
-      f.auth.jwt = 'token-b';
+      f.auth.accessToken = 'token-b';
       f.community.refresh();
       view.leave();
     }
@@ -1197,7 +1197,7 @@ for (const phase of ['pending', 'uncertain', 'recovery']) {
       assert.equal(account.screen.canLeave(), false);
     else assert.equal(control(account.body, 'Recovery key').value, 'save-once');
     f.auth.userId = 'account-b';
-    f.auth.jwt = 'token-b';
+    f.auth.accessToken = 'token-b';
     f.community.refresh();
     assert.equal(f.state.accountChanges, 1);
     account.leave();
@@ -1226,7 +1226,7 @@ test('community controls use the injected static hosts without querying the shel
     action(f.elements.communityActions, 'Account').click();
     assert.deepEqual(f.state.openedSettings, ['profile']);
     f.auth.userId = 'account-b';
-    f.auth.jwt = 'token-b';
+    f.auth.accessToken = 'token-b';
     f.community.refresh();
     await f.community.refreshMessages();
     assert.equal(f.state.accountChanges, 1);
@@ -1284,7 +1284,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
       roomActions,
       loginAltActions: dom.loginActions,
     },
-    auth: { isLoggedIn: true, userId: 'account-a', jwt: 'token-a' },
+    auth: { isLoggedIn: true, userId: 'account-a', accessToken: 'token-a' },
     getRoom: () => null,
     notify() {},
     onProfileChanged() {},
@@ -1394,7 +1394,7 @@ test('membership pages append unique rooms and keep the cursor on a failed read'
     throw new Error('Unexpected fixture request');
   };
   // The shared fixture's API object is supplied by reference to this instance.
-  f.community.options.auth.jwt = 'token';
+  f.community.options.auth.accessToken = 'token';
   f.ui.api.memberships = async (_token, cursor) => {
     requests.push(['page', cursor]);
     if (failNext) {
@@ -1607,7 +1607,7 @@ test('Messages badge follows confirmed unread counts and fences a replaced accou
   f.state.unread = () => pending.promise;
   const previous = f.community.refreshMessages();
   f.auth.userId = 'account-b';
-  f.auth.jwt = 'token-b';
+  f.auth.accessToken = 'token-b';
   f.state.unread = async () => ({ unreadCount: 2 });
   f.community.refresh();
   await flush();
@@ -1655,7 +1655,7 @@ test('legacy unread invalidation remains immediate without a healthy current-acc
   await flush();
   f.updates.live.add('account-a');
   f.auth.userId = 'account-b';
-  f.auth.jwt = 'token-b';
+  f.auth.accessToken = 'token-b';
   f.state.inboxListener();
   assert.deepEqual(
     tokens,

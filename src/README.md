@@ -25,7 +25,7 @@ HTTP / WebSocket
 | Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs` (server state, guards and handlers; tests in `signaling/security_tests.rs`), `signaling/routes.rs` (the route tree and its per-group budgets), `signaling/connection.rs` (`connection_gates.rs` holds its per-connection budgets and their verdicts, `connection_credentials.rs` its accepted credentials and their checks, `connection_grace.rs` the reconnect grace and its map, `connection_token_bucket.rs` the bucket and refusal window; tests in `connection_gates_tests.rs`, `connection_security_tests.rs` and the other `connection_*_tests.rs` files) |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
 | Wire contract | `signaling/protocol.rs`; `cargo run -q -p xtask -- protocol-ts` generates [web/src/protocol.generated.ts](../web/src/protocol.generated.ts) from it |
-| Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/password_policy.rs` (selection limits, mirrored into the browser contract), `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
+| Password/passkey auth and access tokens | `auth/routes.rs`, `auth/password.rs`, `auth/password_policy.rs` (selection limits, mirrored into the browser contract), `auth/webauthn.rs`, `auth/access_tokens.rs` (opaque tokens, issued and validated against the session row), `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | Atomic account privacy and fresh runtime publication | `auth/account.rs`, `room/privacy.rs` |
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
@@ -207,11 +207,20 @@ failures at other addresses cannot continuously deny the owner's proof. The HTTP
 failure tables use bounded LRU eviction, with no shared overflow penalty;
 resource admission remains a separate protection against distributed traffic.
 
-Access JWTs require an explicit account `auth_version` and a UUID `sid` naming
-an unexpired session belonging to that account. Every HTTP authorization and
-socket revalidation enforces both; logout removes the session, and recovery or
-password changes remove all sessions and advance the account version. There is
-no sessionless token issuer or validator. Refresh tokens have one opaque format:
+Access tokens are opaque 256-bit handles, accepted for at most fifteen minutes and
+never past their session's end, and stored only as SHA-256 digests in
+`session_access_tokens` (migration 038), one row per
+token naming its session and the account version at issue.
+`access_tokens::issue_access_token` runs in the sign-in or refresh transaction and
+reads that version in the same statement rather than trusting a caller's copy; it
+prunes the session's expired rows and keeps its newest 32 live ones, which bounds
+the table by sessions without a separate sweep. `validate_access_token` checks the
+token's shape before any query, then requires the token, its session and the
+account version to be current; `revalidate_principal` re-checks the session and
+version for a principal held by a socket, stream, ticket or grant. Logout removes
+the session and, by cascade, its tokens; recovery or password changes remove all
+sessions and advance the account version. There is no sessionless token issuer
+or validator, and nothing is signed. Refresh tokens have one opaque format:
 `v1n` followed by two 43-character unpadded base64url secrets (generation, then
 family), each encoding 32 random bytes. Only hashes persist, the family hash is
 required, and token rotation retains the existing bounded concurrency/replay rules.
@@ -231,19 +240,19 @@ session immediately; the account hub (`auth/updates.rs`) tells the account's upd
 streams and sockets to re-check at once, while retained reconnect media checks every
 five seconds. Logout, refresh-token reuse and a sign-in that ends the account's
 oldest session under the per-account cap tell the hub the same way after they
-commit; a session that simply expires is not announced, and the periodic checks
-find it. Revoking the current session clears its matching refresh cookie without
+commit; a session that simply expires is not announced, since no access token
+outlives it. Revoking the current session clears its matching refresh cookie without
 clearing a newer sign-in cookie installed by another tab.
 
 Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the
-`ticket.` WebSocket subprotocol. Pending records contain a digest, session-bound
-claims and a monotonic deadline of at most 30 seconds; at most 10,000 records are
+`ticket.` WebSocket subprotocol. Pending records contain a digest, the validated
+principal and a monotonic deadline of at most 30 seconds; at most 10,000 records are
 retained per process. Full capacity refuses issuance after reclaiming expired
 records. Consumption is atomic before database revalidation; logout, credential
 revocation and original access-token expiry are checked again before upgrade.
 Existing connection expiry/renewal/revocation handling then owns the session.
-Unknown protocols and reusable-JWT protocols are rejected instead of becoming guests.
-This removes reusable JWTs from handshake headers, but tickets remain secret
+Unknown protocols and reusable access-token protocols are rejected instead of becoming
+guests. This keeps reusable tokens out of handshake headers, but tickets remain secret
 until consumed/expired. A future load balancer must route ticket issuance and
 upgrade to the same application process or provide an equivalent shared atomic
 store; current deployment is a single application process.
@@ -303,8 +312,8 @@ Run from the repository root so `web/dist` resolves.
 Production builds do not enable `load-test`; synthetic clients live separately
 under [load_tests](../load_tests/README.md).
 
-No `DATABASE_URL` means anonymous-only operation. Auth also requires a JWT secret
-of at least 32 bytes. `RUN_MIGRATIONS` defaults false; production uses a separate
+No `DATABASE_URL` means anonymous-only operation; accounts need nothing else.
+`RUN_MIGRATIONS` defaults false; production uses a separate
 DDL-capable migration role. Registration and ad-hoc rooms are opt-in.
 See [deployment](../docs/deployment.md) before opening a service to other users.
 

@@ -2,7 +2,7 @@
 //! short private timing policy; no browser or public service is used. The one
 //! ignored authentication fixture requires the existing disposable test database.
 
-use super::authentication::{RenewalOutcome, renew_authentication, unix_seconds};
+use super::authentication::{RenewalOutcome, renew_authentication};
 use super::*;
 use crate::ids::ParticipantId;
 use crate::ids::fixtures::rid;
@@ -51,7 +51,7 @@ pub(super) struct Fixture {
     completed: mpsc::Receiver<()>,
     did_complete: bool,
     server: OwnedTask,
-    _revocations: broadcast::Sender<(String, i64)>,
+    _revocations: broadcast::Sender<(UserId, i64)>,
 }
 
 impl Drop for Fixture {
@@ -63,15 +63,15 @@ impl Drop for Fixture {
 
 impl Fixture {
     pub(super) async fn new() -> Self {
-        Self::with_claims(None).await
+        Self::with_principal(None).await
     }
 
-    async fn with_claims(claims: Option<Claims>) -> Self {
-        Self::with_authentication(claims, None, None).await
+    async fn with_principal(principal: Option<Principal>) -> Self {
+        Self::with_authentication(principal, None, None).await
     }
 
     async fn with_authentication(
-        claims: Option<Claims>,
+        principal: Option<Principal>,
         pool: Option<sqlx::PgPool>,
         renewal_authenticator: Option<RenewalAuthenticator>,
     ) -> Self {
@@ -91,7 +91,7 @@ impl Fixture {
                 let grace = grace.clone();
                 let revocations = revocations.clone();
                 move |upgrade: WebSocketUpgrade| {
-                    let claims = claims.clone();
+                    let principal = principal.clone();
                     let pool = pool.clone();
                     let renewal_authenticator = renewal_authenticator.clone();
                     let manager = manager.clone();
@@ -109,7 +109,7 @@ impl Fixture {
                                 grace,
                                 metrics,
                                 permits.acquire_owned().await.unwrap(),
-                                claims,
+                                principal,
                                 None,
                                 pool,
                                 crate::attachments::GrantKey::generate().unwrap(),
@@ -528,15 +528,15 @@ async fn heartbeat_control_writes_do_not_change_application_write_counters() {
 
 #[tokio::test]
 async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
-    for exp in [0, usize::MAX] {
-        let mut fixture = Fixture::with_claims(Some(Claims {
-            sub: Uuid::new_v4().to_string(),
-            name: "Account".into(),
-            iss: "test".into(),
-            aud: "test".into(),
-            exp,
-            auth_version: 0,
+    for expires_at in [
+        chrono::DateTime::UNIX_EPOCH,
+        chrono::DateTime::<chrono::Utc>::MAX_UTC,
+    ] {
+        let mut fixture = Fixture::with_principal(Some(Principal {
+            user: UserId::random(),
             sid: uuid::Uuid::new_v4(),
+            auth_version: 0,
+            expires_at,
         }))
         .await;
         let first = tokio::time::timeout(TEST_IDLE, fixture.peer.next()).await;
@@ -551,26 +551,21 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
 #[tokio::test]
 async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
     let fixture = Fixture::new().await;
-    let secret =
-        crate::auth::jwt::JwtSecret::from("interrupted-renewal-fixture-secret-at-least-32-bytes");
-    let token = crate::auth::jwt::create_session_token(
-        &Uuid::new_v4().to_string(),
-        "Renewal fixture",
-        &secret,
-        0,
-        Uuid::new_v4(),
-    )
-    .unwrap();
-    let claims = crate::auth::jwt::validate_token(&token, &secret).unwrap();
-    let token = serde_json::from_value(serde_json::json!(token)).unwrap();
-    let authenticator = RenewalAuthenticator::new(secret.clone(), Arc::new(Semaphore::new(1)));
+    let principal = Principal {
+        user: UserId::random(),
+        sid: Uuid::new_v4(),
+        auth_version: 0,
+        expires_at: chrono::Utc::now() + chrono::TimeDelta::minutes(15),
+    };
+    let token = serde_json::from_value(serde_json::json!("A".repeat(43))).unwrap();
+    let authenticator = RenewalAuthenticator::new(Arc::new(Semaphore::new(1)));
     let (_notices, mut revocations) = broadcast::channel(4);
     let (closed_sender, closed_receiver) = mpsc::channel(1);
     drop(closed_receiver);
     let drain = fixture.manager.drain_signal();
     let lost_transport = renew_authentication(
         &authenticator,
-        &claims,
+        &principal,
         &token,
         None,
         &mut revocations,
@@ -582,7 +577,7 @@ async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
     drain.begin_draining();
     let draining = renew_authentication(
         &authenticator,
-        &claims,
+        &principal,
         &token,
         None,
         &mut revocations,
@@ -603,8 +598,6 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
     let account_id: Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name, password_hash) VALUES ($1, 'Renewal fixture', 'unused-fixture-hash') RETURNING id",
     ).bind(email).fetch_one(&pool).await.unwrap();
-    let secret =
-        crate::auth::jwt::JwtSecret::from("same-socket-renewal-fixture-secret-at-least-32-bytes");
     let session_id = crate::auth::session::create_session(
         &pool,
         &account_id,
@@ -612,29 +605,15 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
     )
     .await
     .unwrap();
-    let mut original = crate::auth::jwt::validate_token(
-        &crate::auth::jwt::create_session_token(
-            &account_id.to_string(),
-            "Renewal fixture",
-            &secret,
-            0,
-            session_id,
-        )
-        .unwrap(),
-        &secret,
-    )
-    .unwrap();
+    let mut original = crate::auth::access_tokens::fixtures::principal(&pool, session_id).await;
     // Only this private handler fixture uses a short original credential. The
-    // renewal passes the production JWT verifier and database account check.
-    original.exp = unix_seconds() as usize + 6;
-    let original_expiry = original.exp as u64;
+    // renewal passes the production token validator against the session row.
+    original.expires_at = chrono::Utc::now() + chrono::TimeDelta::seconds(6);
+    let original_expiry = u64::try_from(original.expires_at.timestamp()).unwrap();
     let mut fixture = Fixture::with_authentication(
         Some(original),
         Some(pool.clone()),
-        Some(RenewalAuthenticator::new(
-            secret.clone(),
-            Arc::new(Semaphore::new(1)),
-        )),
+        Some(RenewalAuthenticator::new(Arc::new(Semaphore::new(1)))),
     )
     .await;
     let observed =
@@ -646,14 +625,8 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
                 .manager
                 .room_for_connection_tests(&rid("heartbeat-test"));
             let before = room.read().await.participants[&participant_id].clone();
-            let token = crate::auth::jwt::create_session_token(
-                &participant_id.to_string(),
-                "Renewal fixture",
-                &secret,
-                0,
-                session_id,
-            )
-            .map_err(|_| anyhow::anyhow!("fixture token could not be issued"))?;
+            // A second tab's refresh: a new token for the same session.
+            let token = crate::auth::access_tokens::fixtures::issue(&pool, session_id).await;
             let renewed = fixture.request(serde_json::json!({
             "type": "renewAuthentication", "requestId": "renewal-fixture-1", "token": token,
         }), "authenticationRenewed").await?;
@@ -669,7 +642,9 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
             );
             fixture
                 .observe_alive(Duration::from_secs(
-                    original_expiry.saturating_sub(unix_seconds()) + 1,
+                    original_expiry.saturating_sub(
+                        u64::try_from(chrono::Utc::now().timestamp()).unwrap_or(u64::MAX),
+                    ) + 1,
                 ))
                 .await?;
             let after = room.read().await.participants[&participant_id].clone();
@@ -744,20 +719,8 @@ async fn an_ended_session_closes_its_socket_at_the_hubs_notice() {
     let session_id = crate::auth::session::create_session(&pool, &account_id, &refresh)
         .await
         .unwrap();
-    let secret = crate::auth::jwt::JwtSecret::from("hub-notice-fixture-secret-at-least-32-bytes");
-    let claims = crate::auth::jwt::validate_token(
-        &crate::auth::jwt::create_session_token(
-            &account_id.to_string(),
-            "Notice fixture",
-            &secret,
-            0,
-            session_id,
-        )
-        .unwrap(),
-        &secret,
-    )
-    .unwrap();
-    let mut fixture = Fixture::with_authentication(Some(claims), Some(pool.clone()), None).await;
+    let principal = crate::auth::access_tokens::fixtures::principal(&pool, session_id).await;
+    let mut fixture = Fixture::with_authentication(Some(principal), Some(pool.clone()), None).await;
     let observed = async {
         let joined = fixture.join().await?;
         anyhow::ensure!(joined["type"] == "roomJoined", "fixture was not admitted");
@@ -767,7 +730,10 @@ async fn an_ended_session_closes_its_socket_at_the_hubs_notice() {
         crate::auth::session::delete_session_by_token(&pool, &refresh.raw)
             .await
             .map_err(|_| anyhow::anyhow!("the fixture session could not be ended"))?;
-        fixture.manager.account_updates().revalidate(account_id);
+        fixture
+            .manager
+            .account_updates()
+            .revalidate(UserId::from(account_id));
         anyhow::ensure!(
             fixture
                 .observe_alive(Duration::from_millis(1500))

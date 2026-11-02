@@ -74,7 +74,7 @@ impl Fixture {
             let bytes = self
                 .sql(ctx, "host-migration-after", &migration::observation_sql())
                 .await?;
-            let observed = migration_observation(&sources, &bytes, Generation::After037)?;
+            let observed = migration_observation(&sources, &bytes, Generation::After038)?;
             ctx.check()?;
             Ok(observed)
         }

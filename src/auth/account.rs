@@ -1,8 +1,9 @@
 //! Account profiles, password changes and one-time recovery credentials.
 //!
-//! Authenticated handlers validate both the signed access token and the current
-//! database authentication version. Password changes and recovery commit the
-//! new password, increment that version and remove refresh sessions together;
+//! Authenticated handlers resolve the opaque access token through its session
+//! row and the account's current authentication version. Password changes and
+//! recovery commit the new password, increment that version and remove refresh
+//! sessions (and with them their access tokens) together;
 //! only then do they notify connected sessions of revocation. Profile edits do
 //! not change account credentials. Responses containing account or recovery
 //! information are not cacheable.
@@ -12,9 +13,9 @@
 //! caller as a credential: never include it in logs, metrics or room messages.
 
 use super::{
-    jwt, password_policy, routes, session,
+    access_tokens, password_policy, routes, session,
     sessions::lock_current_session,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::ids::UserId;
 use crate::room::refusal::Refusal;
@@ -342,7 +343,7 @@ pub(crate) async fn get_preferences(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
     let rooms = server.room_manager().clone();
     // A successful explicit refresh also repairs a preceding save's incomplete
@@ -351,7 +352,7 @@ pub(crate) async fn get_preferences(
         let _permit = permit;
         let (id, preferences) = tokio::time::timeout(
             std::time::Duration::from_secs(15),
-            current_preferences(&pool, &claims),
+            current_preferences(&pool, &principal),
         )
         .await
         .map_err(|_| AuthError::ServiceBusy)??;
@@ -374,7 +375,7 @@ pub(crate) async fn patch_preferences(
     Json(request): Json<PreferencePatch>,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
     let rooms = server.room_manager().clone();
     // Once admitted, both the transaction and publication outlive a lost HTTP
@@ -383,7 +384,7 @@ pub(crate) async fn patch_preferences(
         let _permit = permit;
         let write = tokio::time::timeout(
             std::time::Duration::from_secs(15),
-            save_preferences(&pool, &claims, request),
+            save_preferences(&pool, &principal, request),
         )
         .await
         .unwrap_or(Err(AuthError::ServiceBusy));
@@ -397,7 +398,7 @@ pub(crate) async fn patch_preferences(
             // A transport/COMMIT failure may have committed. Attempt a fresh
             // publication even though the caller must still reconcile the save.
             Err(AuthError::DatabaseError(_) | AuthError::ServiceBusy) => {
-                Uuid::parse_str(&claims.sub).ok()
+                Some(principal.user.as_uuid())
             }
             Err(_) => None,
         };
@@ -415,27 +416,19 @@ pub(crate) async fn patch_preferences(
     Ok((routes::no_store_headers(), Json(preferences)))
 }
 
-pub(crate) fn ensure_unexpired_claim(claims: &Claims) -> Result<(), AuthError> {
-    let expiration = i64::try_from(claims.exp).map_err(|_| AuthError::InvalidToken)?;
-    if expiration <= chrono::Utc::now().timestamp() {
-        return Err(AuthError::TokenExpired);
-    }
-    Ok(())
-}
-
 /// The session row is already locked. Its admission predicate may have been
 /// evaluated before a lock wait, so use a fresh clock after the wait and before
 /// committing the preference operation.
 async fn ensure_preference_session_current(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: Uuid,
-    claims: &Claims,
+    principal: &Principal,
 ) -> Result<(), AuthError> {
     let live: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM sessions
          WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp())",
     )
-    .bind(claims.sid)
+    .bind(principal.sid)
     .bind(id)
     .fetch_one(&mut **transaction)
     .await
@@ -443,37 +436,37 @@ async fn ensure_preference_session_current(
     if !live {
         return Err(AuthError::InvalidToken);
     }
-    ensure_unexpired_claim(claims)
+    principal.ensure_unexpired()
 }
 
 async fn current_preferences(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
 ) -> Result<(Uuid, ChatPreferences), AuthError> {
-    ensure_unexpired_claim(claims)?;
+    principal.ensure_unexpired()?;
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-    let (id, _) = lock_current_session(&mut transaction, claims).await?;
-    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    let (id, _) = lock_current_session(&mut transaction, principal).await?;
+    ensure_preference_session_current(&mut transaction, id, principal).await?;
     let saved = sqlx::query_scalar("SELECT preferences FROM users WHERE id=$1")
         .bind(id)
         .fetch_optional(&mut *transaction)
         .await
         .map_err(routes::database_error)?;
     let preferences = stored_preferences(saved, id)?;
-    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    ensure_preference_session_current(&mut transaction, id, principal).await?;
     transaction.commit().await.map_err(routes::database_error)?;
     Ok((id, preferences))
 }
 
 async fn save_preferences(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     request: PreferencePatch,
 ) -> Result<(Uuid, ChatPreferences), AuthError> {
-    ensure_unexpired_claim(claims)?;
+    principal.ensure_unexpired()?;
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-    let (id, _) = lock_current_session(&mut transaction, claims).await?;
-    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    let (id, _) = lock_current_session(&mut transaction, principal).await?;
+    ensure_preference_session_current(&mut transaction, id, principal).await?;
     let saved = sqlx::query_scalar("SELECT preferences FROM users WHERE id=$1")
         .bind(id)
         .fetch_one(&mut *transaction)
@@ -491,11 +484,11 @@ async fn save_preferences(
     )
     .bind(id)
     .bind(&value)
-    .bind(claims.auth_version)
+    .bind(principal.auth_version)
     .execute(&mut *transaction)
     .await
     .map_err(routes::database_error)?;
-    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    ensure_preference_session_current(&mut transaction, id, principal).await?;
     transaction.commit().await.map_err(routes::database_error)?;
     Ok((id, preferences))
 }
@@ -537,31 +530,31 @@ impl std::fmt::Debug for RedeemRecoveryRequest {
     }
 }
 
-/// Resolve an exact `Bearer ` authorization header into currently valid claims.
+/// Resolve an exact `Bearer ` authorization header into the principal its
+/// access token currently speaks for.
 ///
-/// Signature and expiry validation alone are insufficient: this also checks the
-/// account's persisted authentication version, so a password change or recovery
-/// invalidates previously issued access tokens. It neither refreshes a session
-/// nor accepts a refresh cookie in place of the header.
+/// The token is looked up through its row, its live session and the account's
+/// current authentication version, so logout, session revocation, a password
+/// change or recovery refuses it on the next request. It neither refreshes a
+/// session nor accepts a refresh cookie in place of the header.
 ///
 /// # Errors
-/// Returns an [`AuthError`] for missing configuration, absent/malformed/expired
-/// credentials, revoked claims or a failed database check. Callers must propagate
-/// the failure rather than downgrading an authenticated request to guest access.
-pub(crate) async fn authenticated_claims(
+/// Returns an [`AuthError`] when no database is configured (`NotConfigured`),
+/// for an absent header (`MissingToken`), a malformed, unknown, expired or
+/// revoked token (`InvalidToken`) or a failed database check. Callers must
+/// propagate the failure rather than downgrading an authenticated request to
+/// guest access.
+pub(crate) async fn authenticated_principal(
     server: &SignalingServer,
     headers: &HeaderMap,
-) -> Result<Claims, AuthError> {
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
+) -> Result<Principal, AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let token = headers
         .get("authorization")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "))
         .ok_or(AuthError::MissingToken)?;
-    let claims = jwt::validate_token(token, secret)?;
-    jwt::validate_current_claims(pool, &claims).await?;
-    Ok(claims)
+    access_tokens::validate_access_token(pool, token).await
 }
 
 fn profile_error() -> AuthError {
@@ -764,10 +757,10 @@ pub(crate) async fn get_profile(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<AccountProfile>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let profile = load_profile(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?,
+        principal.user.as_uuid(),
     )
     .await?;
     Ok((routes::no_store_headers(), Json(profile)))
@@ -779,7 +772,7 @@ pub(crate) async fn update_profile(
     Json(request): Json<UpdateProfileRequest>,
 ) -> Result<(HeaderMap, Json<AccountProfile>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     routes::validate_display_name(&request.display_name).map_err(|_| profile_error())?;
     if !validate_text(&request.bio, 1024, true) {
         return Err(profile_error());
@@ -790,7 +783,7 @@ pub(crate) async fn update_profile(
     let picture = change.flatten();
     validate_image_data_url(picture)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let id = principal.user.as_uuid();
     let row: AccountProfileRow = sqlx::query_as(
         "UPDATE users SET display_name = $2, bio = $4, profile_style = $6,
                 avatar_url = CASE WHEN $7 THEN $3 ELSE avatar_url END,
@@ -804,7 +797,7 @@ pub(crate) async fn update_profile(
     .bind(request.display_name.trim())
     .bind(picture)
     .bind(request.bio)
-    .bind(claims.auth_version)
+    .bind(principal.auth_version)
     .bind(sqlx::types::Json(request.profile_style))
     .bind(change.is_some())
     .bind(picture.map(avatar_digest))
@@ -866,21 +859,20 @@ pub(crate) async fn profile_avatar(
 /// matched. The password is read only for its byte limit and inside the verification job.
 pub(super) async fn verified_password_hash(
     server: &SignalingServer,
-    claims: &Claims,
+    principal: &Principal,
     password: SecretString,
 ) -> Result<String, AuthError> {
     if password.expose_secret().len() > password_policy::MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
-    if !server.allow_auth_principal(&claims.sub) {
+    if !server.allow_auth_principal(principal.user) {
         return Err(AuthError::RateLimited);
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
     let stored: Option<String> =
         sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1 AND auth_version = $2")
-            .bind(id)
-            .bind(claims.auth_version)
+            .bind(principal.user)
+            .bind(principal.auth_version)
             .fetch_optional(pool)
             .await
             .map_err(routes::database_error)?
@@ -895,7 +887,7 @@ pub(super) async fn verified_password_hash(
     Ok(stored)
 }
 
-/// Change a password after verifying the account's current password and claims.
+/// Change a password after verifying the account's current password and principal.
 ///
 /// The conditional update prevents a concurrent credential change from being
 /// overwritten. Password replacement, authentication-version increment and
@@ -917,17 +909,17 @@ pub(crate) async fn change_password(
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     password_policy::validate_new_password(request.new_password.expose_secret())?;
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
-    let old_hash = verified_password_hash(&server, &claims, request.current_password).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
+    let old_hash = verified_password_hash(&server, &principal, request.current_password).await?;
     let permit = server
         .try_acquire_password_work()
         .ok_or(AuthError::ServiceBusy)?;
     let new_hash = routes::hash_password_async(request.new_password, permit).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let id = principal.user.as_uuid();
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
     let changed = sqlx::query("UPDATE users SET password_hash = $2, auth_version = auth_version + 1, updated_at = now() WHERE id = $1 AND password_hash = $3 AND auth_version = $4")
-        .bind(id).bind(new_hash).bind(old_hash).bind(claims.auth_version)
+        .bind(id).bind(new_hash).bind(old_hash).bind(principal.auth_version)
         .execute(&mut *transaction).await.map_err(routes::database_error)?;
     if changed.rows_affected() == 0 {
         return Err(AuthError::InvalidCredentials);
@@ -941,7 +933,7 @@ pub(crate) async fn change_password(
         .await
         .map_err(routes::database_error)?;
     transaction.commit().await.map_err(routes::database_error)?;
-    server.revoke_account_sessions(claims.sub, claims.auth_version + 1);
+    server.revoke_account_sessions(principal.user, principal.auth_version + 1);
     Ok((
         routes::clear_refresh_cookie_headers(),
         StatusCode::NO_CONTENT,
@@ -993,14 +985,14 @@ pub(crate) async fn create_recovery_key(
     Json(request): Json<RecoveryKeyRequest>,
 ) -> Result<(HeaderMap, Json<RecoveryKeyResponse>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
-    let old_hash = verified_password_hash(&server, &claims, request.current_password).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
+    let old_hash = verified_password_hash(&server, &principal, request.current_password).await?;
     let key = generate_recovery_key()?;
     let key_hash = recovery_hash(&key)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let id = principal.user.as_uuid();
     let updated = sqlx::query("UPDATE users SET recovery_key_hash = $2, updated_at = now() WHERE id = $1 AND password_hash = $3 AND auth_version = $4")
-        .bind(id).bind(key_hash).bind(old_hash).bind(claims.auth_version).execute(pool).await.map_err(routes::database_error)?;
+        .bind(id).bind(key_hash).bind(old_hash).bind(principal.auth_version).execute(pool).await.map_err(routes::database_error)?;
     if updated.rows_affected() == 0 {
         return Err(AuthError::InvalidCredentials);
     }
@@ -1082,7 +1074,7 @@ pub(crate) async fn redeem_recovery(
     let password_hash = routes::hash_password_async(request.new_password, permit).await?;
     let (id, version) = consume_recovery(pool, &email, &hash, &password_hash).await?;
     server.note_sign_in_success(source_ip, &email);
-    server.revoke_account_sessions(id.to_string(), version);
+    server.revoke_account_sessions(UserId::from(id), version);
     Ok((
         routes::clear_refresh_cookie_headers(),
         StatusCode::NO_CONTENT,

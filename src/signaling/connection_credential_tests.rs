@@ -1,16 +1,20 @@
 //! Deterministic credential-observation tests; no database or network failures.
 
-use super::authentication::unix_seconds;
 use super::*;
 use crate::ids::fixtures::{pid, rid};
 use std::future::{Future, pending, ready};
 use tokio::sync::broadcast;
 
+/// The account every fixture here observes.
+fn observed_account() -> UserId {
+    UserId::from(pid("credential-observer-account").as_uuid())
+}
+
 struct ValidationFixture {
-    claims: Claims,
+    principal: Principal,
     continuity: CredentialContinuity,
-    notices: Option<broadcast::Sender<(String, i64)>>,
-    receiver: broadcast::Receiver<(String, i64)>,
+    notices: Option<broadcast::Sender<(UserId, i64)>>,
+    receiver: broadcast::Receiver<(UserId, i64)>,
     drain: crate::shutdown::DrainSignal,
 }
 
@@ -18,14 +22,11 @@ impl ValidationFixture {
     fn new() -> Self {
         let (notices, receiver) = broadcast::channel(1);
         Self {
-            claims: Claims {
-                sub: "credential-observer-account".to_string(),
-                name: "Credential observer".to_string(),
-                iss: "simplestchat".to_string(),
-                aud: "simplestchat".to_string(),
-                exp: unix_seconds() as usize + 60,
-                auth_version: 2,
+            principal: Principal {
+                user: observed_account(),
                 sid: uuid::Uuid::new_v4(),
+                auth_version: 2,
+                expires_at: chrono::Utc::now() + chrono::TimeDelta::seconds(60),
             },
             continuity: CredentialContinuity::default(),
             notices: Some(notices),
@@ -43,7 +44,7 @@ impl ValidationFixture {
             Duration::from_secs(1),
             observe_account_validation(
                 validation,
-                &self.claims,
+                &self.principal,
                 &mut self.continuity,
                 &mut self.receiver,
                 &self.drain,
@@ -113,8 +114,8 @@ async fn current_validation_recovers_before_the_original_uncertainty_deadline() 
 async fn queued_authoritative_revocation_wins_without_polling_ready_validation() {
     let mut fixture = ValidationFixture::new();
     for notice in [
-        ("unrelated-account".to_string(), i64::MAX),
-        (fixture.claims.sub.clone(), fixture.claims.auth_version),
+        (UserId::random(), i64::MAX),
+        (fixture.principal.user, fixture.principal.auth_version),
     ] {
         fixture.notices.as_ref().unwrap().send(notice).unwrap();
         assert_eq!(fixture.status(CredentialStatus::Current).await, Some(true));
@@ -123,7 +124,7 @@ async fn queued_authoritative_revocation_wins_without_polling_ready_validation()
         .notices
         .as_ref()
         .unwrap()
-        .send((fixture.claims.sub.clone(), fixture.claims.auth_version + 1))
+        .send((fixture.principal.user, fixture.principal.auth_version + 1))
         .unwrap();
     let polled = AtomicBool::new(false);
     let validation = async {
@@ -145,8 +146,8 @@ async fn revocation_inside_a_query_interrupts_pending_work_and_wins_over_ready_c
     for stay_pending in [false, true] {
         let mut fixture = ValidationFixture::new();
         let notices = fixture.notices.as_ref().unwrap().clone();
-        let subject = fixture.claims.sub.clone();
-        let version = fixture.claims.auth_version + 1;
+        let subject = fixture.principal.user;
+        let version = fixture.principal.auth_version + 1;
         let validation = async move {
             notices.send((subject, version)).unwrap();
             if stay_pending {
@@ -171,8 +172,8 @@ async fn revocation_notice_loss_during_a_query_cannot_be_cleared_by_its_ready_re
         let notices = fixture.notices.as_ref().unwrap().clone();
         let validation = async move {
             // Capacity one makes this an exact lag, without scheduling or sleeps.
-            notices.send(("other-account-a".to_string(), 1)).unwrap();
-            notices.send(("other-account-b".to_string(), 1)).unwrap();
+            notices.send((UserId::random(), 1)).unwrap();
+            notices.send((UserId::random(), 1)).unwrap();
             if stay_pending {
                 pending::<()>().await;
             }
@@ -236,12 +237,12 @@ async fn known_prequery_notice_loss_requires_current_proof_not_uncertainty_allow
 }
 
 #[tokio::test]
-async fn expired_claims_hard_deadline_or_uncertainty_reject_even_ready_current_validation() {
-    for expired_boundary in ["jwt", "retained-grace", "uncertainty"] {
+async fn expired_token_hard_deadline_or_uncertainty_reject_even_ready_current_validation() {
+    for expired_boundary in ["token", "retained-grace", "uncertainty"] {
         let mut fixture = ValidationFixture::new();
         let mut deadline = Instant::now() + Duration::from_secs(30);
         match expired_boundary {
-            "jwt" => fixture.claims.exp = unix_seconds() as usize,
+            "token" => fixture.principal.expires_at = chrono::Utc::now(),
             "retained-grace" => deadline = Instant::now() - Duration::from_millis(1),
             "uncertainty" => {
                 assert!(fixture.continuity.observe(
@@ -312,7 +313,7 @@ fn grace_entry_with_timer(token: &str, timer: tokio::task::JoinHandle<()>) -> Gr
     let (sender, _receiver) = mpsc::channel(1);
     GraceEntry {
         reconnect_token: token.to_string(),
-        authenticated_subject: Some("credential-observer-account".to_string()),
+        authenticated_subject: Some(observed_account()),
         authenticated_version: Some(2),
         media_rate_state: MediaSessionRateState::new(
             crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
@@ -340,7 +341,7 @@ async fn grace_activation_publishes_the_entry_before_immediately_ready_cleanup()
             &rid("credential-room"),
             &pid("credential-participant"),
             "accepted-reconnect-token",
-            Some("credential-observer-account"),
+            Some(observed_account()),
         );
         let _ = finished.send(entry.is_some());
     });

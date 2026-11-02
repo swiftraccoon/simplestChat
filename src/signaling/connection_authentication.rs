@@ -1,53 +1,35 @@
 //! Same-socket credential renewal preserves membership and absolute expiry.
 
 use super::*;
-use crate::auth::jwt;
-use crate::auth::jwt::JwtSecret;
+use crate::auth::access_tokens;
+use crate::auth::types::AuthError;
 use crate::signaling::protocol::AuthenticationToken;
+use chrono::{DateTime, Utc};
 
 const RENEWAL_WINDOW: Duration = Duration::from_secs(60);
 const MAX_RENEWALS_PER_WINDOW: u8 = 3;
 const RENEWAL_VALIDATION_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Connection-local access to the existing authentication concurrency budget.
-/// The signing secret is deliberately absent from `Debug` implementations.
 #[derive(Clone)]
 pub(crate) struct RenewalAuthenticator {
-    secret: JwtSecret,
     concurrency: Arc<tokio::sync::Semaphore>,
 }
 
 impl RenewalAuthenticator {
-    pub(crate) fn new(secret: JwtSecret, concurrency: Arc<tokio::sync::Semaphore>) -> Self {
-        Self {
-            secret,
-            concurrency,
-        }
-    }
-
-    fn candidate(&self, current: &Claims, token: &AuthenticationToken) -> Option<Claims> {
-        if token.expose().is_empty() || token.expose().len() > 4_096 {
-            return None;
-        }
-        let candidate = jwt::validate_token(token.expose(), &self.secret).ok()?;
-        renewal_matches(current, &candidate, unix_seconds()).then_some(candidate)
+    pub(crate) fn new(concurrency: Arc<tokio::sync::Semaphore>) -> Self {
+        Self { concurrency }
     }
 }
 
-/// Renewals cannot change identity or refresh session, revive expiry, or move
-/// expiry backwards.
-fn renewal_matches(current: &Claims, candidate: &Claims, now: u64) -> bool {
-    current.exp as u64 > now
-        && candidate.exp >= current.exp
-        && candidate.sub == current.sub
+/// Renewals cannot change identity, account version or session, revive
+/// expiry, or move expiry backwards.
+fn renewal_matches(current: &Principal, candidate: &Principal, now: DateTime<Utc>) -> bool {
+    current.expires_at > now
+        && candidate.expires_at >= current.expires_at
+        && candidate.user == current.user
         && candidate.auth_version == current.auth_version
         && candidate.sid == current.sid
-}
-
-pub(super) fn unix_seconds() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(u64::MAX, |duration| duration.as_secs())
 }
 
 pub(super) struct RenewalBudget {
@@ -77,10 +59,10 @@ impl RenewalBudget {
 }
 
 pub(super) enum RenewalOutcome {
-    Renewed(Claims),
+    Renewed(Principal),
     Rejected,
-    /// The database could not establish whether accepted credentials are current.
-    /// Keep the previous claims; the connection owns the bounded uncertainty policy.
+    /// The database could not establish whether the new token is current.
+    /// Keep the previous principal; the connection owns the bounded uncertainty policy.
     Unavailable,
     /// Shared validation capacity is occupied; no database check was attempted.
     Busy,
@@ -89,17 +71,17 @@ pub(super) enum RenewalOutcome {
     Close,
 }
 
-/// Consume already-delivered revocations before committing renewed claims.
+/// Consume already-delivered revocations before committing a renewed principal.
 /// A lagged/closed channel cannot establish current credentials for this commit.
 pub(super) fn revocations_current(
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
-    current: &Claims,
+    revocations: &mut tokio::sync::broadcast::Receiver<(UserId, i64)>,
+    current: &Principal,
 ) -> bool {
     // Bound synchronous work even if other accounts change credentials rapidly.
     for _ in 0..256 {
         match revocations.try_recv() {
-            Ok((subject, minimum_version)) => {
-                if subject == current.sub && current.auth_version < minimum_version {
+            Ok((user, minimum_version)) => {
+                if user == current.user && current.auth_version < minimum_version {
                     return false;
                 }
             }
@@ -110,41 +92,37 @@ pub(super) fn revocations_current(
     false
 }
 
-/// Validate using the same database policy and shared admission budget as an
-/// authenticated handshake. Waiting never extends the previous token lifetime.
+/// Resolve the new token through the same validation and shared admission
+/// budget as authenticated HTTP. A token of the wrong shape is refused before
+/// any query or permit. Waiting never extends the previous token lifetime.
 pub(super) async fn renew_authentication(
     authenticator: &RenewalAuthenticator,
-    current: &Claims,
+    current: &Principal,
     token: &AuthenticationToken,
     pool: Option<&sqlx::PgPool>,
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    revocations: &mut tokio::sync::broadcast::Receiver<(UserId, i64)>,
     drain: &crate::shutdown::DrainSignal,
     sender: &mpsc::Sender<crate::OutboundJson>,
 ) -> RenewalOutcome {
-    if current.exp as u64 <= unix_seconds() || !revocations_current(revocations, current) {
+    if current.expires_at <= Utc::now() || !revocations_current(revocations, current) {
         return RenewalOutcome::Close;
     }
     if drain.is_draining() || sender.is_closed() {
         return RenewalOutcome::Interrupted;
     }
-    if pool.is_none() {
+    let Some(pool) = pool else {
         return RenewalOutcome::Close;
-    }
-    let Some(candidate) = authenticator.candidate(current, token) else {
-        return if current.exp as u64 <= unix_seconds() {
-            RenewalOutcome::Close
-        } else {
-            RenewalOutcome::Rejected
-        };
     };
+    if !access_tokens::valid_shape(token.expose()) {
+        return RenewalOutcome::Rejected;
+    }
     let Ok(_permit) = authenticator.concurrency.clone().try_acquire_owned() else {
         return RenewalOutcome::Busy;
     };
-    // Preserve the fractional second remaining before absolute JWT expiry.
-    // Subtracting integer Unix seconds could otherwise extend validation past it.
-    let remaining = std::time::UNIX_EPOCH
-        .checked_add(Duration::from_secs(current.exp as u64))
-        .and_then(|expiry| expiry.duration_since(std::time::SystemTime::now()).ok())
+    // Keep the fractional second remaining before the accepted expiry, so
+    // validation can never run past it.
+    let remaining = (current.expires_at - Utc::now())
+        .to_std()
         .unwrap_or_default();
     if remaining.is_zero() {
         return RenewalOutcome::Close;
@@ -152,8 +130,7 @@ pub(super) async fn renew_authentication(
     let deadline = tokio::time::Instant::now() + RENEWAL_VALIDATION_TIMEOUT.min(remaining);
     validate_renewal(
         current,
-        &candidate,
-        account_credentials_current(pool, &candidate, deadline.into_std()),
+        access_tokens::validate_access_token(pool, token.expose()),
         revocations,
         drain,
         sender,
@@ -163,42 +140,39 @@ pub(super) async fn renew_authentication(
 }
 
 /// Keep transport/revocation/expiry races separate from the database result.
-/// Only a current result may commit new claims, and a local validation deadline
-/// is temporary unavailability unless the accepted token has itself expired.
+/// Only a token the database resolves to this socket's own account, version
+/// and session, expiring no earlier, renews it. A token it refuses is rejected
+/// and the accepted principal stays, still bound by its own expiry and checks.
+/// A local validation deadline is temporary unavailability unless the accepted
+/// token has itself expired.
 async fn validate_renewal(
-    current: &Claims,
-    candidate: &Claims,
-    validation: impl std::future::Future<Output = CredentialStatus>,
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    current: &Principal,
+    validation: impl std::future::Future<Output = Result<Principal, AuthError>>,
+    revocations: &mut tokio::sync::broadcast::Receiver<(UserId, i64)>,
     drain: &crate::shutdown::DrainSignal,
     sender: &mpsc::Sender<crate::OutboundJson>,
     deadline: tokio::time::Instant,
 ) -> RenewalOutcome {
-    if !renewal_matches(current, candidate, unix_seconds())
-        || !revocations_current(revocations, current)
-    {
+    if current.expires_at <= Utc::now() || !revocations_current(revocations, current) {
         return RenewalOutcome::Close;
     }
-    let valid = {
+    let candidate = {
         tokio::pin!(validation);
         loop {
             tokio::select! {
                 biased;
                 _ = drain.wait() => return RenewalOutcome::Interrupted,
                 _ = sender.closed() => return RenewalOutcome::Interrupted,
-                _ = tokio::time::sleep_until(deadline) => break CredentialStatus::Unavailable,
+                _ = tokio::time::sleep_until(deadline) => break None,
                 notice = revocations.recv() => match notice {
-                    Ok((subject, minimum_version)) if subject != current.sub || current.auth_version >= minimum_version => {},
+                    Ok((user, minimum_version)) if user != current.user || current.auth_version >= minimum_version => {},
                     _ => return RenewalOutcome::Close,
                 },
-                valid = &mut validation => break valid,
+                candidate = &mut validation => break Some(candidate),
             }
         }
     };
-    if matches!(valid, CredentialStatus::Revoked)
-        || !revocations_current(revocations, current)
-        || !renewal_matches(current, candidate, unix_seconds())
-    {
+    if current.expires_at <= Utc::now() || !revocations_current(revocations, current) {
         return RenewalOutcome::Close;
     }
     if drain.is_draining() || sender.is_closed() {
@@ -207,10 +181,12 @@ async fn validate_renewal(
     if tokio::time::Instant::now() >= deadline {
         return RenewalOutcome::Unavailable;
     }
-    match valid {
-        CredentialStatus::Current => RenewalOutcome::Renewed(candidate.clone()),
-        CredentialStatus::Unavailable => RenewalOutcome::Unavailable,
-        CredentialStatus::Revoked => RenewalOutcome::Close,
+    match candidate {
+        None | Some(Err(AuthError::DatabaseError(_))) => RenewalOutcome::Unavailable,
+        Some(Ok(candidate)) if renewal_matches(current, &candidate, Utc::now()) => {
+            RenewalOutcome::Renewed(candidate)
+        }
+        Some(_) => RenewalOutcome::Rejected,
     }
 }
 
@@ -218,23 +194,33 @@ async fn validate_renewal(
 mod tests {
     use super::*;
 
-    fn claims(exp: usize) -> Claims {
-        Claims {
-            sub: Uuid::new_v4().to_string(),
-            name: "Renewal test".into(),
-            iss: "simplestchat".into(),
-            aud: "simplestchat".into(),
-            exp,
+    fn principal(expires_at: DateTime<Utc>) -> Principal {
+        Principal {
+            user: UserId::random(),
+            sid: Uuid::new_v4(),
             auth_version: 0,
-            sid: uuid::Uuid::new_v4(),
+            expires_at,
         }
     }
 
+    fn later(seconds: i64) -> DateTime<Utc> {
+        Utc::now() + chrono::TimeDelta::seconds(seconds)
+    }
+
+    fn token(text: &str) -> AuthenticationToken {
+        serde_json::from_value(serde_json::json!(text)).unwrap()
+    }
+
+    /// The shape the server issues: 43 base64url characters encoding 32 bytes.
+    fn well_formed_token() -> AuthenticationToken {
+        token(&"A".repeat(43))
+    }
+
     struct ValidationFixture {
-        current: Claims,
-        candidate: Claims,
-        notice_sender: tokio::sync::broadcast::Sender<(String, i64)>,
-        revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+        current: Principal,
+        candidate: Principal,
+        notice_sender: tokio::sync::broadcast::Sender<(UserId, i64)>,
+        revocations: tokio::sync::broadcast::Receiver<(UserId, i64)>,
         drain: crate::shutdown::DrainSignal,
         sender: mpsc::Sender<crate::OutboundJson>,
         receiver: mpsc::Receiver<crate::OutboundJson>,
@@ -242,9 +228,9 @@ mod tests {
 
     impl ValidationFixture {
         fn new() -> Self {
-            let current = claims(unix_seconds() as usize + 60);
+            let current = principal(later(60));
             let mut candidate = current.clone();
-            candidate.exp += 60;
+            candidate.expires_at += chrono::TimeDelta::seconds(60);
             let (notice_sender, revocations) = tokio::sync::broadcast::channel(1);
             let (sender, receiver) = mpsc::channel(1);
             Self {
@@ -260,12 +246,11 @@ mod tests {
 
         async fn validate(
             &mut self,
-            validation: impl std::future::Future<Output = CredentialStatus>,
+            validation: impl std::future::Future<Output = Result<Principal, AuthError>>,
             deadline: tokio::time::Instant,
         ) -> RenewalOutcome {
             validate_renewal(
                 &self.current,
-                &self.candidate,
                 validation,
                 &mut self.revocations,
                 &self.drain,
@@ -275,29 +260,26 @@ mod tests {
             .await
         }
 
-        async fn renew_without_database(&mut self) -> RenewalOutcome {
-            let secret = JwtSecret::from("renewal-priority-fixture-secret-at-least-32-bytes");
-            let token = jwt::create_session_token(
-                &self.current.sub,
-                &self.current.name,
-                &secret,
-                self.current.auth_version,
-                self.current.sid,
-            )
-            .unwrap();
-            let token = serde_json::from_value(serde_json::json!(token)).unwrap();
-            let authenticator =
-                RenewalAuthenticator::new(secret.clone(), Arc::new(tokio::sync::Semaphore::new(1)));
+        async fn renew(
+            &mut self,
+            token: &AuthenticationToken,
+            pool: Option<&sqlx::PgPool>,
+        ) -> RenewalOutcome {
+            let authenticator = RenewalAuthenticator::new(Arc::new(tokio::sync::Semaphore::new(1)));
             renew_authentication(
                 &authenticator,
                 &self.current,
-                &token,
-                None,
+                token,
+                pool,
                 &mut self.revocations,
                 &self.drain,
                 &self.sender,
             )
             .await
+        }
+
+        async fn renew_without_database(&mut self) -> RenewalOutcome {
+            self.renew(&well_formed_token(), None).await
         }
     }
 
@@ -314,7 +296,7 @@ mod tests {
             fixture.renew_without_database().await,
             RenewalOutcome::Interrupted
         ));
-        fixture.current.exp = unix_seconds() as usize;
+        fixture.current.expires_at = Utc::now();
         assert!(matches!(
             fixture.renew_without_database().await,
             RenewalOutcome::Close
@@ -328,10 +310,7 @@ mod tests {
         ));
         fixture
             .notice_sender
-            .send((
-                fixture.current.sub.clone(),
-                fixture.current.auth_version + 1,
-            ))
+            .send((fixture.current.user, fixture.current.auth_version + 1))
             .unwrap();
         assert!(matches!(
             fixture.renew_without_database().await,
@@ -340,47 +319,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn renewal_commits_only_current_database_validation() {
+    async fn renewal_refuses_a_malformed_token_before_any_query() {
+        // Over this pool only an outcome other than `Unavailable` was decided
+        // before any query.
+        let pool = crate::signaling::fixtures::unreachable_pool().await;
         let mut fixture = ValidationFixture::new();
-        let old_expiry = fixture.current.exp;
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+        // Empty, structured like a signed token, or longer than any token.
+        for malformed in [
+            String::new(),
+            "header.payload.signature".into(),
+            "A".repeat(129),
+        ] {
+            assert!(matches!(
+                fixture.renew(&token(&malformed), Some(&pool)).await,
+                RenewalOutcome::Rejected
+            ));
+        }
+        // A well-formed token reaches the (failing) database.
         assert!(matches!(
-            fixture
-                .validate(std::future::ready(CredentialStatus::Unavailable), deadline)
-                .await,
+            fixture.renew(&well_formed_token(), Some(&pool)).await,
             RenewalOutcome::Unavailable
         ));
-        assert_eq!(fixture.current.exp, old_expiry);
-
-        let outcome = fixture
-            .validate(std::future::ready(CredentialStatus::Current), deadline)
-            .await;
-        let RenewalOutcome::Renewed(renewed) = outcome else {
-            panic!("only a current account check should renew claims");
-        };
-        assert_eq!(renewed.exp, fixture.candidate.exp);
-        assert_eq!(renewed.sub, fixture.current.sub);
-        assert_eq!(fixture.current.exp, old_expiry);
     }
 
     #[tokio::test]
-    async fn renewal_database_revocation_still_closes() {
+    async fn renewal_commits_only_current_database_validation() {
+        let mut fixture = ValidationFixture::new();
+        let old_expiry = fixture.current.expires_at;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+        assert!(matches!(
+            fixture
+                .validate(
+                    std::future::ready(Err(AuthError::DatabaseError("fixture".into()))),
+                    deadline
+                )
+                .await,
+            RenewalOutcome::Unavailable
+        ));
+        assert_eq!(fixture.current.expires_at, old_expiry);
+
+        let candidate = fixture.candidate.clone();
+        let outcome = fixture
+            .validate(std::future::ready(Ok(candidate)), deadline)
+            .await;
+        let RenewalOutcome::Renewed(renewed) = outcome else {
+            panic!("only a current account check should renew the principal");
+        };
+        assert_eq!(renewed.expires_at, fixture.candidate.expires_at);
+        assert_eq!(renewed.user, fixture.current.user);
+        assert_eq!(fixture.current.expires_at, old_expiry);
+    }
+
+    #[tokio::test]
+    async fn renewal_with_a_token_the_database_refuses_keeps_the_accepted_principal() {
         let mut fixture = ValidationFixture::new();
         assert!(matches!(
             fixture
                 .validate(
-                    std::future::ready(CredentialStatus::Revoked),
+                    std::future::ready(Err(AuthError::InvalidToken)),
                     tokio::time::Instant::now() + Duration::from_secs(1),
                 )
                 .await,
-            RenewalOutcome::Close
+            RenewalOutcome::Rejected
         ));
     }
 
     #[tokio::test]
     async fn renewal_validation_deadline_is_unavailable_not_revocation() {
         let mut fixture = ValidationFixture::new();
-        let old_expiry = fixture.current.exp;
+        let old_expiry = fixture.current.expires_at;
         // An already-elapsed deadline avoids timing-sensitive database fixtures.
         assert!(matches!(
             fixture
@@ -388,16 +395,17 @@ mod tests {
                 .await,
             RenewalOutcome::Unavailable
         ));
-        assert_eq!(fixture.current.exp, old_expiry);
+        assert_eq!(fixture.current.expires_at, old_expiry);
     }
 
     #[tokio::test]
     async fn renewal_ready_current_result_cannot_bypass_validation_deadline() {
         let mut fixture = ValidationFixture::new();
+        let candidate = fixture.candidate.clone();
         assert!(matches!(
             fixture
                 .validate(
-                    std::future::ready(CredentialStatus::Current),
+                    std::future::ready(Ok(candidate)),
                     tokio::time::Instant::now(),
                 )
                 .await,
@@ -407,12 +415,17 @@ mod tests {
 
     #[tokio::test]
     async fn renewal_accepted_token_expiry_wins_ready_validation_and_timeout() {
-        for status in [CredentialStatus::Current, CredentialStatus::Unavailable] {
+        for database_failure in [false, true] {
             let mut fixture = ValidationFixture::new();
-            fixture.current.exp = unix_seconds() as usize;
+            fixture.current.expires_at = Utc::now();
+            let result = if database_failure {
+                Err(AuthError::DatabaseError("fixture".into()))
+            } else {
+                Ok(fixture.candidate.clone())
+            };
             assert!(matches!(
                 fixture
-                    .validate(std::future::ready(status), tokio::time::Instant::now())
+                    .validate(std::future::ready(result), tokio::time::Instant::now())
                     .await,
                 RenewalOutcome::Close
             ));
@@ -423,11 +436,12 @@ mod tests {
     async fn renewal_revocation_queued_during_validation_wins_success() {
         let mut fixture = ValidationFixture::new();
         let notices = fixture.notice_sender.clone();
-        let revoked_subject = fixture.current.sub.clone();
+        let revoked_user = fixture.current.user;
         let revoked_version = fixture.current.auth_version + 1;
+        let candidate = fixture.candidate.clone();
         let validation = async move {
-            notices.send((revoked_subject, revoked_version)).unwrap();
-            CredentialStatus::Current
+            notices.send((revoked_user, revoked_version)).unwrap();
+            Ok(candidate)
         };
         assert!(matches!(
             fixture
@@ -445,9 +459,9 @@ mod tests {
         let mut fixture = ValidationFixture::new();
         let notices = fixture.notice_sender.clone();
         let validation = async move {
-            notices.send((Uuid::new_v4().to_string(), 1)).unwrap();
-            notices.send((Uuid::new_v4().to_string(), 1)).unwrap();
-            CredentialStatus::Unavailable
+            notices.send((UserId::random(), 1)).unwrap();
+            notices.send((UserId::random(), 1)).unwrap();
+            Err(AuthError::DatabaseError("fixture".into()))
         };
         assert!(matches!(
             fixture
@@ -467,7 +481,7 @@ mod tests {
         assert!(matches!(
             fixture
                 .validate(
-                    std::future::ready(CredentialStatus::Unavailable),
+                    std::future::ready(Err(AuthError::DatabaseError("fixture".into()))),
                     tokio::time::Instant::now() + Duration::from_secs(1),
                 )
                 .await,
@@ -479,7 +493,7 @@ mod tests {
         assert!(matches!(
             fixture
                 .validate(
-                    std::future::ready(CredentialStatus::Unavailable),
+                    std::future::ready(Err(AuthError::DatabaseError("fixture".into()))),
                     tokio::time::Instant::now() + Duration::from_secs(1),
                 )
                 .await,
@@ -489,41 +503,43 @@ mod tests {
 
     #[test]
     fn renewal_preserves_identity_and_expiry_without_requiring_a_new_membership() {
-        let current = claims(200);
+        let now = Utc::now();
+        let current = principal(now + chrono::TimeDelta::seconds(100));
         let mut renewed = current.clone();
-        renewed.exp = 300;
-        assert!(renewal_matches(&current, &renewed, 100));
+        renewed.expires_at = now + chrono::TimeDelta::seconds(200);
+        assert!(renewal_matches(&current, &renewed, now));
         assert!(
-            renewal_matches(&renewed, &renewed, 200),
+            renewal_matches(&renewed, &renewed, current.expires_at),
             "duplicate renewal is idempotent"
         );
         assert!(
-            !renewal_matches(&renewed, &current, 100),
+            !renewal_matches(&renewed, &current, now),
             "late renewal cannot shorten expiry"
         );
         assert!(
-            !renewal_matches(&current, &renewed, 200),
+            !renewal_matches(&current, &renewed, current.expires_at),
             "expiry is not revived"
         );
-        renewed.sub = Uuid::new_v4().to_string();
-        assert!(!renewal_matches(&current, &renewed, 100));
-        renewed.sub.clone_from(&current.sub);
+        renewed.user = UserId::random();
+        assert!(!renewal_matches(&current, &renewed, now));
+        renewed.user = current.user;
         renewed.auth_version += 1;
-        assert!(!renewal_matches(&current, &renewed, 100));
+        assert!(!renewal_matches(&current, &renewed, now));
     }
 
     #[test]
     fn renewal_refuses_a_token_from_another_session() {
-        let current = claims(200);
+        let now = Utc::now();
+        let current = principal(now + chrono::TimeDelta::seconds(100));
         let mut candidate = current.clone();
         candidate.sid = Uuid::new_v4();
         assert!(
-            !renewal_matches(&current, &candidate, 100),
+            !renewal_matches(&current, &candidate, now),
             "a token issued with another refresh session cannot renew this socket"
         );
         candidate.sid = current.sid;
         assert!(
-            renewal_matches(&current, &candidate, 100),
+            renewal_matches(&current, &candidate, now),
             "the same token from the socket's own session still renews"
         );
     }
@@ -541,43 +557,21 @@ mod tests {
 
     #[test]
     fn renewal_observes_queued_account_revocation() {
-        let current = claims(200);
+        let current = principal(later(100));
         let (sender, mut receiver) = tokio::sync::broadcast::channel(4);
-        sender.send((Uuid::new_v4().to_string(), 1)).unwrap();
+        sender.send((UserId::random(), 1)).unwrap();
         assert!(revocations_current(&mut receiver, &current));
         sender
-            .send((current.sub.clone(), current.auth_version + 1))
+            .send((current.user, current.auth_version + 1))
             .unwrap();
         assert!(!revocations_current(&mut receiver, &current));
     }
 
     #[test]
     fn renewal_does_not_trust_closed_revocation_channels() {
-        let current = claims(200);
+        let current = principal(later(100));
         let (sender, mut receiver) = tokio::sync::broadcast::channel(1);
         drop(sender);
         assert!(!revocations_current(&mut receiver, &current));
-    }
-
-    #[test]
-    fn renewal_validator_accepts_an_ordinary_refreshed_token() {
-        let secret = JwtSecret::from("ordinary-renewal-fixture-secret-at-least-32-bytes");
-        let mut current = claims(unix_seconds() as usize + 60);
-        let token = jwt::create_session_token(
-            &current.sub,
-            &current.name,
-            &secret,
-            current.auth_version,
-            current.sid,
-        )
-        .unwrap();
-        let token: AuthenticationToken = serde_json::from_value(serde_json::json!(token)).unwrap();
-        let auth =
-            RenewalAuthenticator::new(secret.clone(), Arc::new(tokio::sync::Semaphore::new(1)));
-        let refreshed = auth.candidate(&current, &token).unwrap();
-        assert_eq!(refreshed.sub, current.sub);
-        assert!(refreshed.exp > current.exp);
-        current.exp = unix_seconds() as usize;
-        assert!(auth.candidate(&current, &token).is_none());
     }
 }

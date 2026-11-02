@@ -8,7 +8,7 @@
 
 use super::{
     account, routes, session,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
     webauthn::{
         AccountAuthenticationData, AccountChallenge, AccountRegistrationData, ChallengeStore,
         ReplacementRegistration,
@@ -137,10 +137,6 @@ struct AccountState {
     recovery_enabled: bool,
 }
 
-fn account_id(claims: &Claims) -> Result<Uuid, AuthError> {
-    Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)
-}
-
 async fn locked_account(
     transaction: &mut Transaction<'_, Postgres>,
     id: Uuid,
@@ -167,11 +163,11 @@ pub(crate) async fn list(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PasskeySettings>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = account_id(&claims)?;
+    let id = principal.user.as_uuid();
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-    let owner = locked_account(&mut transaction, id, claims.auth_version).await?;
+    let owner = locked_account(&mut transaction, id, principal.auth_version).await?;
     let passkeys: Vec<PasskeySummary> = sqlx::query_as("SELECT id, created_at FROM webauthn_credentials WHERE user_id = $1 ORDER BY created_at, id LIMIT $2")
         .bind(id).bind(MAX_PASSKEYS + 1).fetch_all(&mut *transaction).await
         .map_err(routes::database_error)?;
@@ -196,13 +192,13 @@ pub(crate) async fn start(
     Json(request): Json<StartRequest>,
 ) -> Result<(HeaderMap, Json<ActionResponse>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let id = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let id = principal.user.as_uuid();
     if let Some(password) = request.current_password {
-        let verified = account::verified_password_hash(&server, &claims, password).await?;
+        let verified = account::verified_password_hash(&server, &principal, password).await?;
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
         let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-        let owner = locked_account(&mut transaction, id, claims.auth_version).await?;
+        let owner = locked_account(&mut transaction, id, principal.auth_version).await?;
         if owner.password_hash.as_deref() != Some(verified.as_str()) {
             return Err(AuthError::InvalidCredentials);
         }
@@ -210,13 +206,13 @@ pub(crate) async fn start(
             &server,
             transaction,
             owner,
-            &claims,
+            &principal,
             request.operation,
             source_ip,
         )
         .await;
     }
-    if !server.allow_auth_principal(&claims.sub) {
+    if !server.allow_auth_principal(principal.user) {
         return Err(AuthError::RateLimited);
     }
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
@@ -229,7 +225,7 @@ pub(crate) async fn start(
             AccountChallenge::Authentication(AccountAuthenticationData {
                 state,
                 user_id: id,
-                auth_version: claims.auth_version,
+                auth_version: principal.auth_version,
                 action: request.operation,
             }),
             source_ip,
@@ -252,12 +248,12 @@ pub(crate) async fn authorize(
     Json(request): Json<AuthorizeRequest>,
 ) -> Result<(HeaderMap, Json<ActionResponse>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let id = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let id = principal.user.as_uuid();
     routes::validate_ceremony_id(&request.ceremony_id)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let Some(AccountChallenge::Authentication(data)) =
-        store.take_account(&request.ceremony_id, id, claims.auth_version)
+        store.take_account(&request.ceremony_id, id, principal.auth_version)
     else {
         return Err(AuthError::InvalidPasskey);
     };
@@ -271,7 +267,7 @@ pub(crate) async fn authorize(
     let passkey_id = URL_SAFE_NO_PAD.encode(presented_id);
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let mut transaction = pool.begin().await.map_err(routes::database_error)?;
-    let owner = locked_account(&mut transaction, id, claims.auth_version).await?;
+    let owner = locked_account(&mut transaction, id, principal.auth_version).await?;
     routes::verify_discoverable_assertion(
         &mut transaction,
         webauthn,
@@ -281,28 +277,37 @@ pub(crate) async fn authorize(
         &passkey_id,
     )
     .await?;
-    apply_action(&server, transaction, owner, &claims, data.action, source_ip).await
+    apply_action(
+        &server,
+        transaction,
+        owner,
+        &principal,
+        data.action,
+        source_ip,
+    )
+    .await
 }
 
 async fn apply_action(
     server: &SignalingServer,
     mut transaction: Transaction<'_, Postgres>,
     owner: AccountState,
-    claims: &Claims,
+    principal: &Principal,
     action: PasskeyAction,
     source_ip: IpAddr,
 ) -> Result<(HeaderMap, Json<ActionResponse>), AuthError> {
-    let id = account_id(claims)?;
+    let id = principal.user.as_uuid();
     let response = match action {
         PasskeyAction::Add {} => {
-            return prepare_registration(server, transaction, owner, claims, None, source_ip).await;
+            return prepare_registration(server, transaction, owner, principal, None, source_ip)
+                .await;
         }
         PasskeyAction::Replace { id: target } => {
             return prepare_registration(
                 server,
                 transaction,
                 owner,
-                claims,
+                principal,
                 Some(target),
                 source_ip,
             )
@@ -326,13 +331,13 @@ async fn apply_action(
             let version = remove_credential(
                 &mut transaction,
                 id,
-                claims.auth_version,
+                principal.auth_version,
                 credential,
                 owner.password_hash.is_some(),
             )
             .await?;
             transaction.commit().await.map_err(routes::database_error)?;
-            server.revoke_account_sessions(claims.sub.clone(), version);
+            server.revoke_account_sessions(principal.user, version);
             return Ok((
                 routes::clear_refresh_cookie_headers(),
                 Json(ActionResponse::Removed),
@@ -347,11 +352,11 @@ async fn prepare_registration(
     server: &SignalingServer,
     mut transaction: Transaction<'_, Postgres>,
     owner: AccountState,
-    claims: &Claims,
+    principal: &Principal,
     target: Option<Uuid>,
     source_ip: IpAddr,
 ) -> Result<(HeaderMap, Json<ActionResponse>), AuthError> {
-    let id = account_id(claims)?;
+    let id = principal.user.as_uuid();
     let records = credentials(&mut transaction, id).await?;
     if let Some(target) = target {
         if !records.iter().any(|(record, _)| *record == target) {
@@ -404,7 +409,7 @@ async fn prepare_registration(
         AccountRegistrationData {
             state,
             user_id: id,
-            auth_version: claims.auth_version,
+            auth_version: principal.auth_version,
             replacement,
         },
         source_ip,
@@ -546,19 +551,19 @@ async fn remove_credential(
 }
 
 /// The enrollment challenge represents a recently verified owner, not a bearer
-/// enrollment token: current claims and the same authentication version are required.
+/// enrollment token: the current principal and the same authentication version are required.
 pub(crate) async fn enroll(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<EnrollRequest>,
 ) -> Result<(HeaderMap, Json<ActionResponse>), AuthError> {
     let _permit = routes::acquire_auth_request(&server)?;
-    let claims = account::authenticated_claims(&server, &headers).await?;
-    let id = account_id(&claims)?;
+    let principal = account::authenticated_principal(&server, &headers).await?;
+    let id = principal.user.as_uuid();
     routes::validate_ceremony_id(&request.ceremony_id)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let Some(AccountChallenge::Registration(data)) =
-        store.take_account(&request.ceremony_id, id, claims.auth_version)
+        store.take_account(&request.ceremony_id, id, principal.auth_version)
     else {
         return Err(AuthError::InvalidPasskey);
     };
@@ -574,20 +579,20 @@ pub(crate) async fn enroll(
         let next = replace_credential(
             &mut transaction,
             id,
-            claims.auth_version,
+            principal.auth_version,
             &replacement,
             &routes::credential_id(&key),
             value,
         )
         .await?;
         transaction.commit().await.map_err(routes::database_error)?;
-        server.revoke_account_sessions(claims.sub, next);
+        server.revoke_account_sessions(principal.user, next);
         return Ok((
             routes::clear_refresh_cookie_headers(),
             Json(ActionResponse::Replaced),
         ));
     }
-    let _owner = locked_account(&mut transaction, id, claims.auth_version).await?;
+    let _owner = locked_account(&mut transaction, id, principal.auth_version).await?;
     if credentials(&mut transaction, id).await?.len() >= MAX_PASSKEYS as usize {
         return Err(AuthError::InvalidInput(
             "This account already has the maximum number of passkeys",

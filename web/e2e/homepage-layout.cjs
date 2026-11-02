@@ -515,6 +515,7 @@ async function run(env = process.env, runner = {}) {
                     signedIn
                       ? {
                           token: 'owned-layout-fixture',
+                          expires_at: new Date(Date.now() + 900_000).toISOString(),
                           user: {
                             id: account,
                             email: 'layout@example.test',

@@ -1,5 +1,5 @@
 use super::*;
-use crate::auth::jwt;
+use crate::auth::access_tokens;
 
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
@@ -11,7 +11,7 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
         .unwrap();
     let mut users = Vec::new();
     let mut sessions = Vec::new();
-    let mut claims = Vec::new();
+    let mut principals = Vec::new();
     for _ in 0..2 {
         let user: Uuid = sqlx::query_scalar(
             "INSERT INTO users(email,display_name) VALUES($1,'Session test') RETURNING id",
@@ -26,25 +26,11 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
             let id = session::create_session(&pool, &user, &refresh)
                 .await
                 .unwrap();
-            let token = jwt::create_session_token(
-                &user.to_string(),
-                "Session test",
-                &jwt::JwtSecret::from("session-management-test-secret-with-enough-bytes"),
-                0,
-                id,
-            )
-            .unwrap();
-            claims.push(
-                jwt::validate_token(
-                    &token,
-                    &jwt::JwtSecret::from("session-management-test-secret-with-enough-bytes"),
-                )
-                .unwrap(),
-            );
+            principals.push(access_tokens::fixtures::principal(&pool, id).await);
             sessions.push((id, refresh));
         }
     }
-    let initial = list_sessions(&pool, &claims[0]).await.unwrap();
+    let initial = list_sessions(&pool, &principals[0]).await.unwrap();
     assert_eq!(initial.len(), 3);
     assert_eq!(initial[0].id, sessions[0].0);
     assert_eq!(initial.iter().filter(|session| session.current).count(), 1);
@@ -61,7 +47,7 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
     assert!(
         matches!(rotated, session::RefreshRotation::Rotated { session_id, .. } if session_id == sessions[1].0)
     );
-    let after = list_sessions(&pool, &claims[0]).await.unwrap();
+    let after = list_sessions(&pool, &principals[0]).await.unwrap();
     assert!(
         after
             .iter()
@@ -75,45 +61,45 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
                 .refreshed_at
     );
 
-    revoke_sessions(&pool, &claims[0], Some(sessions[3].0), None)
+    revoke_sessions(&pool, &principals[0], Some(sessions[3].0), None)
         .await
         .unwrap();
-    jwt::validate_current_claims(&pool, &claims[3])
+    access_tokens::revalidate_principal(&pool, &principals[3])
         .await
         .unwrap();
-    revoke_sessions(&pool, &claims[0], Some(sessions[1].0), None)
+    revoke_sessions(&pool, &principals[0], Some(sessions[1].0), None)
         .await
         .unwrap();
     assert!(
-        jwt::validate_current_claims(&pool, &claims[1])
+        access_tokens::revalidate_principal(&pool, &principals[1])
             .await
             .is_err()
     );
-    jwt::validate_current_claims(&pool, &claims[2])
+    access_tokens::revalidate_principal(&pool, &principals[2])
         .await
         .unwrap();
-    // Claims obtained before revocation cannot mutate a surviving session.
+    // A principal accepted before revocation cannot mutate a surviving session.
     assert!(matches!(
-        revoke_sessions(&pool, &claims[1], Some(sessions[0].0), None).await,
+        revoke_sessions(&pool, &principals[1], Some(sessions[0].0), None).await,
         Err(AuthError::InvalidToken)
     ));
-    revoke_sessions(&pool, &claims[0], None, None)
+    revoke_sessions(&pool, &principals[0], None, None)
         .await
         .unwrap();
-    jwt::validate_current_claims(&pool, &claims[0])
+    access_tokens::revalidate_principal(&pool, &principals[0])
         .await
         .unwrap();
     assert!(
-        jwt::validate_current_claims(&pool, &claims[2])
+        access_tokens::revalidate_principal(&pool, &principals[2])
             .await
             .is_err()
     );
-    assert_eq!(list_sessions(&pool, &claims[0]).await.unwrap().len(), 1);
-    assert_eq!(list_sessions(&pool, &claims[3]).await.unwrap().len(), 3);
+    assert_eq!(list_sessions(&pool, &principals[0]).await.unwrap().len(), 1);
+    assert_eq!(list_sessions(&pool, &principals[3]).await.unwrap().len(), 3);
     assert!(
         !revoke_sessions(
             &pool,
-            &claims[3],
+            &principals[3],
             Some(sessions[3].0),
             Some(&sessions[4].1.raw)
         )
@@ -121,13 +107,13 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
         .unwrap(),
         "a newer cookie must survive revocation of another bearer session"
     );
-    jwt::validate_current_claims(&pool, &claims[4])
+    access_tokens::revalidate_principal(&pool, &principals[4])
         .await
         .unwrap();
     assert!(
         revoke_sessions(
             &pool,
-            &claims[0],
+            &principals[0],
             Some(sessions[0].0),
             Some(&sessions[0].1.raw)
         )
@@ -136,7 +122,7 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
         "revoking the cookie-backed current session clears that cookie"
     );
     assert!(
-        jwt::validate_current_claims(&pool, &claims[0])
+        access_tokens::revalidate_principal(&pool, &principals[0])
             .await
             .is_err()
     );

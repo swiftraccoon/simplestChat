@@ -175,13 +175,11 @@ async function runSuite(runner = {}) {
           false,
         );
       }
-      const payload = Buffer.from(
-        JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 900 }),
-      ).toString('base64url');
       await pendingLogin.fulfill({
         headers: { 'Set-Cookie': 'fixture_refresh=accepted; HttpOnly; SameSite=Strict; Path=/' },
         json: {
-          token: `fixture.${payload}.signature`,
+          token: 'opaque-fixture-access-token-signature',
+          expires_at: new Date(Date.now() + 900_000).toISOString(),
           user: { id: 'fixture-user', email: 'fixture@example.test', display_name: 'Fixture' },
         },
       });

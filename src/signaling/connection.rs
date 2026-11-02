@@ -3,9 +3,9 @@
 use super::protocol::{
     ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply, SocialResponse,
 };
-use crate::auth::types::Claims;
+use crate::auth::types::Principal;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
-use crate::ids::{ParticipantId, RoomId};
+use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, SettingsPatch, settings};
 use crate::secret::SecretString;
@@ -381,11 +381,11 @@ pub(crate) async fn handle_connection(
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
-    authenticated_user: Option<Claims>,
+    authenticated_user: Option<Principal>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
     attachment_grant_key: crate::attachments::GrantKey,
-    auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+    auth_revocations: tokio::sync::broadcast::Receiver<(UserId, i64)>,
     renewal_authenticator: Option<RenewalAuthenticator>,
 ) {
     handle_connection_with_timing(
@@ -417,36 +417,31 @@ async fn handle_connection_with_timing(
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
-    authenticated_user: Option<Claims>,
+    authenticated_user: Option<Principal>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
     attachment_grant_key: crate::attachments::GrantKey,
-    mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
+    mut auth_revocations: tokio::sync::broadcast::Receiver<(UserId, i64)>,
     renewal_authenticator: Option<RenewalAuthenticator>,
     timing: ConnectionTiming,
 ) {
-    // Use authenticated user ID if available, otherwise generate anonymous UUID
-    let mut participant_id = match authenticated_user.as_ref() {
-        Some(claims) => match claims.sub.parse::<ParticipantId>() {
-            Ok(id) => id,
-            Err(_) => {
-                tracing::warn!("Rejecting a connection whose account subject is not a UUID");
-                return;
-            }
-        },
-        None => ParticipantId::random(),
-    };
+    // An account participates as its own UUID; a guest gets a fresh one.
+    let mut participant_id = authenticated_user
+        .as_ref()
+        .map_or_else(ParticipantId::random, |principal| {
+            ParticipantId::from(principal.user.as_uuid())
+        });
 
     let is_authenticated = authenticated_user.is_some();
-    let mut session = CredentialSession::new(authenticated_user);
     // The account hub wakes an authenticated socket when a session of its
     // account is ended (logout, revocation, refresh-token reuse or the session
     // cap), so the socket closes at once instead of at its next periodic check.
-    let mut account_notices = is_authenticated.then(|| {
+    let mut account_notices = authenticated_user.as_ref().map(|principal| {
         room_manager
             .account_updates()
-            .subscribe_revalidation(participant_id.as_uuid())
+            .subscribe_revalidation(principal.user)
     });
+    let mut session = CredentialSession::new(authenticated_user);
 
     let diagnostic_connection_id = Some(metrics.next_connection_id());
     info!(
@@ -578,9 +573,9 @@ async fn handle_connection_with_timing(
     let mut peer_close_received = false;
 
     loop {
-        // The JWT is a connection credential, not only a handshake credential.
-        // Cap every receive wait by its absolute expiry so active traffic cannot
-        // keep an authenticated socket alive indefinitely.
+        // The access token is a connection credential, not only a handshake
+        // credential. Cap every receive wait by its absolute expiry so active
+        // traffic cannot keep an authenticated socket alive indefinitely.
         if session.expired() {
             info!(
                 %participant_id,
@@ -871,7 +866,7 @@ async fn handle_connection_with_timing(
                             // An owned subject: the session's check in flight must not be
                             // shared across this await.
                             let reconnect_subject =
-                                session.claims().map(|claims| claims.sub.clone());
+                                session.principal().map(|principal| principal.user);
                             let reconnect_started = Instant::now();
                             let operation = metrics
                                 .diagnostics()
@@ -883,7 +878,7 @@ async fn handle_connection_with_timing(
                                         reconnect_id,
                                         reconnect_room,
                                         client_token.expose_secret(),
-                                        reconnect_subject.as_deref(),
+                                        reconnect_subject,
                                         &grace_periods,
                                         &room_manager,
                                         &tx,
@@ -972,11 +967,11 @@ async fn handle_connection_with_timing(
                         let is_join = matches!(&client_msg, ClientMessage::JoinRoom { .. });
                         let is_leave = matches!(&client_msg, ClientMessage::LeaveRoom);
                         let previous_reconnect_token = reconnect_token.clone();
-                        // Only an attachment grant reads the claims inside the owned
+                        // Only an attachment grant reads the principal inside the owned
                         // dispatch future, and it takes its own copy.
-                        let attachment_claims =
+                        let attachment_principal =
                             matches!(&client_msg, ClientMessage::GetAttachmentAccess { .. })
-                                .then(|| session.claims().cloned())
+                                .then(|| session.principal().cloned())
                                 .flatten();
 
                         let start = Instant::now();
@@ -995,7 +990,7 @@ async fn handle_connection_with_timing(
                                         let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
                                         let access = crate::attachments::grant_access(
                                             &attachment_grant_key, &room_manager, pool, room_id,
-                                            &participant_id, &tx, attachment_claims.as_ref(),
+                                            &participant_id, &tx, attachment_principal.as_ref(),
                                             *attachment_id,
                                         ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
                                         reply.send(&ServerMessage::SocialResponse {
@@ -1216,7 +1211,7 @@ async fn handle_connection_with_timing(
                     media_rate_state: gates.into_media_state(),
                     sender: tx.clone(),
                     disconnected_at,
-                    claims: session.claims().cloned(),
+                    principal: session.principal().cloned(),
                     continuity: session.continuity(),
                     credential_deadline: session.deadline(),
                 },
@@ -1717,7 +1712,7 @@ async fn handle_client_message(
                 .await?;
         }
 
-        // The socket owner handles grants with its current account claims.
+        // The socket owner handles grants with its current account principal.
         ClientMessage::GetAttachmentAccess { .. } => {
             anyhow::bail!("Attachment access requires the current socket credentials");
         }

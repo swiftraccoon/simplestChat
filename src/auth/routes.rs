@@ -1,5 +1,6 @@
 use crate::auth::password_policy::{MAX_PASSWORD_BYTES, validate_new_password};
-use crate::auth::{jwt, password, session, types::*};
+use crate::auth::{access_tokens, password, session, types::*};
+use crate::ids::UserId;
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
     Extension, Json,
@@ -63,13 +64,43 @@ fn refresh_cookie_headers(raw_token: &str) -> Result<HeaderMap, AuthError> {
     Ok(headers)
 }
 
+/// Finishes a sign-in or refresh whose session `session_id` the caller created
+/// or rotated in `transaction`: issues the session's access token in that same
+/// transaction, commits it and answers with the refresh cookie and
+/// `AuthResponse`. Registration, password and passkey sign-in and refresh all
+/// issue their token here, so each response states its token's expiry.
+///
+/// # Errors
+/// Whatever `access_tokens::issue_access_token` or `refresh_cookie_headers`
+/// returns, both before anything is committed, and the
+/// `AuthError::DatabaseError` built by `database_error` when the commit fails.
+async fn signed_in(
+    mut transaction: sqlx::Transaction<'_, sqlx::Postgres>,
+    session_id: Uuid,
+    refresh_token: &session::RefreshToken,
+    user: UserInfo,
+) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
+    let (token, expires_at) =
+        access_tokens::issue_access_token(&mut transaction, session_id).await?;
+    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
+    transaction.commit().await.map_err(database_error)?;
+    Ok((
+        cookie,
+        Json(AuthResponse {
+            token,
+            expires_at,
+            user,
+        }),
+    ))
+}
+
 /// Tells `account`'s open update streams and sockets to re-check at once when
 /// creating `session` ended another of its live sessions to keep the account
 /// within its session cap. Call it only after the sign-in committed, so the
 /// re-check finds the ended session gone.
 fn announce_session_eviction(
     server: &SignalingServer,
-    account: Uuid,
+    account: UserId,
     session: &session::CreatedSession,
 ) {
     if session.evicted_live_session {
@@ -284,7 +315,6 @@ pub(crate) async fn register(
         return Err(AuthError::InviteRequired);
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
 
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
@@ -337,23 +367,21 @@ pub(crate) async fn register(
 
     let user_id = row.0.to_string();
     let created = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
-    let token = jwt::create_session_token(&user_id, &row.2, secret, 0, created.id)?;
-    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
-    transaction.commit().await.map_err(database_error)?;
-    announce_session_eviction(&server, row.0, &created);
+    let response = signed_in(
+        transaction,
+        created.id,
+        &refresh_token,
+        UserInfo {
+            id: user_id.clone(),
+            email: row.1,
+            display_name: row.2,
+        },
+    )
+    .await?;
+    announce_session_eviction(&server, UserId::from(row.0), &created);
 
     info!(user_id, "User registered");
-    Ok((
-        cookie,
-        Json(AuthResponse {
-            token: token.into(),
-            user: UserInfo {
-                id: user_id,
-                email: row.1,
-                display_name: row.2,
-            },
-        }),
-    ))
+    Ok(response)
 }
 
 /// POST /api/auth/login
@@ -363,7 +391,6 @@ pub(crate) async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let email = canonicalize_email(&req.email)?;
     // Only failures cost anything, and only this client's: knowing an email
     // no longer lets a stranger hold its owner out of password sign-in.
@@ -421,24 +448,22 @@ pub(crate) async fn login(
         return Err(AuthError::InvalidCredentials);
     }
     let created = session::create_session_with(&mut transaction, &row.0, &refresh_token).await?;
-    let token = jwt::create_session_token(&user_id, &row.2, secret, row.4, created.id)?;
-    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
-    transaction.commit().await.map_err(database_error)?;
-    announce_session_eviction(&server, row.0, &created);
+    let response = signed_in(
+        transaction,
+        created.id,
+        &refresh_token,
+        UserInfo {
+            id: user_id.clone(),
+            email: row.1,
+            display_name: row.2,
+        },
+    )
+    .await?;
+    announce_session_eviction(&server, UserId::from(row.0), &created);
     server.note_sign_in_success(source_ip, &email);
 
     info!(user_id, "User logged in");
-    Ok((
-        cookie,
-        Json(AuthResponse {
-            token: token.into(),
-            user: UserInfo {
-                id: user_id,
-                email: row.1,
-                display_name: row.2,
-            },
-        }),
-    ))
+    Ok(response)
 }
 
 /// POST /api/auth/refresh
@@ -447,7 +472,6 @@ pub(crate) async fn refresh(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let raw_token = refresh_token_from_headers(&headers).ok_or(AuthError::MissingToken)?;
     let _request_permit = acquire_auth_request(&server)?;
     let mut transaction = pool.begin().await.map_err(database_error)?;
@@ -477,8 +501,8 @@ pub(crate) async fn refresh(
                 return Err(AuthError::InvalidToken);
             }
         };
-    let row = sqlx::query_as::<_, (String, String, i64)>(
-        "SELECT email, display_name, auth_version FROM users WHERE id = $1",
+    let (email, display_name) = sqlx::query_as::<_, (String, String)>(
+        "SELECT email, display_name FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_optional(&mut *transaction)
@@ -486,23 +510,20 @@ pub(crate) async fn refresh(
     .map_err(database_error)?
     .ok_or(AuthError::UserNotFound)?;
 
-    let user_id_string = user_id.to_string();
-    let token = jwt::create_session_token(&user_id_string, &row.1, secret, row.2, session_id)?;
-    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
-    transaction.commit().await.map_err(database_error)?;
+    // The other tabs sharing this session keep their own tokens until each expires.
+    let response = signed_in(
+        transaction,
+        session_id,
+        &refresh_token,
+        UserInfo {
+            id: user_id.to_string(),
+            email,
+            display_name,
+        },
+    )
+    .await?;
     session::spawn_expired_cleanup(pool, server.session_cleanup());
-
-    Ok((
-        cookie,
-        Json(AuthResponse {
-            token: token.into(),
-            user: UserInfo {
-                id: user_id_string,
-                email: row.0,
-                display_name: row.1,
-            },
-        }),
-    ))
+    Ok(response)
 }
 
 /// POST /api/auth/logout
@@ -554,7 +575,6 @@ pub(crate) async fn passkey_register_start(
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
     // Password and passkey signup share the same taken-email answer budget.
@@ -598,7 +618,6 @@ pub(crate) async fn passkey_register_finish(
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     validate_ceremony_id(&body.ceremony_id)?;
     let _request_permit = acquire_auth_request(&server)?;
 
@@ -636,24 +655,20 @@ pub(crate) async fn passkey_register_finish(
             .await?;
 
     let user_id = registration.user_id.to_string();
-    let token =
-        jwt::create_session_token(&user_id, &registration.display_name, secret, 0, created.id)?;
-    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
-    transaction.commit().await.map_err(database_error)?;
-    announce_session_eviction(&server, registration.user_id, &created);
+    let response = signed_in(
+        transaction,
+        created.id,
+        &refresh_token,
+        UserInfo {
+            id: user_id.clone(),
+            email: registration.email,
+            display_name: registration.display_name,
+        },
+    )
+    .await?;
+    announce_session_eviction(&server, UserId::from(registration.user_id), &created);
     info!(user_id, "User registered via passkey");
-
-    Ok((
-        cookie,
-        Json(AuthResponse {
-            token: token.into(),
-            user: UserInfo {
-                id: user_id,
-                email: registration.email,
-                display_name: registration.display_name,
-            },
-        }),
-    ))
+    Ok(response)
 }
 
 /// Adapt the pinned library's browser policy while retaining its verifier.
@@ -711,7 +726,6 @@ pub(crate) async fn passkey_login_start(
     let _pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let _request_permit = acquire_auth_request(&server)?;
 
     let (challenge, state) = webauthn
@@ -734,7 +748,6 @@ pub(crate) async fn passkey_login_finish(
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     validate_ceremony_id(&body.ceremony_id)?;
     let _request_permit = acquire_auth_request(&server)?;
 
@@ -752,8 +765,8 @@ pub(crate) async fn passkey_login_finish(
     // Keep the same users-before-credentials lock order as account mutation.
     // The verifier reads the locked current credential, so parallel assertions
     // cannot verify against a stale counter or a removed credential.
-    let user = sqlx::query_as::<_, (String, String, i64)>(
-        "SELECT email, display_name, auth_version FROM users WHERE id = $1 FOR NO KEY UPDATE",
+    let user = sqlx::query_as::<_, (String, String)>(
+        "SELECT email, display_name FROM users WHERE id = $1 FOR NO KEY UPDATE",
     )
     .bind(account_id)
     .fetch_optional(&mut *transaction)
@@ -774,23 +787,20 @@ pub(crate) async fn passkey_login_finish(
         session::create_session_with(&mut transaction, &account_id, &refresh_token).await?;
 
     let user_id = account_id.to_string();
-    let token = jwt::create_session_token(&user_id, &user.1, secret, user.2, created.id)?;
-    let cookie = refresh_cookie_headers(&refresh_token.raw)?;
-    transaction.commit().await.map_err(database_error)?;
-    announce_session_eviction(&server, account_id, &created);
+    let response = signed_in(
+        transaction,
+        created.id,
+        &refresh_token,
+        UserInfo {
+            id: user_id.clone(),
+            email: user.0,
+            display_name: user.1,
+        },
+    )
+    .await?;
+    announce_session_eviction(&server, UserId::from(account_id), &created);
     info!(user_id, "User logged in via passkey");
-
-    Ok((
-        cookie,
-        Json(AuthResponse {
-            token: token.into(),
-            user: UserInfo {
-                id: user_id,
-                email: user.0,
-                display_name: user.1,
-            },
-        }),
-    ))
+    Ok(response)
 }
 
 /// Verify against the locked current credential. The caller must first lock its user row.

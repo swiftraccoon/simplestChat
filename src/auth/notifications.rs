@@ -1,10 +1,10 @@
 //! Account-wide alert policy. Permission and subscription remain device choices;
 //! muting never changes message delivery, inbox membership, or unread cursors.
 use super::{
-    account::authenticated_claims,
+    account::authenticated_principal,
     routes,
     sessions::lock_current_session,
-    types::{AuthError, Claims},
+    types::{AuthError, Principal},
 };
 use crate::{signaling::SignalingServer, sync::RwLock};
 use axum::{
@@ -229,37 +229,37 @@ impl TimeZoneNames {
 async fn save_policy(
     pool: &PgPool,
     zones: &TimeZoneNames,
-    claims: &Claims,
+    principal: &Principal,
     policy: &NotificationPolicy,
 ) -> Result<Uuid, AuthError> {
-    super::account::ensure_unexpired_claim(claims)?;
+    principal.ensure_unexpired()?;
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
-    current_policy_session(&mut tx, claims, user).await?;
+    let (user, _) = lock_current_session(&mut tx, principal).await?;
+    current_policy_session(&mut tx, principal, user).await?;
     write_policy(&mut tx, zones, user, policy).await?;
-    current_policy_session(&mut tx, claims, user).await?;
+    current_policy_session(&mut tx, principal, user).await?;
     tx.commit().await.map_err(routes::database_error)?;
     Ok(user)
 }
 
 async fn current_policy_session(
     tx: &mut Transaction<'_, Postgres>,
-    claims: &Claims,
+    principal: &Principal,
     user: Uuid,
 ) -> Result<(), AuthError> {
     let live: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp())")
-        .bind(claims.sid).bind(user).fetch_one(&mut **tx).await.map_err(routes::database_error)?;
+        .bind(principal.sid).bind(user).fetch_one(&mut **tx).await.map_err(routes::database_error)?;
     if !live {
         return Err(AuthError::InvalidToken);
     }
-    super::account::ensure_unexpired_claim(claims)
+    principal.ensure_unexpired()
 }
 
 async fn patch_policy(
     pool: &PgPool,
     zones: &TimeZoneNames,
-    claims: &Claims,
+    principal: &Principal,
     patch: NotificationPatch,
 ) -> Result<Uuid, AuthError> {
     if patch.private_messages.is_none() && patch.mentions.is_none() && patch.quiet_hours.is_none() {
@@ -267,12 +267,12 @@ async fn patch_policy(
             "Choose a notification setting to change",
         ));
     }
-    super::account::ensure_unexpired_claim(claims)?;
+    principal.ensure_unexpired()?;
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
     // The account lock serializes creation of an absent policy as well as all
     // PUT/PATCH writers; the retained row is read only after these locks wait.
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
-    current_policy_session(&mut tx, claims, user).await?;
+    let (user, _) = lock_current_session(&mut tx, principal).await?;
+    current_policy_session(&mut tx, principal, user).await?;
     let stored: Option<StoredPolicy> = sqlx::query_as(
         "SELECT private_messages,mentions,quiet_start,quiet_end,quiet_timezone
          FROM account_notification_preferences WHERE user_id=$1 FOR UPDATE",
@@ -292,7 +292,7 @@ async fn patch_policy(
         policy.quiet_hours = value;
     }
     write_policy(&mut tx, zones, user, &policy).await?;
-    current_policy_session(&mut tx, claims, user).await?;
+    current_policy_session(&mut tx, principal, user).await?;
     tx.commit().await.map_err(routes::database_error)?;
     Ok(user)
 }
@@ -363,13 +363,13 @@ async fn reserve_conversation(
 
 async fn save_conversation(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     peer: Uuid,
     policy: &ConversationPolicy,
 ) -> Result<Uuid, AuthError> {
     validate_snooze(policy, Utc::now())?;
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
+    let (user, _) = lock_current_session(&mut tx, principal).await?;
     if !policy.muted && policy.snoozed_until.is_none() {
         sqlx::query(
             "DELETE FROM conversation_notification_preferences WHERE user_id=$1 AND peer_id=$2",
@@ -395,8 +395,8 @@ pub(crate) async fn get_preferences(
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
-    let user = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
+    let principal = authenticated_principal(&server, &headers).await?;
+    let user = principal.user.as_uuid();
     let result = preferences(server.db_pool().ok_or(AuthError::NotConfigured)?, user).await?;
     Ok((routes::no_store_headers(), Json(result)))
 }
@@ -407,10 +407,10 @@ pub(crate) async fn put_preferences(
     Json(policy): Json<NotificationPolicy>,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let result = super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let user = save_policy(pool, server.time_zone_names(), &claims, &policy).await?;
+        let user = save_policy(pool, server.time_zone_names(), &principal, &policy).await?;
         server.room_manager().account_updates().changed(
             user,
             super::updates::Scope::Notifications,
@@ -428,10 +428,10 @@ pub(crate) async fn patch_preferences(
     Json(patch): Json<NotificationPatch>,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let result = super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let user = patch_policy(pool, server.time_zone_names(), &claims, patch).await?;
+        let user = patch_policy(pool, server.time_zone_names(), &principal, patch).await?;
         server.room_manager().account_updates().changed(
             user,
             super::updates::Scope::Notifications,
@@ -450,10 +450,10 @@ pub(crate) async fn put_conversation(
     Json(policy): Json<ConversationPolicy>,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
     let permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let result = super::updates::owned(permit, async move {
         let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-        let user = save_conversation(pool, &claims, peer, &policy).await?;
+        let user = save_conversation(pool, &principal, peer, &policy).await?;
         server.room_manager().account_updates().changed(
             user,
             super::updates::Scope::Notifications,
@@ -568,21 +568,13 @@ mod tests {
         .unwrap()
     }
 
-    /// The claims of a new live session for `user`.
-    async fn signed_in(pool: &PgPool, user: Uuid) -> Claims {
+    /// The principal of a fresh token for a new live session of `user`.
+    async fn signed_in(pool: &PgPool, user: Uuid) -> Principal {
         let refresh = super::super::session::generate_refresh_token().unwrap();
         let sid = super::super::session::create_session(pool, &user, &refresh)
             .await
             .unwrap();
-        Claims {
-            sub: user.to_string(),
-            name: "tester".into(),
-            iss: "simplestChat".into(),
-            aud: "simplestChat".into(),
-            exp: (Utc::now().timestamp() + 3600) as usize,
-            auth_version: 0,
-            sid,
-        }
+        super::super::access_tokens::fixtures::principal(pool, sid).await
     }
 
     /// Private messages off, mentions on, quiet from 22:00 to 07:00 in New York.
@@ -721,10 +713,15 @@ mod tests {
     async fn policy_saves_read_time_zones_on_their_own_connection() {
         let pool = database_pool(1).await;
         let user = account(&pool).await;
-        let claims = signed_in(&pool, user).await;
-        save_policy(&pool, &TimeZoneNames::default(), &claims, &quiet_policy())
-            .await
-            .unwrap();
+        let principal = signed_in(&pool, user).await;
+        save_policy(
+            &pool,
+            &TimeZoneNames::default(),
+            &principal,
+            &quiet_policy(),
+        )
+        .await
+        .unwrap();
         let saved = preferences(&pool, user).await.unwrap().policy.quiet_hours;
         assert_eq!(
             saved.map(|quiet| quiet.time_zone).as_deref(),
@@ -746,9 +743,11 @@ mod tests {
         let users = vec![account(&pool).await, account(&pool).await];
         let user = users[0];
         let peer = users[1];
-        let claims = signed_in(&pool, user).await;
+        let principal = signed_in(&pool, user).await;
         let mut policy = quiet_policy();
-        save_policy(&pool, &zones, &claims, &policy).await.unwrap();
+        save_policy(&pool, &zones, &principal, &policy)
+            .await
+            .unwrap();
         assert!(
             !preferences(&pool, user)
                 .await
@@ -764,12 +763,16 @@ mod tests {
                 .private_messages
         );
         policy.quiet_hours.as_mut().unwrap().time_zone = "Unknown/Nowhere".into();
-        assert!(save_policy(&pool, &zones, &claims, &policy).await.is_err());
+        assert!(
+            save_policy(&pool, &zones, &principal, &policy)
+                .await
+                .is_err()
+        );
         let mute = ConversationPolicy {
             muted: true,
             snoozed_until: None,
         };
-        save_conversation(&pool, &claims, peer, &mute)
+        save_conversation(&pool, &principal, peer, &mute)
             .await
             .unwrap();
         assert_eq!(
@@ -784,13 +787,13 @@ mod tests {
                 .is_empty()
         );
         assert!(
-            save_conversation(&pool, &claims, user, &mute)
+            save_conversation(&pool, &principal, user, &mute)
                 .await
                 .is_err()
         );
         save_conversation(
             &pool,
-            &claims,
+            &principal,
             peer,
             &ConversationPolicy {
                 muted: false,
@@ -807,17 +810,17 @@ mod tests {
                 .is_empty()
         );
         sqlx::query("DELETE FROM sessions WHERE id=$1")
-            .bind(claims.sid)
+            .bind(principal.sid)
             .execute(&pool)
             .await
             .unwrap();
         assert!(matches!(
-            save_conversation(&pool, &claims, peer, &mute).await,
+            save_conversation(&pool, &principal, peer, &mute).await,
             Err(AuthError::InvalidToken)
         ));
         policy.quiet_hours = None;
         assert!(matches!(
-            save_policy(&pool, &zones, &claims, &policy).await,
+            save_policy(&pool, &zones, &principal, &policy).await,
             Err(AuthError::InvalidToken)
         ));
         sqlx::query("DELETE FROM users WHERE id=ANY($1)")

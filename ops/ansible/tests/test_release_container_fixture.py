@@ -191,9 +191,7 @@ class ReleaseContainerFixtureTests(unittest.TestCase):
         self.assertIn("postgres://simplestchat_app:", app["DATABASE_URL"])
         self.assertIn("postgres://simplestchat_migrate:", migration["DATABASE_URL"])
         self.assertNotEqual(app["DATABASE_URL"], migration["DATABASE_URL"])
-        selected_secrets = [
-            app[name] for name in ("JWT_SECRET", "METRICS_TOKEN", "TRUSTED_PROXY_SECRET")
-        ]
+        selected_secrets = [app[name] for name in ("METRICS_TOKEN", "TRUSTED_PROXY_SECRET")]
         selected_secrets.append(
             (self.config / "postgres-admin-password").read_text(encoding="utf-8").strip()
         )

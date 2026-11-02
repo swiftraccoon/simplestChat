@@ -144,10 +144,6 @@ impl Config {
             ("ALLOW_AD_HOC_ROOMS", "true".into()),
             ("REGISTRATIONS_PER_IP_PER_HOUR", "100".into()),
             ("AUTH_REQUESTS_PER_MINUTE", "300".into()),
-            (
-                "JWT_SECRET",
-                "disposable-test-only-jwt-secret-at-least-32-bytes".into(),
-            ),
             ("RUN_MIGRATIONS", "true".into()),
             ("METRICS_TOKEN", self.metrics_token.clone()),
         ] {

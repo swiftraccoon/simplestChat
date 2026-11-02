@@ -7,15 +7,14 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{collections::HashMap, panic::AssertUnwindSafe, str::FromStr, time::Duration};
 use tokio::sync::mpsc;
 
-fn claims(user: Uuid, session: Uuid) -> Claims {
-    Claims {
-        sub: user.to_string(),
-        name: "Administration fixture".into(),
-        iss: "simplestchat".into(),
-        aud: "simplestchat".into(),
-        exp: (Utc::now().timestamp() + 3600) as usize,
-        auth_version: 0,
+/// A principal for `user`'s `session`, as validation resolves one; the admission
+/// under test re-checks both against the database.
+fn principal(user: Uuid, session: Uuid) -> Principal {
+    Principal {
+        user: UserId::from(user),
         sid: session,
+        auth_version: 0,
+        expires_at: Utc::now() + chrono::TimeDelta::hours(1),
     }
 }
 
@@ -124,12 +123,16 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         assert!(manager.rooms.read().get(&room_id).is_none());
         let patch: SettingsPatch =
             serde_json::from_value(json!({"allowChat":false,"maxParticipants":12})).unwrap();
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Settings(patch))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Settings(patch))
+        .await
+        .unwrap();
         assert!(
             manager.rooms.read().get(&room_id).is_none(),
             "HTTP administration must not create a runtime room"
@@ -140,18 +143,22 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let denied = Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(moderator, sessions[1]),
+            principal(moderator, sessions[1]),
         )
         .await
         .unwrap()
         .execute(Command::Settings(SettingsPatch::default()))
         .await;
         assert!(denied.is_err(), "Moderator cannot change Admin settings");
-        let missing = Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Role(outsider, roles::Role::Admin))
-            .await;
+        let missing = Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Role(outsider, roles::Role::Admin))
+        .await;
         assert!(
             matches!(missing, Err(RoomError::Refused(_))),
             "another room's roster is never an account lookup"
@@ -179,14 +186,18 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         room.participants.insert(person.id, person);
         let room = Arc::new(RwLock::new(room));
         manager.rooms.write().insert(room_id.clone(), room.clone());
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Settings(
-                serde_json::from_value(json!({"allowChat":true,"guestsAllowed":false})).unwrap(),
-            ))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Settings(
+            serde_json::from_value(json!({"allowChat":true,"guestsAllowed":false})).unwrap(),
+        ))
+        .await
+        .unwrap();
         let notification: Value = serde_json::from_str(&receiver.recv().await.unwrap()).unwrap();
         assert_eq!(notification["type"], "roomSettingsChanged");
         assert_eq!(notification["settings"]["guestsAllowed"], false);
@@ -198,12 +209,16 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .participants
                 .contains_key(&ParticipantId::from(owner))
         );
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Role(peer, roles::Role::Admin))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Role(peer, roles::Role::Admin))
+        .await
+        .unwrap();
         assert_eq!(
             room.read().await.participants[&ParticipantId::from(peer)].role,
             roles::Role::Admin
@@ -213,10 +228,13 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             granted,
             json!({"type":"roleChanged","participantId":peer,"newRole":"admin","grantedBy":owner})
         );
-        let mut listing =
-            Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-                .await
-                .unwrap();
+        let mut listing = Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap();
         let AdministrationPage::Members(members) = listing.list(Section::Members, 0).await.unwrap()
         else {
             panic!("the members section lists members");
@@ -241,7 +259,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(moderator, sessions[1]),
+            principal(moderator, sessions[1]),
         )
         .await
         .unwrap()
@@ -254,7 +272,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let mut history = Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(moderator, sessions[1]),
+            principal(moderator, sessions[1]),
         )
         .await
         .unwrap();
@@ -272,7 +290,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let stale_report = Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(moderator, sessions[1]),
+            principal(moderator, sessions[1]),
         )
         .await
         .unwrap()
@@ -292,17 +310,21 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             moderation::SanctionKind::Chat,
         ] {
             for enabled in [true, false] {
-                Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-                    .await
-                    .unwrap()
-                    .execute(Command::Sanction(SanctionRequest {
-                        target_participant_id: ParticipantId::from(peer),
-                        kind,
-                        enabled,
-                        reason: None,
-                    }))
-                    .await
-                    .unwrap();
+                Context::admit(
+                    manager.clone(),
+                    room_id.clone(),
+                    principal(owner, sessions[0]),
+                )
+                .await
+                .unwrap()
+                .execute(Command::Sanction(SanctionRequest {
+                    target_participant_id: ParticipantId::from(peer),
+                    kind,
+                    enabled,
+                    reason: None,
+                }))
+                .await
+                .unwrap();
                 let state = room.read().await.participants[&ParticipantId::from(peer)]
                     .punitive
                     .clone();
@@ -317,18 +339,22 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             }
         }
         let mut returning = room.read().await.participants[&ParticipantId::from(peer)].clone();
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Moderate(ModerationRequest {
-                action: moderation::ModerationCommand::Ban,
-                target_participant_id: ParticipantId::from(peer),
-                reason: Some("Test administration".into()),
-                duration_seconds: Some(3600),
-                report_id: None,
-            }))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Moderate(ModerationRequest {
+            action: moderation::ModerationCommand::Ban,
+            target_participant_id: ParticipantId::from(peer),
+            reason: Some("Test administration".into()),
+            duration_seconds: Some(3600),
+            report_id: None,
+        }))
+        .await
+        .unwrap();
         assert!(room.read().await.participants.is_empty());
         assert!(
             room.read()
@@ -347,19 +373,23 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let denied = Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(moderator, sessions[1]),
+            principal(moderator, sessions[1]),
         )
         .await
         .unwrap()
         .execute(Command::Unban(ban))
         .await;
         assert!(denied.is_err(), "Moderator cannot unban");
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Unban(ban))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Unban(ban))
+        .await
+        .unwrap();
         assert!(
             !room
                 .read()
@@ -372,12 +402,15 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .await
                 .unwrap()
         );
-        let stale_ban =
-            Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-                .await
-                .unwrap()
-                .execute(Command::Unban(ban))
-                .await;
+        let stale_ban = Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Unban(ban))
+        .await;
         assert!(matches!(stale_ban, Err(RoomError::Refused(_))));
         assert!(
             !room.read().await.deleting,
@@ -407,18 +440,22 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 punitive: moderation::PunitiveState::default(),
             },
         );
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Lobby(
-                ParticipantId::from(outsider),
-                LobbyRequest {
-                    action: moderation::LobbyAction::Admit,
-                    reason: None,
-                },
-            ))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Lobby(
+            ParticipantId::from(outsider),
+            LobbyRequest {
+                action: moderation::LobbyAction::Admit,
+                reason: None,
+            },
+        ))
+        .await
+        .unwrap();
         assert!(!waiting.load(std::sync::atomic::Ordering::Acquire));
         assert!(
             room.read()
@@ -429,18 +466,22 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let admitted: Value =
             serde_json::from_str(&waiting_receiver.recv().await.unwrap()).unwrap();
         assert_eq!(admitted["type"], "lobbyAdmitted");
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Moderate(ModerationRequest {
-                action: moderation::ModerationCommand::Kick,
-                target_participant_id: ParticipantId::from(outsider),
-                reason: None,
-                duration_seconds: None,
-                report_id: None,
-            }))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Moderate(ModerationRequest {
+            action: moderation::ModerationCommand::Kick,
+            target_participant_id: ParticipantId::from(outsider),
+            reason: None,
+            duration_seconds: None,
+            report_id: None,
+        }))
+        .await
+        .unwrap();
         let denied_id = ParticipantId::random();
         let (denied_sender, mut denied_receiver) = mpsc::channel(16);
         room.write().await.lobby.insert(
@@ -459,23 +500,27 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 punitive: moderation::PunitiveState::default(),
             },
         );
-        Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
-            .await
-            .unwrap()
-            .execute(Command::Lobby(
-                denied_id,
-                LobbyRequest {
-                    action: moderation::LobbyAction::Deny,
-                    reason: Some("Closed meeting".into()),
-                },
-            ))
-            .await
-            .unwrap();
+        Context::admit(
+            manager.clone(),
+            room_id.clone(),
+            principal(owner, sessions[0]),
+        )
+        .await
+        .unwrap()
+        .execute(Command::Lobby(
+            denied_id,
+            LobbyRequest {
+                action: moderation::LobbyAction::Deny,
+                reason: Some("Closed meeting".into()),
+            },
+        ))
+        .await
+        .unwrap();
         assert!(!room.read().await.lobby.contains_key(&denied_id));
         let denied: Value = serde_json::from_str(&denied_receiver.recv().await.unwrap()).unwrap();
         assert_eq!(denied["type"], "lobbyDenied");
 
-        // JWT expiry and refresh-session expiry are rechecked AFTER the room
+        // Token expiry and refresh-session expiry are rechecked AFTER the room
         // row lock wait, even though both were valid when auth locks completed.
         for expire_session in [false, true] {
             let expires = Utc::now() + chrono::Duration::seconds(2);
@@ -502,9 +547,9 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .fetch_one(&mut *blocker)
                 .await
                 .unwrap();
-            let mut expiring = claims(owner, sessions[0]);
+            let mut expiring = principal(owner, sessions[0]);
             if !expire_session {
-                expiring.exp = expires.timestamp() as usize;
+                expiring.expires_at = expires;
             }
             let request = tokio::spawn(Context::admit(manager.clone(), room_id.clone(), expiring));
             await_owned_lock_wait(&pool, pid).await;
@@ -522,12 +567,12 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         }
 
         // Queue behind the real room control gate, revoke the issuing session,
-        // then release admission. Cached claims must not authorize that write.
+        // then release admission. A cached principal must not authorize that write.
         let control = control::lock_room(&room).await;
         let request = tokio::spawn(Context::admit(
             manager.clone(),
             room_id.clone(),
-            claims(owner, sessions[0]),
+            principal(owner, sessions[0]),
         ));
         tokio::task::yield_now().await;
         sqlx::query("DELETE FROM sessions WHERE id=$1 AND user_id=$2")

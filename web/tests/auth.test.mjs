@@ -22,10 +22,14 @@ async function flush() {
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 }
 
-function session(name, expiresAt = 900) {
-  const payload = Buffer.from(JSON.stringify({ sub: name, exp: expiresAt })).toString('base64url');
+let issued = 0;
+
+/** A sign-in or refresh answer: a new opaque token and the expiry the server states for it. */
+function session(name, expiresAtMs = 900_000) {
+  issued += 1;
   return {
-    token: `fixture.${payload}.${name}`,
+    token: `opaque-${name}-${issued}`,
+    expires_at: new Date(expiresAtMs).toISOString(),
     user: { id: name, email: `${name}@example.test`, display_name: name },
   };
 }
@@ -145,11 +149,10 @@ async function fixture(t, { locks, random = 0 } = {}) {
     moveWallClock: (milliseconds) => {
       wallNow += milliseconds;
     },
-    session: (name, lifetimeSeconds = 900) =>
-      session(name, Math.floor(wallNow / 1000) + lifetimeSeconds),
+    session: (name, lifetimeSeconds = 900) => session(name, wallNow + lifetimeSeconds * 1000),
     enqueue: (value) => queued.push(value),
     async login(name = 'initial', lifetimeSeconds = 900) {
-      queued.push(response(session(name, Math.floor(wallNow / 1000) + lifetimeSeconds)));
+      queued.push(response(session(name, wallNow + lifetimeSeconds * 1000)));
       await auth.login(`${name}@example.test`, 'password');
     },
     async fire(milliseconds) {
@@ -173,7 +176,7 @@ test('login validates identity and refreshes with the existing token-refresh not
   const rotated = { ...session('initial'), token: `${session('initial').token}-rotated` };
   f.enqueue(response(rotated));
   await f.fire(REFRESH_MS);
-  assert.equal(f.auth.jwt, rotated.token);
+  assert.equal(f.auth.accessToken, rotated.token);
   assert.deepEqual(f.changes, [
     [true, false],
     [true, true],
@@ -322,7 +325,7 @@ for (const action of ['login', 'register', 'restore']) {
     if (action === 'restore') assert.equal(await settled, 'superseded');
     else await settled;
     assert.equal(f.auth.isLoggedIn, false);
-    assert.equal(f.auth.jwt, null);
+    assert.equal(f.auth.accessToken, null);
     assert.equal(f.timers.size, 0);
     assert.deepEqual(f.changes, [[false, false]]);
   });
@@ -505,14 +508,14 @@ for (const failure of [500, 502, 503, 504, 'network']) {
   test(`scheduled refresh preserves identity through ${failure} and retries in place`, async (t) => {
     const f = await fixture(t);
     await f.login();
-    const accepted = f.auth.jwt;
+    const accepted = f.auth.accessToken;
     const gate = deferred();
     f.enqueue(gate.promise);
     await f.fire(REFRESH_MS);
     if (failure === 'network') gate.reject(new TypeError('Failed to fetch'));
     else gate.resolve(response({ error: 'temporarily unavailable' }, failure));
     await flush();
-    assert.equal(f.auth.jwt, accepted);
+    assert.equal(f.auth.accessToken, accepted);
     assert.deepEqual(f.changes, [[true, false]]);
     assert.equal(f.requests.length, 2);
     assert.deepEqual(
@@ -523,7 +526,7 @@ for (const failure of [500, 502, 503, 504, 'network']) {
     const refreshed = f.session('initial');
     f.enqueue(response(refreshed));
     await f.fire(RETRY_MS);
-    assert.equal(f.auth.jwt, refreshed.token);
+    assert.equal(f.auth.accessToken, refreshed.token);
     assert.deepEqual(f.changes, [
       [true, false],
       [true, true],
@@ -589,11 +592,12 @@ test('scheduled refresh watchdog aborts a request that never settles', async (t)
   assert.equal(f.timers.size, 0);
 });
 
-test('accepted JWT expiry caps retention despite a backwards wall clock', async (t) => {
+test('the stated expiry caps retention despite a backwards wall clock', async (t) => {
   const f = await fixture(t);
-  await f.login('initial', (REFRESH_MS + 2000) / 1000);
+  // A ten-second token refreshes after eight seconds and expires two later.
+  await f.login('initial', 10);
   f.enqueue(response(null, 503));
-  await f.fire(REFRESH_MS);
+  await f.fire(8000);
   f.moveWallClock(-60_000);
   await f.fire(2000);
   assert.equal(f.auth.isLoggedIn, false);
@@ -613,12 +617,12 @@ test('wall-clock retention deadline covers a suspended monotonic clock', async (
   assert.equal(f.timers.size, 0);
 });
 
-test('accepted JWT wall-clock expiry also fences a pending successful refresh', async (t) => {
+test('the stated wall-clock expiry also fences a pending successful refresh', async (t) => {
   const f = await fixture(t);
-  await f.login('initial', (REFRESH_MS + 2000) / 1000);
+  await f.login('initial', 10);
   const gate = deferred();
   f.enqueue(gate.promise);
-  await f.fire(REFRESH_MS);
+  await f.fire(8000);
   f.moveWallClock(2000);
   gate.resolve(response(f.session('late')));
   await flush();
@@ -626,16 +630,47 @@ test('accepted JWT wall-clock expiry also fences a pending successful refresh', 
   assert.equal(f.timers.size, 0);
 });
 
-test('unknown accepted-token expiry does not gain transient retry allowance', async (t) => {
+test("the refresh is scheduled from the server's expiry", async (t) => {
   const f = await fixture(t);
-  f.enqueue(response({ ...session('opaque'), token: 'opaque-fixture-token' }));
-  await f.auth.login('opaque@example.test', 'password');
-  f.enqueue(response(null, 503));
-  await f.fire(REFRESH_MS);
-  assert.equal(f.auth.isLoggedIn, false);
-  assert.equal(f.requests.length, 2);
-  assert.equal(f.timers.size, 0);
+  // A ten-minute token refreshes after eight minutes; the token text is never read.
+  await f.login('initial', 600);
+  assert.deepEqual(
+    [...f.timers.values()].map((timer) => timer.milliseconds),
+    [480_000],
+  );
+  // The refresh answers with fifteen minutes from the moment it lands.
+  const refreshed = f.session('initial', 480 + 900);
+  f.enqueue(response(refreshed));
+  await f.fire(480_000);
+  assert.equal(f.auth.accessToken, refreshed.token);
+  assert.deepEqual(
+    [...f.timers.values()].map((timer) => timer.milliseconds),
+    [REFRESH_MS],
+  );
 });
+
+test("a local clock behind the server's still refreshes within twelve minutes", async (t) => {
+  const f = await fixture(t);
+  // An hour of stated lifetime here may be fifteen minutes on the server's clock.
+  await f.login('initial', 3600);
+  assert.deepEqual(
+    [...f.timers.values()].map((timer) => timer.milliseconds),
+    [REFRESH_MS],
+  );
+});
+
+for (const expiry of [undefined, 'soon', '2026-13-45T99:99:99Z', 900]) {
+  test(`a sign-in stating ${JSON.stringify(expiry) ?? 'no'} expiry is refused`, async (t) => {
+    const f = await fixture(t);
+    f.enqueue(response({ ...session('opaque'), expires_at: expiry }));
+    await assert.rejects(f.auth.login('opaque@example.test', 'password'), {
+      name: 'SessionOutcomeUnknownError',
+    });
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.auth.accessToken, null);
+    assert.equal(f.timers.size, 0);
+  });
+}
 
 test('failed interactive logout preserves the original retry budget and cooldown', async (t) => {
   const f = await fixture(t);
@@ -1038,7 +1073,7 @@ test('malformed successful authentication clears local identity and requires rel
     name: 'SessionOutcomeUnknownError',
   });
   assert.equal(f.auth.userId, null);
-  assert.equal(f.auth.jwt, null);
+  assert.equal(f.auth.accessToken, null);
   assert.equal(f.timers.size, 0);
   await assert.rejects(f.auth.login('again@example.test', 'password'), {
     name: 'SessionOutcomeUnknownError',
@@ -1059,7 +1094,7 @@ test('conclusive HTTP rejection remains retryable even when the error body is ma
   assert.equal(f.timers.size, 1);
 });
 
-test('failed logout preserves the original refresh deadline instead of extending JWT lifetime', async (t) => {
+test('failed logout preserves the original refresh deadline instead of extending the token lifetime', async (t) => {
   const f = await fixture(t);
   await f.login();
   f.elapse(REFRESH_MS - 1000);
@@ -1361,13 +1396,13 @@ test('disposal preserves accepted identity without revoking or broadcasting the 
   const mutations = [];
   f.auth.setSessionMutationHandler(() => mutations.push('changed'));
   await f.login('accepted');
-  const token = f.auth.jwt;
+  const token = f.auth.accessToken;
   const oldRefresh = [...f.timers.values()][0].callback;
   assert.deepEqual(mutations, ['changed']);
   f.auth.dispose();
   f.auth.dispose();
   assert.equal(f.timers.size, 0);
-  assert.equal(f.auth.jwt, token);
+  assert.equal(f.auth.accessToken, token);
   assert.equal(f.auth.userId, 'accepted');
   assert.equal(f.auth.isLoggedIn, true);
   oldRefresh();
@@ -1400,7 +1435,7 @@ test('disposal aborts a startup restore and refuses a late saved-session respons
 test('disposal aborts pending sign-in without adopting its late cookie response or restarting timers', async (t) => {
   const f = await fixture(t);
   await f.login('accepted');
-  const token = f.auth.jwt;
+  const token = f.auth.accessToken;
   const mutations = [];
   f.auth.setSessionMutationHandler(() => mutations.push('changed'));
   const pending = deferred();
@@ -1414,7 +1449,7 @@ test('disposal aborts pending sign-in without adopting its late cookie response 
   await rejected;
   pending.resolve(response(session('replacement')));
   await flush();
-  assert.equal(f.auth.jwt, token);
+  assert.equal(f.auth.accessToken, token);
   assert.equal(f.auth.userId, 'accepted');
   assert.equal(f.timers.size, 0);
   assert.equal(f.requests.length, 2);
@@ -1426,7 +1461,7 @@ for (const lateResult of ['response', 'failure']) {
   test(`disposal aborts scheduled refresh and its retention watchdog before a late ${lateResult}`, async (t) => {
     const f = await fixture(t);
     await f.login('accepted');
-    const token = f.auth.jwt;
+    const token = f.auth.accessToken;
     const pending = deferred();
     f.enqueue(pending.promise);
     await f.fire(REFRESH_MS);
@@ -1440,7 +1475,7 @@ for (const lateResult of ['response', 'failure']) {
     else pending.reject(new Error('retired network failure'));
     retiredTimers.forEach((callback) => callback());
     await flush();
-    assert.equal(f.auth.jwt, token);
+    assert.equal(f.auth.accessToken, token);
     assert.equal(f.auth.userId, 'accepted');
     assert.equal(f.timers.size, 0, 'late completion cannot schedule a retry');
     assert.equal(f.requests.length, 2);

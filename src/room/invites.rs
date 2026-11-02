@@ -413,13 +413,11 @@ async fn caller(
     server: &SignalingServer,
     headers: &HeaderMap,
 ) -> Result<(Uuid, PgPool), RoomApiError> {
-    let claims = account::authenticated_claims(server, headers)
+    let user = account::authenticated_principal(server, headers)
         .await
-        .map_err(IntoResponse::into_response)?;
-    let user: Uuid = claims
-        .sub
-        .parse()
-        .map_err(|_| AuthError::InvalidToken.into_response())?;
+        .map_err(IntoResponse::into_response)?
+        .user
+        .as_uuid();
     let pool = server
         .db_pool()
         .ok_or_else(|| AuthError::NotConfigured.into_response())?

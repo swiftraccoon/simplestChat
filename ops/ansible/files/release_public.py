@@ -62,7 +62,6 @@ IDENTITY_KEYS = frozenset(
     {
         "SIMPLESTCHAT_IMAGE",
         "DATABASE_URL",
-        "JWT_SECRET",
         "METRICS_TOKEN",
         "TRUSTED_PROXY_SECRET",
         "ALLOWED_ORIGINS",

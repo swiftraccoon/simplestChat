@@ -5,10 +5,11 @@ use crate::room::refusal::{Refusal, RoomError};
 use crate::secret::SecretString;
 use crate::{
     auth::{
-        account::authenticated_claims,
+        access_tokens,
+        account::authenticated_principal,
         routes,
         sessions::lock_current_session,
-        types::{AuthError, Claims},
+        types::{AuthError, Principal},
     },
     signaling::{SignalingServer, protocol::ChatAttachment},
 };
@@ -47,7 +48,7 @@ static ACCOUNT_UPLOADS: LazyLock<crate::sync::Mutex<HashSet<Uuid>>> =
     LazyLock::new(|| crate::sync::Mutex::new(HashSet::new()));
 /// HS256 key for attachment grants: `grant_access` signs a 30-second token for
 /// one attachment, room, participant and media session (with the viewer's
-/// account claims, if any), and `allowed` verifies it. `SignalingServer::new`
+/// account principal, if any), and `allowed` verifies it. `SignalingServer::new`
 /// draws the key from the OS once and keeps it in memory only, so grants do not
 /// survive a restart and no other server process accepts them. The type has no
 /// `Debug`, so the key cannot reach a log or debug output.
@@ -161,7 +162,7 @@ fn content_type(bytes: &[u8]) -> &'static str {
 
 async fn store_upload(
     pool: &PgPool,
-    claims: &Claims,
+    principal: &Principal,
     name: String,
     data: Vec<u8>,
 ) -> Result<ChatAttachment, AuthError> {
@@ -171,7 +172,7 @@ async fn store_upload(
         ));
     }
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (owner, _) = lock_current_session(&mut tx, claims).await?;
+    let (owner, _) = lock_current_session(&mut tx, principal).await?;
     // A single bounded quota reservation serializes uploads across accounts.
     // Expired bytes count until physically deleted, keeping the disk cap honest.
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
@@ -235,12 +236,8 @@ pub(crate) async fn upload(
     // Authenticate before admission: a refused request spends neither the
     // account's upload slot nor one of the four upload permits.
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, request.headers()).await?;
-    let account = claims
-        .sub
-        .parse::<Uuid>()
-        .map_err(|_| AuthError::InvalidToken)?;
-    let _account_upload = reserve_account_upload(account)?;
+    let principal = authenticated_principal(&server, request.headers()).await?;
+    let _account_upload = reserve_account_upload(principal.user.as_uuid())?;
     let _upload = UPLOADS.try_acquire().map_err(|_| AuthError::ServiceBusy)?;
     let name = filename(
         request
@@ -258,7 +255,7 @@ pub(crate) async fn upload(
     .map_err(|_| AuthError::InvalidInput("File exceeds the 5 MiB limit"))?;
     let metadata = store_upload(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
+        &principal,
         name,
         data.to_vec(),
     )
@@ -272,14 +269,14 @@ pub(crate) async fn delete_pending(
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
     let _permit = routes::acquire_account_request(&server)?;
-    let claims = authenticated_claims(&server, &headers).await?;
+    let principal = authenticated_principal(&server, &headers).await?;
     let mut tx = server
         .db_pool()
         .ok_or(AuthError::NotConfigured)?
         .begin()
         .await
         .map_err(routes::database_error)?;
-    let (owner, _) = lock_current_session(&mut tx, &claims).await?;
+    let (owner, _) = lock_current_session(&mut tx, &principal).await?;
     sqlx::query("DELETE FROM attachments WHERE id=$1 AND owner_id=$2 AND message_id IS NULL AND ephemeral_message_id IS NULL")
         .bind(id).bind(owner).execute(&mut *tx).await.map_err(routes::database_error)?;
     tx.commit().await.map_err(routes::database_error)?;
@@ -352,7 +349,7 @@ struct Grant {
     room_id: RoomId,
     participant_id: ParticipantId,
     media_session: Uuid,
-    account: Option<Claims>,
+    account: Option<Principal>,
 }
 
 #[derive(Debug, Serialize)]
@@ -386,7 +383,7 @@ pub(crate) async fn grant_access(
     room_id: &RoomId,
     participant_id: &ParticipantId,
     expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    claims: Option<&Claims>,
+    principal: Option<&Principal>,
     attachment_id: Uuid,
 ) -> Result<AttachmentAccess, AuthError> {
     let location = location(pool, attachment_id).await?;
@@ -401,13 +398,13 @@ pub(crate) async fn grant_access(
         )
         .await
         .ok_or_else(unavailable)?;
-    if authenticated != claims.is_some()
-        || claims.is_some_and(|claims| claims.sub != participant_id.to_string())
+    if authenticated != principal.is_some()
+        || principal.is_some_and(|principal| principal.user.as_uuid() != participant_id.as_uuid())
     {
         return Err(unavailable());
     }
-    if let Some(claims) = claims {
-        validate_account(pool, claims).await?;
+    if let Some(principal) = principal {
+        validate_account(pool, principal).await?;
     }
     let expires_at = Utc::now() + chrono::Duration::seconds(30);
     let grant = Grant {
@@ -418,7 +415,7 @@ pub(crate) async fn grant_access(
         room_id: room_id.clone(),
         participant_id: *participant_id,
         media_session: session,
-        account: claims.cloned(),
+        account: principal.cloned(),
     };
     let token = jsonwebtoken::encode(
         &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
@@ -432,22 +429,11 @@ pub(crate) async fn grant_access(
     })
 }
 
-async fn validate_account(pool: &PgPool, claims: &Claims) -> Result<(), AuthError> {
-    let owner = claims
-        .sub
-        .parse::<Uuid>()
-        .map_err(|_| AuthError::InvalidToken)?;
-    let current: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users u JOIN sessions s ON s.user_id=u.id
-        WHERE u.id=$1 AND u.auth_version=$2 AND s.id=$3 AND s.expires_at>clock_timestamp())",
-    )
-    .bind(owner)
-    .bind(claims.auth_version)
-    .bind(claims.sid)
-    .fetch_one(pool)
-    .await
-    .map_err(routes::database_error)?;
-    if !current || claims.exp as i64 <= Utc::now().timestamp() {
+/// The grant's account must still hold its live session at the same version,
+/// and its token must not have expired.
+async fn validate_account(pool: &PgPool, principal: &Principal) -> Result<(), AuthError> {
+    access_tokens::revalidate_principal(pool, principal).await?;
+    if principal.expires_at <= Utc::now() {
         return Err(AuthError::InvalidToken);
     }
     Ok(())
@@ -477,8 +463,8 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
         if grant.attachment_id != id {
             return Err(unavailable());
         }
-        if let Some(claims) = &grant.account {
-            validate_account(pool, claims).await?;
+        if let Some(principal) = &grant.account {
+            validate_account(pool, principal).await?;
         }
         let location = location(pool, id).await?;
         server
@@ -495,11 +481,10 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
             .ok_or_else(unavailable)?;
         return Ok(());
     }
-    let claims = authenticated_claims(server, headers).await?;
-    let user = claims
-        .sub
-        .parse::<Uuid>()
-        .map_err(|_| AuthError::InvalidToken)?;
+    let user = authenticated_principal(server, headers)
+        .await?
+        .user
+        .as_uuid();
     let accessible:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM attachments a LEFT JOIN chat_messages m ON m.id=a.message_id
         WHERE a.id=$1 AND a.expires_at>clock_timestamp() AND ((a.owner_id=$2 AND a.message_id IS NULL AND a.ephemeral_message_id IS NULL)
         OR (m.recipient_account IS NOT NULL AND (m.sender_account=$2 OR m.recipient_account=$2) AND m.expires_at>clock_timestamp() AND m.body->>'removedAt' IS NULL)))")

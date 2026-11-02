@@ -57,6 +57,11 @@ const person = {
   producers: [],
 };
 
+/** The expiry a sign-in states: fifteen minutes from now. */
+function soon() {
+  return new Date(Date.now() + 900_000).toISOString();
+}
+
 async function run(runner = {}) {
   const env = runner.env ?? process.env;
   const step = runner.step ?? ((_name, work) => work());
@@ -340,14 +345,16 @@ async function run(runner = {}) {
           email: 'replacement@example.test',
           display_name: 'Replacement owner',
         };
-        return json({ token: 'replacement-fixture', user: account });
+        return json({ token: 'replacement-fixture', expires_at: soon(), user: account });
       }
       if (url.pathname === '/api/auth/refresh') {
         refreshRequests.push(route);
         refreshSeen.resolve();
         if (holdRestore) return;
         return json(
-          account ? { token: 'owned-fixture', user: account } : { error: 'No saved session' },
+          account
+            ? { token: 'owned-fixture', expires_at: soon(), user: account }
+            : { error: 'No saved session' },
           account ? 200 : 401,
         );
       }
@@ -440,7 +447,9 @@ async function run(runner = {}) {
         await featureRequests[index].fulfill({ status, json: body });
       },
       finishRestore: () =>
-        refreshRequests[0].fulfill({ json: { token: 'owned-fixture', user: account } }),
+        refreshRequests[0].fulfill({
+          json: { token: 'owned-fixture', expires_at: soon(), user: account },
+        }),
       redemptions,
       inviteSeen: inviteSeen.promise,
       connections: () => connections,

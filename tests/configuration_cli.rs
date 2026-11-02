@@ -27,7 +27,8 @@ fn preflight_is_offline_and_reports_only_public_settings() {
             "DATABASE_URL",
             "postgres://private-user:private-password@127.0.0.1:1/missing",
         )
-        .env("JWT_SECRET", "private-jwt-secret-never-printed-anywhere")
+        // Retired: the server reads no signing secret and never reports one.
+        .env("JWT_SECRET", "private-retired-secret-never-printed-anywhere")
         .env("MAX_CONNECTIONS", "123")
         .output()
         .unwrap();
@@ -41,7 +42,7 @@ fn preflight_is_offline_and_reports_only_public_settings() {
     assert_eq!(value["settings"]["MAX_CONNECTIONS"], 123);
     assert_eq!(value["settings"]["MEDIA_WORKERS"], 1);
     assert_eq!(value["settings"]["DATABASE_URL"], "configured");
-    assert_eq!(value["settings"]["JWT_SECRET"], "configured");
+    assert!(value["settings"].get("JWT_SECRET").is_none());
     assert_eq!(value["settings"]["METRICS_TOKEN"], serde_json::Value::Null);
     assert!(!String::from_utf8_lossy(&output.stdout).contains("private"));
 }

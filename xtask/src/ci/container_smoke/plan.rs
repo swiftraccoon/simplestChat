@@ -134,8 +134,6 @@ pub(super) fn create_app(
                 "127.0.0.1:5432/simplestchat_test?sslmode=disable"
             ),
             "--env",
-            "JWT_SECRET=disposable-container-jwt-secret-at-least-32-bytes",
-            "--env",
             "RUN_MIGRATIONS=true",
             "--env",
             "REGISTRATION_ENABLED=true",

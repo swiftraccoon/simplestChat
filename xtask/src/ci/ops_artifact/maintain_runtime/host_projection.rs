@@ -461,7 +461,7 @@ mod tests {
         for scenario in options::HOST_CASES {
             let (receipt, request) = fixture_case(scenario);
             assert_eq!(request.as_object().unwrap().len(), 18);
-            assert_eq!(request["sourcePins"].as_object().unwrap().len(), 53);
+            assert_eq!(request["sourcePins"].as_object().unwrap().len(), 54);
             assert_eq!(request["helperPins"].as_object().unwrap().len(), 15);
             assert_eq!(receipt.as_object().unwrap().len(), 19);
             assert_eq!(receipt["observations"].as_object().unwrap().len(), 28);

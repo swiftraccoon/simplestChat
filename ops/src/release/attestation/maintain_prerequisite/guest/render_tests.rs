@@ -57,7 +57,7 @@ fn fixed_render_keeps_quotes_dollar_interpolation_security_and_separate_secrets(
         assert!(app.contains(line));
     }
     assert!(!app.contains("TURN_"));
-    assert!(app.contains(&format!("JWT_SECRET={}\n", values["jwt_secret"])));
+    assert!(app.contains(&format!("METRICS_TOKEN={}\n", values["metrics_token"])));
     assert!(
         std::str::from_utf8(&outputs["init-database.sql"])
             .unwrap()

@@ -85,7 +85,7 @@ impl Fixture {
             super::config::Environment::from([
                 ("PATH".into(), "/caller/fixed path".into()),
                 ("DATABASE_URL".into(), "PRIVATE_DB".into()),
-                ("JWT_SECRET".into(), "PRIVATE_SECRET".into()),
+                ("METRICS_TOKEN".into(), "PRIVATE_SECRET".into()),
                 ("TURN_SECRET".into(), "PRIVATE_TURN".into()),
             ]),
         )
@@ -283,7 +283,7 @@ impl Host for Fixture {
         ensure!(
             !command.environment.keys().any(|v| matches!(
                 v.to_str(),
-                Some("DATABASE_URL" | "JWT_SECRET" | "TURN_SECRET")
+                Some("DATABASE_URL" | "METRICS_TOKEN" | "TURN_SECRET")
             )),
             "fake_env_leak"
         );

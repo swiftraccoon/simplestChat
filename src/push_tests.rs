@@ -137,6 +137,7 @@ impl IsolatedPushDatabase {
         sqlx::raw_sql("CREATE SCHEMA push_test;
             CREATE TABLE push_test.users (LIKE public.users INCLUDING ALL);
             CREATE TABLE push_test.sessions (LIKE public.sessions INCLUDING ALL);
+            CREATE TABLE push_test.session_access_tokens (LIKE public.session_access_tokens INCLUDING ALL);
             CREATE TABLE push_test.chat_messages (LIKE public.chat_messages INCLUDING ALL);
             CREATE TABLE push_test.chat_read_cursors (LIKE public.chat_read_cursors INCLUDING ALL);
             CREATE TABLE push_test.push_keys (LIKE public.push_keys INCLUDING ALL);
@@ -150,8 +151,16 @@ impl IsolatedPushDatabase {
             .connect_with(options)
             .await
             .unwrap();
-        sqlx::query("ALTER TABLE push_subscriptions ADD FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE")
-            .execute(&pool).await.unwrap();
+        // LIKE copies no foreign keys; ending a session must still remove both.
+        sqlx::raw_sql(
+            "ALTER TABLE push_subscriptions
+                 ADD FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+             ALTER TABLE session_access_tokens
+                 ADD FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE;",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         Self { admin, pool }
     }
     async fn close(mut self) {
@@ -175,20 +184,12 @@ impl IsolatedPushDatabase {
         .await
         .unwrap()
     }
-    async fn session(&self, user: Uuid) -> Claims {
+    async fn session(&self, user: Uuid) -> Principal {
         let refresh = crate::auth::session::generate_refresh_token().unwrap();
         let sid = crate::auth::session::create_session(&self.pool, &user, &refresh)
             .await
             .unwrap();
-        Claims {
-            sub: user.to_string(),
-            name: "Push tester".into(),
-            iss: "simplestChat".into(),
-            aud: "simplestChat".into(),
-            exp: (Utc::now().timestamp() + 3600) as usize,
-            auth_version: 0,
-            sid,
-        }
+        crate::auth::access_tokens::fixtures::principal(&self.pool, sid).await
     }
     async fn incoming(&self, user: Uuid) -> (Uuid, String) {
         let id = Uuid::new_v4();
@@ -280,12 +281,14 @@ async fn push_status_does_not_touch_the_key_table() {
     let server = crate::signaling::fixtures::account_server(db.pool.clone())
         .await
         .with_push_signer(signer.clone());
-    let claims = db.session(db.user().await).await;
+    let principal = db.session(db.user().await).await;
     sqlx::query("DROP TABLE push_keys")
         .execute(&db.pool)
         .await
         .unwrap();
-    let (_, Json(answer)) = status(State(server), bearer(&claims)).await.unwrap();
+    let (_, Json(answer)) = status(State(server), bearer(&db.pool, principal.sid).await)
+        .await
+        .unwrap();
     assert_eq!(answer.public_key, signer.public_key());
     assert!(!answer.enabled);
     db.close().await;
@@ -306,8 +309,10 @@ async fn push_start_attaches_the_key_it_creates() {
     let after: i64 = sqlx::query_scalar(keys).fetch_one(&db.pool).await.unwrap();
     assert_eq!(after, 1, "the start created the signing key");
     let stored = load_key(&db.pool).await.unwrap();
-    let claims = db.session(db.user().await).await;
-    let response = status(State(server), bearer(&claims)).await.into_response();
+    let principal = db.session(db.user().await).await;
+    let response = status(State(server), bearer(&db.pool, principal.sid).await)
+        .await
+        .into_response();
     assert_eq!(response.status(), StatusCode::OK);
     let body: serde_json::Value = serde_json::from_slice(
         &axum::body::to_bytes(response.into_body(), 4096)
@@ -328,10 +333,10 @@ async fn database_notifications_coalesce_pending_generations_and_suppress_read_r
 {
     let db = IsolatedPushDatabase::new().await;
     let user = db.user().await;
-    let claims = db.session(user).await;
+    let principal = db.session(user).await;
     save_subscription(
         &db.pool,
-        &claims,
+        &principal,
         "https://updates.push.services.mozilla.com/wpush/v2/isolated-queue",
     )
     .await
@@ -437,10 +442,10 @@ async fn database_notifications_coalesce_pending_generations_and_suppress_read_r
 async fn database_notifications_bound_retries_and_remove_expired_endpoints() {
     let db = IsolatedPushDatabase::new().await;
     let user = db.user().await;
-    let claims = db.session(user).await;
+    let principal = db.session(user).await;
     save_subscription(
         &db.pool,
-        &claims,
+        &principal,
         "https://web.push.apple.com/isolated-retries",
     )
     .await
@@ -480,10 +485,10 @@ async fn database_notifications_bound_retries_and_remove_expired_endpoints() {
 async fn database_notifications_obey_account_and_peer_policy_without_advancing_unread() {
     let db = IsolatedPushDatabase::new().await;
     let user = db.user().await;
-    let claims = db.session(user).await;
+    let principal = db.session(user).await;
     save_subscription(
         &db.pool,
-        &claims,
+        &principal,
         "https://web.push.apple.com/isolated-policy",
     )
     .await
@@ -571,10 +576,10 @@ async fn database_notifications_obey_account_and_peer_policy_without_advancing_u
 async fn database_notifications_quiet_hours_follow_midnight_and_daylight_saving() {
     let db = IsolatedPushDatabase::new().await;
     let user = db.user().await;
-    let claims = db.session(user).await;
+    let principal = db.session(user).await;
     save_subscription(
         &db.pool,
-        &claims,
+        &principal,
         "https://web.push.apple.com/isolated-quiet",
     )
     .await

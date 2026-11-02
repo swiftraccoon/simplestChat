@@ -13,6 +13,7 @@ mod security_tests;
 pub(crate) mod telemetry;
 
 use crate::auth::webauthn::ChallengeStore;
+use crate::ids::UserId;
 use crate::metrics::ServerMetrics;
 use crate::room::RoomManager;
 use crate::sync::Mutex;
@@ -165,11 +166,13 @@ impl PrincipalRateLimiter {
         }
     }
 
-    fn allow(&self, principal: &str) -> bool {
+    /// Charge one request to the account `principal`; `false` once its budget
+    /// for the window is spent.
+    fn allow(&self, principal: UserId) -> bool {
         self.allow_at(principal, Instant::now())
     }
 
-    fn allow_at(&self, principal: &str, now: Instant) -> bool {
+    fn allow_at(&self, principal: UserId, now: Instant) -> bool {
         let mut state = self.state.lock();
         if now.duration_since(state.window_started) >= PRINCIPAL_RATE_WINDOW {
             state.counters.fill(0);
@@ -322,7 +325,6 @@ pub(crate) struct SignalingServer {
     /// The copy of PostgreSQL's time zone names that saving quiet hours checks,
     /// shared by every clone of the server.
     time_zone_names: Arc<crate::auth::notifications::TimeZoneNames>,
-    jwt_secret: Option<crate::auth::jwt::JwtSecret>,
     /// Signs and verifies attachment grants; drawn once when the server is built.
     attachment_grant_key: crate::attachments::GrantKey,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
@@ -337,7 +339,7 @@ pub(crate) struct SignalingServer {
     challenge_store: Option<Arc<ChallengeStore>>,
     registration_enabled: bool,
     max_users: i64,
-    auth_revocations: tokio::sync::broadcast::Sender<(String, i64)>,
+    auth_revocations: tokio::sync::broadcast::Sender<(UserId, i64)>,
 }
 
 impl SignalingServer {
@@ -351,24 +353,6 @@ impl SignalingServer {
         let max_connections = config.limits.max_connections;
         info!("Max connections: {}", max_connections);
 
-        let jwt_secret = config
-            .auth
-            .jwt_secret
-            .clone()
-            .map(|secret| {
-                crate::auth::jwt::JwtSecret::new(secret).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "JWT_SECRET must contain at least {} bytes",
-                        crate::config::MIN_SECRET_BYTES
-                    )
-                })
-            })
-            .transpose()?;
-        if jwt_secret.is_some() {
-            info!("JWT authentication enabled");
-        } else {
-            info!("JWT_SECRET not set — authentication disabled");
-        }
         let attachment_grant_key = crate::attachments::GrantKey::generate()
             .map_err(|error| anyhow::anyhow!("Attachment grant randomness unavailable: {error}"))?;
         let metrics_token = config
@@ -448,7 +432,6 @@ impl SignalingServer {
             db_pool,
             push_signer: None,
             time_zone_names: Arc::default(),
-            jwt_secret,
             attachment_grant_key,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
             metrics_token,
@@ -549,10 +532,6 @@ impl SignalingServer {
             .cloned()
     }
 
-    pub(crate) fn jwt_secret(&self) -> Option<&crate::auth::jwt::JwtSecret> {
-        self.jwt_secret.as_ref()
-    }
-
     pub(crate) fn webauthn(&self) -> Option<&webauthn_rs::prelude::Webauthn> {
         self.webauthn.as_deref()
     }
@@ -573,8 +552,8 @@ impl SignalingServer {
         self.max_users
     }
 
-    pub(crate) fn allow_auth_principal(&self, principal: &str) -> bool {
-        self.principal_auth_limiter.allow(principal)
+    pub(crate) fn allow_auth_principal(&self, user: UserId) -> bool {
+        self.principal_auth_limiter.allow(user)
     }
 
     /// Whole seconds this client must wait before another password attempt on
@@ -596,8 +575,8 @@ impl SignalingServer {
         self.registration_limiter.allow(address)
     }
 
-    pub(crate) fn allow_room_creation(&self, user_id: &str) -> bool {
-        self.room_creation_limiter.allow(user_id)
+    pub(crate) fn allow_room_creation(&self, user: UserId) -> bool {
+        self.room_creation_limiter.allow(user)
     }
 
     pub(crate) fn try_acquire_auth_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
@@ -638,14 +617,10 @@ impl SignalingServer {
 
     /// Notify active sockets and release media retained for reconnect. Version
     /// matching leaves a newer login intact if a notification is delivered late.
-    pub(crate) fn revoke_account_sessions(&self, user_id: String, minimum_version: i64) {
-        if let Ok(account) = user_id.parse() {
-            self.room_manager.account_updates().revalidate(account);
-        }
-        let _ = self
-            .auth_revocations
-            .send((user_id.clone(), minimum_version));
-        let entries = self.grace_periods.take_revoked(&user_id, minimum_version);
+    pub(crate) fn revoke_account_sessions(&self, user: UserId, minimum_version: i64) {
+        self.room_manager.account_updates().revalidate(user);
+        let _ = self.auth_revocations.send((user, minimum_version));
+        let entries = self.grace_periods.take_revoked(user, minimum_version);
         let manager = self.room_manager.clone();
         tokio::spawn(async move {
             for (room_id, participant_id, sender) in entries {
@@ -723,7 +698,8 @@ fn with_static_fallback_and_security(router: Router) -> Router {
 /// Public feature availability, independent of the caller's authorization.
 /// It contains no deployment addresses, secrets or internal dependency errors.
 async fn capabilities_handler(State(server): State<SignalingServer>) -> Response {
-    let accounts = server.db_pool.is_some() && server.jwt_secret.is_some();
+    // Accounts need nothing but the database: access tokens live there.
+    let accounts = server.db_pool.is_some();
     let passkeys = accounts && server.webauthn.is_some();
     (
         [(header::CACHE_CONTROL, "no-store")],
@@ -1013,7 +989,7 @@ async fn ws_handler(
                 return crate::auth::types::AuthError::ServiceBusy.into_response();
             };
             match server.websocket_tickets().redeem(pool, ticket).await {
-                Ok(claims) => Some(claims),
+                Ok(principal) => Some(principal),
                 Err(error) => return error.into_response(),
             }
         }
@@ -1037,13 +1013,8 @@ async fn ws_handler(
         })
         .on_upgrade(move |socket| async move {
             let _ip_permit = ip_permit;
-            let renewal_authenticator = authenticated_user.as_ref().and_then(|_| {
-                server.jwt_secret.clone().map(|secret| {
-                    connection::RenewalAuthenticator::new(
-                        secret,
-                        server.guards.auth.concurrency.clone(),
-                    )
-                })
+            let renewal_authenticator = authenticated_user.as_ref().map(|_| {
+                connection::RenewalAuthenticator::new(server.guards.auth.concurrency.clone())
             });
             connection::handle_connection(
                 socket,
@@ -1405,21 +1376,10 @@ pub(crate) mod fixtures {
     use sqlx::PgPool;
     use std::sync::Arc;
 
-    /// The JWT secret `account_server` validates bearer tokens with.
-    pub(crate) fn jwt_secret() -> String {
-        "a".repeat(32)
-    }
-
-    /// The bearer header `account_server` accepts for `claims`' session.
-    pub(crate) fn bearer(claims: &crate::auth::types::Claims) -> axum::http::HeaderMap {
-        let token = crate::auth::jwt::create_session_token(
-            &claims.sub,
-            &claims.name,
-            &crate::auth::jwt::JwtSecret::from(jwt_secret().as_str()),
-            claims.auth_version,
-            claims.sid,
-        )
-        .unwrap();
+    /// A bearer header for session `sid`, with an access token issued through
+    /// the session row by the production issuer.
+    pub(crate) async fn bearer(pool: &PgPool, sid: uuid::Uuid) -> axum::http::HeaderMap {
+        let token = crate::auth::access_tokens::fixtures::issue(pool, sid).await;
         let mut headers = axum::http::HeaderMap::new();
         headers.insert(
             axum::http::header::AUTHORIZATION,
@@ -1431,8 +1391,7 @@ pub(crate) mod fixtures {
     /// A server with accounts configured over `pool`, on one media worker whose
     /// room manager has no database.
     pub(crate) async fn account_server(pool: PgPool) -> SignalingServer {
-        let mut config = crate::config::Config::for_tests();
-        config.auth.jwt_secret = Some(jwt_secret().into());
+        let config = crate::config::Config::for_tests();
         let mut media = crate::media::config::MediaConfig::default();
         media.worker_config.num_workers = 1;
         media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
@@ -1448,15 +1407,22 @@ pub(crate) mod fixtures {
         SignalingServer::new(Arc::new(manager), metrics, Some(pool), &config).unwrap()
     }
 
-    /// `account_server` over a database that cannot be reached: the pool connects
-    /// lazily to a closed port and is closed before any request, so any query
-    /// fails as `PoolClosed` and answers 500. A 401 from this server therefore
-    /// shows the refusal came before any database access.
-    pub(crate) async fn server_without_database() -> SignalingServer {
+    /// A configured pool that reaches no database: it connects lazily to a
+    /// closed port and is closed before use, so every query fails at once as
+    /// `PoolClosed`. An outcome other than a database error from it was decided
+    /// before any query.
+    pub(crate) async fn unreachable_pool() -> PgPool {
         use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
         let pool = PgPoolOptions::new()
             .connect_lazy_with(PgConnectOptions::new().host("127.0.0.1").port(9));
         pool.close().await;
-        account_server(pool).await
+        pool
+    }
+
+    /// `account_server` over `unreachable_pool`: the database is configured but
+    /// answers no query, so any query answers 500. A 401 from this server
+    /// therefore shows the refusal came before any database access.
+    pub(crate) async fn server_with_unreachable_database() -> SignalingServer {
+        account_server(unreachable_pool().await).await
     }
 }

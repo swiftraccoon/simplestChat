@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { loadContractModules } from './native-fixtures.mjs';
 import { uiFixture } from './ui-fixture.mjs';
 
 const appearance = { color: null, style: 'accent' };
@@ -568,6 +569,30 @@ test('session listings reject secret fields, duplicate handles and invalid curre
     state.response = { ok: true, status: 200, json: async () => invalid };
     await assert.rejects(ui.api.accountSessions('token'), /invalid data/);
   }
+});
+
+test("sign-in responses state the token's expiry and keep the token opaque", async () => {
+  const { decodeAuthResponse } = (await loadContractModules())['./api-validation'];
+  // The shape and timestamp the Rust serialization test pins.
+  const signedIn = {
+    token: 'A'.repeat(43),
+    expires_at: '2027-01-15T08:15:00.250Z',
+    user: { id: 'account', email: 'person@example.test', display_name: 'Person' },
+  };
+  assert.deepEqual(decodeAuthResponse(signedIn), signedIn);
+  assert.deepEqual(decodeAuthResponse({ ...signedIn, token: 'not.a.structured.token' }), {
+    ...signedIn,
+    token: 'not.a.structured.token',
+  });
+  for (const invalid of [
+    { token: signedIn.token, user: signedIn.user },
+    { ...signedIn, expires_at: 'not a timestamp' },
+    { ...signedIn, expires_at: 1800000900 },
+    { ...signedIn, token: '' },
+    { ...signedIn, token: 'A'.repeat(129) },
+    { ...signedIn, user: { id: 'account' } },
+  ])
+    assert.throws(() => decodeAuthResponse(invalid), /Invalid response data/);
 });
 
 test('session revocations use fixed DELETE routes, preserve cancellation and require confirmed no-content responses', async () => {

@@ -110,7 +110,7 @@ export class CommunityUI {
     }
     openPrivateInbox({
       getRoomId: () => this.options.getRoom()?.currentRoomId ?? null,
-      getToken: () => this.options.auth.jwt,
+      getToken: () => this.options.auth.accessToken,
       getAccountId: () => this.options.auth.userId,
       mountConversationPrivacy: (container, peerId, peerName, current) =>
         this.options.mountConversationPrivacy?.(container, peerId, peerName, current),
@@ -177,7 +177,7 @@ export class CommunityUI {
 
   private async openAdministration(roomId: string, view: ReturnType<typeof modal>): Promise<void> {
     const accountId = this.options.auth.userId;
-    const token = this.options.auth.jwt;
+    const token = this.options.auth.accessToken;
     if (!accountId || !token) return;
     const controller = new AbortController();
     view.dialog.addEventListener('close', () => controller.abort(), { once: true });
@@ -294,7 +294,7 @@ export class CommunityUI {
   /** Refreshes the existing header badge without revealing another account's unread state. */
   refreshMessages(): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const token = this.options.auth.jwt;
+    const token = this.options.auth.accessToken;
     const account = this.options.auth.userId;
     if (!token || !account || document.hidden) return Promise.resolve();
     if (this.inboxPending) {
@@ -337,7 +337,7 @@ export class CommunityUI {
   requestContact(peer: string): void {
     if (this.disposed) return;
     offerContact(peer, {
-      getToken: () => this.options.auth.jwt,
+      getToken: () => this.options.auth.accessToken,
       getAccountId: () => this.options.auth.userId,
     });
   }
@@ -639,7 +639,7 @@ export class CommunityUI {
         error.hidden = true;
         error.setAttribute('role', 'alert');
         const stillCurrent = this.accountScope(() => context.current());
-        const token = this.options.auth.jwt;
+        const token = this.options.auth.accessToken;
         try {
           const profile = await api.accountProfile(token);
           if (!stillCurrent()) return body;
@@ -682,7 +682,7 @@ export class CommunityUI {
             'btn-primary sheet-button',
           );
           flow = new AccountSecurityFlow({
-            token: () => this.options.auth.jwt,
+            token: () => this.options.auth.accessToken,
             current: stillCurrent,
             changed: () => {
               save.disabled = !(flow?.canStart ?? false);
@@ -743,7 +743,7 @@ export class CommunityUI {
           security = mountAccountSecurity({
             container: body,
             onLeave: (callback) => leaves.push(callback),
-            token: () => this.options.auth.jwt,
+            token: () => this.options.auth.accessToken,
             current: stillCurrent,
             interactionChanged: (canStart) => {
               if (changePassword) changePassword.disabled = !canStart;
@@ -816,7 +816,7 @@ export class CommunityUI {
             container: body,
             onLeave: (callback) => leaves.push(callback),
             security,
-            token: () => this.options.auth.jwt,
+            token: () => this.options.auth.accessToken,
             current: stillCurrent,
             notify: this.options.notify,
             signedOut: () => {
@@ -864,7 +864,7 @@ export class CommunityUI {
         error.hidden = true;
         error.setAttribute('role', 'alert');
         const stillCurrent = this.accountScope(() => context.current());
-        const token = this.options.auth.jwt;
+        const token = this.options.auth.accessToken;
         const surface: Surface = { body, error, isOpen: stillCurrent };
         const invites = el('div', undefined, 'sheet-group');
         const refreshInvites = async (): Promise<void> => {
@@ -884,7 +884,7 @@ export class CommunityUI {
           () =>
             busy(mint, error, async () => {
               if (!stillCurrent()) return;
-              const invite = await api.createRegistrationInvite(this.options.auth.jwt);
+              const invite = await api.createRegistrationInvite(this.options.auth.accessToken);
               if (!stillCurrent()) return;
               this.showCreatedInvite(invite.code, surface, 'registration');
               await refreshInvites();
@@ -976,14 +976,14 @@ export class CommunityUI {
   private async openRooms(): Promise<void> {
     if (this.disposed) return;
     const view = this.openModal('My rooms');
-    const token = this.options.auth.jwt;
+    const token = this.options.auth.accessToken;
     const account = this.options.auth.userId;
     const current = (): boolean =>
-      view.dialog.open && account === this.options.auth.userId && !!this.options.auth.jwt;
+      view.dialog.open && account === this.options.auth.userId && !!this.options.auth.accessToken;
     view.dialog.setAttribute('data-account-dialog', 'true');
     const savedHost = el('div');
     const saved = mountSavedRooms(savedHost, {
-      getToken: () => this.options.auth.jwt,
+      getToken: () => this.options.auth.accessToken,
       getAccountId: () => this.options.auth.userId,
       current,
       onJoin: (id) => {
@@ -1047,7 +1047,7 @@ export class CommunityUI {
         );
         row.append(
           createFavoriteButton(room.id, favorites.has(room.id), {
-            getToken: () => this.options.auth.jwt,
+            getToken: () => this.options.auth.accessToken,
             getAccountId: () => this.options.auth.userId,
             current,
             onError: (error) => this.showError(view.error, error),
@@ -1190,7 +1190,7 @@ export class CommunityUI {
   private deleteRoom(room: RoomListItem, done: () => void): void {
     if (this.disposed) return;
     const view = this.openModal('Delete room');
-    const token = this.options.auth.jwt;
+    const token = this.options.auth.accessToken;
     const generation = this.generation;
     const confirmation = input('', 'text', 128);
     view.body.append(
@@ -1231,7 +1231,7 @@ export class CommunityUI {
         current: () =>
           this.administration === selection && this.options.auth.userId === selection.accountId,
         token: () => {
-          const token = this.options.auth.jwt;
+          const token = this.options.auth.accessToken;
           if (!token || this.options.auth.userId !== selection.accountId)
             throw new Error('The account changed');
           return token;
@@ -1309,7 +1309,7 @@ export class CommunityUI {
     if (this.editingRoom) return this.editingRoom;
     const live = this.options.getRoom();
     if (live?.currentRoomId) {
-      const rooms = await api.ownRooms(this.options.auth.jwt);
+      const rooms = await api.ownRooms(this.options.auth.accessToken);
       return rooms.find((entry) => entry.id === live.currentRoomId) ?? null;
     }
     return this.editingRoom;
@@ -1345,7 +1345,7 @@ export class CommunityUI {
           return body;
         }
         const room = item;
-        const token = this.options.auth.jwt;
+        const token = this.options.auth.accessToken;
         const name = input(room.display_name, 'text', 100);
         const topic = input(room.topic ?? '', 'text', 500);
         const description = el('textarea');
@@ -1713,7 +1713,7 @@ export class CommunityUI {
         days.max = '30';
         const list = el('div', undefined, 'sheet-group');
         const refresh = async (): Promise<void> => {
-          const invites = await api.roomInvites(this.options.auth.jwt, owned.id);
+          const invites = await api.roomInvites(this.options.auth.accessToken, owned.id);
           if (!stillCurrent()) return;
           list.replaceChildren();
           if (!invites.length) list.append(note('No unused invitations.'));
@@ -1723,7 +1723,7 @@ export class CommunityUI {
                 invite,
                 surface,
                 () => refresh(),
-                () => api.revokeRoomInvite(this.options.auth.jwt, owned.id, invite.id),
+                () => api.revokeRoomInvite(this.options.auth.accessToken, owned.id, invite.id),
               ),
             );
         };
@@ -1732,7 +1732,7 @@ export class CommunityUI {
           () =>
             busy(create, error, async () => {
               if (!stillCurrent()) return;
-              const invite = await api.createRoomInvite(this.options.auth.jwt, owned.id, {
+              const invite = await api.createRoomInvite(this.options.auth.accessToken, owned.id, {
                 role: asRole(role.value) ?? 'member',
                 uses: Number(uses.value) || 1,
                 days: Number(days.value) || 7,

@@ -70,34 +70,43 @@ test("session soak accepts only exact HTTP(S) loopback origins", () => {
     assert.equal(configuration({ ...environment, BASE_URL }).base, BASE_URL);
 });
 
-const ownToken = (payload) =>
-  `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`;
-test("only original expiry timestamp survives successful own auth parsing", () => {
+const ownToken = "A".repeat(43);
+test("only the stated expiry survives successful own auth parsing", () => {
   const now = 1800000000000;
   const expires = now + 900000;
+  const expires_at = new Date(expires).toISOString();
   assert.equal(
     sessionExpiry(
       {
-        token: ownToken({ exp: expires / 1000, sub: "private-account" }),
+        token: ownToken,
+        expires_at,
         user: { email: "private@example.test" },
       },
       now,
     ),
     expires,
   );
-  for (const exp of [
+  for (const stated of [
     undefined,
+    1800000900,
     "1800000900",
-    NaN,
-    0,
-    -1,
-    (now - 1000) / 1000,
-    (now + 1800000) / 1000,
-    Number.MAX_SAFE_INTEGER,
+    "not a timestamp",
+    "2027-01-15T08:15:00+00:00",
+    new Date(now - 1000).toISOString(),
+    new Date(now).toISOString(),
+    new Date(now + 1800000).toISOString(),
   ])
-    assert.throws(() => sessionExpiry({ token: ownToken({ exp }) }, now));
-  for (const token of ["", "x.y", "x.!.z", "x".repeat(16385)])
-    assert.throws(() => sessionExpiry({ token }, now));
+    assert.throws(() =>
+      sessionExpiry({ token: ownToken, expires_at: stated }, now),
+    );
+  for (const token of [
+    "",
+    "header.payload.signature",
+    "A".repeat(42),
+    "A".repeat(44),
+    "+".repeat(43),
+  ])
+    assert.throws(() => sessionExpiry({ token, expires_at }, now));
 });
 
 test("a recovered socket/full rejoin is never a seamless continuity pass", () => {

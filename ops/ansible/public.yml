@@ -177,7 +177,7 @@
             from pathlib import Path
             path = Path('/etc/simplestchat-public/secrets.json')
             names = ['postgres_admin_password', 'migration_password', 'database_password',
-                     'jwt_secret', 'metrics_token', 'proxy_secret', 'owner_password']
+                     'metrics_token', 'proxy_secret', 'owner_password']
             if path.exists() or path.is_symlink():
                 metadata = path.lstat()
                 if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):

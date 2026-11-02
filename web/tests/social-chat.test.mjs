@@ -2225,13 +2225,13 @@ const savedPreferences = {
 
 test('an account viewer loads its saved preferences before the room hears its ignore list', async () => {
   const f = await fixture();
-  f.state.token = 'jwt';
+  f.state.token = 'access-token';
   f.http.response = { ok: true, status: 200, json: async () => savedPreferences };
   await f.chat.activate();
   assert.equal(f.http.requests.length, 1);
   assert.equal(f.http.requests[0][0], '/api/auth/preferences');
   assert.equal(f.http.requests[0][1].method, 'GET');
-  assert.equal(f.http.requests[0][1].headers.Authorization, 'Bearer jwt');
+  assert.equal(f.http.requests[0][1].headers.Authorization, 'Bearer access-token');
   assert.equal(f.chat.privacy.preferences.timestamps, 'seconds');
   assert.equal(f.chat.privacy.preferences.allowPrivateMessages, false);
   assert.equal(f.chat.privacy.preferences.largeText, true);
@@ -2253,7 +2253,7 @@ test('an account viewer loads its saved preferences before the room hears its ig
 test('guests and signed-out viewers never touch the account preference endpoints', async () => {
   const f = await fixture();
   f.state.viewer = 'guest';
-  f.state.token = 'jwt';
+  f.state.token = 'access-token';
   await f.chat.activate();
   f.chat.setTimestampFormat('datetime');
   assert.equal(f.http.requests.length, 0);
@@ -2267,7 +2267,7 @@ test('guests and signed-out viewers never touch the account preference endpoints
 
 test('a scalar chat choice sends only its explicit account PATCH intent', async () => {
   const f = await fixture();
-  f.state.token = 'jwt';
+  f.state.token = 'access-token';
   f.http.response = { ok: true, status: 200, json: async () => savedPreferences };
   await f.chat.activate();
   f.http.requests.length = 0;
@@ -2280,7 +2280,7 @@ test('a scalar chat choice sends only its explicit account PATCH intent', async 
 
 test('a failed preference load keeps the browser copy and says so once', async () => {
   const f = await fixture();
-  f.state.token = 'jwt';
+  f.state.token = 'access-token';
   f.state.storage.set('simplestchat.chat.v1.account-a', JSON.stringify({ timestamps: 'seconds' }));
   f.http.response = { ok: false, status: 503, text: async () => 'down' };
   await f.chat.activate();

@@ -2,7 +2,7 @@
 //! router; the ignored cases require an explicitly disposable PostgreSQL cluster.
 
 use super::*;
-use crate::auth::{jwt, session};
+use crate::auth::{access_tokens, session};
 use crate::ids::fixtures::rid;
 use crate::ids::{MessageId, ParticipantId};
 use crate::room::roles::{self, Role};
@@ -428,7 +428,6 @@ impl Fixture {
             &crate::config::Config::for_tests(),
         )
         .unwrap();
-        server.jwt_secret = Some("disposable-authorization-policy-fixture-secret".into());
         server.registration_enabled = false;
         server.metrics_token = Some("disposable-policy-metrics-secret-at-least-32-bytes".into());
         server.webauthn = Some(Arc::new(
@@ -465,19 +464,14 @@ impl Fixture {
             .unwrap();
             result.users.push(id);
             result.sessions.push(sid);
-            result.tokens.push(result.token(id, sid, 0));
+            let token = result.token(sid).await;
+            result.tokens.push(token);
         }
         result
     }
-    fn token(&self, user: Uuid, sid: Uuid, version: i64) -> String {
-        jwt::create_session_token(
-            &user.to_string(),
-            "Policy fixture",
-            self.server.jwt_secret().unwrap(),
-            version,
-            sid,
-        )
-        .unwrap()
+    /// A fresh access token for session `sid`, issued through the session row.
+    async fn token(&self, sid: Uuid) -> String {
+        access_tokens::fixtures::issue(&self.pool, sid).await
     }
     async fn request(
         &self,
@@ -541,10 +535,39 @@ impl Fixture {
 #[tokio::test]
 #[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
 async fn authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions() {
-    let fixture = Fixture::new(2).await;
-    let foreign = fixture.token(fixture.users[0], fixture.sessions[1], 0);
-    let missing = fixture.token(fixture.users[0], Uuid::new_v4(), 0);
-    let stale_version = fixture.token(fixture.users[1], fixture.sessions[1], 1);
+    let fixture = Fixture::new(3).await;
+    // A token is bound to its own session, so one naming another account's
+    // session cannot be built: the cases are what an opaque token can be.
+    let unknown = "A".repeat(43);
+    let ended = session::create_session(
+        &fixture.pool,
+        &fixture.users[1],
+        &session::generate_refresh_token().unwrap(),
+    )
+    .await
+    .unwrap();
+    let absent_session = fixture.token(ended).await;
+    sqlx::query("DELETE FROM sessions WHERE id=$1")
+        .bind(ended)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    let expired_token = fixture.token(fixture.sessions[1]).await;
+    sqlx::query(
+        "UPDATE session_access_tokens SET expires_at = clock_timestamp() - interval '1 second'
+         WHERE token_hash=$1",
+    )
+    .bind(session::hash_token(&expired_token))
+    .execute(&fixture.pool)
+    .await
+    .unwrap();
+    // The session row survives the version change; the token's version does not match.
+    let stale_version = fixture.tokens[2].clone();
+    sqlx::query("UPDATE users SET auth_version = auth_version + 1 WHERE id=$1")
+        .bind(fixture.users[2])
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
     sqlx::query(
         "UPDATE sessions SET expires_at = clock_timestamp() - interval '1 second' WHERE id=$1",
     )
@@ -561,8 +584,9 @@ async fn authorization_database_every_authenticated_route_rejects_missing_or_non
     }) {
         for (label, token) in [
             ("missing", None),
-            ("wrong-account session", Some(foreign.as_str())),
-            ("absent session", Some(missing.as_str())),
+            ("unknown token", Some(unknown.as_str())),
+            ("absent session", Some(absent_session.as_str())),
+            ("expired token", Some(expired_token.as_str())),
             ("stale version", Some(stale_version.as_str())),
             ("expired session", Some(fixture.tokens[0].as_str())),
         ] {
@@ -577,10 +601,10 @@ async fn authorization_database_every_authenticated_route_rejects_missing_or_non
             sequence += 1;
         }
     }
-    let unchanged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ANY($1) AND display_name='Policy fixture' AND auth_version=0 AND password_hash IS NULL")
-        .bind(&fixture.users).fetch_one(&fixture.pool).await.unwrap();
+    let unchanged: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE id = ANY($1) AND display_name='Policy fixture' AND auth_version=CASE WHEN id=$2 THEN 1 ELSE 0 END AND password_hash IS NULL")
+        .bind(&fixture.users).bind(fixture.users[2]).fetch_one(&fixture.pool).await.unwrap();
     assert_eq!(
-        unchanged, 2,
+        unchanged, 3,
         "denied account writes leave identity and credentials unchanged"
     );
     let created: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM rooms WHERE owner_id=ANY($1)) + (SELECT COUNT(*) FROM invites WHERE created_by=ANY($1))")

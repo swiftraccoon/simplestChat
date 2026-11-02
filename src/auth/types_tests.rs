@@ -40,6 +40,29 @@ fn redacted_debug(name: &str, value: &impl std::fmt::Debug) -> String {
     debug
 }
 
+#[test]
+fn sign_in_responses_state_the_token_expiry_beside_the_opaque_token() {
+    let expires_at = chrono::DateTime::from_timestamp(1_800_000_900, 250_000_000).unwrap();
+    let wire = serde_json::to_value(AuthResponse {
+        token: SECRET.into(),
+        expires_at,
+        user: UserInfo {
+            id: "account".into(),
+            email: "person@example.test".into(),
+            display_name: "Person".into(),
+        },
+    })
+    .unwrap();
+    assert_eq!(
+        wire,
+        json!({
+            "token": SECRET,
+            "expires_at": "2027-01-15T08:15:00.250Z",
+            "user": {"id": "account", "email": "person@example.test", "display_name": "Person"},
+        })
+    );
+}
+
 /// A response body still puts the plain secret on the wire at `pointer`.
 fn assert_serialized_secret(name: &str, value: &impl serde::Serialize, pointer: &str) {
     let wire = serde_json::to_value(value).unwrap();
@@ -126,6 +149,7 @@ fn debug_output_redacts_every_secret_field() {
     // Response bodies redact their debug output and still carry the plain secret.
     let authentication = AuthResponse {
         token: SECRET.into(),
+        expires_at: Utc::now(),
         user: UserInfo {
             id: "account".into(),
             email: "person@example.test".into(),

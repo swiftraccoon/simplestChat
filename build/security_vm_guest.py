@@ -68,7 +68,6 @@ SECRET_NAMES = frozenset(
         "postgres_admin_password",
         "migration_password",
         "database_password",
-        "jwt_secret",
         "metrics_token",
         "proxy_secret",
         "owner_password",
@@ -569,7 +568,6 @@ def public_files() -> JsonObject:
         "MEDIA_WORKERS": "1",
         "BIND_ADDR": "0.0.0.0",  # noqa: S104 - container namespace; host HTTP publication is loopback.
         "PORT": "3000",
-        "JWT_SECRET": string_value(secrets["jwt_secret"]),
         "METRICS_TOKEN": string_value(secrets["metrics_token"]),
         "TRUSTED_PROXY_SECRET": string_value(secrets["proxy_secret"]),
         "DATABASE_URL": "postgres://simplestchat_app:"

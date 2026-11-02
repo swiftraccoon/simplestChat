@@ -96,7 +96,6 @@ Create a local development database, then configure:
 
 ```sh
 export DATABASE_URL='postgres://YOUR_USER:YOUR_PASSWORD@127.0.0.1:5432/simplestchat_dev?sslmode=disable'
-export JWT_SECRET="$(openssl rand -hex 32)"
 export RUN_MIGRATIONS=true
 export REGISTRATION_ENABLED=true
 cargo run --locked -q -p xtask -- run
@@ -104,12 +103,12 @@ cargo run --locked -q -p xtask -- run
 
 Startup migrations change the database schema, so use a dedicated development
 database. The role needs permission to install the `pg_trgm` extension.
-Keep credentials out of Git and reuse the JWT secret across restarts to preserve
-sessions. The launcher accepts only loopback database URLs; `sslmode=disable`
-is for local development.
+Keep credentials out of Git. Sessions and their access tokens live in the
+database, so they survive restarts. The launcher accepts only loopback database
+URLs; `sslmode=disable` is for local development.
 
-Without `DATABASE_URL`, the server is guest-only. Accounts also require a JWT
-secret of at least 32 bytes. Registration and startup migrations default off.
+Without `DATABASE_URL`, the server is guest-only. Registration and startup
+migrations default off.
 
 For passkeys, set `WEBAUTHN_RP_ID=localhost` and
 `WEBAUTHN_ORIGIN=http://localhost:3000`. The origin must match the page you open,

@@ -34,15 +34,15 @@ function configuration(env = process.env) {
   };
 }
 
-/** Decode only our own successful auth response; never return/persist its credential. */
+/** The expiry our own successful auth response states; never return/persist its credential. */
 function sessionExpiry(response, nowMs) {
-  assert.ok(typeof response?.token === 'string' && response.token.length <= 16384);
-  const parts = response.token.split('.');
-  assert.equal(parts.length, 3);
-  assert.ok(parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part)));
-  const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-  assert.ok(Number.isSafeInteger(payload.exp) && payload.exp > 0);
-  const expiryMs = payload.exp * 1000;
+  // The token is opaque: only its issued shape is checked, nothing is read from it.
+  assert.ok(typeof response?.token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(response.token));
+  assert.ok(
+    typeof response.expires_at === 'string' &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(response.expires_at),
+  );
+  const expiryMs = Date.parse(response.expires_at);
   assert.ok(Number.isSafeInteger(expiryMs) && Number.isFinite(nowMs));
   // An unexpected lifetime is not permission to shorten or advance the soak.
   assert.ok(expiryMs > nowMs && expiryMs <= nowMs + 16 * 60000);

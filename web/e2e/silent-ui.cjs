@@ -158,7 +158,11 @@ async function run() {
               if (url.pathname === '/api/auth/refresh')
                 return json(
                   signedIn
-                    ? { token: 'owned-silent-fixture', user: profile }
+                    ? {
+                        token: 'owned-silent-fixture',
+                        expires_at: new Date(Date.now() + 900_000).toISOString(),
+                        user: profile,
+                      }
                     : { error: 'No saved session' },
                   signedIn ? 200 : 401,
                 );

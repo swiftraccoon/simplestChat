@@ -36,7 +36,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `saveRoom` | `PUT /api/auth/saved-rooms/:id`, JSON `{favorite}` | `204`, no body |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
-| WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer JWT and JSON `{}` | `{ ticket: string, expires_in: integer }` |
+| WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer access token and JSON `{}` | `{ ticket: string, expires_in: integer }` |
 | `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
 | `updatePreferences` | `PATCH /api/auth/preferences` with explicit field/set intents | `ChatPreferences` |
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
@@ -102,8 +102,8 @@ Guest sanctions preserve the existing canonical-IP cohort and role hierarchy.
 Restoring permission never starts capture for the participant.
 
 Every operation rechecks the current account/session and saved room role under
-the users → sessions → room database lock order. JWT and refresh-session expiry
-are checked again after lock waits and before a mutation commits. Creation fencing
+the users → sessions → room database lock order. Access-token and refresh-session
+expiry are checked again after lock waits and before a mutation commits. Creation fencing
 and the live room control guard serialize HTTP changes with socket changes and
 the exact room generation. Admitted writes retain their request permit and own
 commit/publication after HTTP cancellation. Durable settings and sanctions publish
@@ -230,7 +230,7 @@ session, visibility, consent and mutation policies remain authoritative.
 The stream has an independent lease: eight connections per account, a separate
 process-wide `MAX_CONNECTIONS` ceiling, and a queue of 64 notices per account.
 A lagging receiver closes and must reconnect/resync. Heartbeat comments arrive
-every fifteen seconds. JWT expiry ends a stream without a grace period; account
+every fifteen seconds. Access-token expiry ends a stream without a grace period; account
 version and the issuing session are revalidated at most every five seconds,
 with each database validation bounded to five seconds. Known account/session
 revocations force revalidation before a queued change can be sent. Failed
@@ -383,18 +383,18 @@ The browser connects to `/ws` on the page's host, using `wss:` for HTTPS pages a
 `ws:` for local HTTP. Messages are JSON text objects with a camelCase `type`
 discriminant and camelCase fields.
 
-A signed-in browser first requests `POST /api/auth/ws-ticket` with its bearer
-JWT in the normal HTTP Authorization header and an empty JSON object. The
+A signed-in browser first requests `POST /api/auth/ws-ticket` with its access
+token in the normal HTTP Authorization header and an empty JSON object. The
 no-store response contains a 43-character base64url `ticket` (256 random bits)
 and integer `expires_in` from 1 through 30 seconds, bounded by the original
 access token's remaining lifetime. The browser offers `simplestchat` and
 `ticket.<ticket>` as WebSocket subprotocols. The server selects only
-`simplestchat`, never the ticket. JWT subprotocols and all WebSocket query
+`simplestchat`, never the ticket. Access-token subprotocols and all WebSocket query
 parameters are rejected; there is no alternate authenticated handshake format.
 A guest can offer just `simplestchat` or omit protocols, as native load clients do.
 An invalid supplied protocol or ticket never downgrades to a guest.
 
-A ticket belongs to the account and refresh-session claims validated at issuance.
+A ticket belongs to the account and refresh session validated at issuance.
 The server atomically removes it before database revalidation, then checks that
 the session still exists, the account version still matches, and both the
 monotonic ticket deadline and original access-token expiry remain in the future.
@@ -422,11 +422,20 @@ loopback origins. Origin-less native clients are handled separately. See
 [configuration](configuration.md) for deployment settings.
 
 Authentication comes from the handshake, not from participant IDs in messages.
-The server also enforces JWT expiry and account revocation on open sockets.
+The server also enforces access-token expiry and account revocation on open sockets.
 
-Access JWTs always include `auth_version` and a UUID `sid`. Authorization requires
-the current account version and the named, unexpired session belonging to that
-account; there is no sessionless JWT contract. Refresh tokens are opaque to the
+Access tokens are opaque handles: 43 unpadded base64url characters encoding 32
+random bytes, accepted for at most fifteen minutes and never past the end of their
+session. Sign-in, registration, refresh and
+both passkey finishes return `{ token, expires_at, user }`, where `expires_at` is
+the RFC 3339 instant the token stops being accepted; clients schedule refresh from
+it and never read the token. The server keeps only each token's SHA-256 digest,
+one `session_access_tokens` row per token naming its session and the account
+version at issue, so each tab's refresh adds a token without retiring another
+tab's. Issuing prunes the session's expired tokens and keeps its newest 32.
+Authorization requires a stored, unexpired token whose unexpired session belongs to
+an account still at that version; ending the session deletes its tokens at once,
+and there is no sessionless token. Refresh tokens are opaque to the
 browser and use only the secure HttpOnly `__Host-refresh_token` cookie at `Path=/`
 with `SameSite=Strict`. The server accepts its single current `v1n` format (two
 43-character unpadded base64url secrets encoding 32 bytes each), never a raw UUID
@@ -435,7 +444,8 @@ Migration 022 invalidates existing sign-ins once, preserving accounts,
 password/passkey credentials, recovery keys and memberships. Affected clients
 must sign in again; no token transition or fallback is provided.
 
-The browser schedules HTTP token refresh after 12 minutes. Network failures or
+The browser schedules HTTP token refresh at four fifths of the token's remaining
+lifetime as the response states it, and never later than twelve minutes. Network failures or
 HTTP 5xx responses retain the current session for up to three refresh requests
 within 15 seconds of starting scheduled refresh, capped by the accepted token's
 expiry. Retries wait three seconds plus up to 249 ms of jitter; waiting for the
@@ -466,7 +476,11 @@ signaling and navigation for the retired attempt.
 After an HTTP refresh, the browser sends `renewAuthentication` with a `requestId`
 and the new `token` on its existing authenticated socket. `authenticationRenewed`
 returns that request ID and `expiresAt` in Unix seconds; a rejected renewal returns
-`authenticationRenewalFailed` with only the request ID. These connection-owned
+`authenticationRenewalFailed` with only the request ID and leaves the socket on its
+accepted credentials. A refused opaque token cannot show whether it was forged,
+evicted or of an ended session; an ended session reaches the socket through the
+account's notice or its next check instead. The browser closes and reconnects on
+that reply. These connection-owned
 replies are separate from room request/error correlation. Never log renewal frames.
 
 Temporary database or authentication-capacity failures instead return
@@ -477,8 +491,9 @@ requested delay plus up to 249 ms of jitter. It allows at most three total
 attempts within one 15-second budget, shortened by the accepted expiry; repeated
 deferrals and newer pending tokens cannot extend that budget.
 
-Renewal validates the same account, credential version and refresh session
-(`sid`) without changing room membership, media, roles or reconnect credentials.
+Renewal validates the same account, credential version and refresh session (the
+new token's session row) without changing room membership, media, roles or
+reconnect credentials.
 It cannot upgrade a guest, change identity or session, shorten the accepted
 lifetime or revive an expired connection.
 The server bounds validation to two seconds and the old expiry, and permits three
@@ -504,9 +519,10 @@ previous check completes, and at once when a session of the account ends (logout
 session revocation, refresh-token reuse, a sign-in ending the oldest session under the
 per-account cap, a password change or recovery): the server discards the check
 in flight and requires a fresh successful one. A session that simply expires is not
-announced; its sockets find it gone at their next check. A database error or validation timeout permits retaining
+announced: no access token outlives its session, so its sockets end with their token
+or at their next check. A database error or validation timeout permits retaining
 previously accepted credentials for at most 15 seconds from the first observed
-failure, capped by the accepted JWT expiry. Only successful revalidation before
+failure, capped by the accepted access token's expiry. Only successful revalidation before
 that deadline clears the allowance. Disconnecting carries the same deadline into
 reconnect grace; it does not start a fresh allowance or extend the normal 30-second
 grace period. Initial authenticated handshakes still require a successful database

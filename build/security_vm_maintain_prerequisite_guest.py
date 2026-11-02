@@ -385,7 +385,6 @@ SECRET_NAMES = frozenset(
         "postgres_admin_password",
         "migration_password",
         "database_password",
-        "jwt_secret",
         "metrics_token",
         "proxy_secret",
         "owner_password",
@@ -438,6 +437,7 @@ MIGRATIONS = (
     "migrations/035_role_numbering.sql",
     "migrations/036_validate_role_numbering.sql",
     "migrations/037_users_avatar_digest.sql",
+    "migrations/038_session_access_tokens.sql",
 )
 STAGED_SOURCES = frozenset(
     {

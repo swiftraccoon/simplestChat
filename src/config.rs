@@ -36,7 +36,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
-/// Shortest secret the server accepts for `JWT_SECRET`, `METRICS_TOKEN`,
+/// Shortest secret the server accepts for `METRICS_TOKEN`,
 /// `TRUSTED_PROXY_SECRET` and `TURN_SECRET`.
 pub const MIN_SECRET_BYTES: usize = 32;
 
@@ -481,11 +481,10 @@ impl WebAuthn {
     }
 }
 
-/// Account authentication.
+/// Account authentication. Accounts need only the database (`DATABASE_URL`):
+/// access tokens are opaque and live there, so no signing secret exists.
 #[derive(Debug, Clone)]
 pub struct Auth {
-    /// `JWT_SECRET`: HS256 secret; without it the auth endpoints answer 503.
-    pub jwt_secret: Option<SecretString>,
     /// `REGISTRATION_ENABLED`: whether new password and passkey accounts may be created.
     pub registration_enabled: bool,
     /// Passkeys, when both `WEBAUTHN_*` variables are set.
@@ -495,14 +494,12 @@ pub struct Auth {
 impl Auth {
     fn read(source: &dyn Source) -> Result<Self> {
         Ok(Self {
-            jwt_secret: secret(source, "JWT_SECRET")?,
             registration_enabled: flag(source, "REGISTRATION_ENABLED", false)?,
             webauthn: WebAuthn::read(source)?,
         })
     }
 
     fn settings(&self, out: &mut BTreeMap<&'static str, Value>) {
-        out.insert("JWT_SECRET", secret_state(self.jwt_secret.as_ref()));
         out.insert("REGISTRATION_ENABLED", json!(self.registration_enabled));
         out.insert(
             "WEBAUTHN_RP_ID",

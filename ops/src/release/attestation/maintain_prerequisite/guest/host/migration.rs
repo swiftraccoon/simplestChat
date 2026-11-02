@@ -27,35 +27,40 @@ const CURRENT_037: &str = concat!(
     "37a9d7b0ee6ebb914f76238489f819c71a45df73428869b351f6e7",
     "c39fd6b6b3def42801227cc7cc1ffeed228e6f89f0"
 );
+// It reverses migration 038 (the session_access_tokens table) the same way.
+const CURRENT_038: &str = concat!(
+    "9541653bd7f9af14a67643062af60993390388132d5ad49465d623",
+    "9509947b4a3eee3d3f8c2c421ce41ddc53957687d6"
+);
 
 #[derive(Clone, Copy)]
 pub(in super::super) enum Generation {
     Before035,
-    After037,
+    After038,
 }
 impl Generation {
     fn last(self) -> u64 {
         match self {
             Self::Before035 => 34,
-            Self::After037 => 37,
+            Self::After038 => 38,
         }
     }
     fn name(self) -> &'static str {
         match self {
             Self::Before035 => "pre035",
-            Self::After037 => "post037",
+            Self::After038 => "post038",
         }
     }
     fn role(self) -> u64 {
         match self {
             Self::Before035 => 1,
-            Self::After037 => 2,
+            Self::After038 => 2,
         }
     }
     fn definition(self) -> &'static str {
         match self {
             Self::Before035 => "CHECK (((role >= 1) AND (role <= 3)))",
-            Self::After037 => "CHECK (((role >= 2) AND (role <= 4)))",
+            Self::After038 => "CHECK (((role >= 2) AND (role <= 4)))",
         }
     }
 }
@@ -87,13 +92,15 @@ impl SourceLedger {
                 return Err(Error::Refused);
             }
         }
-        if rows.keys().copied().collect::<Vec<_>>() != (1..=37).collect::<Vec<_>>()
+        if rows.keys().copied().collect::<Vec<_>>() != (1..=38).collect::<Vec<_>>()
             || rows.get(&35).map(String::as_str) != Some(CURRENT_035)
             || rows.get(&36).map(String::as_str) != Some(CURRENT_036)
             || rows.get(&37).map(String::as_str) != Some(CURRENT_037)
+            || rows.get(&38).map(String::as_str) != Some(CURRENT_038)
             || !sources.contains_key("migrations/035_role_numbering.sql")
             || !sources.contains_key("migrations/036_validate_role_numbering.sql")
             || !sources.contains_key("migrations/037_users_avatar_digest.sql")
+            || !sources.contains_key("migrations/038_session_access_tokens.sql")
         {
             return Err(Error::Refused);
         }
@@ -101,7 +108,7 @@ impl SourceLedger {
     }
 
     /// Exactly one bounded psql --command, original database CID and uid999.
-    /// Explicit BEGIN/COMMIT joins seed data, schema reversal and the three ledger
+    /// Explicit BEGIN/COMMIT joins seed data, schema reversal and the four ledger
     /// deletions. ON_ERROR_STOP and a closed connection roll back a failed txn.
     pub(in super::super) fn preparation_sql(&self) -> String {
         let values = self
@@ -227,9 +234,10 @@ BEGIN
     IF affected<>1 THEN RAISE EXCEPTION 'Fixture refused'; END IF;
     ALTER TABLE public.invites ADD CONSTRAINT invites_role_check CHECK(role BETWEEN 1 AND 3);
     ALTER TABLE public.users DROP COLUMN avatar_digest;
-    DELETE FROM public._sqlx_migrations WHERE version IN (35,36,37);
+    DROP TABLE public.session_access_tokens;
+    DELETE FROM public._sqlx_migrations WHERE version IN (35,36,37,38);
     GET DIAGNOSTICS affected=ROW_COUNT;
-    IF affected<>3 THEN RAISE EXCEPTION 'Fixture refused'; END IF;
+    IF affected<>4 THEN RAISE EXCEPTION 'Fixture refused'; END IF;
 END
 $fixture$;
 COMMIT;
@@ -393,6 +401,14 @@ mod tests {
             ))
             .to_vec(),
         );
+        sources.insert(
+            "migrations/038_session_access_tokens.sql".into(),
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../migrations/038_session_access_tokens.sql"
+            ))
+            .to_vec(),
+        );
         sources
     }
     #[test]
@@ -403,6 +419,7 @@ mod tests {
             "migrations/035_role_numbering.sql",
             "migrations/036_validate_role_numbering.sql",
             "migrations/037_users_avatar_digest.sql",
+            "migrations/038_session_access_tokens.sql",
         ] {
             let mut changed = sources.clone();
             changed.get_mut(name).unwrap().push(b' ');
@@ -413,7 +430,7 @@ mod tests {
         }
         let mut additional = sources;
         additional.insert(
-            "migrations/038_unreviewed.sql".into(),
+            "migrations/039_unreviewed.sql".into(),
             b"SELECT 1;".to_vec(),
         );
         assert!(SourceLedger::from_sources(&additional).is_err());
@@ -421,7 +438,7 @@ mod tests {
     #[test]
     fn closed_observation_joins_actual_snapshot_and_complete_same_generation_ledger() {
         let source = SourceLedger::from_sources(&current_sources()).unwrap();
-        for generation in [Generation::Before035, Generation::After037] {
+        for generation in [Generation::Before035, Generation::After038] {
             let ledger = source
                 .0
                 .iter()
@@ -450,7 +467,7 @@ mod tests {
     }
     #[test]
     fn both_real_columns_and_validation_state_are_mandatory() {
-        for generation in [Generation::Before035, Generation::After037] {
+        for generation in [Generation::Before035, Generation::After038] {
             let row = snapshot(generation);
             verify_snapshot(&row, generation).unwrap();
             for field in ["memberRole", "inviteRole", "redemptionRole"] {
@@ -462,16 +479,16 @@ mod tests {
             missing_validation["constraints"][1]["validated"] = false.into();
             assert!(verify_snapshot(&missing_validation, generation).is_err());
             let other = match generation {
-                Generation::Before035 => Generation::After037,
-                Generation::After037 => Generation::Before035,
+                Generation::Before035 => Generation::After038,
+                Generation::After038 => Generation::Before035,
             };
             assert!(verify_snapshot(&row, other).is_err());
         }
     }
     #[test]
     fn prefix_ledger_requires_all_current_source_checksums_and_no_holes() {
-        let source = SourceLedger((1..=37).map(|version| (version, "c".repeat(96))).collect());
-        for generation in [Generation::Before035, Generation::After037] {
+        let source = SourceLedger((1..=38).map(|version| (version, "c".repeat(96))).collect());
+        for generation in [Generation::Before035, Generation::After038] {
             let rows = (1..=generation.last())
                 .map(|version| format!("{version}|t|{}\n", "c".repeat(96)))
                 .collect::<String>();
@@ -487,7 +504,7 @@ mod tests {
                     .verify_ledger(rows.replacen("|t|", "|f|", 1).as_bytes(), generation)
                     .is_err()
             );
-            let extra = format!("{rows}38|t|{}\n", "c".repeat(96));
+            let extra = format!("{rows}39|t|{}\n", "c".repeat(96));
             assert!(source.verify_ledger(extra.as_bytes(), generation).is_err());
         }
     }

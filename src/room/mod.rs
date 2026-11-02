@@ -99,7 +99,7 @@ pub(crate) struct Participant {
     pub producers: HashMap<ProducerId, ProducerRecord>,
     pub role: roles::Role,
     pub punitive: moderation::PunitiveState,
-    /// True when the connection carried a valid JWT (id == user uuid)
+    /// True when the connection carried a valid access token (id == user uuid)
     pub authenticated: bool,
     /// Client IP (from ConnectInfo / X-Forwarded-For) — used for guest bans
     pub ip: Option<std::net::IpAddr>,
