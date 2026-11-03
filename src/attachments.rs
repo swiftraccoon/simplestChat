@@ -13,6 +13,7 @@ use crate::{
     },
     signaling::{SignalingServer, protocol::ChatAttachment},
 };
+use aws_lc_rs::hmac;
 use axum::{
     Json,
     body::{Body, Bytes, to_bytes},
@@ -46,12 +47,15 @@ static DOWNLOADS: LazyLock<Arc<Semaphore>> = LazyLock::new(|| Arc::new(Semaphore
 /// so it never holds more than one of the four `UPLOADS` permits.
 static ACCOUNT_UPLOADS: LazyLock<crate::sync::Mutex<HashSet<Uuid>>> =
     LazyLock::new(|| crate::sync::Mutex::new(HashSet::new()));
-/// HS256 key for attachment grants: `grant_access` signs a 30-second token for
-/// one attachment, room, participant and media session (with the viewer's
-/// account principal, if any), and `allowed` verifies it. `SignalingServer::new`
-/// draws the key from the OS once and keeps it in memory only, so grants do not
-/// survive a restart and no other server process accepts them. The type has no
-/// `Debug`, so the key cannot reach a log or debug output.
+/// HMAC-SHA256 key for attachment grants: `grant_access` signs a 30-second
+/// grant for one attachment, room, participant and media session (with the
+/// viewer's account principal, if any), and `allowed` verifies it. A grant
+/// travels as `base64url(payload) "." base64url(tag)`, both unpadded, where the
+/// payload is the grant's JSON and the tag its HMAC-SHA256 under this key.
+/// `SignalingServer::new` draws the key from the OS once and keeps it in memory
+/// only, so grants do not survive a restart and no other server process
+/// accepts them. The type has no `Debug`, so the key cannot reach a log or
+/// debug output.
 #[derive(Clone)]
 pub(crate) struct GrantKey([u8; 32]);
 
@@ -64,13 +68,84 @@ impl GrantKey {
         Ok(Self(key))
     }
 
-    fn encoding(&self) -> jsonwebtoken::EncodingKey {
-        jsonwebtoken::EncodingKey::from_secret(&self.0)
+    fn hmac(&self) -> hmac::Key {
+        hmac::Key::new(hmac::HMAC_SHA256, &self.0)
     }
 
-    fn decoding(&self) -> jsonwebtoken::DecodingKey {
-        jsonwebtoken::DecodingKey::from_secret(&self.0)
+    /// `grant` as a token. Fails only when the grant cannot be serialized.
+    fn sign(&self, grant: &Grant) -> serde_json::Result<SecretString> {
+        let payload = serde_json::to_vec(grant)?;
+        let tag = hmac::sign(&self.hmac(), &payload);
+        Ok(format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(&payload),
+            URL_SAFE_NO_PAD.encode(tag)
+        )
+        .into())
     }
+
+    /// The grant in `token`, provided this key signed it, it names
+    /// `attachment_id` and its expiry is later than `now`. The checks run in
+    /// this order, and the first that fails gives the refusal: the length
+    /// bound, before any decoding; one `.` between two segments that are each
+    /// the canonical unpadded base64url of their bytes, the tag 32 bytes long;
+    /// the tag, compared in constant time over the exact payload bytes; and
+    /// only then the payload's JSON, its expiry and its attachment.
+    fn verify(
+        &self,
+        token: &str,
+        attachment_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<Grant, GrantRefusal> {
+        if token.len() > MAX_GRANT_BYTES {
+            return Err(GrantRefusal::Oversized);
+        }
+        let (payload, tag) = token.split_once('.').ok_or(GrantRefusal::Malformed)?;
+        let (Ok(payload), Ok(tag)) = (URL_SAFE_NO_PAD.decode(payload), URL_SAFE_NO_PAD.decode(tag))
+        else {
+            return Err(GrantRefusal::Malformed);
+        };
+        if tag.len() != hmac::HMAC_SHA256.tag_len() {
+            return Err(GrantRefusal::Malformed);
+        }
+        hmac::verify(&self.hmac(), &payload, &tag).map_err(|_| GrantRefusal::Forged)?;
+        let grant: Grant = serde_json::from_slice(&payload).map_err(|_| GrantRefusal::Malformed)?;
+        if grant.exp <= now {
+            return Err(GrantRefusal::Expired);
+        }
+        if grant.attachment_id != attachment_id {
+            return Err(GrantRefusal::OtherAttachment);
+        }
+        Ok(grant)
+    }
+}
+
+/// The longest token `GrantKey::sign` can produce, which `GrantKey::verify`
+/// enforces before decoding anything. The payload is longest with an account:
+/// five UUIDs of 36 characters, a room identifier of at most `MAX_ROOM_ID_LEN`
+/// (128) bytes that JSON never escapes, an account version of at most 20
+/// characters (`i64::MIN`) and two timestamps of at most 33 (chrono's year
+/// limits, with nanoseconds) come to 534 bytes with the field names and
+/// punctuation, which is 712 characters of unpadded base64url; the `.` and the
+/// 43 characters of the 32-byte tag follow.
+const MAX_GRANT_BYTES: usize = 756;
+
+/// Why `GrantKey::verify` refused a token. The download answers every refusal
+/// alike, with `Attachment unavailable`; the reason exists so tests can tell
+/// which check refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GrantRefusal {
+    /// Longer than any grant the server issues; nothing was decoded.
+    Oversized,
+    /// Not one `.` between two canonical unpadded base64url segments, a tag
+    /// that is not 32 bytes, or an authentic payload that is not a grant.
+    Malformed,
+    /// The tag is not this key's tag over the payload.
+    Forged,
+    /// The grant's expiry has passed.
+    Expired,
+    /// The grant names another attachment.
+    OtherAttachment,
 }
 
 fn unavailable() -> AuthError {
@@ -339,12 +414,15 @@ pub(crate) async fn bind_ephemeral(
     Ok(metadata)
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+/// What a grant authorizes, as its token's payload carries it: one
+/// attachment, for one participant's media session in one room, with the
+/// viewer's account principal when signed in, until `exp`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Grant {
-    iss: String,
-    aud: String,
-    exp: usize,
+    /// The instant the grant stops authorizing downloads: the `expires_at`
+    /// that `grant_access` returns with the token.
+    exp: DateTime<Utc>,
     attachment_id: Uuid,
     room_id: RoomId,
     participant_id: ParticipantId,
@@ -408,25 +486,15 @@ pub(crate) async fn grant_access(
     }
     let expires_at = Utc::now() + chrono::Duration::seconds(30);
     let grant = Grant {
-        iss: "simplestChat-attachment".into(),
-        aud: "attachment".into(),
-        exp: expires_at.timestamp() as usize,
+        exp: expires_at,
         attachment_id,
         room_id: room_id.clone(),
         participant_id: *participant_id,
         media_session: session,
         account: principal.cloned(),
     };
-    let token = jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &grant,
-        &key.encoding(),
-    )
-    .map_err(|_| unavailable())?;
-    Ok(AttachmentAccess {
-        token: token.into(),
-        expires_at,
-    })
+    let token = key.sign(&grant).map_err(|_| unavailable())?;
+    Ok(AttachmentAccess { token, expires_at })
 }
 
 /// The grant's account must still hold its live session at the same version,
@@ -446,23 +514,10 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
         .and_then(|header| header.to_str().ok())
         .and_then(|header| header.strip_prefix("Attachment "))
     {
-        if token.len() > 4096 {
-            return Err(unavailable());
-        }
-        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
-        validation.set_issuer(&["simplestChat-attachment"]);
-        validation.set_audience(&["attachment"]);
-        validation.leeway = 0;
-        let grant = jsonwebtoken::decode::<Grant>(
-            token,
-            &server.attachment_grant_key().decoding(),
-            &validation,
-        )
-        .map_err(|_| unavailable())?
-        .claims;
-        if grant.attachment_id != id {
-            return Err(unavailable());
-        }
+        let grant = server
+            .attachment_grant_key()
+            .verify(token, id, Utc::now())
+            .map_err(|_| unavailable())?;
         if let Some(principal) = &grant.account {
             validate_account(pool, principal).await?;
         }

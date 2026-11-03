@@ -1,6 +1,6 @@
 use super::*;
 use crate::ids::fixtures::rid;
-use crate::ids::{MessageId, ParticipantId};
+use crate::ids::{MAX_ROOM_ID_LEN, MessageId, ParticipantId, UserId};
 use crate::signaling::fixtures::{account_server, bearer, server_with_unreachable_database};
 use axum::response::IntoResponse;
 
@@ -148,6 +148,254 @@ fn apng_is_detected_by_chunk_type_only() {
     let mut declared = u32::MAX.to_be_bytes().to_vec();
     declared.extend_from_slice(b"acTL");
     assert!(png_is_animated(&png(declared)));
+}
+
+/// A guest's grant for `attachment_id` that expires at `exp`, for a
+/// participant and media session of its own.
+fn guest_grant(attachment_id: Uuid, exp: DateTime<Utc>) -> Grant {
+    Grant {
+        exp,
+        attachment_id,
+        room_id: rid("grant-room"),
+        participant_id: ParticipantId::random(),
+        media_session: Uuid::new_v4(),
+        account: None,
+    }
+}
+
+/// `payload` sealed the way the grant format is documented, independently of
+/// `GrantKey::sign`: the unpadded base64url of the payload and of its
+/// HMAC-SHA256 tag under the key's bytes, joined by one `.`.
+fn sealed(key: &GrantKey, payload: &[u8]) -> String {
+    let tag = hmac::sign(&hmac::Key::new(hmac::HMAC_SHA256, &key.0), payload);
+    format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(payload),
+        URL_SAFE_NO_PAD.encode(tag)
+    )
+}
+
+/// A grant verifies only as it was signed. Its token is exactly the
+/// documented `base64url(payload) "." base64url(HMAC-SHA256(key, payload))`;
+/// a payload altered under the original tag, a tag with one bit flipped, a
+/// 31-byte tag, the tag of another server's key and a token without exactly
+/// one separator are all refused. The tag is checked before anything in the
+/// payload is read: a payload that is not a grant under a wrong tag, and
+/// another server's check of the grant once expired and for another
+/// attachment, are refused as forged, while this key's own tag over a payload
+/// that is not a grant is refused as malformed.
+#[test]
+fn attachment_grants_reject_tampered_payloads_and_signatures() {
+    let key = GrantKey::generate().unwrap();
+    let id = Uuid::new_v4();
+    let now = Utc::now();
+    let exp = now + chrono::Duration::seconds(30);
+    let grant = guest_grant(id, exp);
+    let signed = key.sign(&grant).unwrap();
+    let token = signed.expose_secret();
+    assert_eq!(token, sealed(&key, &serde_json::to_vec(&grant).unwrap()));
+    assert_eq!(key.verify(token, id, now), Ok(grant.clone()));
+    let (payload, tag) = token.split_once('.').unwrap();
+    let mut altered = grant;
+    altered.participant_id = ParticipantId::random();
+    let altered = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&altered).unwrap());
+    let mut flipped = URL_SAFE_NO_PAD.decode(tag).unwrap();
+    flipped[0] ^= 1;
+    let flipped = URL_SAFE_NO_PAD.encode(&flipped);
+    let truncated = URL_SAFE_NO_PAD.encode(&URL_SAFE_NO_PAD.decode(tag).unwrap()[..31]);
+    for (case, presented, refusal) in [
+        (
+            "altered payload",
+            format!("{altered}.{tag}"),
+            GrantRefusal::Forged,
+        ),
+        (
+            "payload that is not a grant under a wrong tag",
+            format!("{}.{tag}", URL_SAFE_NO_PAD.encode(b"not a grant")),
+            GrantRefusal::Forged,
+        ),
+        (
+            "flipped tag bit",
+            format!("{payload}.{flipped}"),
+            GrantRefusal::Forged,
+        ),
+        (
+            "31-byte tag",
+            format!("{payload}.{truncated}"),
+            GrantRefusal::Malformed,
+        ),
+        (
+            "no separator",
+            format!("{payload}{tag}"),
+            GrantRefusal::Malformed,
+        ),
+        (
+            "two separators",
+            format!("{token}.{tag}"),
+            GrantRefusal::Malformed,
+        ),
+        (
+            "authentic payload that is not a grant",
+            sealed(&key, b"{}"),
+            GrantRefusal::Malformed,
+        ),
+    ] {
+        assert_eq!(key.verify(&presented, id, now), Err(refusal), "{case}");
+    }
+    let other_server = GrantKey::generate().unwrap();
+    assert_eq!(
+        other_server.verify(token, id, now),
+        Err(GrantRefusal::Forged)
+    );
+    assert_eq!(
+        other_server.verify(token, Uuid::new_v4(), exp),
+        Err(GrantRefusal::Forged),
+        "the tag is checked before the expiry and the attachment"
+    );
+}
+
+/// A grant authorizes downloads until its expiry and not at it: `verify`
+/// accepts it a nanosecond before `exp` and refuses it from `exp` on, so a
+/// grant never outlives the `expires_at` its client was told.
+#[test]
+fn attachment_grants_expire() {
+    let key = GrantKey::generate().unwrap();
+    let id = Uuid::new_v4();
+    let exp = Utc::now() + chrono::Duration::seconds(30);
+    let grant = guest_grant(id, exp);
+    let signed = key.sign(&grant).unwrap();
+    let token = signed.expose_secret();
+    assert_eq!(
+        key.verify(token, id, exp - chrono::Duration::nanoseconds(1)),
+        Ok(grant)
+    );
+    assert_eq!(key.verify(token, id, exp), Err(GrantRefusal::Expired));
+    assert_eq!(
+        key.verify(token, id, exp + chrono::Duration::seconds(1)),
+        Err(GrantRefusal::Expired)
+    );
+}
+
+/// A grant names one attachment: its valid tag opens no other.
+#[test]
+fn attachment_grants_refuse_a_valid_tag_for_another_attachment() {
+    let key = GrantKey::generate().unwrap();
+    let (granted, other) = (Uuid::new_v4(), Uuid::new_v4());
+    let now = Utc::now();
+    let grant = guest_grant(granted, now + chrono::Duration::seconds(30));
+    let signed = key.sign(&grant).unwrap();
+    assert_eq!(
+        key.verify(signed.expose_secret(), other, now),
+        Err(GrantRefusal::OtherAttachment)
+    );
+    assert_eq!(key.verify(signed.expose_secret(), granted, now), Ok(grant));
+}
+
+/// Each segment must be the one canonical unpadded base64url text of its
+/// bytes: the same payload and tag written with padding, in the standard
+/// alphabet or both, or with an unused low bit set in the tag's last
+/// character, are refused as malformed before the tag is checked.
+#[test]
+fn attachment_grants_refuse_padded_or_other_alphabet_tokens() {
+    use base64::alphabet;
+    use base64::engine::GeneralPurpose;
+    use base64::engine::general_purpose::{NO_PAD, STANDARD, STANDARD_NO_PAD, URL_SAFE};
+    let key = GrantKey::generate().unwrap();
+    let id = Uuid::new_v4();
+    let now = Utc::now();
+    // The two alphabets differ only in the characters for 62 and 63, so sign
+    // until a token holds one; about three tokens in four do.
+    let (grant, token) = std::iter::repeat_with(|| {
+        let grant = guest_grant(id, now + chrono::Duration::seconds(30));
+        let token = key.sign(&grant).unwrap().expose_secret().to_owned();
+        (grant, token)
+    })
+    .take(100)
+    .find(|(_, token)| token.contains(['-', '_']))
+    .expect("a token holding '-' or '_' within 100 signatures");
+    assert_eq!(key.verify(&token, id, now), Ok(grant));
+    let (payload, tag) = token.split_once('.').unwrap();
+    let payload = URL_SAFE_NO_PAD.decode(payload).unwrap();
+    let tag = URL_SAFE_NO_PAD.decode(tag).unwrap();
+    for (case, engine) in [
+        ("padded", URL_SAFE),
+        ("standard alphabet", STANDARD_NO_PAD),
+        ("standard alphabet, padded", STANDARD),
+    ] {
+        let rewritten = format!("{}.{}", engine.encode(&payload), engine.encode(&tag));
+        assert_ne!(rewritten, token, "{case}");
+        assert_eq!(
+            key.verify(&rewritten, id, now),
+            Err(GrantRefusal::Malformed),
+            "{case}"
+        );
+    }
+    // The tag's last character carries four bits; with an unused low bit
+    // set it spells the same 32 bytes, which only a lenient decoder accepts.
+    let symbols = alphabet::URL_SAFE.as_str().as_bytes();
+    let last = token.as_bytes()[token.len() - 1];
+    let index = symbols.iter().position(|&symbol| symbol == last).unwrap();
+    let lenient = format!(
+        "{}{}",
+        &token[..token.len() - 1],
+        char::from(symbols[index | 1])
+    );
+    let trailing_bits = GeneralPurpose::new(
+        &alphabet::URL_SAFE,
+        NO_PAD.with_decode_allow_trailing_bits(true),
+    );
+    let (_, lenient_tag) = lenient.split_once('.').unwrap();
+    assert_eq!(trailing_bits.decode(lenient_tag).unwrap(), tag);
+    assert_eq!(key.verify(&lenient, id, now), Err(GrantRefusal::Malformed));
+}
+
+/// `MAX_GRANT_BYTES` is the longest grant the server can issue: the largest
+/// grant (an account principal, a room identifier of the greatest length and
+/// the widest account version and timestamps) signs to exactly that length
+/// and verifies. Anything longer is refused before decoding: two runs of `!`
+/// around a `.`, the bound's length in all, pass the bound and the split and
+/// reach the base64 decoder, which refuses them; one byte more is refused
+/// before the split, and so is a validly sealed payload over the bound.
+#[test]
+fn attachment_grants_refuse_an_over_bound_header_before_decoding() {
+    let key = GrantKey::generate().unwrap();
+    let id = Uuid::new_v4();
+    let largest = Grant {
+        exp: DateTime::<Utc>::MAX_UTC,
+        attachment_id: id,
+        room_id: rid(&"r".repeat(MAX_ROOM_ID_LEN)),
+        participant_id: ParticipantId::random(),
+        media_session: Uuid::new_v4(),
+        account: Some(Principal {
+            user: UserId::from(Uuid::new_v4()),
+            sid: Uuid::new_v4(),
+            auth_version: i64::MIN,
+            expires_at: DateTime::<Utc>::MAX_UTC,
+        }),
+    };
+    let signed = key.sign(&largest).unwrap();
+    assert_eq!(signed.expose_secret().len(), MAX_GRANT_BYTES);
+    let now = Utc::now();
+    let mut over_bound = serde_json::to_vec(&largest).unwrap();
+    over_bound.push(b' ');
+    let at_bound = format!("{}.{}", "!".repeat(377), "!".repeat(378));
+    assert_eq!(at_bound.len(), MAX_GRANT_BYTES);
+    assert_eq!(key.verify(signed.expose_secret(), id, now), Ok(largest));
+    for (case, token, refusal) in [
+        ("at the bound", at_bound, GrantRefusal::Malformed),
+        (
+            "one byte over",
+            "!".repeat(MAX_GRANT_BYTES + 1),
+            GrantRefusal::Oversized,
+        ),
+        (
+            "sealed over the bound",
+            sealed(&key, &over_bound),
+            GrantRefusal::Oversized,
+        ),
+    ] {
+        assert_eq!(key.verify(&token, id, now), Err(refusal), "{case}");
+    }
 }
 
 struct Database {
@@ -606,6 +854,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     let location = location(&db.pool, file.id).await.unwrap();
     assert!(location.message_id.is_none());
     assert!(location.ephemeral_message_id.is_some());
+    let before = Utc::now();
     let access = grant_access(
         server.attachment_grant_key(),
         &manager,
@@ -618,6 +867,17 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     )
     .await
     .unwrap();
+    let after = Utc::now();
+    let lifetime = chrono::Duration::seconds(30);
+    assert!((before + lifetime..=after + lifetime).contains(&access.expires_at));
+    let grant = server
+        .attachment_grant_key()
+        .verify(access.token.expose_secret(), file.id, after)
+        .unwrap();
+    assert_eq!(
+        grant.exp, access.expires_at,
+        "the grant expires when its client is told"
+    );
     let mut headers = HeaderMap::new();
     headers.insert(
         "authorization",

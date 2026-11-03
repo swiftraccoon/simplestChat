@@ -10,7 +10,10 @@ use crate::{
     secret::SecretString,
     signaling::SignalingServer,
 };
-use aws_lc_rs::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair};
+use aws_lc_rs::{
+    rand::SystemRandom,
+    signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, KeyPair},
+};
 use axum::{
     Json,
     extract::State,
@@ -65,21 +68,33 @@ fn endpoint_url(endpoint: &str) -> Result<url::Url, AuthError> {
     Ok(parsed)
 }
 
+/// The protected header of every VAPID token: a JWT signed with ES256
+/// (RFC 8292 section 2, RFC 7518 section 3.4).
+const VAPID_HEADER: &[u8] = br#"{"typ":"JWT","alg":"ES256"}"#;
+
+/// The VAPID signing identity: the P-256 key pair, parsed once from the stored
+/// PKCS#8 document, and the public key browsers subscribe with. The document's
+/// bytes are not kept.
 struct VapidKey {
-    private: Vec<u8>,
+    pair: EcdsaKeyPair,
     public: String,
 }
 
 impl VapidKey {
-    fn from_private(private: Vec<u8>) -> anyhow::Result<Self> {
-        let pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &private)
+    fn from_private(private: &[u8]) -> anyhow::Result<Self> {
+        let pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, private)
             .map_err(|_| anyhow::anyhow!("Invalid stored notification signing key"))?;
         Ok(Self {
             public: URL_SAFE_NO_PAD.encode(pair.public_key().as_ref()),
-            private,
+            pair,
         })
     }
 
+    /// The `Authorization` value for one delivery to `endpoint` (RFC 8292):
+    /// `vapid t=<JWS>,k=<public key>`, where the JWS is the header, the claims
+    /// (the endpoint's origin, an expiry an hour ahead and `subject` when
+    /// given) and the ES256 signature over the first two, each unpadded
+    /// base64url. Fails when the claims cannot be serialized or signing fails.
     fn authorization(&self, endpoint: &url::Url, subject: Option<&str>) -> anyhow::Result<String> {
         #[derive(Serialize)]
         struct VapidClaims<'a> {
@@ -88,16 +103,27 @@ impl VapidKey {
             #[serde(skip_serializing_if = "Option::is_none")]
             sub: Option<&'a str>,
         }
-        let token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::ES256),
-            &VapidClaims {
-                aud: endpoint.origin().ascii_serialization(),
-                exp: Utc::now().timestamp() + 3600,
-                sub: subject,
-            },
-            &jsonwebtoken::EncodingKey::from_ec_der(&self.private),
-        )?;
-        Ok(format!("vapid t={token},k={}", self.public))
+        let claims = serde_json::to_vec(&VapidClaims {
+            aud: endpoint.origin().ascii_serialization(),
+            exp: Utc::now().timestamp() + 3600,
+            sub: subject,
+        })?;
+        let signed = format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(VAPID_HEADER),
+            URL_SAFE_NO_PAD.encode(claims)
+        );
+        // `from_private` parsed the pair for the fixed signing algorithm, whose
+        // signature is the 64-byte r||s form ES256 requires, not ASN.1 DER.
+        let signature = self
+            .pair
+            .sign(&SystemRandom::new(), signed.as_bytes())
+            .map_err(|_| anyhow::anyhow!("Notification signing failed"))?;
+        Ok(format!(
+            "vapid t={signed}.{},k={}",
+            URL_SAFE_NO_PAD.encode(signature.as_ref()),
+            self.public
+        ))
     }
 }
 
@@ -123,7 +149,7 @@ async fn load_key(pool: &PgPool) -> anyhow::Result<VapidKey> {
             .await?;
     }
     VapidKey::from_private(
-        stored.ok_or_else(|| anyhow::anyhow!("Notification signing key unavailable"))?,
+        &stored.ok_or_else(|| anyhow::anyhow!("Notification signing key unavailable"))?,
     )
 }
 

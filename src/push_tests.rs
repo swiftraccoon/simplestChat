@@ -39,57 +39,101 @@ fn notification_endpoints_require_known_https_services_without_credentials_or_fr
     assert!(endpoint_url(&format!("https://fcm.googleapis.com/{}", "x".repeat(2048))).is_err());
 }
 
-#[test]
-fn vapid_signatures_bind_the_push_origin_expiry_and_stable_public_key() {
+/// A VAPID key over a freshly generated P-256 key's PKCS#8 document, read the
+/// way `load_key` reads the stored one.
+fn generated_key() -> VapidKey {
     let pair = EcdsaKeyPair::generate(&ECDSA_P256_SHA256_FIXED_SIGNING).unwrap();
-    let document = pair.to_pkcs8v1().unwrap();
-    let key = VapidKey::from_private(document.as_ref().to_vec()).unwrap();
-    let before = Utc::now().timestamp();
+    VapidKey::from_private(pair.to_pkcs8v1().unwrap().as_ref()).unwrap()
+}
+
+/// The authorization `key` gives a delivery to an endpoint whose path holds a
+/// private token, naming `subject` as the contact.
+fn authorization(key: &VapidKey, subject: Option<&str>) -> String {
     let endpoint =
         endpoint_url("https://fcm.googleapis.com/fcm/send/private-endpoint-token").unwrap();
-    let authorization = key
-        .authorization(&endpoint, Some("https://the.research.clinic"))
-        .unwrap();
-    let after = Utc::now().timestamp();
+    key.authorization(&endpoint, subject).unwrap()
+}
+
+/// The JWS segments and the public key of a `vapid t=<JWS>,k=<key>` value.
+fn token_parts(authorization: &str) -> (Vec<&str>, &str) {
     let (token, public) = authorization
         .strip_prefix("vapid t=")
         .unwrap()
         .split_once(",k=")
         .unwrap();
+    (token.split('.').collect(), public)
+}
+
+/// An authorization is `vapid t=<JWS>,k=<key>` (RFC 8292). `k` is the key
+/// pair's public part, the uncompressed P-256 point; the JWS is three
+/// unpadded base64url segments, and its signature is the 64-byte r||s form
+/// that ES256 requires (RFC 7518 section 3.4) and verifies under that public
+/// part through `UnparsedPublicKey`. The signature covers only its own
+/// claims, and an invalid stored key is refused.
+#[test]
+fn vapid_tokens_are_valid_es256_jws() {
+    let key = generated_key();
+    let signed = authorization(&key, Some("https://the.research.clinic"));
+    let (segments, public) = token_parts(&signed);
+    let point = key.pair.public_key().as_ref();
     assert_eq!(public, key.public);
-    let public = URL_SAFE_NO_PAD.decode(public).unwrap();
-    assert_eq!(public.len(), 65);
-    assert_eq!(public[0], 4, "VAPID uses an uncompressed P-256 point");
-    let pieces: Vec<_> = token.split('.').collect();
-    assert_eq!(pieces.len(), 3);
-    let header: serde_json::Value =
-        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(pieces[0]).unwrap()).unwrap();
-    let claims: serde_json::Value =
-        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(pieces[1]).unwrap()).unwrap();
-    assert_eq!(header["alg"], "ES256");
-    assert_eq!(claims["aud"], "https://fcm.googleapis.com");
-    assert_eq!(claims["sub"], "https://the.research.clinic");
-    let expiry = claims["exp"].as_i64().unwrap();
-    assert!((before + 3600..=after + 3600).contains(&expiry));
-    assert!(!claims.to_string().contains("private-endpoint-token"));
-    let signature = URL_SAFE_NO_PAD.decode(pieces[2]).unwrap();
-    UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, public)
+    assert_eq!(URL_SAFE_NO_PAD.decode(public).unwrap(), point);
+    assert_eq!(point.len(), 65);
+    assert_eq!(point[0], 4, "VAPID uses an uncompressed P-256 point");
+    assert_eq!(segments.len(), 3);
+    let decoded: Vec<Vec<u8>> = segments
+        .iter()
+        .map(|segment| URL_SAFE_NO_PAD.decode(segment).unwrap())
+        .collect();
+    let signature = &decoded[2];
+    assert_eq!(signature.len(), 64, "ES256 signs with the fixed r||s form");
+    let verifier = UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, point);
+    verifier
         .verify(
-            format!("{}.{}", pieces[0], pieces[1]).as_bytes(),
-            &signature,
+            format!("{}.{}", segments[0], segments[1]).as_bytes(),
+            signature,
         )
         .unwrap();
-    assert!(VapidKey::from_private(vec![0; 80]).is_err());
-    let no_subject = key.authorization(&endpoint, None).unwrap();
-    let payload = no_subject
-        .strip_prefix("vapid t=")
-        .unwrap()
-        .split('.')
-        .nth(1)
-        .unwrap();
-    let claims: serde_json::Value =
-        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).unwrap()).unwrap();
-    assert!(claims.get("sub").is_none());
+    let unsigned = authorization(&key, None);
+    let (other, _) = token_parts(&unsigned);
+    assert!(
+        verifier
+            .verify(
+                format!("{}.{}", segments[0], other[1]).as_bytes(),
+                signature
+            )
+            .is_err(),
+        "the signature does not cover other claims"
+    );
+    assert!(VapidKey::from_private(&[0; 80]).is_err());
+}
+
+/// The JWS header is exactly `{"typ":"JWT","alg":"ES256"}`, and the claims are
+/// exactly the push service's origin as `aud`, an expiry an hour ahead and,
+/// when given, the contact as `sub`: nothing of the endpoint's path.
+#[test]
+fn vapid_header_and_claims_decode_to_the_expected_json() {
+    let key = generated_key();
+    for subject in [Some("https://the.research.clinic"), None] {
+        let before = Utc::now().timestamp();
+        let signed = authorization(&key, subject);
+        let after = Utc::now().timestamp();
+        let (segments, _) = token_parts(&signed);
+        assert_eq!(
+            URL_SAFE_NO_PAD.decode(segments[0]).unwrap(),
+            br#"{"typ":"JWT","alg":"ES256"}"#
+        );
+        let claims: serde_json::Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(segments[1]).unwrap()).unwrap();
+        let expiry = claims["exp"].as_i64().unwrap();
+        assert!((before + 3600..=after + 3600).contains(&expiry));
+        let mut expected =
+            serde_json::json!({ "aud": "https://fcm.googleapis.com", "exp": expiry });
+        if let Some(subject) = subject {
+            expected["sub"] = subject.into();
+        }
+        assert_eq!(claims, expected);
+    }
 }
 
 #[test]
@@ -215,7 +259,6 @@ async fn database_notifications_keep_key_identity_and_require_current_owned_sess
     let first_key = load_key(&db.pool).await.unwrap();
     let reloaded_key = load_key(&db.pool).await.unwrap();
     assert_eq!(first_key.public, reloaded_key.public);
-    assert_eq!(first_key.private, reloaded_key.private);
     let user = db.user().await;
     let foreign = db.user().await;
     let first = db.session(user).await;
