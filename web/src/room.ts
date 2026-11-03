@@ -9,8 +9,8 @@ import type { CallHealthSource, CallHealthState } from './call-health';
 import type {
   ChatStyle,
   ClientMessage,
-  RoomSettings,
   RoomSettingsPatch,
+  RoomSettingsView,
   ServerMessage,
   SocialAction,
   SocialRequest,
@@ -106,7 +106,7 @@ export type RoomEventHandler = {
   onAudioLevels: (levels: { participantId: string; volume: number }[]) => void;
   onModeration: (action: string, participantId: string, reason?: string) => void;
   onRoleChanged: (participantId: string, newRole: Role) => void;
-  onRoomSettingsChanged: (settings: RoomSettings) => void;
+  onRoomSettingsChanged: (settings: RoomSettingsView) => void;
   onTopicChanged: (topic: string, changedBy: string) => void;
   onVoiceRequested: (participantId: string, displayName: string) => void;
   onLobbyWaiting: (
@@ -208,7 +208,7 @@ export class RoomClient {
   private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
   private localRole: Role = 'user';
-  private _roomSettings: RoomSettings | null = null;
+  private _roomSettings: RoomSettingsView | null = null;
   private localTextMuted = false;
   private localCamBanned = false;
   private serverCanChat: boolean | null = null;
@@ -1295,7 +1295,7 @@ export class RoomClient {
     return this.localRole;
   }
 
-  get roomSettings(): RoomSettings | null {
+  get roomSettings(): RoomSettingsView | null {
     return this._roomSettings;
   }
 

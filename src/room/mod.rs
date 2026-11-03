@@ -13,7 +13,7 @@ mod receive_replacement;
 pub(crate) mod refusal;
 pub(crate) mod roles;
 pub(crate) mod settings;
-pub use settings::{RoomSettings, SettingsPatch};
+pub use settings::{RoomSettings, RoomSettingsView, SettingsPatch};
 pub(crate) mod social;
 mod window;
 
@@ -163,7 +163,7 @@ pub(crate) enum JoinResult {
         participants: Vec<ParticipantInfo>,
         role: roles::Role,
         /// Boxed so the lobby outcome does not pay for the settings it lacks.
-        room_settings: Option<Box<settings::RoomSettings>>,
+        room_settings: Option<Box<settings::RoomSettingsView>>,
         /// The joiner's look: the account's saved one, or the guest's.
         chat_style: ChatStyle,
         /// The name the room knows the joiner by: a guest's may carry a number.

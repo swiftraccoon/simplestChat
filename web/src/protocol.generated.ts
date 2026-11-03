@@ -429,7 +429,7 @@ export type ServerMessage =
       yourName: string;
       /** This participant's look: an account's saved one, or the guest's. */
       yourChatStyle: ChatStyle;
-      roomSettings?: RoomSettings;
+      roomSettings?: RoomSettingsView;
     }
   | {
       type: 'authenticationRenewed';
@@ -716,7 +716,7 @@ export type ServerMessage =
   | {
       type: 'roomSettingsChanged';
       requestId?: string;
-      settings: RoomSettings;
+      settings: RoomSettingsView;
     }
   | {
       type: 'topicChanged';
@@ -967,7 +967,7 @@ export interface RoomSnapshot {
   lobby: SnapshotLobbyEntry[];
   yourRole: Role;
   chatSessionId: string;
-  roomSettings: RoomSettings | null;
+  roomSettings: RoomSettingsView | null;
   nickname: string;
   allowPrivateMessages: boolean;
   ignoredParticipantIds: string[];
@@ -1067,7 +1067,13 @@ export interface ParticipantInfo {
   chatStyle: ChatStyle;
 }
 
-export interface RoomSettings {
+/**
+ * The room settings a client receives: in `roomJoined`, `roomSettingsChanged`
+ * and the room snapshot, from room creation and from the administration pages.
+ * Every stored setting but the owner, whom participants learn by role, never by
+ * account id. An absent limit or topic is omitted rather than `null`.
+ */
+export interface RoomSettingsView {
   id: string;
   displayName: string;
   passwordProtected: boolean;

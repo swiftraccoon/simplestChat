@@ -1,7 +1,7 @@
-use super::{RoomManager, control, settings};
+use super::{RoomManager, RoomSettingsView, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;
-use crate::ids::RoomId;
+use crate::ids::{RoomId, UserId};
 use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::{ChatStyle, ServerMessage, deserialize_appearance_style};
 use serde::Deserialize;
@@ -73,7 +73,7 @@ impl RoomManager {
     pub(crate) async fn update_room_identity(
         &self,
         room_id: &RoomId,
-        owner_id: Uuid,
+        owner_id: UserId,
         identity: RoomIdentityUpdate,
     ) -> Result<bool, RoomError> {
         let pool = self
@@ -138,7 +138,7 @@ impl RoomManager {
             } else {
                 // Authorize before any uncertain write can reserve this ID.
                 // Read failure has no durable side effects to quarantine.
-                let saved_owner: Option<Uuid> = tokio::time::timeout(
+                let saved_owner: Option<UserId> = tokio::time::timeout(
                     Duration::from_secs(5),
                     sqlx::query_scalar("SELECT owner_id FROM rooms WHERE id=$1")
                         .bind(&room_id)
@@ -217,9 +217,10 @@ impl RoomManager {
             {
                 // Publication is mandatory after COMMIT, not part of its timeout.
                 let mut room = room_lock.write().await;
-                room.settings = Some(settings.clone());
+                let view = RoomSettingsView::from(&settings);
+                room.settings = Some(settings);
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: view });
             }
             Ok(true)
         };

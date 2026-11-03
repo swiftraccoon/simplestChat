@@ -2713,7 +2713,7 @@ async fn database_public_message_removal_scrubs_durable_history_without_runtime_
         .unwrap();
     }
     let mut settings = crate::room::RoomSettings::defaults(&room_id);
-    settings.owner_id = moderator.id.as_uuid();
+    settings.owner_id = UserId::from(moderator.id.as_uuid());
     settings.history_retention_days = 7;
     room.id = room_id.clone();
     room.persisted = true;
@@ -2903,7 +2903,7 @@ async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
         .await
         .unwrap();
     let mut settings = crate::room::RoomSettings::defaults(&room_id);
-    settings.owner_id = owner_id;
+    settings.owner_id = UserId::from(owner_id);
     room.id = room_id.clone();
     room.persisted = true;
     room.settings = Some(settings);

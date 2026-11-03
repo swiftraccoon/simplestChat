@@ -140,7 +140,7 @@ impl RoomManager {
             .as_mut()
             .ok_or_else(|| unavailable("Room settings unavailable"))?;
         settings.history_retention_days = retention_days;
-        let settings = settings.clone();
+        let settings = RoomSettingsView::from(&*settings);
         room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
         if retention_days == 0 {
             room.social.pins.clear();

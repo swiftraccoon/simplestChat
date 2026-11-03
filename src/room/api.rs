@@ -1,9 +1,9 @@
 use crate::auth::{account, types::AuthError};
-use crate::ids::{RoomId, room_log_handle};
+use crate::ids::RoomId;
 use crate::room::DeleteRoomResult;
 use crate::room::community::RoomIdentityUpdate;
 use crate::room::refusal::RoomError;
-use crate::room::settings::{self, CreateRoomRequest, RoomSettings};
+use crate::room::settings::{self, CreateRoomRequest, RoomSettingsView};
 use crate::signaling::SignalingServer;
 use crate::signaling::protocol::ChatStyle;
 use axum::{
@@ -369,12 +369,12 @@ pub(crate) async fn create_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(req): Json<CreateRoomRequest>,
-) -> Result<Json<RoomSettings>, RoomApiError> {
+) -> Result<Json<RoomSettingsView>, RoomApiError> {
     let _request_permit = acquire_room_api_request(&server)?;
     let principal = account::authenticated_principal(&server, &headers)
         .await
         .map_err(IntoResponse::into_response)?;
-    let owner_id = principal.user.as_uuid();
+    let owner_id = principal.user;
     if !server.allow_room_creation(principal.user) {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
@@ -384,9 +384,8 @@ pub(crate) async fn create_room(
             .into());
     }
 
-    if let Err(message) = settings::validate_create_request(&req) {
-        return Err((StatusCode::BAD_REQUEST, message).into_response().into());
-    }
+    let room_id = settings::validate_create_request(&req)
+        .map_err(|message| (StatusCode::BAD_REQUEST, message).into_response())?;
     let password_hash = match &req.password {
         Some(password) => Some(
             server
@@ -403,7 +402,7 @@ pub(crate) async fn create_room(
 
     let room = server
         .room_manager()
-        .create_persisted_room(&owner_id, &req, password_hash.as_deref())
+        .create_persisted_room(owner_id, &room_id, &req, password_hash.as_deref())
         .await
         .map_err(|error| {
             if server.room_manager().drain_signal().is_draining() {
@@ -415,7 +414,7 @@ pub(crate) async fn create_room(
                 }
                 RoomError::Database(error) => {
                     crate::db::record_error(&error);
-                    warn!(room = %room_log_handle(&req.id), %error, "Failed to create room");
+                    warn!(room = %room_id.log_handle(), %error, "Failed to create room");
                     AuthError::DatabaseError("room creation failed".to_string()).into_response()
                 }
             }
@@ -428,7 +427,7 @@ pub(crate) async fn create_room(
                 .into_response()
         })?;
 
-    Ok(Json(room))
+    Ok(Json(RoomSettingsView::from(&room)))
 }
 
 /// DELETE /api/rooms/:id
@@ -569,8 +568,7 @@ pub(crate) async fn update_room_identity(
     let owner = account::authenticated_principal(&server, &headers)
         .await
         .map_err(IntoResponse::into_response)?
-        .user
-        .as_uuid();
+        .user;
     request.validate().map_err(IntoResponse::into_response)?;
     if !server
         .room_manager()

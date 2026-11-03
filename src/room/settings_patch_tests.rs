@@ -306,7 +306,7 @@ async fn room_passwords_match_across_unicode_normalization() {
             .await
             .unwrap();
         manager
-            .create_persisted_room(&owner_id, &request, Some(&hash))
+            .create_persisted_room(UserId::from(owner_id), &room_id, &request, Some(&hash))
             .await
             .unwrap()
             .expect("the room id is free");

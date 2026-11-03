@@ -108,17 +108,17 @@ test('a message without a look wears the automatic one rather than being dropped
   const decoded = decode({ type: 'chatReceived', ...bare });
   assert.deepEqual(decoded.chatStyle, { color: null, style: 'accent' });
 });
+// Exactly what the server's RoomSettingsView writes for a default room named Room
+// (src/room/settings.rs pins the same object): no owner, and no limit or topic key
+// when none is set.
 const settings = {
   nameStyle: { color: null, style: 'accent' },
   historyRetentionDays: 0,
   topicStyle: { color: null, style: 'accent' },
   id: 'room',
-  ownerId: 'owner',
   displayName: 'Room',
   passwordProtected: false,
   requireRegistration: false,
-  maxParticipants: null,
-  maxBroadcasters: null,
   allowScreenSharing: true,
   allowChat: true,
   allowVideo: true,
@@ -129,7 +129,6 @@ const settings = {
   pushToTalk: false,
   guestsAllowed: true,
   guestsCanBroadcast: true,
-  topic: null,
 };
 const snapshot = {
   participants: [participant],
@@ -587,8 +586,33 @@ for (const [action, data] of Object.entries(socialData)) {
   });
 }
 
+test('room settings frames decode to exactly the view the server writes', () => {
+  const limited = { ...settings, maxParticipants: 12, maxBroadcasters: 4, topic: 'Welcome' };
+  const joined = fixtures.find((value) => value.type === 'roomJoined');
+  for (const view of [settings, limited]) {
+    assert.deepEqual(decode({ ...joined, roomSettings: view }).roomSettings, view);
+    assert.deepEqual(decode({ type: 'roomSettingsChanged', settings: view }).settings, view);
+    const restored = decode({
+      type: 'socialResponse',
+      requestId: 'request',
+      action: 'getRoomSnapshot',
+      data: { ...snapshot, roomSettings: view },
+    });
+    assert.deepEqual(restored.data.roomSettings, view);
+  }
+});
+
 test('normalizes Rust null optionals without losing meaningful false, zero, or empty strings', () => {
-  const room = decode(fixtures.find((value) => value.type === 'roomJoined'));
+  const room = decode({
+    ...fixtures.find((value) => value.type === 'roomJoined'),
+    roomSettings: {
+      ...settings,
+      maxParticipants: null,
+      maxBroadcasters: null,
+      topic: null,
+      ownerId: 'owner',
+    },
+  });
   assert.equal(Object.hasOwn(room.roomSettings, 'maxParticipants'), false);
   assert.equal(Object.hasOwn(room.roomSettings, 'maxBroadcasters'), false);
   assert.equal(Object.hasOwn(room.roomSettings, 'topic'), false);

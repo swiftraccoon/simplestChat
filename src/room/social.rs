@@ -2193,7 +2193,7 @@ impl RoomManager {
             },
             your_role: actor.role,
             chat_session_id: actor.social.chat_session_id,
-            room_settings: room.settings.clone(),
+            room_settings: room.settings.as_ref().map(RoomSettingsView::from),
             nickname: actor.name.clone(),
             allow_private_messages: actor.social.allow_private_messages,
             ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),

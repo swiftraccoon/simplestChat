@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
 use crate::room::moderation::{ReportResolution, ReportStatus};
-use crate::room::settings::{RoomSettings, SettingsPatch};
+use crate::room::settings::{RoomSettingsView, SettingsPatch};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -471,7 +471,7 @@ pub enum ServerMessage {
         #[serde(default)]
         your_chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        room_settings: Option<RoomSettings>,
+        room_settings: Option<RoomSettingsView>,
     },
     /// The existing socket accepted a same-identity credential renewal.
     AuthenticationRenewed {
@@ -741,7 +741,7 @@ pub enum ServerMessage {
     // === Room state ===
     /// Room settings were changed
     RoomSettingsChanged {
-        settings: RoomSettings,
+        settings: RoomSettingsView,
     },
     /// Room topic was changed
     TopicChanged {
@@ -1089,7 +1089,7 @@ pub struct RoomSnapshot {
     pub lobby: Vec<SnapshotLobbyEntry>,
     pub your_role: Role,
     pub chat_session_id: Uuid,
-    pub room_settings: Option<RoomSettings>,
+    pub room_settings: Option<RoomSettingsView>,
     pub nickname: String,
     pub allow_private_messages: bool,
     pub ignored_participant_ids: Vec<ParticipantId>,

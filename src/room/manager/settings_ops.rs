@@ -164,7 +164,8 @@ impl RoomManager {
         if let Some(hash) = password_hash {
             room.password_hash = hash;
         }
-        room.settings = Some(updated.clone());
+        let view = settings::RoomSettingsView::from(&updated);
+        room.settings = Some(updated);
         room.policy_revision = room.policy_revision.wrapping_add(1);
         let revoked = Self::revoke_unauthorized_producers(
             &mut room,
@@ -173,7 +174,7 @@ impl RoomManager {
         );
         let active_observer = room.active_speaker_observer.clone();
         let audio_observer = room.audio_level_observer.clone();
-        room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: updated });
+        room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: view });
         drop(room);
         control.release();
 

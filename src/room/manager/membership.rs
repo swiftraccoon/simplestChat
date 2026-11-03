@@ -140,7 +140,7 @@ impl RoomManager {
                 pool,
                 room_id,
                 user_uuid.as_ref(),
-                &room_settings.owner_id,
+                &room_settings.owner_id.as_uuid(),
                 authenticated,
             ),
         )
@@ -614,7 +614,13 @@ impl RoomManager {
             Some(
                 measure_result(
                     Stage::RoomPolicyLookup,
-                    roles::resolve_role(pool, room_id, user_uuid.as_ref(), owner_id, authenticated),
+                    roles::resolve_role(
+                        pool,
+                        room_id,
+                        user_uuid.as_ref(),
+                        &owner_id.as_uuid(),
+                        authenticated,
+                    ),
                 )
                 .await
                 .map_err(|error| {
@@ -895,7 +901,10 @@ impl RoomManager {
                 .collect();
 
             // Serialize room settings for the joining client
-            let room_settings = room.settings.clone().map(Box::new);
+            let room_settings = room
+                .settings
+                .as_ref()
+                .map(|settings| Box::new(settings::RoomSettingsView::from(settings)));
 
             Ok(JoinResult::Joined {
                 participants,

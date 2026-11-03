@@ -3,8 +3,8 @@ import type {
   RoomBansPage,
   RoomMembersPage,
   RoomReportsPage,
-  RoomSettings,
   RoomSettingsPatch,
+  RoomSettingsView,
 } from './protocol';
 import type { ScreenContext, SheetScreen, SheetSection } from './settings-sheet';
 import {
@@ -28,7 +28,7 @@ import type {
 
 export interface RoomAdministrationView {
   role: Role;
-  settings: RoomSettings;
+  settings: RoomSettingsView;
 }
 
 export interface RoomAdministrationLobbyPage {
@@ -128,8 +128,8 @@ const labels: Record<Section, string> = {
   history: 'History',
 };
 type BooleanSetting = {
-  [K in keyof RoomSettings]-?: RoomSettings[K] extends boolean ? K : never;
-}[keyof RoomSettings];
+  [K in keyof RoomSettingsView]-?: RoomSettingsView[K] extends boolean ? K : never;
+}[keyof RoomSettingsView];
 
 const access: [BooleanSetting, string][] = [
   ['guestsAllowed', 'Allow guests'],

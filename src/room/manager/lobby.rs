@@ -204,7 +204,7 @@ impl RoomManager {
         } else {
             entry.reconnect_token.clone()
         };
-        let room_settings = room.settings.clone();
+        let room_settings = room.settings.as_ref().map(settings::RoomSettingsView::from);
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
             participant_id: entry.participant_id,
             participants,

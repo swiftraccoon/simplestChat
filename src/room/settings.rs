@@ -1,19 +1,76 @@
-use crate::ids::RoomId;
+use crate::ids::{RoomId, UserId};
 use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::ChatStyle;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
+/// A room's settings as the server holds them: loaded from its `rooms` row,
+/// written with it at creation, or the defaults of an ad-hoc room. The record
+/// carries the owner and has no serde form, so it never reaches a client and no
+/// payload can produce one; clients receive [`RoomSettingsView`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomSettings {
+    pub id: RoomId,
+    pub owner_id: UserId,
+    pub display_name: String,
+    pub password_protected: bool,
+    pub require_registration: bool,
+    pub max_participants: Option<i32>,
+    pub max_broadcasters: Option<i32>,
+    pub allow_screen_sharing: bool,
+    pub allow_chat: bool,
+    pub allow_video: bool,
+    pub moderated: bool,
+    pub invite_only: bool,
+    pub secret: bool,
+    pub lobby_enabled: bool,
+    pub push_to_talk: bool,
+    pub guests_allowed: bool,
+    pub guests_can_broadcast: bool,
+    pub topic: Option<String>,
+    pub name_style: ChatStyle,
+    pub topic_style: ChatStyle,
+    pub history_retention_days: i64,
+}
+
+impl RoomSettings {
+    /// The settings of a room that has none stored: open, unmoderated and unowned.
+    pub fn defaults(room_id: &RoomId) -> Self {
+        Self {
+            id: room_id.clone(),
+            owner_id: UserId::from(Uuid::nil()),
+            display_name: room_id.to_string(),
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
+            history_retention_days: 0,
+            password_protected: false,
+            require_registration: false,
+            max_participants: None,
+            max_broadcasters: None,
+            allow_screen_sharing: true,
+            allow_chat: true,
+            allow_video: true,
+            moderated: false,
+            invite_only: false,
+            secret: false,
+            lobby_enabled: false,
+            push_to_talk: false,
+            guests_allowed: true,
+            guests_can_broadcast: true,
+            topic: None,
+        }
+    }
+}
+
+/// The room settings a client receives: in `roomJoined`, `roomSettingsChanged`
+/// and the room snapshot, from room creation and from the administration pages.
+/// Every stored setting but the owner, whom participants learn by role, never by
+/// account id. An absent limit or topic is omitted rather than `null`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RoomSettings {
-    pub id: String,
-    /// Never written to the wire: participants learn the owner by role, not by
-    /// account id. Read when present, because the administration path rebuilds
-    /// the settings from a JSON row that carries it.
-    #[serde(skip_serializing, default)]
-    pub owner_id: Uuid,
+pub struct RoomSettingsView {
+    pub id: RoomId,
     pub display_name: String,
     pub password_protected: bool,
     pub require_registration: bool,
@@ -38,31 +95,54 @@ pub struct RoomSettings {
     pub history_retention_days: i64,
 }
 
-impl RoomSettings {
-    /// The settings of a room that has none stored: open, unmoderated and unowned.
-    pub fn defaults(room_id: &RoomId) -> Self {
+impl From<&RoomSettings> for RoomSettingsView {
+    fn from(settings: &RoomSettings) -> Self {
+        // Naming every field makes a new stored setting fail to compile until it
+        // is either sent here or withheld like the owner.
+        let RoomSettings {
+            id,
+            owner_id: _,
+            display_name,
+            password_protected,
+            require_registration,
+            max_participants,
+            max_broadcasters,
+            allow_screen_sharing,
+            allow_chat,
+            allow_video,
+            moderated,
+            invite_only,
+            secret,
+            lobby_enabled,
+            push_to_talk,
+            guests_allowed,
+            guests_can_broadcast,
+            topic,
+            name_style,
+            topic_style,
+            history_retention_days,
+        } = settings;
         Self {
-            id: room_id.to_string(),
-            owner_id: Uuid::nil(),
-            display_name: room_id.to_string(),
-            name_style: ChatStyle::default(),
-            topic_style: ChatStyle::default(),
-            history_retention_days: 0,
-            password_protected: false,
-            require_registration: false,
-            max_participants: None,
-            max_broadcasters: None,
-            allow_screen_sharing: true,
-            allow_chat: true,
-            allow_video: true,
-            moderated: false,
-            invite_only: false,
-            secret: false,
-            lobby_enabled: false,
-            push_to_talk: false,
-            guests_allowed: true,
-            guests_can_broadcast: true,
-            topic: None,
+            id: id.clone(),
+            display_name: display_name.clone(),
+            password_protected: *password_protected,
+            require_registration: *require_registration,
+            max_participants: *max_participants,
+            max_broadcasters: *max_broadcasters,
+            allow_screen_sharing: *allow_screen_sharing,
+            allow_chat: *allow_chat,
+            allow_video: *allow_video,
+            moderated: *moderated,
+            invite_only: *invite_only,
+            secret: *secret,
+            lobby_enabled: *lobby_enabled,
+            push_to_talk: *push_to_talk,
+            guests_allowed: *guests_allowed,
+            guests_can_broadcast: *guests_can_broadcast,
+            topic: topic.clone(),
+            name_style: name_style.clone(),
+            topic_style: topic_style.clone(),
+            history_retention_days: *history_retention_days,
         }
     }
 }
@@ -127,8 +207,8 @@ where
 
 #[derive(FromRow)]
 struct RoomRow {
-    id: String,
-    owner_id: Uuid,
+    id: RoomId,
+    owner_id: UserId,
     display_name: String,
     password_hash: Option<String>,
     require_registration: bool,
@@ -191,10 +271,11 @@ pub(crate) fn valid_new_room_password(password: &str) -> bool {
         && !password.chars().any(char::is_control)
 }
 
-pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(), &'static str> {
-    if !valid_room_id(&request.id) {
-        return Err("Room ID must use 1-128 letters, numbers, hyphens, or underscores");
-    }
+/// Checks a room-creation request and returns the room identifier it names,
+/// parsed here once so that creation carries it as a [`RoomId`].
+pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<RoomId, &'static str> {
+    let room_id = RoomId::new(request.id.as_str())
+        .map_err(|_| "Room ID must use 1-128 letters, numbers, hyphens, or underscores")?;
     if request.display_name.trim().is_empty()
         || request.display_name.len() > MAX_DISPLAY_NAME_LEN
         || !crate::labels::is_plain(&request.display_name)
@@ -233,7 +314,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(),
     ) {
         return Err("Maximum broadcasters cannot exceed maximum participants");
     }
-    Ok(())
+    Ok(room_id)
 }
 
 /// The stored settings and password hash of a room, from a pool or from inside a
@@ -284,9 +365,12 @@ pub(crate) async fn load_room<'e>(
     }))
 }
 
+/// Insert a new saved room under `owner_id` and return its settings. `room_id` is
+/// the identifier [`validate_create_request`] parsed from `req`.
 pub(crate) async fn create_room(
     pool: &PgPool,
-    owner_id: &Uuid,
+    owner_id: UserId,
+    room_id: &RoomId,
     req: &CreateRoomRequest,
     password_hash: Option<&str>,
     max_persisted_rooms: i64,
@@ -334,7 +418,7 @@ pub(crate) async fn create_room(
                            guests_allowed, guests_can_broadcast, topic)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
     )
-    .bind(&req.id)
+    .bind(room_id)
     .bind(owner_id)
     .bind(&req.display_name)
     .bind(password_hash)
@@ -353,8 +437,8 @@ pub(crate) async fn create_room(
     transaction.commit().await?;
 
     Ok(RoomSettings {
-        id: req.id.clone(),
-        owner_id: *owner_id,
+        id: room_id.clone(),
+        owner_id,
         display_name: req.display_name.clone(),
         password_protected: password_hash.is_some(),
         require_registration: req.require_registration.unwrap_or(false),
@@ -507,14 +591,15 @@ pub(crate) async fn update_room_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     /// The web client reads camelCase keys from the roomJoined/roomSettingsChanged
     /// payloads — this guards against snake_case regressions in the wire format.
     #[test]
     fn room_settings_serialize_camel_case() {
         let settings = RoomSettings {
-            id: "room-1".to_string(),
-            owner_id: Uuid::nil(),
+            id: rid("room-1"),
+            owner_id: UserId::from(Uuid::nil()),
             display_name: "Room One".to_string(),
             password_protected: false,
             require_registration: false,
@@ -535,7 +620,7 @@ mod tests {
             topic_style: ChatStyle::default(),
             history_retention_days: 0,
         };
-        let value = serde_json::to_value(&settings).unwrap();
+        let value = serde_json::to_value(RoomSettingsView::from(&settings)).unwrap();
         let obj = value.as_object().unwrap();
         for key in [
             "displayName",
@@ -613,19 +698,52 @@ mod tests {
         assert!(validate_create_request(&request).is_err());
     }
 
-    /// The owner id leaves with no payload but survives a JSON round-trip that carries it,
-    /// which is how the administration transaction loads the row it patches.
+    /// Participants learn ownership by role: the settings a client receives name the
+    /// room and never its owner's account. The browser's decoder fixtures
+    /// (web/tests/protocol-validation.test.mjs) carry this same object.
     #[test]
-    fn owner_id_is_read_but_never_written() {
-        let owner = Uuid::new_v4();
-        let mut settings = RoomSettings::defaults(&"owned".parse().unwrap());
-        settings.owner_id = owner;
-        let mut value = serde_json::to_value(&settings).unwrap();
-        assert!(value.get("ownerId").is_none());
-        let anonymous: RoomSettings = serde_json::from_value(value.clone()).unwrap();
-        assert_eq!(anonymous.owner_id, Uuid::nil());
-        value["ownerId"] = serde_json::json!(owner);
-        let loaded: RoomSettings = serde_json::from_value(value).unwrap();
-        assert_eq!(loaded.owner_id, owner);
+    fn room_settings_never_serialize_the_owner() {
+        let mut settings = RoomSettings::defaults(&rid("room"));
+        settings.display_name = "Room".into();
+        settings.owner_id = UserId::random();
+        let value = serde_json::to_value(RoomSettingsView::from(&settings)).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "id": "room",
+                "displayName": "Room",
+                "passwordProtected": false,
+                "requireRegistration": false,
+                "allowScreenSharing": true,
+                "allowChat": true,
+                "allowVideo": true,
+                "moderated": false,
+                "inviteOnly": false,
+                "secret": false,
+                "lobbyEnabled": false,
+                "pushToTalk": false,
+                "guestsAllowed": true,
+                "guestsCanBroadcast": true,
+                "nameStyle": {"color": null, "style": "accent"},
+                "topicStyle": {"color": null, "style": "accent"},
+                "historyRetentionDays": 0,
+            })
+        );
+        let owner = settings.owner_id.to_string();
+        assert!(!value.to_string().contains(&owner), "{value}");
+    }
+
+    /// The view has no owner field, so a payload that names an owner still reads
+    /// back as the view of the room's settings, with nothing kept from it: what
+    /// parses these frames (the load generator, server tests) never holds an owner.
+    #[test]
+    fn room_settings_views_have_no_owner_to_read() {
+        let settings = RoomSettings::defaults(&rid("room"));
+        let sent = serde_json::to_value(RoomSettingsView::from(&settings)).unwrap();
+        let mut carrying = sent.clone();
+        carrying["ownerId"] = serde_json::json!(UserId::random());
+        let read: RoomSettingsView = serde_json::from_value(carrying).unwrap();
+        assert_eq!(serde_json::to_value(&read).unwrap(), sent);
+        assert_eq!(read, RoomSettingsView::from(&settings));
     }
 }

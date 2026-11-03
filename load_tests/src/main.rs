@@ -4558,7 +4558,7 @@ mod setup_response_tests {
                     let mut settings =
                         simplestchat::room::RoomSettings::defaults(&"retention".parse()?);
                     settings.history_retention_days = 7;
-                    settings
+                    simplestchat::room::RoomSettingsView::from(&settings)
                 },
             },
             ServerMessage::PinnedMessagesChanged {

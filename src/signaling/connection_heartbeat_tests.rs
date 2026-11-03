@@ -303,8 +303,8 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
         .manager
         .room_for_connection_tests(&rid("heartbeat-test"));
     room.write().await.settings = Some(settings::RoomSettings {
-        id: "heartbeat-test".into(),
-        owner_id: Uuid::nil(),
+        id: rid("heartbeat-test"),
+        owner_id: UserId::from(Uuid::nil()),
         display_name: "Heartbeat fixture".into(),
         name_style: Default::default(),
         topic_style: Default::default(),

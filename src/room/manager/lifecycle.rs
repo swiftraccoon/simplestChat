@@ -7,10 +7,12 @@ impl RoomManager {
     /// Atomically reserve a database-backed room ID against ad-hoc runtime room
     /// creation. Without sharing the creation lock, an anonymous join could
     /// create an owner-controlled runtime room between the REST endpoint's
-    /// existence check and the database insert.
+    /// existence check and the database insert. `room_id` is the identifier
+    /// `settings::validate_create_request` parsed from `request`.
     pub(crate) async fn create_persisted_room(
         &self,
-        owner_id: &uuid::Uuid,
+        owner_id: UserId,
+        room_id: &RoomId,
         request: &settings::CreateRoomRequest,
         password_hash: Option<&str>,
     ) -> std::result::Result<Option<settings::RoomSettings>, RoomError> {
@@ -24,10 +26,10 @@ impl RoomManager {
         if self.drain.is_draining() {
             return Err(sqlx::Error::PoolClosed.into());
         }
-        if self.deleting_rooms.read().contains_key(request.id.as_str()) {
+        if self.deleting_rooms.read().contains_key(room_id) {
             return Ok(None);
         }
-        if self.rooms.read().contains_key(request.id.as_str()) {
+        if self.rooms.read().contains_key(room_id) {
             return Ok(None);
         }
         let pool = self.db_pool.as_ref().ok_or(sqlx::Error::PoolClosed)?;
@@ -36,6 +38,7 @@ impl RoomManager {
             settings::create_room(
                 pool,
                 owner_id,
+                room_id,
                 request,
                 password_hash,
                 self.max_persisted_rooms,

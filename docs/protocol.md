@@ -57,11 +57,11 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]`, live rooms busiest first, then dormant rooms newest first, across pages |
 | `ownRooms` | `GET /api/rooms/mine` | `RoomListItem[]` |
 | (`<img>`) | `GET /api/rooms/:id/image?v=<digest>` | The bytes a listing's `image_url` names; `404` without the exact current digest |
-| `createRoom` | `POST /api/rooms` | `RoomSettings` |
+| `createRoom` | `POST /api/rooms` | `RoomSettingsView` |
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |
 | `deleteRoom` | `DELETE /api/rooms/:id` | `204`, no body |
-| `administration` | `GET /api/rooms/:id/administration` | `{role, settings:RoomSettings}` |
-| `administrationSettings` | `PATCH /api/rooms/:id/administration/settings`, `RoomSettingsPatch` | `{role, settings:RoomSettings}` |
+| `administration` | `GET /api/rooms/:id/administration` | `{role, settings:RoomSettingsView}` |
+| `administrationSettings` | `PATCH /api/rooms/:id/administration/settings`, `RoomSettingsPatch` | `{role, settings:RoomSettingsView}` |
 | `administrationMembers`, `administrationBans`, `administrationReports`, `administrationHistory` | `GET /api/rooms/:id/administration/{members,bans,reports,history}?offset=N` | The corresponding social page shape, at most 100 entries and `hasMore` |
 | `administrationRole` | `PUT /api/rooms/:id/administration/members/:account`, JSON `{role}` | `{updated:true}` |
 | `administrationUnban` | `DELETE /api/rooms/:id/administration/bans/:ban` | `{removed:true}` |
@@ -152,13 +152,13 @@ unknown count rather than an empty room.
 
 Account/public profiles include `profile_style`; profile updates require it.
 Room listings and identity updates include `name_style` and `topic_style`, while
-`RoomSettings` carries `nameStyle` and `topicStyle`. Each is a separate
+`RoomSettingsView` carries `nameStyle` and `topicStyle`. Each is a separate
 `{color: null | palette-token, style: "accent" | "text" | "bubble"}` object.
 Update inputs reject unknown colors, treatments and extra style keys. These
 fields never replace a participant's chat style. Only the room owner can update
 room identity/appearance; a successful save broadcasts the committed settings.
 
-Account/profile and directory fields use snake_case. `RoomSettings`, including
+Account/profile and directory fields use snake_case. `RoomSettingsView`, including
 the room-creation result, uses camelCase, and so does `ChatPreferences`: it is
 the browser's own chat preference object (private-message opt-in, sounds, text
 size, timestamp format and the ignore list) kept on the account so it follows a

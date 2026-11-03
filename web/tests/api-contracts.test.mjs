@@ -33,14 +33,13 @@ const room = {
   name_style: appearance,
   topic_style: appearance,
 };
+// The server's RoomSettingsView for a default room: no owner, and no limit or topic
+// key when none is set.
 const settings = {
   id: 'room',
-  ownerId: 'account',
   displayName: 'Room',
   passwordProtected: false,
   requireRegistration: false,
-  maxParticipants: null,
-  maxBroadcasters: null,
   allowScreenSharing: true,
   allowChat: true,
   allowVideo: true,
@@ -51,7 +50,6 @@ const settings = {
   pushToTalk: false,
   guestsAllowed: true,
   guestsCanBroadcast: true,
-  topic: null,
   nameStyle: appearance,
   historyRetentionDays: 0,
   topicStyle: appearance,
@@ -471,16 +469,8 @@ for (const [name, request, path, method, valid] of endpoints) {
     assert.deepEqual(wire, before, 'decoding must not mutate a response object');
     for (const item of Array.isArray(value) ? value : [value]) {
       assert.equal(Object.hasOwn(item, 'internal'), false);
-      assert.equal(Object.hasOwn(item, 'ownerId'), false);
     }
-    if (name === 'room creation') {
-      assert.equal(
-        Object.hasOwn(value, 'maxParticipants'),
-        false,
-        'Rust null limits normalize to optional values',
-      );
-      assert.equal(value.allowChat, true);
-    } else assert.deepEqual(value, valid);
+    assert.deepEqual(value, valid);
   });
 
   test(`${name} rejects incomplete, mistyped, malformed and empty JSON without leaking its contents`, async () => {
@@ -528,6 +518,18 @@ for (const [name, request, path, method, valid] of endpoints) {
     });
   });
 }
+
+test('room creation drops an ownerId the response carries', async () => {
+  const { ui, state } = await uiFixture();
+  state.response = {
+    ok: true,
+    status: 200,
+    json: async () => ({ ...settings, ownerId: 'account' }),
+  };
+  const created = await ui.api.createRoom('token', { id: 'room', display_name: 'Room' });
+  assert.equal(Object.hasOwn(created, 'ownerId'), false, 'a room owner never reaches the client');
+  assert.deepEqual(created, settings);
+});
 
 test('chat preferences refuse a timestamp format the contract does not list', async () => {
   const { ui, state } = await uiFixture();

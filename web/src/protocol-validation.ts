@@ -11,7 +11,7 @@ import type {
   ChatEntry,
   ChatAttachment,
   ChatHistoryPage,
-  RoomSettings,
+  RoomSettingsView,
   RoomSnapshot,
   BanEntry,
   MemberEntry,
@@ -185,7 +185,7 @@ export const decodeChatHistory = object<ChatHistoryPage>({
   firstUnreadMessageId: nullable(text),
   retentionDays: decodeHistoryRetention,
 });
-export const decodeRoomSettings = object<RoomSettings>({
+export const decodeRoomSettings = object<RoomSettingsView>({
   id: text,
   displayName: text,
   passwordProtected: boolean,

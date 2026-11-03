@@ -3,7 +3,7 @@
 //! Creation, runtime control and database authorization have one order. An
 //! admitted mutation owns its commit and publication even when HTTP disconnects.
 use super::publication::{RemovalPublication, SanctionPublication};
-use super::settings::SettingsPatch;
+use super::settings::{RoomSettingsView, SettingsPatch};
 use super::{IdentityUpdateGuard, Room, RoomManager, api, control, moderation, roles, settings};
 use crate::auth::{
     account, sessions,
@@ -712,7 +712,8 @@ impl Context {
             .bind(updated.max_broadcasters).bind(updated.max_participants).bind(updated.allow_screen_sharing).bind(updated.allow_chat).bind(updated.allow_video)
             .bind(updated.require_registration).bind(updated.invite_only).bind(updated.push_to_talk).bind(updated.secret).bind(hash.is_some()).bind(hash.clone().flatten())
             .execute(self.connection()?).await?;
-        let response = json!({"role":self.role.name(),"settings":updated});
+        let view = RoomSettingsView::from(&updated);
+        let response = json!({"role":self.role.name(),"settings":view});
         Ok((Publication::Settings(updated, hash), response))
     }
 
@@ -901,11 +902,12 @@ impl Context {
         // Control and the creation marker still pin this exact generation.
         let revoked = match publication {
             Publication::Settings(settings, password) => {
-                room.settings = Some(settings.clone());
+                let view = RoomSettingsView::from(&settings);
+                room.settings = Some(settings);
                 if let Some(password) = password {
                     room.password_hash = password;
                 }
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: view });
                 room.policy_revision = room.policy_revision.wrapping_add(1);
                 room.notify_lobby_status();
                 RoomManager::revoke_unauthorized_producers(
@@ -983,7 +985,8 @@ pub(crate) async fn overview(
 ) -> Result<Response, api::RoomApiError> {
     let _permit = api::acquire_room_api_request(&server)?;
     let mut context = admit(&server, &headers, id).await?;
-    let response = json!({"role":context.role.name(),"settings":context.settings});
+    let view = RoomSettingsView::from(&context.settings);
+    let response = json!({"role":context.role.name(),"settings":view});
     context
         .transaction
         .take()
