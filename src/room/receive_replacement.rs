@@ -4,6 +4,7 @@ use super::RoomManager;
 use crate::ids::{ParticipantId, RoomId};
 use crate::media::transport_manager::ReceiveReplacementPlacement;
 use crate::media::types::{ReceiveBandwidthEstimate, TransportInfo};
+use crate::room::refusal::RoomError;
 use mediasoup::prelude::TransportId;
 use tokio::sync::mpsc;
 
@@ -18,7 +19,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: TransportId,
         bwe_sender: Option<mpsc::Sender<ReceiveBandwidthEstimate>>,
-    ) -> anyhow::Result<TransportInfo> {
+    ) -> Result<TransportInfo, RoomError> {
         let expected = transport_id;
         let participant_id = participant_id.to_owned();
         let expected_sender = expected_sender.clone();

@@ -713,6 +713,43 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         StatusCode::BAD_REQUEST,
         "a retained message id cannot authorize another account conversation"
     );
+    // Bob editing Alice's message and Alice editing one that is not there get
+    // the same answer; an edit addressed to her own account gets the accounts'.
+    let alices_message = saved["messageId"].as_str().unwrap().to_owned();
+    for (token, peer, message, sequence, answer) in [
+        (1, alice, alices_message.clone(), 104, "Message unavailable"),
+        (
+            0,
+            bob,
+            Uuid::new_v4().to_string(),
+            105,
+            "Message unavailable",
+        ),
+        (
+            0,
+            alice,
+            alices_message,
+            106,
+            "Message unavailable or changed; refresh before editing",
+        ),
+    ] {
+        let edit = operation(
+            "PUT",
+            format!("/api/auth/inbox/{peer}/messages/{message}"),
+            Some(json!({"content":"Not this account's to change","expectedRevision":0})),
+        );
+        let response = fixture
+            .request(&edit, Some(&fixture.tokens[token]), sequence)
+            .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body: Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 16 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body["error"], answer, "edit of {message} with {peer}");
+    }
     let conflict = operation(
         "POST",
         format!("/api/auth/inbox/{bob}/messages"),

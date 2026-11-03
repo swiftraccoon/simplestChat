@@ -10,7 +10,7 @@ impl RoomManager {
         mut room: HeldRoom<'a>,
         allow_private_messages: bool,
         ignored_participant_ids: &[ParticipantId],
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let participant_id = request.participant_id;
         let actor_authenticated = request.actor_authenticated;
         if ignored_participant_ids.len() > MAX_IGNORED
@@ -18,15 +18,16 @@ impl RoomManager {
                 .iter()
                 .any(|id| id == participant_id)
         {
-            return Err(invalid(
-                "Choose at most 100 valid participant identities to ignore",
-            ));
+            return Err(Refusal::Invalid(
+                "Choose at most 100 valid participant identities to ignore".into(),
+            )
+            .into());
         }
         if actor_authenticated {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("Account preferences unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Account preferences unavailable".into()))?;
             let account = participant_id.as_uuid();
             let released = release(room);
             let preferences = tokio::time::timeout(
@@ -34,7 +35,7 @@ impl RoomManager {
                 crate::auth::account::load_chat_preferences(pool, account),
             )
             .await
-            .map_err(|_| timed_out("Account preferences timed out"))??;
+            .map_err(|_| Refusal::TimedOut("Account preferences timed out".into()))??;
             room = request.reacquire(released).await?;
             let actor = request.actor(&room)?;
             let guests = ignored_participant_ids
@@ -67,7 +68,7 @@ impl RoomManager {
         request: &SocialRequest<'_>,
         mut room: HeldRoom<'_>,
         nickname: &str,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let participant_id = request.participant_id;
         let nickname = nickname.trim();
         if nickname.is_empty()
@@ -75,12 +76,13 @@ impl RoomManager {
             || !crate::labels::is_plain(nickname)
             || crate::labels::is_reserved_name(nickname)
         {
-            return Err(invalid(
-                "Nickname must be 1–64 bytes of plain text; \"You\" is taken",
-            ));
+            return Err(Refusal::Invalid(
+                "Nickname must be 1–64 bytes of plain text; \"You\" is taken".into(),
+            )
+            .into());
         }
         if room.name_in_use(nickname, Some(participant_id)) {
-            return Err(invalid("That name is already in use in this room"));
+            return Err(Refusal::Invalid("That name is already in use in this room".into()).into());
         }
         request.actor_mut(&mut room)?.name = nickname.to_string();
         room.broadcast_all(&ServerMessage::NicknameChanged {
@@ -97,11 +99,11 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         mut room: HeldRoom<'a>,
         chat_style: &ChatStyle,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let participant_id = request.participant_id;
         let chat_style = chat_style
             .validated()
-            .ok_or_else(|| invalid("Choose a chat color from the palette"))?;
+            .ok_or_else(|| Refusal::Invalid("Choose a chat color from the palette".into()))?;
         if request.actor_authenticated
             && let Some(pool) = self.db_pool.clone()
         {
@@ -113,8 +115,11 @@ impl RoomManager {
                 save_chat_style(&pool, user, &chat_style),
             )
             .await
-            .map_err(|_| failed("Your chat look could not be saved"))?
-            .map_err(|_| failed("Your chat look could not be saved"))?;
+            .map_err(|_| {
+                warn!(room = %request.room_id.log_handle(), "Chat look save timed out");
+                Refusal::TimedOut("Your chat look may not have been saved".into())
+            })?
+            .map_err(|error| control::Save::ChatLook.failure(request.room_id, error.into()))?;
             room = request.reacquire(released).await?;
         }
         request.actor_mut(&mut room)?.chat_style = chat_style.clone();

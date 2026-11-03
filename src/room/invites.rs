@@ -9,6 +9,7 @@ use crate::room::api::{
     RoomApiError, RoomListItem, RoomListRow, acquire_room_api_request, room_database_error,
     room_list_item,
 };
+use crate::room::refusal::{Refusal, RoomError};
 use crate::room::roles::{self, Role};
 use crate::room::settings;
 use crate::secret::SecretString;
@@ -115,9 +116,12 @@ pub(crate) async fn create_room_invite(
     uses: i32,
     days: i32,
     created_by: Uuid,
-) -> Result<Option<CreatedRoomInvite>, sqlx::Error> {
-    let code =
-        invite_codes::generate().map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+) -> Result<Option<CreatedRoomInvite>, RoomError> {
+    // Generation fails before any write, so it refuses; the detail is logged.
+    let code = invite_codes::generate().map_err(|error| {
+        tracing::warn!(%error, "Room invitation code generation failed");
+        Refusal::Internal("Invitation could not be created".into())
+    })?;
     let mut transaction = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 71340))")
         .bind(room_id)

@@ -280,7 +280,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<Roo
         || request.display_name.len() > MAX_DISPLAY_NAME_LEN
         || !crate::labels::is_plain(&request.display_name)
     {
-        return Err("Display name must be 1-128 characters without control characters");
+        return Err("Display name must be 1-128 bytes without control characters");
     }
     if request
         .password
@@ -294,7 +294,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<Roo
         .as_ref()
         .is_some_and(|topic| topic.len() > MAX_TOPIC_LEN || topic.chars().any(char::is_control))
     {
-        return Err("Topic must be at most 512 characters without control characters");
+        return Err("Topic must be at most 512 bytes without control characters");
     }
     if request
         .max_participants

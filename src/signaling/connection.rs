@@ -3,11 +3,12 @@
 use super::protocol::{
     ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply, SocialResponse,
 };
-use crate::auth::types::Principal;
+use crate::auth::types::{AuthError, Principal};
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::metrics::ServerMetrics;
-use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, SettingsPatch, settings};
+use crate::room::refusal::{Refusal, RoomError};
+use crate::room::{JoinResult, RoomManager, SettingsPatch, settings};
 use crate::secret::SecretString;
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
@@ -162,15 +163,45 @@ fn log_command_close(
     }
 }
 
-fn client_error_response(error: &anyhow::Error) -> ServerMessage {
-    if error.is::<RoomPasswordRequired>() {
-        ServerMessage::RoomPasswordRequired
-    } else {
-        ServerMessage::Error {
-            code: ErrorCode::RequestFailed,
-            message: "Request could not be completed".to_string(),
-        }
+/// The `error` frame a failed command answers with: a refusal's own code and
+/// text, the password prompt for the password challenge, and a fixed text for
+/// any other failure, whose detail only the server log sees. Every refusal a
+/// command answers outside the social shape goes through here.
+fn error_frame(error: &RoomError) -> ServerMessage {
+    match error {
+        RoomError::PasswordRequired => ServerMessage::RoomPasswordRequired,
+        error => ServerMessage::Error {
+            code: error.code(),
+            message: error.client_message().to_owned(),
+        },
     }
+}
+
+/// The `socialError` a social request or a chat send answers with. It keeps
+/// the request ID and the client message ID the command carried, so the
+/// client settles the attempt it made; `None` for any other command, which
+/// answers with [`error_frame`].
+fn social_error_frame(command: &ClientMessage, error: &RoomError) -> Option<ServerMessage> {
+    let request_id = command.social_request().map(|(id, _)| id.to_owned());
+    let client_message_id = match command {
+        ClientMessage::ChatMessage {
+            client_message_id, ..
+        } => client_message_id.clone(),
+        ClientMessage::PrivateMessage {
+            client_message_id, ..
+        } => Some(client_message_id.clone()),
+        ClientMessage::RetryChatMessage(message) => Some(message.client_message_id.clone()),
+        _ => None,
+    };
+    if request_id.is_none() && client_message_id.is_none() {
+        return None;
+    }
+    Some(ServerMessage::SocialError {
+        request_id,
+        client_message_id,
+        code: error.code(),
+        message: error.client_message().to_owned(),
+    })
 }
 
 /// Serialize a message or reply envelope into the bounded outbound queue.
@@ -178,8 +209,10 @@ fn send_json(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
     msg: &impl serde::Serialize,
-) -> anyhow::Result<()> {
-    let json = crate::OutboundJson::from(serde_json::to_string(msg)?);
+) -> Result<(), RoomError> {
+    let json = crate::OutboundJson::from(
+        serde_json::to_string(msg).map_err(|error| RoomError::Internal(error.into()))?,
+    );
     if let Err(error) = sender.try_send(json) {
         match error {
             mpsc::error::TrySendError::Full(_) => {
@@ -188,7 +221,9 @@ fn send_json(
             }
             mpsc::error::TrySendError::Closed(_) => metrics.inc_outbound_queue_closed(),
         }
-        anyhow::bail!("Outbound signaling queue unavailable");
+        return Err(RoomError::Internal(anyhow::anyhow!(
+            "Outbound signaling queue unavailable"
+        )));
     }
     Ok(())
 }
@@ -204,21 +239,21 @@ impl ReplySender<'_> {
     /// Closure/layer commands without an ID are fire-and-forget: the native
     /// generator and late browser teardown use this form. Correlated browser
     /// controls request acknowledgement to detect an unapplied change.
-    fn acknowledge_control(&self) -> anyhow::Result<()> {
+    fn acknowledge_control(&self) -> Result<(), RoomError> {
         if self.request_id.is_some() {
             self.send(&ServerMessage::MediaControlApplied)?;
         }
         Ok(())
     }
 
-    fn acknowledge_room_control(&self) -> anyhow::Result<()> {
+    fn acknowledge_room_control(&self) -> Result<(), RoomError> {
         if self.request_id.is_some() {
             self.send(&ServerMessage::RoomControlApplied)?;
         }
         Ok(())
     }
 
-    fn send(&self, message: &ServerMessage) -> anyhow::Result<()> {
+    fn send(&self, message: &ServerMessage) -> Result<(), RoomError> {
         // These protocols already serialize their own IDs. Do not emit a
         // duplicate JSON key or replace their independent correlation state.
         let request_id = match message {
@@ -359,10 +394,16 @@ fn begin_join_session(reconnect_token: &mut String) -> String {
 
 /// The room this socket has joined, or the refusal every room command gives
 /// a socket that has not.
-fn joined(current_room_id: &Option<RoomId>) -> anyhow::Result<&RoomId> {
+fn joined(current_room_id: &Option<RoomId>) -> Result<&RoomId, RoomError> {
     current_room_id
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Not in a room"))
+        .ok_or_else(|| Refusal::Forbidden("Not in a room".into()).into())
+}
+
+/// The refusal every command but joining, leaving and public chat gives a
+/// socket that is still waiting in a lobby.
+fn waiting_in_lobby() -> RoomError {
+    Refusal::Forbidden("Cannot perform this action while waiting in lobby".into()).into()
 }
 
 fn reconnect_attempt_allowed(current_room_id: Option<&RoomId>, in_lobby: bool) -> bool {
@@ -746,13 +787,16 @@ async fn handle_connection_with_timing(
                     sender: &tx,
                     request_id: request_id.as_deref(),
                 };
-                let _ = reply.send(&ServerMessage::Error {
-                    code: ErrorCode::RateLimited,
-                    message: format!(
-                        "Rate limit exceeded: max {} frames/second",
-                        RATE_LIMIT_REFILL_RATE
-                    ),
-                });
+                let _ = reply.send(&error_frame(
+                    &Refusal::RateLimited(
+                        format!(
+                            "Rate limit exceeded: max {} frames/second",
+                            RATE_LIMIT_REFILL_RATE
+                        )
+                        .into(),
+                    )
+                    .into(),
+                ));
             }
             if rate_limit_violations >= RATE_LIMIT_MAX_VIOLATIONS {
                 warn!(
@@ -984,15 +1028,15 @@ async fn handle_connection_with_timing(
                                 async {
                                     if let ClientMessage::GetAttachmentAccess { request_id, attachment_id } = &client_msg {
                                         if in_lobby.load(Ordering::Acquire) {
-                                            anyhow::bail!("Cannot perform this action while waiting in lobby");
+                                            return Err(waiting_in_lobby());
                                         }
-                                        let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-                                        let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
+                                        let room_id = joined(&current_room_id)?;
+                                        let pool = db_pool.as_ref().ok_or_else(|| Refusal::Unavailable("Database unavailable".into()))?;
                                         let access = crate::attachments::grant_access(
                                             &attachment_grant_key, &room_manager, pool, room_id,
                                             &participant_id, &tx, attachment_principal.as_ref(),
                                             *attachment_id,
-                                        ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
+                                        ).await.map_err(|error| attachment_grant_failure(room_id, error))?;
                                         reply.send(&ServerMessage::SocialResponse {
                                             request_id: request_id.clone(),
                                             response: SocialResponse::GetAttachmentAccess {
@@ -1023,7 +1067,7 @@ async fn handle_connection_with_timing(
                             .await;
                         operation.finish(match &result {
                             Ok(()) => Outcome::Ok,
-                            Err(error) if error.is::<RoomPasswordRequired>() => Outcome::Rejected,
+                            Err(RoomError::PasswordRequired) => Outcome::Rejected,
                             Err(_) => Outcome::Error,
                         });
                         metrics.observe_message_handling(start.elapsed());
@@ -1044,8 +1088,8 @@ async fn handle_connection_with_timing(
                             gates.reset_media(Instant::now(), consumer_limit);
                         }
 
-                        if let Err(e) = result {
-                            if e.is::<RoomPasswordRequired>()
+                        if let Err(error) = result {
+                            if matches!(error, RoomError::PasswordRequired)
                                 && let ClientMessage::JoinRoom { room_id, .. } = &client_msg
                             {
                                 gates.note_password_challenge(room_id.clone());
@@ -1053,10 +1097,11 @@ async fn handle_connection_with_timing(
                             // Invalid IDs, stale media state, and authorization
                             // failures are routine client-controlled outcomes.
                             // Keep them observable without allowing a socket to
-                            // amplify them into production error logs.
+                            // amplify them into production error logs. A
+                            // failure's detail is logged here and never sent.
                             debug!(
                                 %participant_id,
-                                error = %e,
+                                %error,
                                 "Client signaling request was rejected"
                             );
                             metrics.inc_errors();
@@ -1064,15 +1109,8 @@ async fn handle_connection_with_timing(
                             if tx.is_closed() {
                                 break;
                             }
-                            let (code, public_message) = e
-                                .downcast_ref::<crate::room::social::SocialFailure>()
-                                .map_or(
-                                    (ErrorCode::RequestFailed, "Request could not be completed"),
-                                    |error| (error.code, error.message.as_str()),
-                                );
-                            let response = client_msg
-                                .social_error(code, public_message)
-                                .unwrap_or_else(|| client_error_response(&e));
+                            let response = social_error_frame(&client_msg, &error)
+                                .unwrap_or_else(|| error_frame(&error));
                             if reply.send(&response).is_err() {
                                 break;
                             }
@@ -1405,9 +1443,11 @@ fn spawn_stats_task(
 /// Generate ICE servers with an unlinkable TURN identity for each issuance.
 fn make_ice_servers(
     turn_config: &Option<Arc<TurnConfig>>,
-) -> anyhow::Result<Vec<crate::turn::IceServer>> {
+) -> Result<Vec<crate::turn::IceServer>, RoomError> {
     match turn_config {
-        Some(tc) => Ok(vec![tc.generate_credentials()?]),
+        Some(tc) => Ok(vec![
+            tc.generate_credentials().map_err(RoomError::Internal)?,
+        ]),
         None => Ok(vec![]),
     }
 }
@@ -1415,27 +1455,46 @@ fn make_ice_servers(
 pub(crate) const MAX_PARTICIPANT_NAME_LEN: usize = 64;
 
 /// The report a sanction answers must at least look like one of ours.
-fn parse_report_id(report_id: Option<&str>) -> anyhow::Result<Option<Uuid>> {
+fn parse_report_id(report_id: Option<&str>) -> Result<Option<Uuid>, RoomError> {
     report_id
         .map(|id| {
             id.parse::<Uuid>()
-                .map_err(|_| anyhow::anyhow!("Invalid report"))
+                .map_err(|_| Refusal::Invalid("Invalid report".into()).into())
         })
         .transpose()
 }
 
-fn validate_reason(reason: Option<&str>) -> anyhow::Result<()> {
+fn validate_reason(reason: Option<&str>) -> Result<(), RoomError> {
     if reason.is_some_and(|reason| reason.len() > 1_024 || reason.chars().any(char::is_control)) {
-        anyhow::bail!("Reason must be at most 1024 characters without control characters");
+        return Err(Refusal::Invalid(
+            "Reason must be at most 1024 bytes without control characters".into(),
+        )
+        .into());
     }
     Ok(())
 }
 
-fn validate_durable_reason(reason: Option<&str>) -> anyhow::Result<()> {
+fn validate_durable_reason(reason: Option<&str>) -> Result<(), RoomError> {
     if reason.is_some_and(|reason| !crate::room::moderation::valid_reason(reason)) {
-        anyhow::bail!("Reason must be at most 256 characters without control characters");
+        return Err(Refusal::Invalid(
+            "Reason must be at most 256 bytes without control characters".into(),
+        )
+        .into());
     }
     Ok(())
+}
+
+/// What a failed attachment grant answers. A database failure is the
+/// service's and is logged with its detail; any other failure (the attachment
+/// is gone, expired or not this member's to see) says only that.
+fn attachment_grant_failure(room_id: &RoomId, error: AuthError) -> Refusal {
+    match error {
+        AuthError::DatabaseError(detail) => {
+            warn!(room = %room_id.log_handle(), %detail, "Attachment grant failed on the database");
+            Refusal::Unavailable("Attachment service is temporarily unavailable".into())
+        }
+        _ => Refusal::NotFound("Attachment unavailable".into()),
+    }
 }
 
 /// What one client command may read and change: this connection's identity and
@@ -1458,7 +1517,7 @@ struct Dispatch<'a, 'r> {
 async fn handle_client_message(
     message: &ClientMessage,
     connection: Dispatch<'_, '_>,
-) -> anyhow::Result<()> {
+) -> Result<(), RoomError> {
     let Dispatch {
         participant_id,
         current_room_id,
@@ -1480,7 +1539,7 @@ async fn handle_client_message(
             | ClientMessage::LeaveRoom
             | ClientMessage::ChatMessage { .. }
             | ClientMessage::Reconnect { .. } => {} // allowed while in lobby
-            _ => anyhow::bail!("Cannot perform this action while waiting in lobby"),
+            _ => return Err(waiting_in_lobby()),
         }
     }
 
@@ -1495,7 +1554,7 @@ async fn handle_client_message(
             .is_bound_participant(room_id, participant_id, sender)
             .await
     {
-        anyhow::bail!("Participant is no longer in this room");
+        return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
     }
 
     match message {
@@ -1510,9 +1569,13 @@ async fn handle_client_message(
                 || !crate::labels::is_plain(participant_name)
                 || crate::labels::is_reserved_name(participant_name)
             {
-                anyhow::bail!(
-                    "Invalid participant_name: must be 1-{MAX_PARTICIPANT_NAME_LEN} characters without control characters"
-                );
+                return Err(Refusal::Invalid(
+                    format!(
+                        "Name must be 1-{MAX_PARTICIPANT_NAME_LEN} bytes of plain text; \"You\" is taken"
+                    )
+                    .into(),
+                )
+                .into());
             }
             if password
                 .as_ref()
@@ -1523,7 +1586,7 @@ async fn handle_client_message(
                         || password.chars().any(char::is_control)
                 })
             {
-                anyhow::bail!("Invalid room password");
+                return Err(Refusal::Invalid("Invalid room password".into()).into());
             }
             // Rotate before RoomJoined is serialized. The same token remains in
             // connection state for disconnect grace and (for lobby joins) is
@@ -1656,15 +1719,15 @@ async fn handle_client_message(
         ClientMessage::Reconnect { .. } | ClientMessage::RenewAuthentication { .. } => {
             // The connection loop answers these before dispatch; reaching this arm
             // is a dispatcher bug, so refuse the request instead of ignoring it.
-            anyhow::bail!("Reconnect and renewal are answered before dispatch");
+            return Err(RoomError::Internal(anyhow::anyhow!(
+                "Reconnect and renewal are answered before dispatch"
+            )));
         }
 
         ClientMessage::ChatMessage { .. }
         | ClientMessage::PrivateMessage { .. }
         | ClientMessage::RetryChatMessage(_) => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .handle_chat_command(room_id, participant_id, sender, message)
                 .await?;
@@ -1672,9 +1735,7 @@ async fn handle_client_message(
         ClientMessage::Typing {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .relay_typing(
                     room_id,
@@ -1704,9 +1765,7 @@ async fn handle_client_message(
         | ClientMessage::ListRoomReports { .. }
         | ClientMessage::ResolveRoomReport { .. }
         | ClientMessage::ListModerationEvents { .. } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .handle_social_request(room_id, participant_id, sender, message)
                 .await?;
@@ -1714,7 +1773,9 @@ async fn handle_client_message(
 
         // The socket owner handles grants with its current account principal.
         ClientMessage::GetAttachmentAccess { .. } => {
-            anyhow::bail!("Attachment access requires the current socket credentials");
+            return Err(RoomError::Internal(anyhow::anyhow!(
+                "Attachment access requires the current socket credentials"
+            )));
         }
 
         // === Moderation ===
@@ -1781,3 +1842,7 @@ mod security_tests;
 #[cfg(test)]
 #[path = "connection_gates_tests.rs"]
 mod gates_tests;
+
+#[cfg(test)]
+#[path = "connection_tests.rs"]
+mod tests;

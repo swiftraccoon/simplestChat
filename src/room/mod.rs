@@ -32,7 +32,7 @@ mod settings_patch_tests;
 
 use crate::diagnostics::{Stage, measure, measure_result};
 use crate::ids::{ParticipantId, RoomId, UserId};
-use crate::media::types::{MediaResult, TransportInfo};
+use crate::media::types::TransportInfo;
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
 use crate::shutdown::DrainSignal;
@@ -40,12 +40,12 @@ use crate::signaling::protocol::{
     AudioLevelEntry, ChatStyle, ParticipantInfo, ProducerMetadata, ServerMessage,
 };
 use crate::sync::{Mutex, RwLock};
-use anyhow::Result;
 use mediasoup::active_speaker_observer::{ActiveSpeakerObserver, ActiveSpeakerObserverOptions};
 use mediasoup::audio_level_observer::{AudioLevelObserver, AudioLevelObserverOptions};
 use mediasoup::prelude::*;
 use mediasoup::producer::ProducerId;
 use mediasoup::rtp_observer::{RtpObserver, RtpObserverAddProducerOptions};
+use refusal::{Refusal, RoomError};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::net::IpAddr;
@@ -172,11 +172,6 @@ pub(crate) enum JoinResult {
     /// Placed in the lobby awaiting moderator approval
     Lobbied,
 }
-
-/// A public join challenge, kept distinct from internal room failures.
-#[derive(Debug, thiserror::Error)]
-#[error("This room requires a password")]
-pub(crate) struct RoomPasswordRequired;
 
 pub(crate) enum DeleteRoomResult {
     Deleted,
@@ -379,10 +374,19 @@ where
     }
 }
 
+/// What an admission answers once the server has begun draining.
+fn shutting_down() -> RoomError {
+    Refusal::Unavailable("Server shutting down".into()).into()
+}
+
+/// A room deletion whose statement timed out: its commit is unknown, so it
+/// fails closed. A wait that timed out before any write is a refusal instead.
 fn room_delete_timeout(operation: &str) -> refusal::RoomError {
     sqlx::Error::Protocol(format!("room deletion timed out while {operation}")).into()
 }
 
+/// A room creation whose insert timed out: its commit is unknown, so it fails
+/// closed. A wait that timed out before any write is a refusal instead.
 fn room_creation_timeout(operation: &str) -> refusal::RoomError {
     sqlx::Error::Protocol(format!("room creation timed out while {operation}")).into()
 }
@@ -818,9 +822,9 @@ impl Room {
         }
     }
 
-    fn ensure_live(&self) -> Result<()> {
+    fn ensure_live(&self) -> Result<(), RoomError> {
         if self.deleting {
-            anyhow::bail!("Room is being deleted");
+            return Err(Refusal::NotFound("Room is being deleted".into()).into());
         }
         Ok(())
     }
@@ -947,29 +951,15 @@ fn lobby_admission_state(
 /// address must move together. Authorization is checked against the whole
 /// cohort to prevent selecting a low-role guest as a proxy for punishing a
 /// higher-role guest sharing that address.
-/// A kick's history write failed: a missing report is the caller's mistake,
-/// anything else is the database's.
-fn moderation_history_error(error: refusal::RoomError) -> anyhow::Error {
-    match error {
-        refusal::RoomError::Refused(refused) => return social::refused(refused),
-        refusal::RoomError::Database(sqlx::Error::RowNotFound) => {
-            return anyhow::anyhow!("Report not found");
-        }
-        refusal::RoomError::Database(_) => {}
-    }
-    warn!(%error, "Failed to record a moderation history entry");
-    anyhow::anyhow!("Moderation history could not be saved")
-}
-
 fn moderation_cohort(
     room: &Room,
     target_participant_id: &ParticipantId,
     moderator_role: roles::Role,
-) -> Result<Vec<ParticipantId>> {
+) -> Result<Vec<ParticipantId>, RoomError> {
     let target = room
         .participants
         .get(target_participant_id)
-        .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+        .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
 
     let mut participant_ids = if !target.authenticated {
         if let Some(target_ip) = target.ip {
@@ -994,7 +984,10 @@ fn moderation_cohort(
             .get(participant_id)
             .is_none_or(|participant| !moderator_role.can_moderate(participant.role))
     }) {
-        anyhow::bail!("Insufficient permissions to moderate this participant");
+        return Err(Refusal::Forbidden(
+            "Insufficient permissions to moderate this participant".into(),
+        )
+        .into());
     }
 
     participant_ids.sort_unstable();
@@ -1006,7 +999,7 @@ fn guest_ip_lobby_cohort(
     target_authenticated: bool,
     target_ip: Option<IpAddr>,
     moderator_role: roles::Role,
-) -> Result<Vec<ParticipantId>> {
+) -> Result<Vec<ParticipantId>, RoomError> {
     if target_authenticated {
         return Ok(Vec::new());
     }
@@ -1027,7 +1020,10 @@ fn guest_ip_lobby_cohort(
             .get(participant_id)
             .is_none_or(|entry| !moderator_role.can_moderate(entry.role))
     }) {
-        anyhow::bail!("Insufficient permissions to moderate this participant");
+        return Err(Refusal::Forbidden(
+            "Insufficient permissions to moderate this participant".into(),
+        )
+        .into());
     }
     participant_ids.sort_unstable();
     Ok(participant_ids)

@@ -158,7 +158,7 @@ async fn authenticated_join_validates_the_requested_room_name() {
         )
         .await
         .unwrap_err();
-        assert!(error.to_string().starts_with("Invalid participant_name:"));
+        assert!(error.to_string().starts_with("Name must be 1-64 bytes"));
         assert!(room.is_none());
         assert_eq!(reconnect, "unchanged");
         assert!(receiver.try_recv().is_err());

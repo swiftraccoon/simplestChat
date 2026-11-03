@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::ids::fixtures::{mid, pid, rid};
+use crate::signaling::protocol::ErrorCode;
 use serde_json::{Value, json};
 
 fn message(json: &str) -> ClientMessage {
@@ -13,9 +14,11 @@ fn message(json: &str) -> ClientMessage {
 fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
     let metrics = ServerMetrics::new();
     let (sender, mut receiver) = mpsc::channel(1);
+    let room_id = rid("chat-storage");
     chat_persistence_failure(
         &metrics,
         &sender,
+        &room_id,
         "uncertain",
         sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)).into(),
     )
@@ -25,19 +28,26 @@ fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
     assert_eq!(result["outcome"], "unknown");
     assert_eq!(result["reason"], "storage_unconfirmed");
     assert_eq!(result["clientMessageId"], "uncertain");
+    // A definite database failure is the service's: unavailable, so retry.
     let definite = chat_persistence_failure(
         &metrics,
         &sender,
+        &room_id,
         "rejected",
         sqlx::Error::PoolTimedOut.into(),
     )
     .unwrap_err();
-    assert!(definite.downcast_ref::<SocialFailure>().is_some());
+    assert_eq!(definite.code(), ErrorCode::Unavailable, "{definite:?}");
+    assert_eq!(
+        definite.client_message(),
+        "Message could not be saved; try again"
+    );
     assert!(receiver.try_recv().is_err());
     for _ in 0..2 {
         chat_persistence_failure(
             &metrics,
             &sender,
+            &room_id,
             "uncertain",
             sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)).into(),
         )
@@ -54,14 +64,104 @@ fn a_refused_chat_save_answers_with_its_own_code() {
     let refused = chat_persistence_failure(
         &metrics,
         &sender,
+        &rid("chat-refusal"),
         "refused",
         Refusal::NotFound("Attachment unavailable".into()).into(),
     )
     .unwrap_err();
-    let failure = refused.downcast_ref::<SocialFailure>().unwrap();
-    assert_eq!(failure.code, ErrorCode::NotFound);
-    assert_eq!(failure.message, "Attachment unavailable");
+    let RoomError::Refused(failure) = refused else {
+        panic!("a refused save answers as the refusal: {refused:?}");
+    };
+    assert_eq!(failure.code(), ErrorCode::NotFound);
+    assert_eq!(failure.message(), "Attachment unavailable");
     assert!(receiver.try_recv().is_err());
+}
+
+/// A social write whose commit is left in doubt may have applied, and a retry
+/// could apply a toggle such as a reaction twice: it answers `timed_out`, never
+/// that the service is unavailable. A definite failure and a refusal pass
+/// through as they are.
+#[tokio::test]
+async fn a_social_write_past_its_deadline_answers_that_it_may_not_have_been_saved() {
+    use futures_util::FutureExt as _;
+    let manager = RoomManager::new_for_connection_tests(ServerMetrics::new()).await;
+    let (room, alice, _bob, _carol, _receivers) = fixture();
+    let room_id = room.id.clone();
+    let room_lock = Arc::new(TokioRwLock::new(room));
+    manager
+        .rooms
+        .write()
+        .insert(room_id.clone(), room_lock.clone());
+    let test = async {
+        let request = SocialRequest {
+            room_id: &room_id,
+            participant_id: &alice.id,
+            expected_sender: &alice.sender,
+            room_lock: &room_lock,
+            actor_role: roles::Role::User,
+            actor_name: alice.name.clone(),
+            actor_authenticated: false,
+        };
+        let released = release(room_lock.write().await);
+        let later = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        let definite = request
+            .persist_until(
+                &manager,
+                &released,
+                later,
+                std::future::ready(Err::<(), RoomError>(sqlx::Error::PoolTimedOut.into())),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(definite, RoomError::Database(sqlx::Error::PoolTimedOut)),
+            "{definite:?}"
+        );
+        let refused = request
+            .persist_until(
+                &manager,
+                &released,
+                later,
+                std::future::ready(Err::<(), RoomError>(
+                    Refusal::NotFound("Message not found".into()).into(),
+                )),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::NotFound);
+        assert_eq!(refused.client_message(), "Message not found");
+        assert!(!room_lock.read().await.deleting);
+
+        let in_doubt = request
+            .persist_until(
+                &manager,
+                &released,
+                tokio::time::Instant::now(),
+                std::future::pending::<Result<(), RoomError>>(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(in_doubt.code(), ErrorCode::TimedOut);
+        assert_eq!(
+            in_doubt.client_message(),
+            "This change may not have been saved"
+        );
+        assert!(room_lock.read().await.deleting);
+    };
+    let outcome = std::panic::AssertUnwindSafe(tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        test,
+    ))
+    .catch_unwind()
+    .await;
+    let rooms = manager.shutdown().await;
+    let media = manager.media_server.shutdown().await;
+    match outcome {
+        Err(panic) => std::panic::resume_unwind(panic),
+        Ok(result) => result.expect("social persistence fixture timed out"),
+    }
+    rooms.expect("social persistence room cleanup failed");
+    media.expect("idle native worker cleanup failed");
 }
 
 #[test]
@@ -189,7 +289,7 @@ fn chat(
     sender: &Participant,
     id: &str,
     target: Option<&ParticipantId>,
-) -> Result<()> {
+) -> Result<(), RoomError> {
     RoomManager::process_social_chat(
         room,
         &sender.id,
@@ -226,9 +326,11 @@ fn a_social_request_whose_actor_has_left_is_refused_as_not_found() {
     ];
     for refusal in refusals {
         let error = refusal.expect_err("an actor who is not in the room is refused");
-        let failure = error.downcast_ref::<SocialFailure>().unwrap();
-        assert_eq!(failure.code, ErrorCode::NotFound);
-        assert_eq!(failure.message, "Participant not found");
+        let RoomError::Refused(failure) = error else {
+            panic!("a missing actor is a refusal: {error:?}");
+        };
+        assert_eq!(failure.code(), ErrorCode::NotFound);
+        assert_eq!(failure.message(), "Participant not found");
     }
     let present = SocialRequest {
         participant_id: &alice.id,
@@ -437,7 +539,7 @@ fn sequenced_chat(
     sequence: u64,
     target: Option<&ParticipantId>,
     retry: Option<String>,
-) -> Result<()> {
+) -> Result<(), RoomError> {
     RoomManager::process_chat_attempt(
         room,
         &sender.id,
@@ -1051,17 +1153,7 @@ fn ban_listing_shape_never_serializes_guest_network_identity() {
 }
 
 #[test]
-fn social_wire_correlates_errors_and_bounds_identifiers() {
-    let command:ClientMessage=serde_json::from_value(json!({"type":"privateMessage","targetParticipantId":Uuid::new_v4().to_string(),"content":"hello","clientMessageId":"draft-1"})).unwrap();
-    let error = serde_json::to_value(
-        command
-            .social_error(ErrorCode::Unavailable, "Unavailable")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(error["clientMessageId"], "draft-1");
-    assert_eq!(error["type"], "socialError");
-    assert!(error.get("requestId").is_none());
+fn social_correlation_ids_are_bounded() {
     assert!(valid_correlation_id("request_123"));
     assert!(!valid_correlation_id(&"x".repeat(65)));
     assert!(!valid_correlation_id("unsafe\n"));
@@ -1074,7 +1166,7 @@ fn reply(
     target: Option<&ParticipantId>,
     content: &str,
     reply_to: Option<&str>,
-) -> Result<()> {
+) -> Result<(), RoomError> {
     RoomManager::process_chat_attempt(
         room,
         &sender.id,
@@ -1508,7 +1600,7 @@ impl AccountRoomFixture {
     }
 
     /// Alice's private message to Bob from her room socket.
-    async fn socket_send(&self, client_message_id: &str, content: &str) -> Result<()> {
+    async fn socket_send(&self, client_message_id: &str, content: &str) -> Result<(), RoomError> {
         self.manager
             .send_social_chat(
                 &self.room_id,
@@ -1745,12 +1837,12 @@ async fn socket_private_messages_share_the_account_budget() {
         .socket_send(attempt, content)
         .await
         .expect_err("the next private message within the minute is refused");
-    let failure = refused
-        .downcast_ref::<SocialFailure>()
-        .expect("a refusal the socket answers with its own code");
-    assert_eq!(failure.code, ErrorCode::RateLimited);
+    let RoomError::Refused(failure) = refused else {
+        panic!("a refusal the socket answers with its own code: {refused:?}");
+    };
+    assert_eq!(failure.code(), ErrorCode::RateLimited);
     assert_eq!(
-        failure.message,
+        failure.message(),
         "Private messages are rate limited; wait a moment"
     );
     assert!(
@@ -1845,11 +1937,9 @@ async fn retries_of_saved_private_messages_are_not_budgeted() {
         .socket_send("socket-new", "New socket message")
         .await
         .expect_err("a new private message over the budget is refused");
-    assert_eq!(
-        refused
-            .downcast_ref::<SocialFailure>()
-            .map(|failure| failure.code),
-        Some(ErrorCode::RateLimited)
+    assert!(
+        matches!(refused, RoomError::Refused(Refusal::RateLimited(_))),
+        "{refused:?}"
     );
     assert_eq!(
         fixture.saved_private_messages().await,

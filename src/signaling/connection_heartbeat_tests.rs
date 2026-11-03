@@ -151,15 +151,10 @@ impl Fixture {
     }
 
     pub(super) async fn join(&mut self) -> anyhow::Result<serde_json::Value> {
-        self.peer
-            .send(PeerMessage::Text(
-                serde_json::json!({
-                    "type": "joinRoom", "roomId": "heartbeat-test", "participantName": "Quiet"
-                })
-                .to_string()
-                .into(),
-            ))
-            .await?;
+        self.send(serde_json::json!({
+            "type": "joinRoom", "roomId": "heartbeat-test", "participantName": "Quiet"
+        }))
+        .await?;
         tokio::time::timeout(Duration::from_secs(3), async {
             while let Some(message) = self.peer.next().await {
                 if let PeerMessage::Text(text) = message? {
@@ -167,7 +162,7 @@ impl Fixture {
                     if value["type"] == "roomJoined" || value["type"] == "lobbyWaiting" {
                         return Ok(value);
                     }
-                    anyhow::ensure!(value["type"] != "error", "join rejected");
+                    anyhow::ensure!(value["type"] != "error", "join rejected: {value}");
                 }
             }
             anyhow::bail!("connection closed before join")
@@ -180,9 +175,7 @@ impl Fixture {
         message: serde_json::Value,
         response_type: &str,
     ) -> anyhow::Result<serde_json::Value> {
-        self.peer
-            .send(PeerMessage::Text(message.to_string().into()))
-            .await?;
+        self.send(message).await?;
         tokio::time::timeout(Duration::from_secs(3), async {
             while let Some(message) = self.peer.next().await {
                 if let PeerMessage::Text(text) = message? {
@@ -201,6 +194,15 @@ impl Fixture {
             anyhow::bail!("connection closed before fixture response")
         })
         .await?
+    }
+
+    /// Sends one frame without waiting for its answer; [`Self::next_message`]
+    /// reads whatever the server says next, an error frame included.
+    pub(super) async fn send(&mut self, message: serde_json::Value) -> anyhow::Result<()> {
+        self.peer
+            .send(PeerMessage::Text(message.to_string().into()))
+            .await?;
+        Ok(())
     }
 
     pub(super) async fn next_message(&mut self) -> anyhow::Result<serde_json::Value> {
@@ -374,8 +376,7 @@ async fn leaving_room_stops_heartbeat_renewal() {
     let mut fixture = Fixture::new().await;
     fixture.join().await.unwrap();
     fixture
-        .peer
-        .send(PeerMessage::Text(r#"{"type":"leaveRoom"}"#.into()))
+        .send(serde_json::json!({"type": "leaveRoom"}))
         .await
         .unwrap();
     let observed = fixture.observe_alive(TEST_IDLE * 3).await;

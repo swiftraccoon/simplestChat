@@ -6,6 +6,7 @@
 use super::{Room, RoomManager, TokioRwLock, control};
 use crate::auth::account::{ChatPreferences, load_chat_preferences};
 use crate::ids::ParticipantId;
+use crate::room::refusal::{Refusal, RoomError};
 use futures_util::{StreamExt, stream};
 use sqlx::PgPool;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -19,7 +20,7 @@ async fn refresh_live_room<F, W, C>(
     account: Uuid,
     current: C,
     read: F,
-) -> anyhow::Result<()>
+) -> Result<(), RoomError>
 where
     F: FnOnce() -> W,
     W: Future<Output = Result<ChatPreferences, sqlx::Error>>,
@@ -27,7 +28,11 @@ where
 {
     let _control = tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(room))
         .await
-        .map_err(|_| anyhow::anyhow!("Privacy synchronization is waiting on a busy room"))?;
+        .map_err(|_| {
+            RoomError::Internal(anyhow::anyhow!(
+                "Privacy synchronization is waiting on a busy room"
+            ))
+        })?;
     let account_id = ParticipantId::from(account);
     {
         let state = room.read().await;
@@ -47,7 +52,9 @@ where
     // writes commit independently of a room; the room gate orders fresh reads.
     let preferences = tokio::time::timeout(control::PERSISTENCE_TIMEOUT, read())
         .await
-        .map_err(|_| anyhow::anyhow!("Current account privacy could not be read"))??;
+        .map_err(|_| {
+            RoomError::Internal(anyhow::anyhow!("Current account privacy could not be read"))
+        })??;
     let mut state = room.write().await;
     if !current() {
         return Ok(());
@@ -69,33 +76,36 @@ impl RoomManager {
         &self,
         authenticated: bool,
         participant_id: &ParticipantId,
-    ) -> anyhow::Result<Option<ChatPreferences>> {
+    ) -> Result<Option<ChatPreferences>, RoomError> {
         if !authenticated {
             return Ok(None);
         }
+        let unverified = || Refusal::Unavailable("Account privacy could not be verified".into());
         let account = participant_id.as_uuid();
-        let pool = self
-            .db_pool
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Account privacy could not be verified"))?;
+        let pool = self.db_pool.as_ref().ok_or_else(unverified)?;
         let preferences = tokio::time::timeout(
             control::PERSISTENCE_TIMEOUT,
             load_chat_preferences(pool, account),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("Account privacy could not be verified"))?
-        .map_err(|_| anyhow::anyhow!("Account privacy could not be verified"))?;
+        .map_err(|_| unverified())?
+        .map_err(|error| {
+            tracing::warn!(%error, "Account privacy lookup failed");
+            unverified()
+        })?;
         Ok(Some(preferences))
     }
 
     /// Called by the owned preference-save task after COMMIT. Unreadable or
     /// timed-out rooms retain their existing policy and make the save response
     /// explicitly report incomplete synchronization rather than claim success.
-    pub(crate) async fn refresh_account_preferences(&self, account: Uuid) -> anyhow::Result<()> {
+    pub(crate) async fn refresh_account_preferences(&self, account: Uuid) -> Result<(), RoomError> {
         let pool: PgPool = self
             .db_pool
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Account privacy requires a database"))?
+            .ok_or_else(|| {
+                RoomError::Internal(anyhow::anyhow!("Account privacy requires a database"))
+            })?
             .clone();
         let account_id = ParticipantId::from(account);
         let rooms: Vec<_> = self
@@ -138,15 +148,20 @@ impl RoomManager {
                     failed += 1;
                 }
             }
-            anyhow::ensure!(
-                failed == 0,
-                "Account privacy did not synchronize to {failed} rooms"
-            );
+            if failed > 0 {
+                return Err(RoomError::Internal(anyhow::anyhow!(
+                    "Account privacy did not synchronize to {failed} rooms"
+                )));
+            }
             Ok(())
         };
         let result = tokio::time::timeout(SYNC_TIMEOUT, synchronize)
             .await
-            .map_err(|_| anyhow::anyhow!("Account privacy synchronization deadline exceeded"))?;
+            .map_err(|_| {
+                RoomError::Internal(anyhow::anyhow!(
+                    "Account privacy synchronization deadline exceeded"
+                ))
+            })?;
         if result.is_err() {
             tracing::warn!("Saved account privacy could not be synchronized to every active room");
         }

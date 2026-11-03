@@ -5,9 +5,9 @@
 //! persistence. Admission is cancellable; an admitted write owns its task until
 //! runtime publication or quarantine. Native cleanup may follow outside control.
 
-use super::{Room, RoomManager, ServerMessage, TokioRwLock, try_send_essential};
+use super::{Room, RoomManager, ServerMessage, TokioRwLock, shutting_down, try_send_essential};
 use crate::ids::RoomId;
-use crate::room::refusal::RoomError;
+use crate::room::refusal::{Refusal, RoomError};
 use crate::sync::Mutex;
 use std::future::Future;
 use std::sync::Arc;
@@ -52,7 +52,7 @@ pub(super) async fn lock_room(room: &Arc<TokioRwLock<Room>>) -> OwnedMutexGuard<
 /// that no longer exists. Do not keep serving its cached authorization policy.
 pub(super) fn persistence_is_indeterminate(error: &RoomError) -> bool {
     match error {
-        RoomError::Refused(_) => false,
+        RoomError::Refused(_) | RoomError::PasswordRequired => false,
         RoomError::Database(sqlx::Error::Database(error)) => {
             !postgres_rejection_is_definite(error.code().as_deref())
         }
@@ -60,6 +60,9 @@ pub(super) fn persistence_is_indeterminate(error: &RoomError) -> bool {
             sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::InvalidArgument(_),
         ) => false,
         RoomError::Database(_) => true,
+        // Persistence futures fail only with refusals and database errors; any
+        // other failure inside one leaves its commit unproven, so fail closed.
+        RoomError::Media(_) | RoomError::Internal(_) => true,
     }
 }
 
@@ -77,6 +80,102 @@ pub(super) fn postgres_rejection_is_definite(code: Option<&str>) -> bool {
         || matches!(code, "40000" | "40001" | "40002" | "40P01" | "55P03" | "57014"))
 }
 
+/// A change whose save its requester waits for. A room-state save runs
+/// through [`RoomManager::persist_room`], which quarantines its room when the
+/// commit is unproven; the account's saves (`ChatLook`, `ReadMarker`) keep the
+/// account's own state and quarantine no room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Save {
+    /// A mute, a camera ban or the removal of either.
+    Sanction,
+    /// A ban; it may resolve a report.
+    Ban,
+    /// The removal of an account's saved ban.
+    Unban,
+    /// A saved role.
+    Role,
+    /// The room settings.
+    Settings,
+    /// The room topic.
+    Topic,
+    /// The history entry a kick writes first; it may resolve a report.
+    Kick,
+    /// The account's chat look.
+    ChatLook,
+    /// The account's read marker in a room's saved history.
+    ReadMarker,
+}
+
+impl Save {
+    /// What the requester hears when this save definitely did not apply, and
+    /// when it may have committed.
+    fn texts(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Sanction => (
+                "Moderation state could not be saved; try again",
+                "Moderation state may not have been saved",
+            ),
+            Self::Ban => (
+                "Ban could not be saved; try again",
+                "Ban may not have been saved",
+            ),
+            Self::Unban => (
+                "Ban removal could not be saved; try again",
+                "Ban removal may not have been saved",
+            ),
+            Self::Role => (
+                "Role could not be saved; try again",
+                "Role may not have been saved",
+            ),
+            Self::Settings => (
+                "Room settings could not be saved; try again",
+                "Room settings may not have been saved",
+            ),
+            Self::Topic => (
+                "Room topic could not be saved; try again",
+                "Room topic may not have been saved",
+            ),
+            Self::Kick => (
+                "Moderation history could not be saved; try again",
+                "Moderation history may not have been saved",
+            ),
+            Self::ChatLook => (
+                "Your chat look could not be saved; try again",
+                "Your chat look may not have been saved",
+            ),
+            Self::ReadMarker => (
+                "Read marker could not be saved; try again",
+                "Read marker may not have been saved",
+            ),
+        }
+    }
+
+    /// What the requester is told when this save failed. A refusal stands as
+    /// it is (a report from another room among them). A failure that leaves
+    /// the commit unproven ([`persistence_is_indeterminate`]) answers
+    /// `timed_out`, because the change may have applied; a room-state save's
+    /// room has then been quarantined, an account save's has not. A definite
+    /// database failure answers `unavailable` and any other definite failure
+    /// `request_failed`. Every failure but a refusal is logged with the room's
+    /// log handle and its detail.
+    pub(super) fn failure(self, room_id: &RoomId, error: RoomError) -> RoomError {
+        match error {
+            refused @ RoomError::Refused(_) => refused,
+            error => {
+                warn!(room = %room_id.log_handle(), save = ?self, %error, "Save failed");
+                let (failed, uncertain) = self.texts();
+                if persistence_is_indeterminate(&error) {
+                    Refusal::TimedOut(uncertain.into()).into()
+                } else if matches!(error, RoomError::Database(_)) {
+                    Refusal::Unavailable(failed.into()).into()
+                } else {
+                    Refusal::Internal(failed.into()).into()
+                }
+            }
+        }
+    }
+}
+
 impl RoomManager {
     /// Admit one owned control operation against the exact runtime incarnation.
     /// Request cancellation while queued does no work; cancellation after spawn
@@ -85,27 +184,30 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         action: F,
-    ) -> anyhow::Result<T>
+    ) -> Result<T, RoomError>
     where
         T: Send + 'static,
         F: FnOnce(Self, RoomId, RoomControl) -> W + Send + 'static,
-        W: Future<Output = anyhow::Result<T>> + Send + 'static,
+        W: Future<Output = Result<T, RoomError>> + Send + 'static,
     {
         let room = self.get_room(room_id)?;
         let control = tokio::time::timeout(ADMISSION_TIMEOUT, lock_room(&room))
             .await
-            .map_err(|_| anyhow::anyhow!("Room control is busy; try again"))?;
+            .map_err(|_| Refusal::Unavailable("Room control is busy; try again".into()))?;
         {
             let state = room.read().await;
             state.ensure_live()?;
-            anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
-            anyhow::ensure!(
-                self.rooms
-                    .read()
-                    .get(room_id)
-                    .is_some_and(|current| Arc::ptr_eq(current, &room)),
-                "Room is no longer active"
-            );
+            if self.drain.is_draining() {
+                return Err(shutting_down());
+            }
+            if !self
+                .rooms
+                .read()
+                .get(room_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &room))
+            {
+                return Err(Refusal::NotFound("Room is no longer active".into()).into());
+            }
         }
         let manager = self.clone();
         let room_id = room_id.clone();
@@ -127,7 +229,7 @@ impl RoomManager {
         .await
         .map_err(|error| {
             warn!(%error, "Owned room control task failed");
-            anyhow::anyhow!("Room control operation failed")
+            RoomError::Internal(anyhow::anyhow!("Room control operation failed"))
         })?
     }
 

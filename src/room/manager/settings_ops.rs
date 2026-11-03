@@ -8,11 +8,14 @@ impl RoomManager {
         label: &str,
         value: Option<Option<i32>>,
         maximum: i32,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         if let Some(Some(value)) = value
             && !(1..=maximum).contains(&value)
         {
-            anyhow::bail!("{label} must be between 1 and {maximum}");
+            return Err(Refusal::Invalid(
+                format!("{label} must be between 1 and {maximum}").into(),
+            )
+            .into());
         }
         Ok(())
     }
@@ -28,7 +31,7 @@ impl RoomManager {
         admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         patch: SettingsPatch,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let admin_id = *admin_id;
         let expected_sender = expected_sender.clone();
         self.run_room_control(room_id, move |manager, room_id, control| async move {
@@ -52,7 +55,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         patch: SettingsPatch,
         control: control::RoomControl,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         // Authorize before expensive password work. Control retains this
         // membership/permission order while brief state locks allow chat/media.
         let room_lock = self.get_room(room_id)?;
@@ -60,7 +63,10 @@ impl RoomManager {
             let room = room_lock.read().await;
             let admin = Self::participant_for_sender(&room, admin_id, expected_sender)?;
             if !admin.role.can_change_settings() {
-                anyhow::bail!("Insufficient permissions to change room settings (requires Admin+)");
+                return Err(Refusal::Forbidden(
+                    "Insufficient permissions to change room settings (requires Admin+)".into(),
+                )
+                .into());
             }
         }
 
@@ -77,23 +83,34 @@ impl RoomManager {
         let mut admin_mutation_reserved = false;
         if let Some(Some(value)) = patch.password.as_ref() {
             if !settings::valid_new_room_password(value.expose_secret()) {
-                anyhow::bail!("Room password must be 8-256 bytes without control characters");
+                return Err(Refusal::Invalid(
+                    "Room password must be 8-256 bytes without control characters".into(),
+                )
+                .into());
             }
 
             let mut room = room_lock.write().await;
             let admin = Self::participant_for_sender(&room, admin_id, expected_sender)?;
             if !admin.role.can_change_settings() {
-                anyhow::bail!("Insufficient permissions to change room settings (requires Admin+)");
+                return Err(Refusal::Forbidden(
+                    "Insufficient permissions to change room settings (requires Admin+)".into(),
+                )
+                .into());
             }
             let now = std::time::Instant::now();
             if room
                 .last_password_hash_at
                 .is_some_and(|previous| now.duration_since(previous) < ROOM_PASSWORD_HASH_COOLDOWN)
             {
-                anyhow::bail!("Room password updates are rate limited");
+                return Err(
+                    Refusal::RateLimited("Room password updates are rate limited".into()).into(),
+                );
             }
             if !room.admin_mutations.reserve(now) {
-                anyhow::bail!("Room administration changes are rate limited");
+                return Err(Refusal::RateLimited(
+                    "Room administration changes are rate limited".into(),
+                )
+                .into());
             }
             admin_mutation_reserved = true;
             room.last_password_hash_at = Some(now);
@@ -111,7 +128,10 @@ impl RoomManager {
         let mut room = room_lock.write().await;
         let admin = Self::participant_for_sender(&room, admin_id, expected_sender)?;
         if !admin.role.can_change_settings() {
-            anyhow::bail!("Insufficient permissions to change room settings (requires Admin+)");
+            return Err(Refusal::Forbidden(
+                "Insufficient permissions to change room settings (requires Admin+)".into(),
+            )
+            .into());
         }
 
         let current = room
@@ -129,13 +149,19 @@ impl RoomManager {
             (updated.max_broadcasters, updated.max_participants),
             (Some(broadcasters), Some(participants)) if broadcasters > participants
         ) {
-            anyhow::bail!("Maximum broadcasters cannot exceed maximum participants");
+            return Err(Refusal::Invalid(
+                "Maximum broadcasters cannot exceed maximum participants".into(),
+            )
+            .into());
         }
         if !password_changed && updated == current {
             return Ok(());
         }
         if !admin_mutation_reserved && !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         // For DB-backed rooms persistence is the commit point. Do not advertise
@@ -143,20 +169,16 @@ impl RoomManager {
         let persisted = room.persisted;
         drop(room);
         if persisted {
-            let pool = self
-                .db_pool
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Room settings are temporarily unavailable"))?;
+            let pool = self.db_pool.as_ref().ok_or_else(|| {
+                Refusal::Unavailable("Room settings are temporarily unavailable".into())
+            })?;
             self.persist_room(
                 room_id,
                 &room_lock,
                 settings::update_room_settings(pool, room_id, &patch, password_hash.clone()),
             )
             .await
-            .map_err(|error| {
-                warn!(room = %room_id.log_handle(), %error, "Failed to persist room settings");
-                anyhow::anyhow!("Room settings could not be saved")
-            })?;
+            .map_err(|error| control::Save::Settings.failure(room_id, error))?;
         }
 
         let mut room = room_lock.write().await;
@@ -197,7 +219,7 @@ impl RoomManager {
         admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         topic: String,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let admin_id = *admin_id;
         let expected_sender = expected_sender.clone();
         self.run_room_control(room_id, move |manager, room_id, control| async move {
@@ -215,16 +237,22 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         topic: String,
         control: control::RoomControl,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         if topic.len() > settings::MAX_TOPIC_LEN || topic.chars().any(char::is_control) {
-            anyhow::bail!("Room topic must be at most 512 characters without control characters");
+            return Err(Refusal::Invalid(
+                "Room topic must be at most 512 bytes without control characters".into(),
+            )
+            .into());
         }
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
 
         let admin = Self::participant_for_sender(&room, admin_id, expected_sender)?;
         if !admin.role.can_change_settings() {
-            anyhow::bail!("Insufficient permissions to change room topic (requires Admin+)");
+            return Err(Refusal::Forbidden(
+                "Insufficient permissions to change room topic (requires Admin+)".into(),
+            )
+            .into());
         }
         if room
             .settings
@@ -235,16 +263,18 @@ impl RoomManager {
             return Ok(());
         }
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         let persisted = room.persisted;
         drop(room);
         if persisted {
-            let pool = self
-                .db_pool
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Room topic is temporarily unavailable"))?;
+            let pool = self.db_pool.as_ref().ok_or_else(|| {
+                Refusal::Unavailable("Room topic is temporarily unavailable".into())
+            })?;
             self.persist_room(room_id, &room_lock, async {
                 let result =
                     sqlx::query("UPDATE rooms SET topic = $1, updated_at = now() WHERE id = $2")
@@ -258,10 +288,7 @@ impl RoomManager {
                 Ok(())
             })
             .await
-            .map_err(|error| {
-                warn!(room = %room_id.log_handle(), %error, "Failed to persist room topic");
-                anyhow::anyhow!("Room topic could not be saved")
-            })?;
+            .map_err(|error| control::Save::Topic.failure(room_id, error))?;
         }
 
         let mut room = room_lock.write().await;

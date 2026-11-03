@@ -19,13 +19,13 @@ impl RoomManager {
     /// Creates a new room manager
     ///
     /// # Errors
-    /// Returns an error if room configuration is invalid or media server initialization fails
+    /// [`RoomError::Internal`] when the media server cannot start its workers.
     pub(crate) async fn new(
         settings: ManagerSettings,
         media_config: MediaConfig,
         metrics: ServerMetrics,
         db_pool: Option<sqlx::PgPool>,
-    ) -> Result<Self> {
+    ) -> Result<Self, RoomError> {
         let ManagerSettings {
             allow_ad_hoc_rooms,
             max_participants_per_room,
@@ -37,7 +37,11 @@ impl RoomManager {
             join_attempts_per_room_ip_per_minute,
             account_update_capacity,
         } = settings;
-        let media_server = Arc::new(MediaServer::new(media_config).await?);
+        let media_server = Arc::new(
+            MediaServer::new(media_config)
+                .await
+                .map_err(RoomError::Internal)?,
+        );
 
         Ok(Self {
             rooms: Arc::new(RwLock::new(HashMap::new())),
@@ -214,11 +218,14 @@ impl RoomManager {
     }
 
     /// Gets a room lock by ID (brief outer read lock, no await)
-    pub(in crate::room) fn get_room(&self, room_id: &RoomId) -> Result<Arc<TokioRwLock<Room>>> {
+    pub(in crate::room) fn get_room(
+        &self,
+        room_id: &RoomId,
+    ) -> Result<Arc<TokioRwLock<Room>>, RoomError> {
         let rooms = self.rooms.read();
         rooms
             .get(room_id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Room not found: {}", room_id.log_handle()))
+            .ok_or_else(|| Refusal::NotFound("Room not found".into()).into())
     }
 }

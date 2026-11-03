@@ -570,12 +570,24 @@ this, or the room's state forbids it), `not_found` (the target does not exist or
 is no longer available), `rate_limited` (retry after a pause), `unavailable` (a
 dependency the request needs is down; retry later), `timed_out` (the operation
 did not finish in time and may or may not have applied) and `request_failed`
-(the server could not complete the request). A refusal raised while saving
-carries its own class, so the code follows what happened rather than the words
-of the message. An error with a `requestId` rejects only that pending request. Errors without IDs are connection or
-uncorrelated command notifications and cannot settle a pending media/reconnect
-request; they can reach the join handler. `roomPasswordRequired` is a distinct
-retry/prompt result, while `roomClosed` is terminal room state.
+(the server could not complete the request). Every refusal, on every
+command, carries its own class and a message a person can read, so the code
+follows what happened rather than the words of the message. A failure inside
+the server answers with a fixed message, and its detail stays in the server
+log: `unavailable` when its database failed, `request_failed` otherwise. A save
+that may have committed is never answered as failed or unavailable. A room
+change (a sanction, ban, ban removal, role, settings or topic change, or a
+kick) and any other social change to the room's saved state answer
+`timed_out` with a message that they may not have been saved, and the room
+closes (`roomClosed`) until a restart reloads its saved state; a chat send
+answers `messageRetryResult` with outcome `unknown`; a chat look or read
+marker, which the account keeps, answers `timed_out` whenever its commit is
+unproven, its deadline included, and closes no room. An error with a
+`requestId` rejects only that pending request.
+Errors without IDs are connection or uncorrelated command notifications and
+cannot settle a pending media/reconnect request; they can reach the join
+handler. `roomPasswordRequired` is a distinct retry/prompt result, while
+`roomClosed` is terminal room state.
 `serverRestarting` is a separate temporary process-shutdown event with a
 human-readable `reason`; it is not room deletion.
 

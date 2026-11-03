@@ -17,7 +17,7 @@ async fn join(
     id: &str,
     authenticated: bool,
     password: Option<&str>,
-) -> Result<mpsc::Sender<crate::OutboundJson>> {
+) -> Result<mpsc::Sender<crate::OutboundJson>, RoomError> {
     let (sender, _receiver) = mpsc::channel(16);
     manager
         .add_participant(
@@ -156,7 +156,7 @@ async fn a_refused_join_to_a_dormant_room_creates_no_router() {
         let error = join(&manager, &room_id, &visitor_id.to_string(), true, None)
             .await
             .expect_err("a missing password is refused");
-        assert!(error.is::<RoomPasswordRequired>(), "{error}");
+        assert!(matches!(error, RoomError::PasswordRequired), "{error}");
         assert!(!has_media_state(&manager, &room_id).await);
         assert_eq!(manager.metrics.rooms_created_total(), created_before);
 

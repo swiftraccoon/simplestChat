@@ -6,12 +6,10 @@ use crate::room::moderation::{
     Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId,
     ReportStatus, Target, record_event,
 };
-use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::{
     BanEntry, ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
-    ChatStyleKind, ClientMessage, ErrorCode, MemberEntry, ModerationEventView, REACTIONS,
-    ReportEntry, ReportOutcome, RoomSnapshot, SnapshotLobbyEntry, SocialResponse,
-    valid_correlation_id,
+    ChatStyleKind, ClientMessage, MemberEntry, ModerationEventView, REACTIONS, ReportEntry,
+    ReportOutcome, RoomSnapshot, SnapshotLobbyEntry, SocialResponse, valid_correlation_id,
 };
 use hand_off::{Released, release};
 use uuid::Uuid;
@@ -165,19 +163,6 @@ struct RuntimeBan {
     expiry: Option<std::time::Instant>,
 }
 
-/// A request the room refused: the code the client switches on and a
-/// message for people.
-#[derive(Debug)]
-pub(crate) struct SocialFailure {
-    pub code: ErrorCode,
-    pub message: String,
-}
-impl std::fmt::Display for SocialFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-impl std::error::Error for SocialFailure {}
 /// An account's saved chat look, or `None` for an unknown account. A color the
 /// palette has since dropped falls back to the automatic one.
 pub(crate) async fn load_chat_style(
@@ -211,39 +196,6 @@ async fn save_chat_style(
     .execute(pool)
     .await?;
     Ok(())
-}
-
-/// A typed refusal from the persistence layer, carried to the socket with its code.
-pub(super) fn refused(refused: Refusal) -> anyhow::Error {
-    refusal(refused.code(), refused.message())
-}
-fn refusal(code: ErrorCode, message: &str) -> anyhow::Error {
-    SocialFailure {
-        code,
-        message: message.to_string(),
-    }
-    .into()
-}
-fn invalid(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::Invalid, message)
-}
-fn forbidden(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::Forbidden, message)
-}
-fn not_found(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::NotFound, message)
-}
-fn rate_limited(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::RateLimited, message)
-}
-fn unavailable(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::Unavailable, message)
-}
-fn timed_out(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::TimedOut, message)
-}
-fn failed(message: &str) -> anyhow::Error {
-    refusal(ErrorCode::RequestFailed, message)
 }
 
 /// Which room-wide budget a social request must reserve before it runs.
@@ -309,55 +261,48 @@ impl ClientMessage {
             _ => None,
         }
     }
-    pub(crate) fn social_error(&self, code: ErrorCode, message: &str) -> Option<ServerMessage> {
-        let request_id = self.social_request().map(|(id, _)| id.to_string());
-        let client_message_id = match self {
-            Self::ChatMessage {
-                client_message_id, ..
-            } => client_message_id.clone(),
-            Self::PrivateMessage {
-                client_message_id, ..
-            } => Some(client_message_id.clone()),
-            Self::RetryChatMessage(message) => Some(message.client_message_id.clone()),
-            _ => None,
-        };
-        if request_id.is_none() && client_message_id.is_none() {
-            return None;
-        }
-        Some(ServerMessage::SocialError {
-            request_id,
-            client_message_id,
-            code,
-            message: message.to_string(),
-        })
-    }
+}
+
+/// One outbound frame. Server messages always serialize; were one not to, the
+/// failure would be the server's own, never the client's.
+fn encode(message: &ServerMessage) -> Result<crate::OutboundJson, RoomError> {
+    serde_json::to_string(message)
+        .map(crate::OutboundJson::from)
+        .map_err(|error| RoomError::Internal(error.into()))
+}
+
+/// The bytes a confirmation receipt holds for `message`.
+fn receipt_size(message: &ChatEntry) -> Result<usize, RoomError> {
+    serde_json::to_vec(message)
+        .map(|bytes| bytes.len())
+        .map_err(|error| RoomError::Internal(error.into()))
 }
 
 fn send(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
     message: &ServerMessage,
-) -> Result<()> {
-    try_send_essential(
-        metrics,
-        sender,
-        crate::OutboundJson::from(serde_json::to_string(message)?),
-    )
-    .map_err(|_| rate_limited("Connection is busy; please retry"))
+) -> Result<(), RoomError> {
+    try_send_essential(metrics, sender, encode(message)?)
+        .map_err(|_| Refusal::RateLimited("Connection is busy; please retry".into()).into())
 }
 
 /// A refusal answers the attempt with its own code and text. An uncertain
 /// commit is not a rejected send. Its owned room was quarantined already;
-/// preserve the client's unconfirmed attempt instead of inviting a new ID.
+/// preserve the client's unconfirmed attempt instead of inviting a new ID. A
+/// definite database failure answers `unavailable`. Every failure but a
+/// refusal is logged with its detail.
 fn chat_persistence_failure(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
+    room_id: &RoomId,
     client_message_id: &str,
     error: RoomError,
-) -> Result<()> {
+) -> Result<(), RoomError> {
     if let RoomError::Refused(refusal) = error {
-        return Err(refused(refusal));
+        return Err(refusal.into());
     }
+    warn!(room = %room_id.log_handle(), %error, "Chat message save failed");
     if let RoomError::Database(error) = &error {
         crate::db::record_error(error);
     }
@@ -372,8 +317,10 @@ fn chat_persistence_failure(
             },
         );
         Ok(())
+    } else if matches!(error, RoomError::Database(_)) {
+        Err(Refusal::Unavailable("Message could not be saved; try again".into()).into())
     } else {
-        Err(failed("Message could not be saved; try again"))
+        Err(Refusal::Internal("Message could not be saved; try again".into()).into())
     }
 }
 
@@ -381,27 +328,27 @@ fn acknowledge_chat(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
     message: ChatEntry,
-) -> Result<()> {
-    let json = crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageAck {
+) -> Result<(), RoomError> {
+    let json = encode(&ServerMessage::MessageAck {
         client_message_id: message.client_message_id.clone(),
         message,
-    })?);
+    })?;
     // Acceptance already happened. Queue rejection is counted, but must not
     // become a SocialError claiming the message failed. The sender retains an
     // unconfirmed attempt and can reconcile its receipt after reconnecting.
     let _ = try_send_essential(metrics, sender, json);
     Ok(())
 }
-fn page_offset(offset: Option<u32>) -> Result<usize> {
+fn page_offset(offset: Option<u32>) -> Result<usize, RoomError> {
     let offset = offset.unwrap_or(0) as usize;
     if offset > 10_000 {
-        return Err(invalid("Invalid page"));
+        return Err(Refusal::Invalid("Invalid page".into()).into());
     }
     Ok(offset)
 }
-fn require_role(actual: roles::Role, required: roles::Role) -> Result<()> {
+fn require_role(actual: roles::Role, required: roles::Role) -> Result<(), RoomError> {
     if actual < required {
-        return Err(forbidden("This action requires a room moderator"));
+        return Err(Refusal::Forbidden("This action requires a room moderator".into()).into());
     }
     Ok(())
 }
@@ -450,20 +397,27 @@ fn quote_reply(
     sender: &Participant,
     recipient_id: Option<&ParticipantId>,
     message_id: &MessageId,
-) -> Result<ChatReplyRef> {
+) -> Result<ChatReplyRef, RoomError> {
     let original = history
         .iter()
         .rev()
         .find(|entry| entry.message.message_id == *message_id && visible(entry, sender))
-        .ok_or_else(|| not_found("That message is no longer available to reply to"))?;
+        .ok_or_else(|| {
+            Refusal::NotFound("That message is no longer available to reply to".into())
+        })?;
     reply_reference(&original.message, sender, recipient_id)
 }
 
 /// A saved public row is readable by every currently admitted, non-ignoring
 /// viewer, even when the row predates their runtime replay membership.
-fn saved_public_reply(message: &ChatEntry, sender: &Participant) -> Result<ChatReplyRef> {
+fn saved_public_reply(
+    message: &ChatEntry,
+    sender: &Participant,
+) -> Result<ChatReplyRef, RoomError> {
     if message.recipient_id.is_some() || sender.social.ignored.contains(&message.participant_id) {
-        return Err(not_found("That message is no longer available to reply to"));
+        return Err(
+            Refusal::NotFound("That message is no longer available to reply to".into()).into(),
+        );
     }
     reply_reference(message, sender, None)
 }
@@ -472,9 +426,9 @@ fn reply_reference(
     message: &ChatEntry,
     sender: &Participant,
     recipient_id: Option<&ParticipantId>,
-) -> Result<ChatReplyRef> {
+) -> Result<ChatReplyRef, RoomError> {
     if message.removed_at.is_some() {
-        return Err(not_found("That message has been removed"));
+        return Err(Refusal::NotFound("That message has been removed".into()).into());
     }
     let same_conversation = match (recipient_id, message.recipient_id.as_ref()) {
         (None, None) => true,
@@ -485,9 +439,10 @@ fn reply_reference(
         _ => false,
     };
     if !same_conversation {
-        return Err(invalid(
-            "Reply within the conversation the message belongs to",
-        ));
+        return Err(Refusal::Invalid(
+            "Reply within the conversation the message belongs to".into(),
+        )
+        .into());
     }
     let flat = message
         .content
@@ -515,26 +470,26 @@ fn prepare_reaction(
     participant_id: &ParticipantId,
     message_id: &MessageId,
     emoji: &str,
-) -> Result<Vec<ChatReaction>> {
+) -> Result<Vec<ChatReaction>, RoomError> {
     let actor = room
         .participants
         .get(participant_id)
-        .ok_or_else(|| not_found("Participant not found"))?;
+        .ok_or_else(|| Refusal::NotFound("Participant not found".into()))?;
     let index = room
         .social
         .history
         .iter()
         .position(|entry| entry.message.message_id == *message_id && visible(entry, actor))
-        .ok_or_else(|| not_found("That message is no longer available"))?;
+        .ok_or_else(|| Refusal::NotFound("That message is no longer available".into()))?;
     if room.social.history[index].message.removed_at.is_some() {
-        return Err(not_found("That message has been removed"));
+        return Err(Refusal::NotFound("That message has been removed".into()).into());
     }
     toggle_reactions(
         &room.social.history[index].message.reactions,
         participant_id,
         emoji,
     )
-    .map_err(invalid)
+    .map_err(|message| Refusal::Invalid(message.into()).into())
 }
 
 /// Shared by the runtime and transaction-locked saved-message paths. The
@@ -603,9 +558,9 @@ pub(super) fn set_reaction(
 
 /// Saved reaction completion does not insert an old message into bounded replay.
 /// Public history access also permits pre-join viewers to observe its changes.
-fn publish_saved_reaction(room: &mut Room, message: &ChatEntry) -> Result<()> {
+fn publish_saved_reaction(room: &mut Room, message: &ChatEntry) -> Result<(), RoomError> {
     if message.recipient_id.is_some() || message.removed_at.is_some() {
-        return Err(unavailable("Public message unavailable"));
+        return Err(Refusal::Unavailable("Public message unavailable".into()).into());
     }
     if let Some(index) = room.social.history.iter().position(|entry| {
         entry.message.message_id == message.message_id && entry.message.removed_at.is_none()
@@ -621,11 +576,10 @@ fn publish_saved_reaction(room: &mut Room, message: &ChatEntry) -> Result<()> {
             pin.reactions.clone_from(&message.reactions);
         }
     }
-    let event =
-        crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
-            message_id: message.message_id,
-            reactions: message.reactions.clone(),
-        })?);
+    let event = encode(&ServerMessage::MessageReactions {
+        message_id: message.message_id,
+        reactions: message.reactions.clone(),
+    })?;
     for viewer in room.participants.values().filter(|viewer| {
         viewer.social.connected && !viewer.social.ignored.contains(&message.participant_id)
     }) {
@@ -638,7 +592,7 @@ fn publish_reaction(
     room: &mut Room,
     message_id: &MessageId,
     reactions: Vec<ChatReaction>,
-) -> Result<Vec<ChatReaction>> {
+) -> Result<Vec<ChatReaction>, RoomError> {
     // Ephemeral chat can trim replay while a saved reaction waits for SQL.
     // Resolve the identity again instead of applying it to the old slot.
     let index = room
@@ -646,16 +600,15 @@ fn publish_reaction(
         .history
         .iter()
         .position(|entry| entry.message.message_id == *message_id)
-        .ok_or_else(|| not_found("That message is no longer available"))?;
+        .ok_or_else(|| Refusal::NotFound("That message is no longer available".into()))?;
     if room.social.history[index].message.removed_at.is_some() {
-        return Err(not_found("That message has been removed"));
+        return Err(Refusal::NotFound("That message has been removed".into()).into());
     }
     room.social.history[index].message.reactions = reactions.clone();
-    let event =
-        crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
-            message_id: *message_id,
-            reactions: reactions.clone(),
-        })?);
+    let event = encode(&ServerMessage::MessageReactions {
+        message_id: *message_id,
+        reactions: reactions.clone(),
+    })?;
     let entry = &room.social.history[index];
     for viewer in room.participants.values().filter(|p| visible(entry, p)) {
         let _ = try_send_essential(&room.metrics, &viewer.sender, event.clone());
@@ -669,7 +622,7 @@ fn react_to_message(
     participant_id: &ParticipantId,
     message_id: &MessageId,
     emoji: &str,
-) -> Result<Vec<ChatReaction>> {
+) -> Result<Vec<ChatReaction>, RoomError> {
     let reactions = prepare_reaction(room, participant_id, message_id, emoji)?;
     publish_reaction(room, message_id, reactions)
 }
@@ -679,7 +632,7 @@ fn prepare_edit(
     actor: &Participant,
     message_id: &MessageId,
     request: &history::EditRequest,
-) -> Result<Option<ChatEntry>> {
+) -> Result<Option<ChatEntry>, RoomError> {
     if room.settings.as_ref().is_some_and(|s| !s.allow_chat)
         || !moderation::can_chat(
             &actor.punitive,
@@ -687,7 +640,7 @@ fn prepare_edit(
             room.settings.as_ref().is_some_and(|s| s.moderated),
         )
     {
-        return Err(forbidden("You are not allowed to chat"));
+        return Err(Refusal::Forbidden("You are not allowed to chat".into()).into());
     }
     let Some(entry) = room
         .social
@@ -701,27 +654,27 @@ fn prepare_edit(
         || (!actor.authenticated && entry.sender_session != actor.media_session_id)
         || (entry.message.recipient_id.is_some() && !visible(entry, actor))
     {
-        return Err(forbidden("Only the author can edit this message"));
+        return Err(Refusal::Forbidden("Only the author can edit this message".into()).into());
     }
     if let Some(peer) = &entry.message.recipient_id {
         let recipient = room
             .participants
             .get(peer)
-            .ok_or_else(|| forbidden("Edit this saved conversation in Messages"))?;
+            .ok_or_else(|| Refusal::Forbidden("Edit this saved conversation in Messages".into()))?;
         if !can_private_message(actor, recipient) {
-            return Err(unavailable("Private message unavailable"));
+            return Err(Refusal::Unavailable("Private message unavailable".into()).into());
         }
     }
     let mut edited = entry.message.clone();
-    history::apply_edit(&mut edited, request).map_err(invalid)?;
+    history::apply_edit(&mut edited, request)
+        .map_err(|message| Refusal::Invalid(message.into()))?;
     Ok(Some(edited))
 }
 
-fn publish_edit(room: &mut Room, message: &ChatEntry) -> Result<()> {
-    let event =
-        crate::OutboundJson::from(serde_json::to_string(&ServerMessage::ChatMessageEdited {
-            message: message.clone(),
-        })?);
+fn publish_edit(room: &mut Room, message: &ChatEntry) -> Result<(), RoomError> {
+    let event = encode(&ServerMessage::ChatMessageEdited {
+        message: message.clone(),
+    })?;
     let viewers: Vec<_> = if message.recipient_id.is_some() {
         room.social
             .history
@@ -749,7 +702,7 @@ fn publish_edit(room: &mut Room, message: &ChatEntry) -> Result<()> {
     Ok(())
 }
 
-fn publish_pins(room: &Room) -> Result<()> {
+fn publish_pins(room: &Room) -> Result<(), RoomError> {
     let mut encoded = HashMap::new();
     for viewer in room.participants.values() {
         let mut mask = 0u8;
@@ -770,9 +723,7 @@ fn publish_pins(room: &Room) -> Result<()> {
         let event = match encoded.entry(mask) {
             std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(crate::OutboundJson::from(serde_json::to_string(
-                    &ServerMessage::PinnedMessagesChanged { messages },
-                )?))
+                entry.insert(encode(&ServerMessage::PinnedMessagesChanged { messages })?)
             }
         };
         let _ = try_send_essential(&room.metrics, &viewer.sender, event.clone());
@@ -1014,12 +965,12 @@ impl RoomSocial {
 
     /// Resolve the open runtime report a sanction answers; a report this room
     /// never received is refused.
-    pub(crate) fn link_report(&mut self, report_id: &str) -> Result<()> {
+    pub(crate) fn link_report(&mut self, report_id: &str) -> Result<(), RoomError> {
         let report = self
             .reports
             .iter_mut()
             .find(|report| report.report_id == report_id)
-            .ok_or_else(|| not_found("Report not found"))?;
+            .ok_or_else(|| Refusal::NotFound("Report not found".into()))?;
         if report.status == ReportStatus::Open {
             report.status = ReportStatus::Resolved;
             report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
@@ -1075,12 +1026,12 @@ impl RoomSocial {
             }
         }
     }
-    pub(crate) fn reserve_ban(&mut self) -> Result<()> {
+    pub(crate) fn reserve_ban(&mut self) -> Result<(), RoomError> {
         let now = std::time::Instant::now();
         self.bans
             .retain(|_, ban| ban.expiry.is_none_or(|expiry| expiry > now));
         if self.bans.len() >= MAX_RUNTIME_BANS {
-            return Err(forbidden("Room ban capacity reached"));
+            return Err(Refusal::Forbidden("Room ban capacity reached".into()).into());
         }
         Ok(())
     }
@@ -1128,7 +1079,7 @@ impl Room {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target: Option<&ParticipantId>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let now = std::time::Instant::now();
         let moderated = self.settings.as_ref().is_some_and(|s| s.moderated);
         let chat_allowed = !self.settings.as_ref().is_some_and(|s| !s.allow_chat);
@@ -1160,7 +1111,7 @@ impl Room {
             participant_id: *sender_id,
             target_participant_id: target.copied(),
         };
-        let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
+        let json = encode(&event)?;
         match target {
             Some(target) => {
                 if target_accepts && let Some(recipient) = self.participants.get(target) {
@@ -1229,7 +1180,7 @@ impl<'a> SocialRequest<'a> {
     /// Takes the room back after an await: it must still be live and the actor
     /// still bound to this connection. A handler that needs only that check
     /// drops the returned guard at once.
-    async fn reacquire(&self, _released: Released) -> Result<HeldRoom<'a>> {
+    async fn reacquire(&self, _released: Released) -> Result<HeldRoom<'a>, RoomError> {
         let lock = self.room_lock;
         let room = lock.write().await;
         room.ensure_live()?;
@@ -1241,28 +1192,56 @@ impl<'a> SocialRequest<'a> {
     async fn persist<T>(
         &self,
         manager: &RoomManager,
-        _released: &Released,
+        released: &Released,
         persistence: impl Future<Output = Result<T, RoomError>>,
     ) -> Result<T, RoomError> {
+        self.persist_until(
+            manager,
+            released,
+            tokio::time::Instant::now() + control::PERSISTENCE_TIMEOUT,
+            persistence,
+        )
+        .await
+    }
+
+    /// [`Self::persist`] against an absolute deadline, kept separate for
+    /// deterministic timer tests. A commit left in doubt may have applied, and
+    /// a retry could apply a toggle such as a reaction twice, so it answers
+    /// `timed_out`; every other failure passes through as it is.
+    async fn persist_until<T>(
+        &self,
+        manager: &RoomManager,
+        _released: &Released,
+        deadline: tokio::time::Instant,
+        persistence: impl Future<Output = Result<T, RoomError>>,
+    ) -> Result<T, RoomError> {
+        let room_id = self.room_id;
         manager
-            .persist_room(self.room_id, self.room_lock, persistence)
+            .persist_room_until(room_id, self.room_lock, deadline, persistence)
             .await
+            .map_err(|error| {
+                if !control::persistence_is_indeterminate(&error) {
+                    return error;
+                }
+                warn!(room = %room_id.log_handle(), %error, "Social change left in doubt");
+                Refusal::TimedOut("This change may not have been saved".into()).into()
+            })
     }
 
     /// The acting participant in the room this request holds. Admission and
     /// [`Self::reacquire`] bind the actor under that same write lock, so the
     /// refusal stands only for a request whose actor is gone.
-    fn actor<'r>(&self, room: &'r Room) -> Result<&'r Participant> {
+    fn actor<'r>(&self, room: &'r Room) -> Result<&'r Participant, RoomError> {
         room.participants
             .get(self.participant_id)
-            .ok_or_else(|| not_found("Participant not found"))
+            .ok_or_else(|| Refusal::NotFound("Participant not found".into()).into())
     }
 
     /// [`Self::actor`], for a change to the acting participant.
-    fn actor_mut<'r>(&self, room: &'r mut Room) -> Result<&'r mut Participant> {
+    fn actor_mut<'r>(&self, room: &'r mut Room) -> Result<&'r mut Participant, RoomError> {
         room.participants
             .get_mut(self.participant_id)
-            .ok_or_else(|| not_found("Participant not found"))
+            .ok_or_else(|| Refusal::NotFound("Participant not found".into()).into())
     }
 }
 
@@ -1318,7 +1297,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target: Option<&ParticipantId>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         room.relay_typing(sender_id, expected_sender, target)
@@ -1335,7 +1314,7 @@ impl RoomManager {
         content: String,
         client_message_id: Option<String>,
         recipient_id: Option<&ParticipantId>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let command = match recipient_id {
             Some(target) => ClientMessage::PrivateMessage {
                 target_participant_id: target.to_owned(),
@@ -1364,7 +1343,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let attempt = match command {
             ClientMessage::ChatMessage {
                 content,
@@ -1406,7 +1385,7 @@ impl RoomManager {
                 retry_session: Some(message.chat_session_id.clone()),
                 reply_to: message.reply_to,
             },
-            _ => return Err(invalid("Invalid chat command")),
+            _ => return Err(Refusal::Invalid("Invalid chat command".into()).into()),
         };
         self.submit_chat_attempt(room_id, sender_id, expected_sender, attempt)
             .await
@@ -1418,7 +1397,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         let durable = self.db_pool.is_some()
@@ -1461,14 +1440,14 @@ impl RoomManager {
                     let pool = manager
                         .db_pool
                         .as_ref()
-                        .ok_or_else(|| unavailable("History unavailable"))?;
+                        .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
                     drop(room);
                     let saved = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
                         history::lookup_public(pool, room_id.as_str(), id),
                     )
                     .await
-                    .map_err(|_| timed_out("Chat history timed out"))??;
+                    .map_err(|_| Refusal::TimedOut("Chat history timed out".into()))??;
                     room = room_lock.write().await;
                     room.ensure_live()?;
                     Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
@@ -1500,7 +1479,7 @@ impl RoomManager {
                 let pool = manager
                     .db_pool
                     .as_ref()
-                    .ok_or_else(|| unavailable("History unavailable"))?;
+                    .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
                 drop(room);
                 let public_room = prepared
                     .message
@@ -1531,12 +1510,13 @@ impl RoomManager {
                         return chat_persistence_failure(
                             &manager.metrics,
                             &expected_sender,
+                            &room_id,
                             &prepared.message.client_message_id,
                             error,
                         );
                     }
                 };
-                prepared.receipt_bytes = serde_json::to_vec(&prepared.message)?.len();
+                prepared.receipt_bytes = receipt_size(&prepared.message)?;
                 prepared.durable = true;
                 room = room_lock.write().await;
                 room.ensure_live()?;
@@ -1545,7 +1525,7 @@ impl RoomManager {
                 let pool = manager
                     .db_pool
                     .as_ref()
-                    .ok_or_else(|| unavailable("Attachments unavailable"))?;
+                    .ok_or_else(|| Refusal::Unavailable("Attachments unavailable".into()))?;
                 drop(room);
                 let attached = manager
                     .persist_room(
@@ -1566,12 +1546,13 @@ impl RoomManager {
                         return chat_persistence_failure(
                             &manager.metrics,
                             &expected_sender,
+                            &room_id,
                             &prepared.message.client_message_id,
                             error,
                         );
                     }
                 };
-                prepared.receipt_bytes = serde_json::to_vec(&prepared.message)?.len();
+                prepared.receipt_bytes = receipt_size(&prepared.message)?;
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
@@ -1748,7 +1729,7 @@ impl RoomManager {
         content: String,
         client_message_id: Option<String>,
         recipient_id: Option<&ParticipantId>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         Self::process_chat_attempt(
             room,
             sender_id,
@@ -1770,7 +1751,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
-    ) -> Result<Option<PreparedChat>> {
+    ) -> Result<Option<PreparedChat>, RoomError> {
         Self::prepare_chat_attempt_with_saved_reply(room, sender_id, expected_sender, attempt, None)
     }
 
@@ -1780,7 +1761,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
         saved_reply: Option<&ChatEntry>,
-    ) -> Result<Option<PreparedChat>> {
+    ) -> Result<Option<PreparedChat>, RoomError> {
         let ChatAttempt {
             content,
             attachment_ids,
@@ -1792,27 +1773,31 @@ impl RoomManager {
         } = attempt;
         let recipient_id = recipient_id.as_ref();
         if (content.trim().is_empty() && attachment_ids.is_empty()) || content.len() > 4096 {
-            return Err(invalid("Message must contain 1–4096 bytes of text"));
+            return Err(
+                Refusal::Invalid("Message must contain 1–4096 bytes of text".into()).into(),
+            );
         }
         if !crate::labels::is_plain_text(&content) {
-            return Err(invalid("Message contains hidden formatting characters"));
+            return Err(
+                Refusal::Invalid("Message contains hidden formatting characters".into()).into(),
+            );
         }
         if !crate::attachments::valid_ids(&attachment_ids) {
-            return Err(invalid("Attach at most four different files"));
+            return Err(Refusal::Invalid("Attach at most four different files".into()).into());
         }
         let client_message_id = client_message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         if !valid_correlation_id(&client_message_id) {
-            return Err(invalid("Invalid message ID"));
+            return Err(Refusal::Invalid("Invalid message ID".into()).into());
         }
         if sequence.is_some_and(|value| value == 0 || value > MAX_CHAT_SEQUENCE) {
-            return Err(invalid("Invalid chat attempt"));
+            return Err(Refusal::Invalid("Invalid chat attempt".into()).into());
         }
         room.ensure_live()?;
         let now = std::time::Instant::now();
         room.social.prune_receipts(now);
         let sender = Self::participant_for_sender(room, sender_id, expected_sender)?;
         if !attachment_ids.is_empty() && !sender.authenticated {
-            return Err(forbidden("Sign in to attach files"));
+            return Err(Refusal::Forbidden("Sign in to attach files".into()).into());
         }
         let metrics = room.metrics.clone();
         let unknown = |reason| {
@@ -1852,7 +1837,7 @@ impl RoomManager {
                 || existing.sequence != sequence
             {
                 if retry_session.is_none() {
-                    return Err(invalid("Message ID was already used"));
+                    return Err(Refusal::Invalid("Message ID was already used".into()).into());
                 }
                 return unknown(ChatRetryReason::Conflict).map(|()| None);
             }
@@ -1880,7 +1865,7 @@ impl RoomManager {
         if room.settings.as_ref().is_some_and(|s| !s.allow_chat)
             || !moderation::can_chat(&sender.punitive, sender.role, moderated)
         {
-            return Err(forbidden("You are not allowed to chat"));
+            return Err(Refusal::Forbidden("You are not allowed to chat".into()).into());
         }
         let sender_authenticated = sender.authenticated;
         let sender_name = sender.name.clone();
@@ -1903,7 +1888,7 @@ impl RoomManager {
                         != attachment_ids)
                 || existing.message.recipient_id.as_ref() != recipient_id
             {
-                return Err(invalid("Message ID was already used"));
+                return Err(Refusal::Invalid("Message ID was already used".into()).into());
             }
             return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone())
                 .map(|()| None);
@@ -1912,9 +1897,9 @@ impl RoomManager {
             let recipient = room
                 .participants
                 .get(id)
-                .ok_or_else(|| unavailable("Private message unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Private message unavailable".into()))?;
             if !can_private_message(sender, recipient) {
-                return Err(unavailable("Private message unavailable"));
+                return Err(Refusal::Unavailable("Private message unavailable".into()).into());
             }
             Some((
                 recipient.name.clone(),
@@ -1956,18 +1941,18 @@ impl RoomManager {
             edited_at: None,
             reactions: Vec::new(),
         };
-        let receipt_bytes = serde_json::to_vec(&message)?.len();
+        let receipt_bytes = receipt_size(&message)?;
         if receipt_bytes > CHAT_RECEIPT_BYTES {
             if retry_session.is_some() {
                 return unknown(ChatRetryReason::Capacity).map(|()| None);
             }
-            return Err(invalid("Chat confirmation exceeds its size limit"));
+            return Err(Refusal::Invalid("Chat confirmation exceeds its size limit".into()).into());
         }
         // A private message reaches one bounded queue; only public fan-out
         // draws on the room-wide window. Rejecting a send must not evict an
         // accepted message's confirmation receipt.
         if recipient.is_none() && !room.chat_broadcasts.reserve(now) {
-            return Err(rate_limited("Room chat rate limit exceeded"));
+            return Err(Refusal::RateLimited("Room chat rate limit exceeded".into()).into());
         }
         let persist = if recipient_id.is_some() {
             sender_authenticated
@@ -2000,7 +1985,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         if let Some(prepared) =
             Self::prepare_chat_attempt(room, sender_id, expected_sender, attempt)?
         {
@@ -2014,7 +1999,7 @@ impl RoomManager {
         sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         prepared: PreparedChat,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let PreparedChat {
             message,
             sender_session,
@@ -2053,7 +2038,7 @@ impl RoomManager {
                 chat_style: message.chat_style.clone(),
                 reply_to: message.reply_to.clone(),
             };
-            let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
+            let json = encode(&event)?;
             for participant in room.participants.values() {
                 if participant.id != *sender_id && !participant.social.ignored.contains(sender_id) {
                     let _ = try_send_essential(&room.metrics, &participant.sender, json.clone());
@@ -2092,12 +2077,12 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let (request_id, _) = command
             .social_request()
-            .ok_or_else(|| not_found("Unknown request"))?;
+            .ok_or_else(|| Refusal::NotFound("Unknown request".into()))?;
         if !valid_correlation_id(request_id) {
-            return Err(invalid("Invalid request ID"));
+            return Err(Refusal::Invalid("Invalid request ID".into()).into());
         }
         if let ClientMessage::GetRoomSnapshot { request_id } = command {
             let room_lock = self.get_room(room_id)?;
@@ -2229,12 +2214,12 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
         control: Option<super::control::RoomControl>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let (request_id, _) = command
             .social_request()
-            .ok_or_else(|| not_found("Unknown request"))?;
+            .ok_or_else(|| Refusal::NotFound("Unknown request".into()))?;
         if !valid_correlation_id(request_id) {
-            return Err(invalid("Invalid request ID"));
+            return Err(Refusal::Invalid("Invalid request ID".into()).into());
         }
         // Control admission keeps the online/offline decision stable. Reuse the
         // already-controlled role path rather than trying to acquire this gate again.
@@ -2259,7 +2244,9 @@ impl RoomManager {
                     expected_sender,
                     &ParticipantId::from(target_user_id.as_uuid()),
                     new_role,
-                    control.ok_or_else(|| unavailable("Room control is unavailable"))?,
+                    control.ok_or_else(|| {
+                        Refusal::Unavailable("Room control is unavailable".into())
+                    })?,
                 )
                 .await?;
                 return send(
@@ -2283,12 +2270,14 @@ impl RoomManager {
             SocialBudget::None => {}
             SocialBudget::ChatBroadcast => {
                 if !room.chat_broadcasts.reserve(std::time::Instant::now()) {
-                    return Err(rate_limited("Room chat rate limit exceeded"));
+                    return Err(Refusal::RateLimited("Room chat rate limit exceeded".into()).into());
                 }
             }
             SocialBudget::AdminMutation => {
                 if !room.admin_mutations.reserve(std::time::Instant::now()) {
-                    return Err(rate_limited("Room requests are rate limited"));
+                    return Err(
+                        Refusal::RateLimited("Room requests are rate limited".into()).into(),
+                    );
                 }
             }
         }
@@ -2417,7 +2406,7 @@ impl RoomManager {
             ClientMessage::ListModerationEvents { offset, .. } => {
                 self.list_moderation_events(&request, room, *offset).await?
             }
-            _ => return Err(not_found("Unknown request")),
+            _ => return Err(Refusal::NotFound("Unknown request".into()).into()),
         };
         if let Some(control) = &control {
             control.release();

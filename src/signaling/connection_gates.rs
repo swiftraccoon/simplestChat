@@ -399,16 +399,14 @@ impl CommandGates {
     }
 }
 
-fn rate_limited(message: &str) -> ServerMessage {
-    ServerMessage::Error {
-        code: ErrorCode::RateLimited,
-        message: message.to_string(),
-    }
+/// A budget's refusal as the plain error frame.
+fn rate_limited(message: &'static str) -> ServerMessage {
+    error_frame(&Refusal::RateLimited(message.into()).into())
 }
 
-/// The social form of a refusal when the command has one, else the plain error.
-fn social_rate_limited(message: &ClientMessage, text: &str) -> ServerMessage {
-    message
-        .social_error(ErrorCode::RateLimited, text)
-        .unwrap_or_else(|| rate_limited(text))
+/// The social form of a budget's refusal when the command has one, else the
+/// plain error frame.
+fn social_rate_limited(message: &ClientMessage, text: &'static str) -> ServerMessage {
+    let refusal = RoomError::from(Refusal::RateLimited(text.into()));
+    social_error_frame(message, &refusal).unwrap_or_else(|| error_frame(&refusal))
 }

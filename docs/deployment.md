@@ -444,7 +444,9 @@ and [development](development.md) for native build requirements.
   admission. Configure password or registration requirements and invite-only
   admission as appropriate. Invite-only rooms hold participants without an
   existing Member-or-higher role for explicit moderator admission; the room's
-  ordinary lobby rules still apply as well.
+  ordinary lobby rules still apply as well. A refused join names its reason (a
+  password, registration, guests not allowed or a ban), so anyone who knows a
+  room's ID learns that the saved room exists and what it requires.
 - Access tokens are bound to the refresh session they were issued with, so
   logging that session out retires them: HTTP requests fail on the next call, and
   the account's open update streams and authenticated sockets are told to

@@ -1097,18 +1097,6 @@ fn media_errors_never_name_rooms() {
     );
 }
 
-/// The social error helpers (social.rs) that build a refusal from a message.
-const SOCIAL_ERROR_HELPERS: [&str; 8] = [
-    "refusal",
-    "invalid",
-    "forbidden",
-    "not_found",
-    "rate_limited",
-    "unavailable",
-    "timed_out",
-    "failed",
-];
-
 /// The message of an `ensure!`: the tokens after its condition, which ends at
 /// the first top-level comma; the condition may name a room to look it up.
 fn ensure_message<'a>(arguments: &[Token<'a>]) -> Vec<Token<'a>> {
@@ -1156,12 +1144,11 @@ fn closed<'a>(name: &str, found: Option<Vec<Invocation<'a>>>) -> Vec<Invocation<
 }
 
 /// A room-layer error's text reaches operational logs the same way, through the
-/// `%error` of a warning or a media error that wraps it (`media_ops` turns a
-/// room lookup's failure into a `MediaError::ConsumerError`), so the room
-/// layer, subdirectories included, names a room only by its log handle in its
-/// `anyhow!` and `bail!` errors, the message of its `ensure!` checks, the
-/// arguments of `.context(…)` and `.with_context(…)`, the social error helpers
-/// and its `Refusal`, `RoomError` and `MediaError` constructions.
+/// `%error` of a warning or the connection task's log of a rejected command, so
+/// the room layer, subdirectories included, names a room only by its log handle
+/// in its `anyhow!` and `bail!` errors, the message of its `ensure!` checks, the
+/// arguments of `.context(…)` and `.with_context(…)` and its `Refusal`,
+/// `RoomError` and `MediaError` constructions.
 #[test]
 fn room_errors_never_name_rooms() {
     let mut offenders = Vec::new();
@@ -1179,7 +1166,6 @@ fn room_errors_never_name_rooms() {
             &name,
             calls(&production, &["context", "with_context"]),
         ));
-        constructions.extend(closed(&name, calls(&production, &SOCIAL_ERROR_HELPERS)));
         for type_name in ["Refusal", "RoomError", "MediaError"] {
             constructions.extend(closed(&name, variant_constructions(&production, type_name)));
         }

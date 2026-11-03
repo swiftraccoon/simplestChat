@@ -10,7 +10,7 @@ use super::*;
 pub(super) async fn handle(
     message: &ClientMessage,
     connection: Dispatch<'_, '_>,
-) -> anyhow::Result<()> {
+) -> Result<(), RoomError> {
     let Dispatch {
         participant_id,
         current_room_id,
@@ -286,7 +286,9 @@ pub(super) async fn handle(
             reply.acknowledge_control()?;
         }
 
-        _ => anyhow::bail!("Not a media command"),
+        _ => {
+            return Err(RoomError::Internal(anyhow::anyhow!("Not a media command")));
+        }
     }
     Ok(())
 }

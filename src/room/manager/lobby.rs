@@ -13,17 +13,17 @@ impl RoomManager {
     /// deployment's ceiling is reached. Joins and lobby admissions share it,
     /// so a participant queued while the room had space cannot be admitted
     /// past either limit later.
-    pub(in crate::room) fn ensure_room_has_space(&self, room: &Room) -> Result<()> {
+    pub(in crate::room) fn ensure_room_has_space(&self, room: &Room) -> Result<(), RoomError> {
         if let Some(maximum) = room
             .settings
             .as_ref()
             .and_then(|settings| settings.max_participants)
         {
             let Ok(maximum) = usize::try_from(maximum) else {
-                anyhow::bail!("Room capacity is unavailable");
+                return Err(Refusal::Unavailable("Room capacity is unavailable".into()).into());
             };
             if maximum == 0 || room.participants.len() >= maximum {
-                anyhow::bail!("Room is full");
+                return Err(Refusal::Forbidden("Room is full".into()).into());
             }
         }
         // The deployment's ceiling applies to every room, ad hoc or saved,
@@ -31,7 +31,7 @@ impl RoomManager {
         if let Some(ceiling) = self.max_participants_per_room
             && room.participants.len() >= ceiling
         {
-            anyhow::bail!("Room is full");
+            return Err(Refusal::Forbidden("Room is full".into()).into());
         }
         Ok(())
     }
@@ -58,7 +58,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
         let room = room_lock.read().await;
@@ -66,7 +66,9 @@ impl RoomManager {
         // Verify moderator exists and has permission
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
         if !moderator.role.can_admit_lobby() {
-            anyhow::bail!("Insufficient permissions to admit from lobby");
+            return Err(
+                Refusal::Forbidden("Insufficient permissions to admit from lobby".into()).into(),
+            );
         }
         drop(room);
         self.admit_authorized_lobby(
@@ -85,13 +87,13 @@ impl RoomManager {
         room_id: &RoomId,
         target_id: &ParticipantId,
         _control: control::RoomControl,
-        authorize: impl FnOnce() -> Result<()>,
-    ) -> Result<()> {
+        authorize: impl FnOnce() -> Result<(), RoomError>,
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         room.ensure_live()?;
         let Some(authenticated) = room.lobby.get(target_id).map(|entry| entry.authenticated) else {
-            anyhow::bail!("Participant not found in lobby");
+            return Err(Refusal::NotFound("Participant not found in lobby".into()).into());
         };
         self.ensure_room_has_space(&room)?;
 
@@ -101,7 +103,7 @@ impl RoomManager {
             .get(target_id)
             .is_some_and(|entry| room.identity_is_banned(target_id, entry.authenticated, entry.ip))
         {
-            anyhow::bail!("Participant is banned from this room");
+            return Err(Refusal::Forbidden("Participant is banned from this room".into()).into());
         }
 
         if room
@@ -109,10 +111,13 @@ impl RoomManager {
             .get(target_id)
             .is_some_and(|entry| entry.sender.is_closed())
         {
-            anyhow::bail!("Participant has already disconnected");
+            return Err(Refusal::NotFound("Participant has already disconnected".into()).into());
         }
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         drop(room);
@@ -121,21 +126,21 @@ impl RoomManager {
             .await?;
         let mut room = room_lock.write().await;
         authorize()?;
-        let admission = self.drain.admit()?;
+        let admission = self.drain.admit().map_err(|_| shutting_down())?;
         room.ensure_live()?;
         if room
             .lobby
             .get(target_id)
             .is_none_or(|entry| entry.sender.is_closed())
         {
-            anyhow::bail!("Participant has already disconnected");
+            return Err(Refusal::NotFound("Participant has already disconnected".into()).into());
         }
 
         // Remove from lobby
         let entry = room
             .lobby
             .remove(target_id)
-            .ok_or_else(|| anyhow::anyhow!("Participant not found in lobby"))?;
+            .ok_or_else(|| Refusal::NotFound("Participant not found in lobby".into()))?;
 
         // Build the participants list (before inserting the new one)
         let participants: Vec<ParticipantInfo> = room
@@ -251,7 +256,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_id: &ParticipantId,
         reason: Option<String>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
         let room = room_lock.read().await;
@@ -259,7 +264,9 @@ impl RoomManager {
         // Verify moderator exists and has permission
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
         if !moderator.role.can_admit_lobby() {
-            anyhow::bail!("Insufficient permissions to deny from lobby");
+            return Err(
+                Refusal::Forbidden("Insufficient permissions to deny from lobby".into()).into(),
+            );
         }
         drop(room);
         self.deny_authorized_lobby(
@@ -278,24 +285,27 @@ impl RoomManager {
         target_id: &ParticipantId,
         reason: Option<String>,
         _control: control::RoomControl,
-        authorize: impl FnOnce() -> Result<()>,
-    ) -> Result<()> {
+        authorize: impl FnOnce() -> Result<(), RoomError>,
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         room.ensure_live()?;
         authorize()?;
         if !room.lobby.contains_key(target_id) {
-            anyhow::bail!("Participant not found in lobby");
+            return Err(Refusal::NotFound("Participant not found in lobby".into()).into());
         }
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         // Remove from lobby
         let entry = room
             .lobby
             .remove(target_id)
-            .ok_or_else(|| anyhow::anyhow!("Participant not found in lobby"))?;
+            .ok_or_else(|| Refusal::NotFound("Participant not found in lobby".into()))?;
 
         // Send LobbyDenied to the denied participant
         if let Ok(json) = serde_json::to_string(&ServerMessage::LobbyDenied { reason }) {

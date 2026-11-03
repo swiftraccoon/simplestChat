@@ -1,7 +1,6 @@
 //! Persisted room creation and deletion, worker recovery and shutdown.
 
 use super::super::*;
-use crate::room::refusal::RoomError;
 
 impl RoomManager {
     /// Atomically reserve a database-backed room ID against ad-hoc runtime room
@@ -22,7 +21,7 @@ impl RoomManager {
         let _creation_guard =
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
-                .map_err(|_| room_creation_timeout("waiting for room creation"))?;
+                .map_err(|_| Refusal::Unavailable("Room creation is busy; try again".into()))?;
         if self.drain.is_draining() {
             return Err(sqlx::Error::PoolClosed.into());
         }
@@ -84,7 +83,7 @@ impl RoomManager {
                 .fetch_optional(&pool),
             )
             .await
-            .map_err(|_| room_delete_timeout("checking ownership"))??;
+            .map_err(|_| Refusal::Unavailable("Room deletion is busy; try again".into()))??;
             let Some((owner_id, created_at)) = generation else {
                 return Ok(DeleteRoomResult::NotFound);
             };
@@ -94,7 +93,7 @@ impl RoomManager {
 
             let creation_guard = tokio::time::timeout(ROOM_DELETE_TIMEOUT, creation_lock.lock())
                 .await
-                .map_err(|_| room_delete_timeout("waiting for room creation"))?;
+                .map_err(|_| Refusal::Unavailable("Room deletion is busy; try again".into()))?;
             let runtime_room = rooms.read().get(&room_id).cloned();
             // Control precedes the deletion reservation: an earlier writer may
             // quarantine this incarnation while we wait for its SQL to finish.
@@ -102,7 +101,9 @@ impl RoomManager {
                 Some(room) => Some(
                     tokio::time::timeout(ROOM_DELETE_TIMEOUT, control::lock_room(room))
                         .await
-                        .map_err(|_| room_delete_timeout("waiting for room control"))?,
+                        .map_err(|_| {
+                            Refusal::Unavailable("Room deletion is busy; try again".into())
+                        })?,
                 ),
                 None => None,
             };
@@ -116,15 +117,17 @@ impl RoomManager {
             }
 
             if let Some(runtime_room) = runtime_room.as_ref() {
-                let mut room = match tokio::time::timeout(ROOM_DELETE_TIMEOUT, runtime_room.write())
-                    .await
-                {
-                    Ok(room) => room,
-                    Err(_) => {
-                        release_deletion_reservation(&deleting_rooms, &room_id, deletion_token);
-                        return Err(room_delete_timeout("waiting to tombstone the runtime room"));
-                    }
-                };
+                let mut room =
+                    match tokio::time::timeout(ROOM_DELETE_TIMEOUT, runtime_room.write()).await {
+                        Ok(room) => room,
+                        Err(_) => {
+                            release_deletion_reservation(&deleting_rooms, &room_id, deletion_token);
+                            return Err(Refusal::Unavailable(
+                                "Room deletion is busy; try again".into(),
+                            )
+                            .into());
+                        }
+                    };
                 room.deleting = true;
                 room.policy_revision = room.policy_revision.wrapping_add(1);
             }
@@ -412,14 +415,14 @@ impl RoomManager {
         room_id: &RoomId,
         expected_worker: mediasoup::worker::WorkerId,
         reason: &str,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let Ok(room_lock) = self.get_room(room_id) else {
             return Ok(());
         };
         let creation_guard =
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
-                .map_err(|_| anyhow::anyhow!("Room creation is busy"))?;
+                .map_err(|_| Refusal::Unavailable("Room creation is busy".into()))?;
         if !self
             .rooms
             .read()
@@ -443,11 +446,11 @@ impl RoomManager {
         let control_guard =
             tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
                 .await
-                .map_err(|_| anyhow::anyhow!("Room control is busy"))?;
+                .map_err(|_| Refusal::Unavailable("Room control is busy".into()))?;
         let participant_sessions = {
             let mut room = tokio::time::timeout(ROOM_DELETE_TIMEOUT, room_lock.write())
                 .await
-                .map_err(|_| anyhow::anyhow!("Room state is busy"))?;
+                .map_err(|_| Refusal::Unavailable("Room state is busy".into()))?;
             let notice = ServerMessage::ServerRestarting {
                 reason: reason.to_string(),
             };
@@ -516,10 +519,11 @@ impl RoomManager {
             deletion_token,
             succeeded,
         );
-        anyhow::ensure!(
-            succeeded,
-            "Recovery router cleanup incomplete; room ID remains reserved"
-        );
+        if !succeeded {
+            return Err(RoomError::Internal(anyhow::anyhow!(
+                "Recovery router cleanup incomplete; room ID remains reserved"
+            )));
+        }
         Ok(())
     }
 
@@ -527,7 +531,7 @@ impl RoomManager {
     /// The coordinator must then call [`MediaServer::shutdown`] to release all
     /// transports, routers, and workers, even if membership cleanup times out.
     /// No persisted rooms or accounts are deleted.
-    pub(crate) async fn shutdown(&self) -> Result<()> {
+    pub(crate) async fn shutdown(&self) -> Result<(), RoomError> {
         self.shutdown_with_budget(std::time::Duration::from_secs(8))
             .await
     }
@@ -535,7 +539,7 @@ impl RoomManager {
     pub(in crate::room) async fn shutdown_with_budget(
         &self,
         budget: std::time::Duration,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         use futures_util::StreamExt;
         use std::sync::atomic::AtomicUsize;
         self.drain.begin_draining();
@@ -572,7 +576,7 @@ impl RoomManager {
                     }
                 })
                 .await;
-            Ok::<(), anyhow::Error>(())
+            Ok::<(), std::convert::Infallible>(())
         };
         let result = crate::shutdown::run_stage("rooms", budget, cleanup).await;
         if result.is_err() {
@@ -582,6 +586,6 @@ impl RoomManager {
                 "Room drain incomplete; global media cleanup will still run"
             );
         }
-        result
+        result.map_err(RoomError::Internal)
     }
 }

@@ -515,10 +515,14 @@ async fn insert_message(
         crate::attachments::bind_durable(connection, attachment_ids, id, room, expires).await?;
         saved.0
     } else {
-        let saved: SqlJson<ChatEntry> = sqlx::query_scalar(
+        let saved: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
             "SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3")
             .bind(&conversation).bind(sender_session).bind(&message.client_message_id)
-            .fetch_one(&mut *connection).await?;
+            .fetch_optional(&mut *connection).await?;
+        // The row that refused the insert was deleted before this read: nothing
+        // was written, so the send is refused rather than left in doubt.
+        let saved = saved
+            .ok_or_else(|| Refusal::Unavailable("Message could not be saved; try again".into()))?;
         if saved.0.removed_at.is_none()
             && saved.0.edited_at.is_none()
             && (saved.0.content != message.content
@@ -815,6 +819,11 @@ pub(crate) async fn remove_public(
 }
 
 /// Caller has already locked account consent and the live HTTP session, if any.
+/// Edits the conversation's live message `message` when `actor` sent it: an
+/// account's message by that account, a guest's from `guest_session`. A missing
+/// message (never sent, expired, or deleted when the room shortened its
+/// retention) is refused `unavailable` and another sender's `forbidden`; nothing
+/// is written, so neither leaves a live room's save in doubt.
 async fn edit_in_transaction(
     connection: &mut PgConnection,
     conversation: &str,
@@ -827,17 +836,24 @@ async fn edit_in_transaction(
         .bind(conversation)
         .execute(&mut *connection)
         .await?;
-    let saved: SqlJson<ChatEntry> = sqlx::query_scalar(
-        "SELECT body FROM chat_messages
-        WHERE conversation=$1 AND id=$2 AND expires_at>now()
-          AND (sender_account=$3 OR (sender_account IS NULL AND sender_session=$4)) FOR UPDATE",
+    let saved: Option<(SqlJson<ChatEntry>, Option<Uuid>, Uuid)> = sqlx::query_as(
+        "SELECT body,sender_account,sender_session FROM chat_messages
+        WHERE conversation=$1 AND id=$2 AND expires_at>now() FOR UPDATE",
     )
     .bind(conversation)
     .bind(message)
-    .bind(actor)
-    .bind(guest_session)
-    .fetch_one(&mut *connection)
+    .fetch_optional(&mut *connection)
     .await?;
+    let Some((saved, sender_account, sender_session)) = saved else {
+        return Err(Refusal::Unavailable("Message unavailable".into()).into());
+    };
+    let authored = match sender_account {
+        Some(account) => account == actor,
+        None => guest_session == Some(sender_session),
+    };
+    if !authored {
+        return Err(Refusal::Forbidden("Only the author can edit this message".into()).into());
+    }
     let mut edited = conversation_message(saved.0, conversation.starts_with("pm:"));
     let old_revision = edited.revision;
     apply_edit(&mut edited, request).map_err(|message| Refusal::Invalid(message.into()))?;
@@ -941,17 +957,31 @@ async fn save_private_edit(
         &request,
     )
     .await
-    .map_err(edit_error)?;
+    .map_err(|error| match error {
+        // The route gives a missing, expired or foreign message one answer.
+        // Those are edit_in_transaction's only Unavailable and Forbidden
+        // refusals; PrivateWrite::begin's Unavailable refusal (the accounts)
+        // keeps edit_error's answer.
+        RoomError::Refused(Refusal::Unavailable(_) | Refusal::Forbidden(_)) => {
+            AuthError::InvalidInput("Message unavailable")
+        }
+        error => edit_error(error),
+    })?;
     write.commit(principal).await?;
     Ok(edited)
 }
 
-/// An HTTP route answers a refusal with its own status and a database failure
-/// with the shared account-service response.
+/// An HTTP route answers a refusal with its own status, a database failure
+/// with the shared account-service response and any other failure, after
+/// logging it, with the fixed refusal of its class.
 fn route_error(error: RoomError) -> AuthError {
     match error {
         RoomError::Refused(refusal) => AuthError::Refused(refusal),
         RoomError::Database(error) => routes::database_error(error),
+        error => {
+            tracing::warn!(%error, "Saved chat request failed");
+            AuthError::Refused(error.into_refusal())
+        }
     }
 }
 
@@ -964,6 +994,7 @@ fn edit_error(error: impl Into<RoomError>) -> AuthError {
             AuthError::InvalidInput("Message unavailable or changed; refresh before editing")
         }
         RoomError::Database(other) => routes::database_error(other),
+        error => route_error(error),
     }
 }
 
@@ -1103,7 +1134,10 @@ pub(crate) async fn set_pin(
         let available:bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL)")
             .bind(room).bind(message).fetch_one(&mut *tx).await?;
         if !available {
-            return Err(sqlx::Error::RowNotFound.into());
+            // The message was removed, expired or never sent: nothing is
+            // written, so this refuses rather than leaving the commit in doubt,
+            // with the answer a room without saved history gives.
+            return Err(Refusal::Unavailable("Public message unavailable".into()).into());
         }
         let existing: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM chat_pins WHERE room_id=$1 AND message_id=$2)",
@@ -1294,6 +1328,7 @@ pub(crate) async fn read(
                 AuthError::InvalidInput("Message unavailable")
             }
             RoomError::Database(other) => routes::database_error(other),
+            error => route_error(error),
         })?;
         if result.advanced {
             server.room_manager().account_updates().changed(
@@ -1409,6 +1444,7 @@ pub(super) async fn save_private_message(
     let mut write = PrivateWrite::begin(pool, principal, own, peer, |error| match error {
         RoomError::Refused(_) => AuthError::InvalidInput("Private message unavailable"),
         RoomError::Database(error) => routes::database_error(error),
+        error => route_error(error),
     })
     .await?;
     if context.is_none()

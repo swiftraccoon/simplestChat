@@ -459,7 +459,7 @@ pub(crate) async fn record_event(
         .as_deref()
         .map(Uuid::parse_str)
         .transpose()
-        .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
+        .map_err(|_| Refusal::Internal("The cited report could not be read".into()))?;
     if let Some(report_id) = report_id {
         let target: Option<ParticipantId> = sqlx::query_scalar(
             "SELECT target_participant_id FROM room_reports WHERE room_id = $1 AND id = $2",
@@ -468,8 +468,10 @@ pub(crate) async fn record_event(
         .bind(report_id)
         .fetch_optional(&mut *transaction)
         .await?;
+        // A report from another room, or none at all, is the caller's mistake
+        // and leaves the caller's transaction uncommitted.
         let Some(target) = target else {
-            return Err(sqlx::Error::RowNotFound.into());
+            return Err(Refusal::NotFound("Report not found".into()).into());
         };
         if ModerationTargetId::from(target) != event.target_id {
             return Err(
@@ -487,7 +489,7 @@ pub(crate) async fn record_event(
         .await?;
     }
     let event_id = Uuid::parse_str(&event.event_id)
-        .map_err(|_| sqlx::Error::Protocol("invalid event id".to_string()))?;
+        .map_err(|_| Refusal::Internal("Moderation history could not be saved".into()))?;
     sqlx::query(
         "INSERT INTO moderation_events
             (id, room_id, action, actor_id, actor_name, target_id, target_name,
@@ -1327,7 +1329,7 @@ pub(crate) async fn file_report(
     cap: u32,
 ) -> Result<bool, RoomError> {
     let report_id = Uuid::parse_str(&report.report_id)
-        .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
+        .map_err(|_| Refusal::Internal("Report could not be filed".into()))?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 71339))")
         .bind(room_id)
         .execute(&mut *connection)
@@ -1605,10 +1607,14 @@ mod tests {
             None,
             Some(foreign_report),
         );
-        assert!(matches!(
-            persist_event(&pool, &room_id, &foreign).await,
-            Err(RoomError::Database(sqlx::Error::RowNotFound))
-        ));
+        let refused = persist_event(&pool, &room_id, &foreign)
+            .await
+            .expect_err("another room's report is refused");
+        assert!(
+            matches!(&refused, RoomError::Refused(Refusal::NotFound(_))),
+            "{refused:?}"
+        );
+        assert_eq!(refused.client_message(), "Report not found");
         let (status,): (String,) = sqlx::query_as("SELECT status FROM room_reports WHERE id=$1")
             .bind(foreign_report)
             .fetch_one(&pool)

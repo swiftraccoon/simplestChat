@@ -3,7 +3,6 @@
 
 use super::super::*;
 use crate::room::publication::{RemovalPublication, SanctionPublication};
-use crate::room::refusal::RoomError;
 
 impl RoomManager {
     #[expect(
@@ -19,7 +18,7 @@ impl RoomManager {
         kind: moderation::PunitiveKind,
         enabled: bool,
         reason: Option<&str>,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
         let target_participant_id = *target_participant_id;
@@ -55,11 +54,12 @@ impl RoomManager {
         enabled: bool,
         reason: Option<&str>,
         control: control::RoomControl,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         if reason.is_some_and(|value| !moderation::valid_reason(value)) {
-            anyhow::bail!(
-                "Moderation reason must be at most 256 characters without control characters"
-            );
+            return Err(Refusal::Invalid(
+                "Moderation reason must be at most 256 bytes without control characters".into(),
+            )
+            .into());
         }
 
         let room_lock = self.get_room(room_id)?;
@@ -76,7 +76,7 @@ impl RoomManager {
             let target = room
                 .participants
                 .get(target_participant_id)
-                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+                .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
             (
                 moderator.role,
                 moderator.authenticated,
@@ -103,7 +103,10 @@ impl RoomManager {
             return Ok(false);
         }
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
         let event = moderation::ModerationEvent::new(
             moderation::ModerationAction::for_punitive(kind, enabled),
@@ -125,13 +128,12 @@ impl RoomManager {
         let persisted = room.persisted;
         drop(room);
         if persisted {
-            let pool = self
-                .db_pool
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Moderation service is temporarily unavailable"))?;
+            let pool = self.db_pool.as_ref().ok_or_else(|| {
+                Refusal::Unavailable("Moderation service is temporarily unavailable".into())
+            })?;
             let applied_by = moderator_authenticated
                 .then(|| moderator_id.as_uuid())
-                .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
+                .ok_or_else(|| Refusal::Forbidden("A registered moderator is required".into()))?;
             let sanction = moderation::Sanction {
                 identity: moderation::SanctionIdentity::of(
                     target_participant_id,
@@ -147,14 +149,7 @@ impl RoomManager {
                 moderation::set_punitive_state(pool, room_id, sanction, kind, enabled, &event),
             )
             .await
-            .map_err(|error| {
-                warn!(
-                    room = %room_id.log_handle(),
-                    %error,
-                    "Failed to persist participant sanction"
-                );
-                anyhow::anyhow!("Moderation state could not be saved")
-            })?;
+            .map_err(|error| control::Save::Sanction.failure(room_id, error))?;
         }
 
         let mut room = room_lock.write().await;
@@ -188,7 +183,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         // Collect producer IDs to close (under room lock)
         let (producers_to_close, target_media_session_id): (Vec<ProducerId>, uuid::Uuid) = {
             let room_lock = self.get_room(room_id)?;
@@ -199,10 +194,13 @@ impl RoomManager {
             let target = room
                 .participants
                 .get(target_participant_id)
-                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+                .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
 
             if !moderator.role.can_moderate(target.role) {
-                anyhow::bail!("Insufficient permissions to moderate this participant");
+                return Err(Refusal::Forbidden(
+                    "Insufficient permissions to moderate this participant".into(),
+                )
+                .into());
             }
 
             // Collect video producers (camera and screen). An authorized retry
@@ -218,7 +216,10 @@ impl RoomManager {
                 return Ok(());
             }
             if !room.admin_mutations.reserve(std::time::Instant::now()) {
-                anyhow::bail!("Room administration changes are rate limited");
+                return Err(Refusal::RateLimited(
+                    "Room administration changes are rate limited".into(),
+                )
+                .into());
             }
             (producers, target_media_session_id)
         };
@@ -282,7 +283,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
         reason: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let changed = self
             .update_punitive_state(
                 room_id,
@@ -313,7 +314,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let changed = self
             .update_punitive_state(
                 room_id,
@@ -344,7 +345,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let changed = self
             .update_punitive_state(
                 room_id,
@@ -375,7 +376,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let changed = self
             .update_punitive_state(
                 room_id,
@@ -408,7 +409,7 @@ impl RoomManager {
         target_participant_id: &ParticipantId,
         reason: Option<&str>,
         report_id: Option<uuid::Uuid>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         // Check permissions and remove under room lock
         let target_media_session_id = {
             let room_lock = self.get_room(room_id)?;
@@ -419,10 +420,13 @@ impl RoomManager {
             let target = room
                 .participants
                 .get(target_participant_id)
-                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+                .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
 
             if !moderator.role.can_moderate(target.role) {
-                anyhow::bail!("Insufficient permissions to kick this participant");
+                return Err(Refusal::Forbidden(
+                    "Insufficient permissions to kick this participant".into(),
+                )
+                .into());
             }
             let (target_authenticated, target_ip, target_name) =
                 (target.authenticated, target.ip, target.name.clone());
@@ -443,14 +447,17 @@ impl RoomManager {
                 report_id,
             );
             if !room.admin_mutations.reserve(std::time::Instant::now()) {
-                anyhow::bail!("Room administration changes are rate limited");
+                return Err(Refusal::RateLimited(
+                    "Room administration changes are rate limited".into(),
+                )
+                .into());
             }
             // A kick leaves no sanction row, so its history entry (and the
             // report it answers) is written first; the target may leave in the
             // meantime, in which case the entry stands and the kick is moot.
             if room.persisted {
                 let pool = self.db_pool.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Moderation service is temporarily unavailable")
+                    Refusal::Unavailable("Moderation service is temporarily unavailable".into())
                 })?;
                 drop(room);
                 self.persist_room(
@@ -459,11 +466,11 @@ impl RoomManager {
                     moderation::persist_event(pool, room_id, &event),
                 )
                 .await
-                .map_err(moderation_history_error)?;
+                .map_err(|error| control::Save::Kick.failure(room_id, error))?;
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 if !room.participants.contains_key(target_participant_id) {
-                    anyhow::bail!("Target participant not found");
+                    return Err(Refusal::NotFound("Target participant not found".into()).into());
                 }
             } else {
                 if let Some(report_id) = report_id {
@@ -487,7 +494,7 @@ impl RoomManager {
             .map(|session| session.media_session_id)
             // The target was checked under this same room lock, so the
             // removal names its session; refuse rather than assume it.
-            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?
+            .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?
         };
 
         // Clean up media outside lock
@@ -528,7 +535,7 @@ impl RoomManager {
         reason: Option<&str>,
         duration: Option<u64>,
         report_id: Option<uuid::Uuid>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
         let target_participant_id = *target_participant_id;
@@ -564,13 +571,19 @@ impl RoomManager {
         duration: Option<u64>,
         report_id: Option<uuid::Uuid>,
         control: control::RoomControl,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         const MAX_BAN_DURATION_SECS: u64 = 10 * 365 * 24 * 60 * 60;
         if duration.is_some_and(|seconds| seconds == 0 || seconds > MAX_BAN_DURATION_SECS) {
-            anyhow::bail!("Ban duration must be between 1 second and 10 years");
+            return Err(Refusal::Invalid(
+                "Ban duration must be between 1 second and 10 years".into(),
+            )
+            .into());
         }
         if reason.is_some_and(|value| !moderation::valid_reason(value)) {
-            anyhow::bail!("Ban reason must be at most 256 characters without control characters");
+            return Err(Refusal::Invalid(
+                "Ban reason must be at most 256 bytes without control characters".into(),
+            )
+            .into());
         }
         // The control guard pins authority and membership across unlocked SQL.
         // An unauthenticated target with an IP represents the entire live guest
@@ -583,7 +596,7 @@ impl RoomManager {
             let target = room
                 .participants
                 .get(target_participant_id)
-                .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+                .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
 
             let target_participant_ids =
                 moderation_cohort(&room, target_participant_id, moderator.role)?;
@@ -596,7 +609,10 @@ impl RoomManager {
                 guest_ip_lobby_cohort(&room, target_authenticated, target_ip, moderator.role)?;
             room.social.reserve_ban()?;
             if !room.admin_mutations.reserve(std::time::Instant::now()) {
-                anyhow::bail!("Room administration changes are rate limited");
+                return Err(Refusal::RateLimited(
+                    "Room administration changes are rate limited".into(),
+                )
+                .into());
             }
             let expires_at = duration.and_then(|seconds| {
                 chrono::Utc::now().checked_add_signed(chrono::Duration::seconds(seconds as i64))
@@ -623,13 +639,14 @@ impl RoomManager {
             let persisted = room.persisted;
             drop(room);
             if persisted {
-                let pool = self
-                    .db_pool
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Ban service is temporarily unavailable"))?;
+                let pool = self.db_pool.as_ref().ok_or_else(|| {
+                    Refusal::Unavailable("Ban service is temporarily unavailable".into())
+                })?;
                 let applied_by = moderator_authenticated
                     .then(|| moderator_id.as_uuid())
-                    .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
+                    .ok_or_else(|| {
+                        Refusal::Forbidden("A registered moderator is required".into())
+                    })?;
                 let sanction = moderation::Sanction {
                     identity: moderation::SanctionIdentity::of(
                         target_participant_id,
@@ -645,20 +662,7 @@ impl RoomManager {
                     moderation::persist_ban(pool, room_id, sanction, expires_at, &event),
                 )
                 .await
-                .map_err(|error| match error {
-                    RoomError::Refused(refused) => crate::room::social::refused(refused),
-                    RoomError::Database(sqlx::Error::RowNotFound) => {
-                        anyhow::anyhow!("Report not found")
-                    }
-                    RoomError::Database(database) => {
-                        warn!(
-                            room = %room_id.log_handle(),
-                            error = %database,
-                            "Failed to persist room ban"
-                        );
-                        anyhow::anyhow!("Ban could not be saved")
-                    }
-                })?;
+                .map_err(|error| control::Save::Ban.failure(room_id, error))?;
             }
 
             let mut room = room_lock.write().await;
@@ -718,7 +722,7 @@ impl RoomManager {
         moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_user_id: &UserId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
         let target_user_id = *target_user_id;
@@ -743,7 +747,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_user_id: &UserId,
         control: control::RoomControl,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let target_participant_id = &ParticipantId::from(target_user_id.as_uuid());
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -752,7 +756,10 @@ impl RoomManager {
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
 
         if moderator.role < roles::Role::Admin {
-            anyhow::bail!("Insufficient permissions to unban (requires Admin+)");
+            return Err(Refusal::Forbidden(
+                "Insufficient permissions to unban (requires Admin+)".into(),
+            )
+            .into());
         }
         let moderator_name = moderator.name.clone();
 
@@ -761,18 +768,22 @@ impl RoomManager {
             .banned_guest_participants
             .contains(target_participant_id)
         {
-            anyhow::bail!(
-                "Guest bans are identity/IP-scoped and cannot be removed by participant ID"
-            );
+            return Err(Refusal::Invalid(
+                "Guest bans are identity/IP-scoped and cannot be removed by participant ID".into(),
+            )
+            .into());
         }
 
         let in_memory_exists = room.banned_participants.contains_key(target_participant_id);
         let persisted_target = room.persisted.then(|| target_participant_id.as_uuid());
         if !in_memory_exists && persisted_target.is_none() {
-            anyhow::bail!("Participant is not banned");
+            return Err(Refusal::NotFound("Participant is not banned".into()).into());
         }
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         // Also clear any persisted user ban (target id == user uuid for
@@ -782,10 +793,9 @@ impl RoomManager {
         drop(room);
         let mut persisted_removed = false;
         if let Some(uid) = persisted_target {
-            let pool = self
-                .db_pool
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Ban service is temporarily unavailable"))?;
+            let pool = self.db_pool.as_ref().ok_or_else(|| {
+                Refusal::Unavailable("Ban service is temporarily unavailable".into())
+            })?;
             persisted_removed = self
                 .persist_room(
                     room_id,
@@ -801,10 +811,7 @@ impl RoomManager {
                     ),
                 )
                 .await
-                .map_err(|error| {
-                    warn!(room = %room_id.log_handle(), %error, "Failed to remove persisted ban");
-                    anyhow::anyhow!("Ban state could not be updated")
-                })?;
+                .map_err(|error| control::Save::Unban.failure(room_id, error))?;
         }
 
         let mut room = room_lock.write().await;
@@ -815,7 +822,7 @@ impl RoomManager {
             .is_some();
 
         if !in_memory && !persisted_removed {
-            anyhow::bail!("Participant is not banned");
+            return Err(Refusal::NotFound("Participant is not banned".into()).into());
         }
         let banned_name = room.social.forget_user_ban(target_participant_id);
         if !room.persisted {
@@ -857,7 +864,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &ParticipantId,
         new_role: roles::Role,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let setter_id = *setter_id;
         let expected_sender = expected_sender.clone();
         let target_participant_id = *target_participant_id;
@@ -884,7 +891,7 @@ impl RoomManager {
         target_participant_id: &ParticipantId,
         new_role: roles::Role,
         control: control::RoomControl,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
 
@@ -892,13 +899,18 @@ impl RoomManager {
         let target = room
             .participants
             .get(target_participant_id)
-            .ok_or_else(|| anyhow::anyhow!("Target participant not found"))?;
+            .ok_or_else(|| Refusal::NotFound("Target participant not found".into()))?;
 
         if !setter.role.can_set_role(target.role, new_role) {
-            anyhow::bail!("Insufficient permissions to set this role");
+            return Err(
+                Refusal::Forbidden("Insufficient permissions to set this role".into()).into(),
+            );
         }
         if target.authenticated && new_role == roles::Role::Guest {
-            anyhow::bail!("Registered participants must be assigned at least the user role");
+            return Err(Refusal::Forbidden(
+                "Registered participants must be assigned at least the user role".into(),
+            )
+            .into());
         }
         if target.role == new_role {
             return Ok(());
@@ -907,31 +919,33 @@ impl RoomManager {
         let setter_authenticated = setter.authenticated;
         let target_authenticated = target.authenticated;
         if !room.admin_mutations.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room administration changes are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room administration changes are rate limited".into(),
+            )
+            .into());
         }
 
         let persisted = room.persisted;
         drop(room);
         if persisted {
             if !setter_authenticated || !target_authenticated {
-                anyhow::bail!("Persistent roles require registered participants");
+                return Err(Refusal::Forbidden(
+                    "Persistent roles require registered participants".into(),
+                )
+                .into());
             }
             let granted_by = setter_id.as_uuid();
             let target_user = target_participant_id.as_uuid();
-            let pool = self
-                .db_pool
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Role service is temporarily unavailable"))?;
+            let pool = self.db_pool.as_ref().ok_or_else(|| {
+                Refusal::Unavailable("Role service is temporarily unavailable".into())
+            })?;
             self.persist_room(
                 room_id,
                 &room_lock,
                 roles::set_role(pool, room_id, &target_user, new_role, &granted_by),
             )
             .await
-            .map_err(|error| {
-                warn!(room = %room_id.log_handle(), %error, "Failed to persist participant role");
-                anyhow::anyhow!("Role could not be saved")
-            })?;
+            .map_err(|error| control::Save::Role.failure(room_id, error))?;
         }
 
         let mut room = room_lock.write().await;
@@ -961,7 +975,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
 
@@ -970,7 +984,9 @@ impl RoomManager {
         let display_name = participant.name.clone();
 
         if !room.voice_requests.reserve(std::time::Instant::now()) {
-            anyhow::bail!("Room voice-request rate limit exceeded");
+            return Err(
+                Refusal::RateLimited("Room voice-request rate limit exceeded".into()).into(),
+            );
         }
 
         room.broadcast_to_role(

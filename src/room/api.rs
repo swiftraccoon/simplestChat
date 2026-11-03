@@ -192,6 +192,10 @@ pub(crate) fn room_database_error(error: impl Into<RoomError>) -> Response {
             crate::db::record_error(&error);
             AuthError::DatabaseError(error.to_string()).into_response()
         }
+        error => {
+            warn!(%error, "Room request failed");
+            room_database_error(error.into_refusal())
+        }
     }
 }
 
@@ -417,6 +421,7 @@ pub(crate) async fn create_room(
                     warn!(room = %room_id.log_handle(), %error, "Failed to create room");
                     AuthError::DatabaseError("room creation failed".to_string()).into_response()
                 }
+                error => room_database_error(error),
             }
         })?
         .ok_or_else(|| {
@@ -463,6 +468,7 @@ pub(crate) async fn delete_room(
                 warn!(room = %room_id.log_handle(), %error, "Failed to delete room");
                 AuthError::DatabaseError("room deletion failed".to_string()).into_response()
             }
+            error => room_database_error(error),
         })?;
 
     match result {

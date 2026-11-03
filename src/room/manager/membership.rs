@@ -21,19 +21,19 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         room_lock: Arc<TokioRwLock<Room>>,
-    ) -> Result<PendingRoomJoin> {
+    ) -> Result<PendingRoomJoin, RoomError> {
         let mut room = measure_result(
             Stage::RoomLockWait,
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, room_lock.write()),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("Room is busy; try again"))?;
-        let admission = self.drain.admit()?;
+        .map_err(|_| Refusal::Unavailable("Room is busy; try again".into()))?;
+        let admission = self.drain.admit().map_err(|_| shutting_down())?;
         room.ensure_live()?;
         room.pending_joins = room
             .pending_joins
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("Room join capacity has been reached"))?;
+            .ok_or_else(|| Refusal::Unavailable("Room join capacity has been reached".into()))?;
         drop(admission);
         drop(room);
         Ok(PendingRoomJoin {
@@ -52,15 +52,15 @@ impl RoomManager {
         room_id: &RoomId,
         supplied: String,
         hash: String,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let permit = measure_result(Stage::RoomPasswordPermitWait, async {
             tokio::time::timeout(
                 PASSWORD_VERIFY_QUEUE_TIMEOUT,
                 self.password_verify_work.clone().acquire_owned(),
             )
             .await
-            .map_err(|_| anyhow::anyhow!("Password verification is busy; try again"))?
-            .map_err(|_| anyhow::anyhow!("Password verification is unavailable"))
+            .map_err(|_| Refusal::Unavailable("Password verification is busy; try again".into()))?
+            .map_err(|_| Refusal::Unavailable("Password verification is unavailable".into()))
         })
         .await?;
         let verified = tokio::task::spawn_blocking(move || {
@@ -70,9 +70,11 @@ impl RoomManager {
         .await
         .map_err(|error| {
             warn!(room = %room_id.log_handle(), %error, "Password verification task failed");
-            anyhow::anyhow!("Password verification failed")
+            Refusal::Internal("Password verification failed".into())
         })?;
-        anyhow::ensure!(verified, "Incorrect room password");
+        if !verified {
+            return Err(Refusal::Forbidden("Incorrect room password".into()).into());
+        }
         Ok(())
     }
 
@@ -91,7 +93,7 @@ impl RoomManager {
         client_ip: Option<std::net::IpAddr>,
         authenticated: bool,
         password: Option<&str>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<String>, RoomError> {
         let Some(pool) = &self.db_pool else {
             return Ok(None);
         };
@@ -103,10 +105,10 @@ impl RoomManager {
             measure_result(Stage::RoomPolicyLookup, settings::load_room(pool, room_id)),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
+        .map_err(|_| Refusal::Unavailable("Room data is temporarily unavailable".into()))?
         .map_err(|error| {
             warn!(room = %room_id.log_handle(), %error, "Failed to load room");
-            anyhow::anyhow!("Room data is temporarily unavailable")
+            Refusal::Unavailable("Room data is temporarily unavailable".into())
         })?;
         let Some((room_settings, password_hash)) = loaded else {
             return Ok(None);
@@ -118,18 +120,22 @@ impl RoomManager {
         )
         .await
         {
-            Ok(true) => anyhow::bail!("You are banned from this room"),
+            Ok(true) => {
+                return Err(Refusal::Forbidden("You are banned from this room".into()).into());
+            }
             Ok(false) => {}
             Err(error) => {
                 warn!(room = %room_id.log_handle(), %error, "Ban check failed");
-                anyhow::bail!("Room access could not be verified");
+                return Err(
+                    Refusal::Unavailable("Room access could not be verified".into()).into(),
+                );
             }
         }
         if room_settings.require_registration && !authenticated {
-            anyhow::bail!("This room requires registration");
+            return Err(Refusal::Forbidden("This room requires registration".into()).into());
         }
         if !room_settings.guests_allowed && !authenticated {
-            anyhow::bail!("Guests are not allowed in this room");
+            return Err(Refusal::Forbidden("Guests are not allowed in this room".into()).into());
         }
         if !room_settings.password_protected {
             return Ok(None);
@@ -147,13 +153,14 @@ impl RoomManager {
         .await
         .map_err(|error| {
             warn!(room = %room_id.log_handle(), %error, "Role lookup failed");
-            anyhow::anyhow!("Room access could not be verified")
+            Refusal::Unavailable("Room access could not be verified".into())
         })?;
         if role >= roles::Role::Admin {
             return Ok(None);
         }
-        let hash = password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
-        let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
+        let hash = password_hash
+            .ok_or_else(|| Refusal::Unavailable("Room password is unavailable".into()))?;
+        let supplied = password.ok_or(RoomError::PasswordRequired)?.to_owned();
         self.verify_room_password(room_id, supplied, hash.clone())
             .await?;
         Ok(Some(hash))
@@ -163,17 +170,19 @@ impl RoomManager {
     pub(in crate::room) async fn get_or_create_room(
         &self,
         room_id: &RoomId,
-    ) -> Result<PendingRoomJoin> {
-        anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
+    ) -> Result<PendingRoomJoin, RoomError> {
+        if self.drain.is_draining() {
+            return Err(shutting_down());
+        }
         if self.deleting_rooms.read().contains_key(room_id) {
-            anyhow::bail!("Room is being deleted");
+            return Err(Refusal::Unavailable("Room is being deleted".into()).into());
         }
         // Fast path: room exists (brief outer read lock)
         let existing_room = {
             let rooms = self.rooms.read();
             let existing = rooms.get(room_id).cloned();
             if existing.is_none() && rooms.len() >= self.max_rooms {
-                anyhow::bail!("Room capacity has been reached");
+                return Err(Refusal::Unavailable("Room capacity has been reached".into()).into());
             }
             existing
         };
@@ -188,15 +197,19 @@ impl RoomManager {
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock()),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("Room creation is busy; try again"))?;
+        .map_err(|_| Refusal::Unavailable("Room creation is busy; try again".into()))?;
 
-        anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
+        if self.drain.is_draining() {
+            return Err(shutting_down());
+        }
 
         if self.deleting_rooms.read().contains_key(room_id) {
-            anyhow::bail!("Room is being deleted");
+            return Err(Refusal::Unavailable("Room is being deleted".into()).into());
         }
         if self.identity_updates.read().contains(room_id) {
-            anyhow::bail!("Room settings are being updated; try again");
+            return Err(
+                Refusal::Unavailable("Room settings are being updated; try again".into()).into(),
+            );
         }
 
         // Re-check now that we hold the creation lock
@@ -204,7 +217,7 @@ impl RoomManager {
             let rooms = self.rooms.read();
             let existing = rooms.get(room_id).cloned();
             if existing.is_none() && rooms.len() >= self.max_rooms {
-                anyhow::bail!("Room capacity has been reached");
+                return Err(Refusal::Unavailable("Room capacity has been reached".into()).into());
             }
             existing
         };
@@ -221,10 +234,10 @@ impl RoomManager {
                 measure_result(Stage::RoomPolicyLookup, settings::load_room(pool, room_id)),
             )
             .await
-            .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
+            .map_err(|_| Refusal::Unavailable("Room data is temporarily unavailable".into()))?
             .map_err(|error| {
                 warn!(room = %room_id.log_handle(), %error, "Failed to load room");
-                anyhow::anyhow!("Room data is temporarily unavailable")
+                Refusal::Unavailable("Room data is temporarily unavailable".into())
             })?;
             loaded.map_or((None, None), |(settings, hash)| (Some(settings), hash))
         } else {
@@ -232,7 +245,7 @@ impl RoomManager {
         };
         let persisted = room_settings.is_some();
         if !persisted && !self.allow_ad_hoc_rooms {
-            anyhow::bail!("Ad-hoc room creation is disabled");
+            return Err(Refusal::NotFound("Ad-hoc room creation is disabled".into()).into());
         }
 
         // Slow path: router/observer setup remains serialized so duplicate
@@ -278,7 +291,7 @@ impl RoomManager {
                     None
                 }
             };
-            Ok::<_, anyhow::Error>((active_speaker_observer, audio_level_observer))
+            Ok::<_, RoomError>((active_speaker_observer, audio_level_observer))
         };
         let (active_speaker_observer, audio_level_observer) = match tokio::time::timeout(
             ROOM_CREATION_TIMEOUT,
@@ -305,7 +318,10 @@ impl RoomManager {
                     self.media_server.remove_router(room_id.as_str()),
                 )
                 .await;
-                anyhow::bail!("Room media service is temporarily unavailable");
+                return Err(Refusal::Unavailable(
+                    "Room media service is temporarily unavailable".into(),
+                )
+                .into());
             }
         };
         self.metrics.inc_rooms_created();
@@ -385,7 +401,7 @@ impl RoomManager {
             ) {
                 warn!(room = %room_id.log_handle(), "Draining room creation rollback incomplete");
             }
-            anyhow::bail!("Server shutting down");
+            return Err(shutting_down());
         };
 
         // Spawn background task with Weak reference (only for newly created rooms)
@@ -467,7 +483,7 @@ impl RoomManager {
         reconnect_token: &str,
         client_ip: Option<std::net::IpAddr>,
         chat_style: Option<ChatStyle>,
-    ) -> Result<JoinResult> {
+    ) -> Result<JoinResult, RoomError> {
         let client_ip = if authenticated {
             client_ip
         } else {
@@ -481,13 +497,18 @@ impl RoomManager {
                     .join_attempts_by_room_ip
                     .allow((room_id.to_string(), address), now)
             {
-                anyhow::bail!("Room join attempts are rate limited");
+                return Err(
+                    Refusal::RateLimited("Room join attempts are rate limited".into()).into(),
+                );
             }
         }
 
         if self.saturated() {
             self.metrics.inc_join_refused_saturated();
-            anyhow::bail!("The server is at capacity right now; please try again in a moment");
+            return Err(Refusal::Unavailable(
+                "The server is at capacity right now; please try again in a moment".into(),
+            )
+            .into());
         }
         // A room's router lives on one worker thread; when that thread is
         // saturated the quota may still show headroom, so the refusal is per
@@ -503,9 +524,11 @@ impl RoomManager {
                 .worker_saturated(worker_id)
         {
             self.metrics.inc_join_refused_saturated();
-            anyhow::bail!(
+            return Err(Refusal::Unavailable(
                 "This room's media worker is at capacity right now; please try again in a moment"
-            );
+                    .into(),
+            )
+            .into());
         }
 
         let user_uuid = if authenticated {
@@ -562,7 +585,7 @@ impl RoomManager {
             let _control =
                 tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
                     .await
-                    .map_err(|_| anyhow::anyhow!("Room control is busy; try again"))?;
+                    .map_err(|_| Refusal::Unavailable("Room control is busy; try again".into()))?;
             let room = measure(Stage::RoomLockWait, room_lock.read()).await;
             let lobby = room.settings.as_ref().is_some_and(|s| s.lobby_enabled);
             let invite_only = room.settings.as_ref().is_some_and(|s| s.invite_only);
@@ -588,15 +611,24 @@ impl RoomManager {
                 )
                 .await
                 {
-                    Ok(true) => anyhow::bail!("You are banned from this room"),
+                    Ok(true) => {
+                        return Err(
+                            Refusal::Forbidden("You are banned from this room".into()).into()
+                        );
+                    }
                     Ok(false) => {}
                     Err(error) => {
                         warn!(room = %room_id.log_handle(), %error, "Ban check failed");
-                        anyhow::bail!("Room access could not be verified");
+                        return Err(Refusal::Unavailable(
+                            "Room access could not be verified".into(),
+                        )
+                        .into());
                     }
                 }
             } else {
-                anyhow::bail!("Room access could not be verified");
+                return Err(
+                    Refusal::Unavailable("Room access could not be verified".into()).into(),
+                );
             }
         }
 
@@ -607,10 +639,10 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
+                .ok_or_else(|| Refusal::Unavailable("Room access could not be verified".into()))?;
             let owner_id = settings_owner_id
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
+                .ok_or_else(|| Refusal::Unavailable("Room access could not be verified".into()))?;
             Some(
                 measure_result(
                     Stage::RoomPolicyLookup,
@@ -625,7 +657,7 @@ impl RoomManager {
                 .await
                 .map_err(|error| {
                     warn!(room = %room_id.log_handle(), %error, "Role lookup failed");
-                    anyhow::anyhow!("Room access could not be verified")
+                    Refusal::Unavailable("Room access could not be verified".into())
                 })?,
             )
         } else {
@@ -664,7 +696,7 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
+                .ok_or_else(|| Refusal::Unavailable("Room access could not be verified".into()))?;
             measure_result(
                 Stage::RoomPolicyLookup,
                 moderation::load_punitive_state(pool, room_id, user_uuid, client_ip, authenticated),
@@ -672,7 +704,7 @@ impl RoomManager {
             .await
             .map_err(|error| {
                 warn!(room = %room_id.log_handle(), %error, "Sanction lookup failed");
-                anyhow::anyhow!("Room access could not be verified")
+                Refusal::Unavailable("Room access could not be verified".into())
             })?
         } else {
             moderation::PunitiveState::default()
@@ -682,10 +714,10 @@ impl RoomManager {
         // The dormant precheck may already have proved it against this very
         // hash; a hash changed since then is verified again.
         if password_protected && !resolved_role.is_some_and(|r| r >= roles::Role::Admin) {
-            let hash =
-                password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
+            let hash = password_hash
+                .ok_or_else(|| Refusal::Unavailable("Room password is unavailable".into()))?;
             if prechecked_hash.as_deref() != Some(hash.as_str()) {
-                let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
+                let supplied = password.ok_or(RoomError::PasswordRequired)?.to_owned();
                 self.verify_room_password(room_id, supplied, hash).await?;
             }
         }
@@ -700,7 +732,7 @@ impl RoomManager {
         let _control =
             tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
                 .await
-                .map_err(|_| anyhow::anyhow!("Room control is busy; try again"))?;
+                .map_err(|_| Refusal::Unavailable("Room control is busy; try again".into()))?;
         let account_preferences = self
             .membership_chat_preferences(authenticated, &participant_id)
             .await?;
@@ -709,37 +741,45 @@ impl RoomManager {
         // Only post-lock validation/commit/fan-out work belongs to this stage;
         // password, database, media setup, and room contention are disjoint.
         measure_result(Stage::RoomMembershipCommit, async {
-            let admission = self.drain.admit()?;
+            let admission = self.drain.admit().map_err(|_| shutting_down())?;
 
             if !policy_snapshot_matches(&room, policy_revision) {
-                anyhow::bail!("Room policy changed while joining; retry");
+                return Err(Refusal::Unavailable(
+                    "Room policy changed while joining; retry".into(),
+                )
+                .into());
             }
 
             // Check ban list before allowing join
             let now = std::time::Instant::now();
             room.prune_expired_bans(now);
             if room.identity_is_banned(&participant_id, authenticated, client_ip) {
-                anyhow::bail!("You are banned from this room");
+                return Err(Refusal::Forbidden("You are banned from this room".into()).into());
             }
             if room.participants.contains_key(&participant_id)
                 || room.lobby.contains_key(&participant_id)
             {
-                anyhow::bail!("This participant already has an active room session");
+                return Err(Refusal::Conflict(
+                    "This participant already has an active room session".into(),
+                )
+                .into());
             }
 
             // Enforce room modes
             if let Some(settings) = &room.settings {
                 if settings.require_registration && !authenticated {
-                    anyhow::bail!("This room requires registration");
+                    return Err(Refusal::Forbidden("This room requires registration".into()).into());
                 }
                 if !settings.guests_allowed && !authenticated {
-                    anyhow::bail!("Guests are not allowed in this room");
+                    return Err(
+                        Refusal::Forbidden("Guests are not allowed in this room".into()).into(),
+                    );
                 }
             }
             self.ensure_room_has_space(&room)?;
 
             if room.lobby.len() >= 1_000 {
-                anyhow::bail!("Room lobby is full");
+                return Err(Refusal::Forbidden("Room lobby is full".into()).into());
             }
 
             // Account display names are not globally unique either. Apply the
@@ -752,7 +792,7 @@ impl RoomManager {
 
             // Determine final role
             let role = select_join_role(persisted, is_first, resolved_role, authenticated)
-                .ok_or_else(|| anyhow::anyhow!("Room access could not be verified"))?;
+                .ok_or_else(|| Refusal::Unavailable("Room access could not be verified".into()))?;
             let sanction_key = SanctionKey::for_identity(&participant_id, authenticated, client_ip);
             // A sanction may have been installed after the DB snapshot but before
             // this join acquired the room lock. Restrictions only merge in the safe
@@ -924,7 +964,7 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         participant_id: &ParticipantId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         self.remove_participant_inner(room_id, participant_id, None)
             .await
             .map(|_| ())
@@ -938,7 +978,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         self.remove_participant_inner(room_id, participant_id, Some(expected_sender))
             .await
     }
@@ -948,7 +988,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: Option<&mpsc::Sender<crate::OutboundJson>>,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         let mut removed_any = false;
         let mut room_empty = false;
         let mut media_session_id = None;
@@ -1167,7 +1207,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         if self.drain.is_draining() {
             return Ok(());
         }
@@ -1195,11 +1235,11 @@ impl RoomManager {
         authenticated_subject: Option<crate::ids::UserId>,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         new_sender: mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
         let mut room = room_lock.write().await;
-        let _admission = self.drain.admit()?;
+        let _admission = self.drain.admit().map_err(|_| shutting_down())?;
         room.ensure_live()?;
         if let Some(participant) = room.participants.get_mut(participant_id) {
             if !participant.sender.same_channel(expected_sender) {
@@ -1237,14 +1277,16 @@ impl RoomManager {
         room: &'a Room,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<&'a Participant> {
+    ) -> Result<&'a Participant, RoomError> {
         room.ensure_live()?;
-        let participant = room
-            .participants
-            .get(participant_id)
-            .ok_or_else(|| anyhow::anyhow!("Participant is not an active member of this room"))?;
+        let participant = room.participants.get(participant_id).ok_or_else(|| {
+            Refusal::NotFound("Participant is not an active member of this room".into())
+        })?;
         if !participant.sender.same_channel(expected_sender) {
-            anyhow::bail!("This connection no longer owns the participant session");
+            return Err(Refusal::Forbidden(
+                "This connection no longer owns the participant session".into(),
+            )
+            .into());
         }
         Ok(participant)
     }

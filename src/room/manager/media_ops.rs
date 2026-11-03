@@ -21,7 +21,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<RtpCapabilitiesFinalized> {
+    ) -> Result<RtpCapabilitiesFinalized, RoomError> {
         self.media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
         let router = self.get_router(room_id).await?;
@@ -37,7 +37,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<TransportInfo> {
+    ) -> Result<TransportInfo, RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -71,7 +71,7 @@ impl RoomManager {
                 .transport_manager()
                 .remove_participant(&media_participant_id)
                 .await;
-            anyhow::bail!("Participant is no longer in this room");
+            return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
         }
         Ok(transport)
     }
@@ -85,7 +85,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<TransportInfo> {
+    ) -> Result<TransportInfo, RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -142,7 +142,7 @@ impl RoomManager {
                 .transport_manager()
                 .remove_participant(&media_participant_id)
                 .await;
-            anyhow::bail!("Participant is no longer in this room");
+            return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
         }
         Ok(transport)
     }
@@ -158,7 +158,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: TransportId,
         dtls_parameters: DtlsParameters,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -203,18 +203,21 @@ impl RoomManager {
         kind: MediaKind,
         rtp_parameters: RtpParameters,
         source: Option<String>,
-    ) -> Result<ProducerId> {
+    ) -> Result<ProducerId, RoomError> {
         let source = source
             .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Media source is required"))?;
+            .ok_or_else(|| Refusal::Invalid("Media source is required".into()))?;
         if !Self::valid_media_source(kind, source) {
-            anyhow::bail!("Media kind does not match source");
+            return Err(Refusal::Invalid("Media kind does not match source".into()).into());
         }
         if !self
             .can_participant_produce(room_id, participant_id, expected_sender, kind, source)
             .await?
         {
-            anyhow::bail!("You are not allowed to produce this media type");
+            return Err(Refusal::Forbidden(
+                "You are not allowed to produce this media type".into(),
+            )
+            .into());
         }
         let _reservation = self
             .reserve_media_mutation_for_sender(room_id, participant_id, expected_sender, None)
@@ -282,7 +285,10 @@ impl RoomManager {
                     .transport_manager()
                     .close_producer(&media_participant_id, producer_id)
                     .await;
-                anyhow::bail!("You are no longer allowed to produce this media type");
+                return Err(Refusal::Forbidden(
+                    "You are no longer allowed to produce this media type".into(),
+                )
+                .into());
             };
             participant.producers.insert(
                 producer_id,
@@ -363,26 +369,19 @@ impl RoomManager {
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
         notification_sender: Option<mpsc::Sender<crate::OutboundJson>>,
-    ) -> MediaResult<crate::media::types::ConsumerInfo> {
+    ) -> Result<crate::media::types::ConsumerInfo, RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
-            .await
-            .map_err(|error| crate::media::types::MediaError::ConsumerError(error.to_string()))?;
+            .await?;
         let consumer_source = {
-            let room_lock = self.get_room(room_id).map_err(|error| {
-                crate::media::types::MediaError::ConsumerError(error.to_string())
-            })?;
+            let room_lock = self.get_room(room_id)?;
             let room = room_lock.read().await;
             let metadata = room
                 .producer_to_participant
                 .get(&producer_id)
                 .and_then(|owner| room.participants.get(owner))
                 .and_then(|owner| owner.producers.get(&producer_id))
-                .ok_or_else(|| {
-                    crate::media::types::MediaError::ConsumerError(
-                        "Producer is not in this room".to_string(),
-                    )
-                })?;
+                .ok_or_else(|| Refusal::NotFound("Producer is not in this room".into()))?;
             crate::media::transport_manager::ConsumerMediaSource::from_room_source(
                 metadata.kind,
                 metadata.source.as_deref(),
@@ -390,8 +389,7 @@ impl RoomManager {
         };
         let _ipc_reservation = self
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
-            .await
-            .map_err(|error| crate::media::types::MediaError::ConsumerError(error.to_string()))?;
+            .await?;
         let media_participant_id =
             Self::media_participant_id(room_id, participant_id, media_session_id);
         // A viewer placed on another worker consumes the producer's pipe there.
@@ -430,9 +428,7 @@ impl RoomManager {
                 .transport_manager()
                 .remove_participant(&media_participant_id)
                 .await;
-            return Err(crate::media::types::MediaError::ConsumerError(
-                "Participant is no longer in this room".to_string(),
-            ));
+            return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
         }
 
         let consumer_info = crate::media::types::ConsumerInfo::from_consumer(&consumer);
@@ -454,7 +450,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: ConsumerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -489,7 +485,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: ConsumerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -525,7 +521,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: ConsumerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -552,7 +548,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: ProducerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -582,7 +578,9 @@ impl RoomManager {
                 expected_sender,
                 media_session_id,
             ) {
-                anyhow::bail!("Participant is no longer in this room");
+                return Err(
+                    Refusal::NotFound("Participant is no longer in this room".into()).into(),
+                );
             }
             let was_audio = room
                 .participants
@@ -647,7 +645,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: ProducerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -685,7 +683,7 @@ impl RoomManager {
             expected_sender,
             media_session_id,
         ) {
-            anyhow::bail!("Participant is no longer in this room");
+            return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
         }
         Self::record_producer_paused(&mut room, participant_id, producer_id, true);
         room.broadcast_except(
@@ -710,7 +708,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: ProducerId,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -748,7 +746,7 @@ impl RoomManager {
             expected_sender,
             media_session_id,
         ) {
-            anyhow::bail!("Participant is no longer in this room");
+            return Err(Refusal::NotFound("Participant is no longer in this room".into()).into());
         }
         Self::record_producer_paused(&mut room, participant_id, producer_id, false);
         room.broadcast_except(
@@ -774,7 +772,7 @@ impl RoomManager {
         consumer_id: ConsumerId,
         spatial_layer: u8,
         temporal_layer: Option<u8>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -810,7 +808,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         bwe_sender: mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>,
-    ) -> Result<()> {
+    ) -> Result<(), RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -837,7 +835,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         expected_transport: TransportId,
         spatial_layer: u8,
-    ) -> Result<usize> {
+    ) -> Result<usize, RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -877,7 +875,7 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: TransportId,
-    ) -> Result<crate::signaling::protocol::IceCredentials> {
+    ) -> Result<crate::signaling::protocol::IceCredentials, RoomError> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await?;
@@ -886,11 +884,11 @@ impl RoomManager {
         let _ipc_reservation = self
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
             .await?;
-        self.media_server
+        Ok(self
+            .media_server
             .transport_manager()
             .restart_ice(&media_participant_id, transport_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+            .await?)
     }
 
     pub(in crate::room) async fn reserve_media_mutation_for_sender(
@@ -899,17 +897,19 @@ impl RoomManager {
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: Option<ProducerId>,
-    ) -> Result<MediaMutationReservation> {
+    ) -> Result<MediaMutationReservation, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
         if producer_id.is_some_and(|producer_id| !participant.producers.contains_key(&producer_id))
         {
-            anyhow::bail!("Producer does not belong to this participant");
+            return Err(
+                Refusal::Forbidden("Producer does not belong to this participant".into()).into(),
+            );
         }
         let reserved_at = std::time::Instant::now();
         if !room.media_mutations.reserve(reserved_at) {
-            anyhow::bail!("Room media changes are rate limited");
+            return Err(Refusal::RateLimited("Room media changes are rate limited".into()).into());
         }
         drop(room);
         Ok(MediaMutationReservation {
@@ -925,19 +925,21 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: ProducerId,
         desired_paused: bool,
-    ) -> Result<Option<MediaMutationReservation>> {
+    ) -> Result<Option<MediaMutationReservation>, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
         let Some(record) = participant.producers.get(&producer_id) else {
-            anyhow::bail!("Producer does not belong to this participant");
+            return Err(
+                Refusal::Forbidden("Producer does not belong to this participant".into()).into(),
+            );
         };
         if record.paused == desired_paused {
             return Ok(None);
         }
         let reserved_at = std::time::Instant::now();
         if !room.media_mutations.reserve(reserved_at) {
-            anyhow::bail!("Room media changes are rate limited");
+            return Err(Refusal::RateLimited("Room media changes are rate limited".into()).into());
         }
         drop(room);
         Ok(Some(MediaMutationReservation {
@@ -956,13 +958,16 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<MediaControlIpcReservation> {
+    ) -> Result<MediaControlIpcReservation, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         Self::participant_for_sender(&room, participant_id, expected_sender)?;
         let reserved_at = std::time::Instant::now();
         if !room.media_control_ipc.reserve(reserved_at) {
-            anyhow::bail!("Room media control operations are rate limited");
+            return Err(Refusal::RateLimited(
+                "Room media control operations are rate limited".into(),
+            )
+            .into());
         }
         drop(room);
         Ok(MediaControlIpcReservation {
@@ -981,7 +986,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-    ) -> Result<uuid::Uuid> {
+    ) -> Result<uuid::Uuid, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let room = measure(Stage::RoomLockWait, room_lock.read()).await;
         Ok(Self::participant_for_sender(&room, participant_id, expected_sender)?.media_session_id)
@@ -1233,7 +1238,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         kind: MediaKind,
         source: &str,
-    ) -> Result<bool> {
+    ) -> Result<bool, RoomError> {
         let room_lock = self.get_room(room_id)?;
         let room = measure(Stage::RoomLockWait, room_lock.read()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
@@ -1247,11 +1252,11 @@ impl RoomManager {
     }
 
     /// Gets the router for a room (from media server)
-    pub(in crate::room) async fn get_router(&self, room_id: &RoomId) -> Result<Router> {
-        self.media_server
+    pub(in crate::room) async fn get_router(&self, room_id: &RoomId) -> Result<Router, RoomError> {
+        Ok(self
+            .media_server
             .router_manager()
             .get_router(room_id.as_str())
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+            .await?)
     }
 }

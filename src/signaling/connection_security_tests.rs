@@ -102,18 +102,21 @@ fn room_control_acknowledgement_requires_and_echoes_request_id() {
 }
 
 #[test]
-fn password_challenge_is_typed_and_internal_errors_stay_generic() {
-    let error = anyhow::Error::new(RoomPasswordRequired).context("joining a room");
+fn password_challenge_is_typed_internal_errors_stay_generic_and_refusals_keep_their_text() {
     assert_eq!(
-        serde_json::to_value(client_error_response(&error)).unwrap(),
+        serde_json::to_value(error_frame(&RoomError::PasswordRequired)).unwrap(),
         serde_json::json!({ "type": "roomPasswordRequired" }),
     );
     for error in [
-        anyhow::anyhow!("database connection details"),
-        anyhow::anyhow!("This room requires a password"),
+        RoomError::Internal(anyhow::anyhow!("database connection details")),
+        RoomError::Internal(anyhow::anyhow!("This room requires a password")),
+        RoomError::Media(crate::media::MediaError::TransportError(format!(
+            "Transport not found: {}",
+            trid("send")
+        ))),
     ] {
         assert_eq!(
-            serde_json::to_value(client_error_response(&error)).unwrap(),
+            serde_json::to_value(error_frame(&error)).unwrap(),
             serde_json::json!({
                 "type": "error",
                 "code": "request_failed",
@@ -121,6 +124,26 @@ fn password_challenge_is_typed_and_internal_errors_stay_generic() {
             }),
         );
     }
+    let database = RoomError::Database(sqlx::Error::Protocol(
+        "rooms row with its password_hash".into(),
+    ));
+    assert_eq!(
+        serde_json::to_value(error_frame(&database)).unwrap(),
+        serde_json::json!({
+            "type": "error",
+            "code": "unavailable",
+            "message": "Service temporarily unavailable; try again",
+        }),
+    );
+    let refused = RoomError::from(Refusal::Forbidden("You are banned from this room".into()));
+    assert_eq!(
+        serde_json::to_value(error_frame(&refused)).unwrap(),
+        serde_json::json!({
+            "type": "error",
+            "code": "forbidden",
+            "message": "You are banned from this room",
+        }),
+    );
 }
 
 #[tokio::test]

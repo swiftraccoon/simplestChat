@@ -3,7 +3,6 @@
 //! history before the room sees it.
 
 use super::*;
-use crate::room::refusal::RoomError;
 
 /// Removes a public message's attachments.
 const DELETE_EPHEMERAL_ATTACHMENTS: &str =
@@ -15,7 +14,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         room: HeldRoom<'a>,
         query: history::HistoryQuery,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_authenticated = request.actor_authenticated;
@@ -23,7 +22,9 @@ impl RoomManager {
             .settings
             .as_ref()
             .map_or(0, |settings| settings.history_retention_days);
-        query.validate().map_err(invalid)?;
+        query
+            .validate()
+            .map_err(|message| Refusal::Invalid(message.into()))?;
         if days == 0 || !room.persisted {
             return Ok(SocialResponse::GetChatHistory(history::HistoryPage {
                 messages: Vec::new(),
@@ -37,7 +38,7 @@ impl RoomManager {
         let pool = self
             .db_pool
             .as_ref()
-            .ok_or_else(|| unavailable("History unavailable"))?;
+            .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
         let account = actor_authenticated.then(|| participant_id.as_uuid());
         let released = release(room);
         let mut page = tokio::time::timeout(
@@ -51,7 +52,7 @@ impl RoomManager {
             ),
         )
         .await
-        .map_err(|_| timed_out("History request timed out"))??;
+        .map_err(|_| Refusal::TimedOut("History request timed out".into()))??;
         let room = request.reacquire(released).await?;
         let ignored = &request.actor(&room)?.social.ignored;
         page.messages
@@ -64,7 +65,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         room: HeldRoom<'a>,
         message_id: &MessageId,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_authenticated = request.actor_authenticated;
@@ -75,14 +76,14 @@ impl RoomManager {
                 .as_ref()
                 .is_some_and(|settings| settings.history_retention_days > 0)
         {
-            return Err(unavailable("Saved room history is unavailable"));
+            return Err(Refusal::Unavailable("Saved room history is unavailable".into()).into());
         }
         let account = participant_id.as_uuid();
         let message = message_id.as_uuid();
         let pool = self
             .db_pool
             .as_ref()
-            .ok_or_else(|| unavailable("History unavailable"))?;
+            .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
         let released = release(room);
         let read = tokio::time::timeout(
             control::PERSISTENCE_TIMEOUT,
@@ -94,12 +95,15 @@ impl RoomManager {
             ),
         )
         .await
-        .map_err(|_| failed("Read marker could not be saved"))?
+        .map_err(|_| {
+            warn!(room = %room_id.log_handle(), "Read marker save timed out");
+            Refusal::TimedOut("Read marker may not have been saved".into())
+        })?
         .map_err(|error| {
             if matches!(error, RoomError::Database(sqlx::Error::RowNotFound)) {
-                unavailable("Message unavailable")
+                Refusal::Unavailable("Message unavailable".into()).into()
             } else {
-                error.into()
+                control::Save::ReadMarker.failure(room_id, error)
             }
         })?;
         drop(request.reacquire(released).await?);
@@ -113,19 +117,19 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         room: HeldRoom<'a>,
         retention_days: i64,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Owner)?;
         let room_id = request.room_id;
         if !room.persisted {
-            return Err(forbidden("Only saved rooms can keep chat history"));
+            return Err(Refusal::Forbidden("Only saved rooms can keep chat history".into()).into());
         }
         if !history::ROOM_HISTORY_RETENTION_DAYS.contains(&retention_days) {
-            return Err(invalid("Choose off, 1, 7, 30 or 90 days"));
+            return Err(Refusal::Invalid("Choose off, 1, 7, 30 or 90 days".into()).into());
         }
         let pool = self
             .db_pool
             .as_ref()
-            .ok_or_else(|| unavailable("History unavailable"))?;
+            .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
         let released = release(room);
         request
             .persist(
@@ -138,7 +142,7 @@ impl RoomManager {
         let settings = room
             .settings
             .as_mut()
-            .ok_or_else(|| unavailable("Room settings unavailable"))?;
+            .ok_or_else(|| Refusal::Unavailable("Room settings unavailable".into()))?;
         settings.history_retention_days = retention_days;
         let settings = RoomSettingsView::from(&*settings);
         room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
@@ -155,7 +159,7 @@ impl RoomManager {
         mut room: HeldRoom<'a>,
         message_id: &MessageId,
         edit: history::EditRequest,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let expected_sender = request.expected_sender;
@@ -173,20 +177,21 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("History unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
             let released = release(room);
             let found = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 history::lookup_public(pool, room_id.as_str(), message_id),
             )
             .await
-            .map_err(|_| timed_out("History request timed out"))??;
+            .map_err(|_| Refusal::TimedOut("History request timed out".into()))??;
             edited = found.map(|(message, _)| message);
             room = request.reacquire(released).await?;
         }
-        let mut edited = edited.ok_or_else(|| unavailable("Message unavailable"))?;
+        let mut edited =
+            edited.ok_or_else(|| Refusal::Unavailable("Message unavailable".into()))?;
         if edited.participant_id != *participant_id {
-            return Err(forbidden("Only the author can edit this message"));
+            return Err(Refusal::Forbidden("Only the author can edit this message".into()).into());
         }
         // The pool a durable edit is saved through; any other edit is applied
         // in memory only.
@@ -212,15 +217,12 @@ impl RoomManager {
                         &edit,
                     ),
                 )
-                .await
-                .map_err(|error| match error {
-                    RoomError::Refused(refused) => super::refused(refused),
-                    RoomError::Database(error) => error.into(),
-                })?;
+                .await?;
             self.account_updates().private_message(&edited);
             room = request.reacquire(released).await?;
         } else {
-            history::apply_edit(&mut edited, &edit).map_err(invalid)?;
+            history::apply_edit(&mut edited, &edit)
+                .map_err(|message| Refusal::Invalid(message.into()))?;
         }
         publish_edit(&mut room, &edited)?;
         drop(self.schedule_inbox_edit(&edited));
@@ -234,7 +236,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         mut room: HeldRoom<'a>,
         change: Option<(&MessageId, bool)>,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         if change.is_some() {
             require_role(request.actor_role, roles::Role::Moderator)?;
         }
@@ -250,7 +252,7 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("History unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
             let released = release(room);
             if let Some((message, pinned)) = change {
                 request
@@ -259,26 +261,23 @@ impl RoomManager {
                         &released,
                         history::set_pin(pool, room_id.as_str(), message, pinned),
                     )
-                    .await
-                    .map_err(|error| match error {
-                        RoomError::Refused(refused) => super::refused(refused),
-                        RoomError::Database(error) => error.into(),
-                    })?;
+                    .await?;
             }
             let pins = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 history::pinned_messages(pool, room_id.as_str()),
             )
             .await
-            .map_err(|_| timed_out("Pinned messages request timed out"))??;
+            .map_err(|_| Refusal::TimedOut("Pinned messages request timed out".into()))??;
             room = request.reacquire(released).await?;
             room.social.pins = pins;
         } else if let Some((message, pinned)) = change {
             if pinned && !room.social.pins.iter().any(|m| m.message_id == *message) {
                 if room.social.pins.len() >= 3 {
-                    return Err(forbidden(
-                        "Unpin a message before pinning another; rooms keep up to three",
-                    ));
+                    return Err(Refusal::Forbidden(
+                        "Unpin a message before pinning another; rooms keep up to three".into(),
+                    )
+                    .into());
                 }
                 let original = room
                     .social
@@ -289,7 +288,7 @@ impl RoomManager {
                             && entry.message.recipient_id.is_none()
                             && entry.message.removed_at.is_none()
                     })
-                    .ok_or_else(|| unavailable("Public message unavailable"))?
+                    .ok_or_else(|| Refusal::Unavailable("Public message unavailable".into()))?
                     .message
                     .clone();
                 room.social.pins.insert(0, original);
@@ -320,7 +319,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         mut room: HeldRoom<'a>,
         message_id: &MessageId,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let room_id = request.room_id;
         let participant_id = request.participant_id;
@@ -342,17 +341,18 @@ impl RoomManager {
         if original.is_none() && persisted && keeps_history {
             let pool = pool
                 .as_ref()
-                .ok_or_else(|| unavailable("Chat history unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Chat history unavailable".into()))?;
             let released = release(room);
             original = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 super::history::lookup_public(pool, room_id.as_str(), message_id),
             )
             .await
-            .map_err(|_| timed_out("Chat history timed out"))??;
+            .map_err(|_| Refusal::TimedOut("Chat history timed out".into()))??;
             room = request.reacquire(released).await?;
         }
-        let (original, authenticated) = original.ok_or_else(|| not_found("Message not found"))?;
+        let (original, authenticated) =
+            original.ok_or_else(|| Refusal::NotFound("Message not found".into()))?;
         let removed_at = original.removed_at.unwrap_or_else(chrono::Utc::now);
         if original.removed_at.is_none() {
             let event = ModerationEvent::new(
@@ -374,7 +374,7 @@ impl RoomManager {
             if persisted {
                 let pool = pool
                     .as_ref()
-                    .ok_or_else(|| unavailable("Moderation unavailable"))?;
+                    .ok_or_else(|| Refusal::Unavailable("Moderation unavailable".into()))?;
                 let released = release(room);
                 request
                     .persist(self, &released, async {
@@ -435,7 +435,7 @@ impl RoomManager {
         mut room: HeldRoom<'a>,
         message_id: &MessageId,
         emoji: &str,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let saved_public = room.persisted
@@ -460,7 +460,7 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("History unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("History unavailable".into()))?;
             let released = release(room);
             let saved = request
                 .persist(
@@ -475,11 +475,7 @@ impl RoomManager {
                         emoji,
                     ),
                 )
-                .await
-                .map_err(|error| match error {
-                    RoomError::Refused(refused) => super::refused(refused),
-                    RoomError::Database(error) => error.into(),
-                })?;
+                .await?;
             room = request.reacquire(released).await?;
             if let Some(message) = saved {
                 publish_saved_reaction(&mut room, &message)?;

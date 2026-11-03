@@ -1,9 +1,12 @@
-//! Why a room operation was refused, stated once.
+//! Why a room operation failed, stated once.
 //!
-//! The persistence layer and the room manager raise a [`Refusal`] with a
-//! client-safe message; the socket turns it into an [`ErrorCode`] and the HTTP
-//! handlers into a [`StatusCode`]. Nothing classifies refusals by their text.
+//! The room, social and media layers fail with a [`RoomError`]: a [`Refusal`]
+//! with a client-safe message, the password challenge, or a database, media or
+//! internal failure whose detail only the server log sees. The socket turns it
+//! into an [`ErrorCode`] and a message, the HTTP handlers into a
+//! [`StatusCode`]. Nothing classifies failures by their text.
 
+use crate::media::MediaError;
 use crate::signaling::protocol::ErrorCode;
 use axum::http::StatusCode;
 use std::borrow::Cow;
@@ -27,6 +30,11 @@ pub(crate) enum Refusal {
     Unavailable(Cow<'static, str>),
     /// The operation did not finish within its deadline.
     TimedOut(Cow<'static, str>),
+    /// The operation definitely failed, not for want of a dependency, and the
+    /// client may be told so in a fixed message, such as "Password
+    /// verification failed": nothing the client sent was wrong. A failure
+    /// whose detail must stay in the log is a [`RoomError::Internal`] instead.
+    Internal(Cow<'static, str>),
 }
 
 impl Refusal {
@@ -40,7 +48,8 @@ impl Refusal {
             | Self::Conflict(message)
             | Self::RateLimited(message)
             | Self::Unavailable(message)
-            | Self::TimedOut(message) => message,
+            | Self::TimedOut(message)
+            | Self::Internal(message) => message,
         }
     }
 
@@ -53,6 +62,7 @@ impl Refusal {
             Self::RateLimited(_) => ErrorCode::RateLimited,
             Self::Unavailable(_) => ErrorCode::Unavailable,
             Self::TimedOut(_) => ErrorCode::TimedOut,
+            Self::Internal(_) => ErrorCode::RequestFailed,
         }
     }
 
@@ -66,6 +76,7 @@ impl Refusal {
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::Unavailable(_) | Self::TimedOut(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -78,12 +89,78 @@ impl std::fmt::Display for Refusal {
 
 impl std::error::Error for Refusal {}
 
-/// What a persistence operation can fail with: a refusal the client can act
-/// on, or a database failure that only the operator can.
+/// What a client hears about the password challenge outside its own frame.
+const PASSWORD_REQUIRED: &str = "This room requires a password";
+/// What a client hears about a database failure.
+const DATABASE_FAILURE: &str = "Service temporarily unavailable; try again";
+/// What a client hears about a media or internal failure.
+const SERVER_FAILURE: &str = "Request could not be completed";
+
+/// What a room, social or media operation fails with. Only a refusal's own
+/// message reaches a client; every other variant answers a fixed text and
+/// keeps its detail, through [`Display`](std::fmt::Display), for the server
+/// log.
+///
+/// `Display` is the whole report: a refusal's text, or the wrapped error's
+/// detail, an anyhow error's chain included. No variant names a
+/// [`source`](std::error::Error::source), so a reporter that walks the chain,
+/// as `anyhow` does for `main`, prints each cause once.
 #[derive(Debug)]
 pub(crate) enum RoomError {
+    /// A refusal the client can act on: its code and message are sent as
+    /// they are.
     Refused(Refusal),
+    /// The room has a password and the join supplied none: the client is
+    /// asked for it (`roomPasswordRequired`) rather than refused.
+    PasswordRequired,
+    /// The database failed; the client hears that the service is unavailable.
     Database(sqlx::Error),
+    /// The media layer failed; the client hears that the request failed.
+    Media(MediaError),
+    /// The server could not do its own part (a task, a serialization, an
+    /// outbound queue, a startup or shutdown step); the client hears that the
+    /// request failed. Raised explicitly where the failure starts, never by
+    /// converting an arbitrary error.
+    Internal(anyhow::Error),
+}
+
+impl RoomError {
+    /// The socket's error code: a refusal's own, `forbidden` for the password
+    /// challenge, `unavailable` for a database failure and `request_failed`
+    /// for a media or internal one.
+    pub(crate) fn code(&self) -> ErrorCode {
+        match self {
+            Self::Refused(refusal) => refusal.code(),
+            Self::PasswordRequired => ErrorCode::Forbidden,
+            Self::Database(_) => ErrorCode::Unavailable,
+            Self::Media(_) | Self::Internal(_) => ErrorCode::RequestFailed,
+        }
+    }
+
+    /// The text a client may be shown: a refusal's own message, otherwise a
+    /// fixed one that names nothing of the failure.
+    pub(crate) fn client_message(&self) -> &str {
+        match self {
+            Self::Refused(refusal) => refusal.message(),
+            Self::PasswordRequired => PASSWORD_REQUIRED,
+            Self::Database(_) => DATABASE_FAILURE,
+            Self::Media(_) | Self::Internal(_) => SERVER_FAILURE,
+        }
+    }
+
+    /// The refusal a client is given in place of this error: a refusal as it
+    /// is, any other error as the fixed refusal with the same code and text,
+    /// and an HTTP status of `403` for the password challenge, `503` for a
+    /// database failure and `500` for a media or internal one, so a route that
+    /// answers refusals can answer every room error.
+    pub(crate) fn into_refusal(self) -> Refusal {
+        match self {
+            Self::Refused(refusal) => refusal,
+            Self::PasswordRequired => Refusal::Forbidden(PASSWORD_REQUIRED.into()),
+            Self::Database(_) => Refusal::Unavailable(DATABASE_FAILURE.into()),
+            Self::Media(_) | Self::Internal(_) => Refusal::Internal(SERVER_FAILURE.into()),
+        }
+    }
 }
 
 impl From<Refusal> for RoomError {
@@ -98,23 +175,26 @@ impl From<sqlx::Error> for RoomError {
     }
 }
 
+impl From<MediaError> for RoomError {
+    fn from(error: MediaError) -> Self {
+        Self::Media(error)
+    }
+}
+
 impl std::fmt::Display for RoomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Refused(refusal) => refusal.fmt(f),
+            Self::PasswordRequired => f.write_str(PASSWORD_REQUIRED),
             Self::Database(error) => error.fmt(f),
+            Self::Media(error) => error.fmt(f),
+            Self::Internal(error) => write!(f, "{error:#}"),
         }
     }
 }
 
-impl std::error::Error for RoomError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Refused(refusal) => Some(refusal),
-            Self::Database(error) => Some(error),
-        }
-    }
-}
+/// `Display` already carries every cause, so `source` stays `None`.
+impl std::error::Error for RoomError {}
 
 /// Why a room password could not be hashed. `Busy` clears once the hashing permit is free;
 /// `Failed` is a job failure (a panicked hashing job or an Argon2 error) that the caller may retry.
@@ -151,91 +231,5 @@ impl From<PasswordHashError> for RoomError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{PasswordHashError, Refusal, RoomError};
-    use crate::signaling::protocol::ErrorCode;
-    use axum::http::StatusCode;
-
-    #[test]
-    fn every_refusal_maps_to_one_code_and_one_status() {
-        let cases = [
-            (
-                Refusal::NotFound("a".into()),
-                ErrorCode::NotFound,
-                StatusCode::NOT_FOUND,
-            ),
-            (
-                Refusal::Unauthorized("b".into()),
-                ErrorCode::Forbidden,
-                StatusCode::UNAUTHORIZED,
-            ),
-            (
-                Refusal::Forbidden("c".into()),
-                ErrorCode::Forbidden,
-                StatusCode::FORBIDDEN,
-            ),
-            (
-                Refusal::Invalid("d".into()),
-                ErrorCode::Invalid,
-                StatusCode::BAD_REQUEST,
-            ),
-            (
-                Refusal::Conflict("e".into()),
-                ErrorCode::Invalid,
-                StatusCode::CONFLICT,
-            ),
-            (
-                Refusal::RateLimited("f".into()),
-                ErrorCode::RateLimited,
-                StatusCode::TOO_MANY_REQUESTS,
-            ),
-            (
-                Refusal::Unavailable("g".into()),
-                ErrorCode::Unavailable,
-                StatusCode::SERVICE_UNAVAILABLE,
-            ),
-            (
-                Refusal::TimedOut("h".into()),
-                ErrorCode::TimedOut,
-                StatusCode::SERVICE_UNAVAILABLE,
-            ),
-        ];
-        for (refusal, code, status) in cases {
-            assert_eq!(refusal.code(), code, "{refusal:?}");
-            assert_eq!(refusal.status(), status, "{refusal:?}");
-            assert_eq!(refusal.to_string(), refusal.message());
-        }
-    }
-
-    #[test]
-    fn database_failures_and_refusals_stay_distinguishable() {
-        let refused = RoomError::from(Refusal::NotFound("Member not found in this room".into()));
-        assert!(matches!(refused, RoomError::Refused(Refusal::NotFound(_))));
-        assert_eq!(refused.to_string(), "Member not found in this room");
-        let database = RoomError::from(sqlx::Error::PoolClosed);
-        assert!(matches!(
-            database,
-            RoomError::Database(sqlx::Error::PoolClosed)
-        ));
-    }
-
-    /// Both hashing paths answered with these exact texts before they shared one site.
-    #[test]
-    fn password_hash_errors_keep_their_messages_and_refuse_as_unavailable() {
-        for (error, message) in [
-            (
-                PasswordHashError::Busy,
-                "Password service is busy; try again",
-            ),
-            (PasswordHashError::Failed, "Password update failed"),
-        ] {
-            assert_eq!(error.to_string(), message);
-            let RoomError::Refused(refusal) = RoomError::from(error) else {
-                panic!("{error:?} must be a refusal");
-            };
-            assert_eq!(refusal, Refusal::Unavailable(message.into()));
-            assert_eq!(refusal.status(), StatusCode::SERVICE_UNAVAILABLE);
-            assert_eq!(refusal.code(), ErrorCode::Unavailable);
-        }
-    }
-}
+#[path = "refusal_tests.rs"]
+mod tests;

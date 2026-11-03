@@ -9,7 +9,7 @@ use super::*;
 pub(super) async fn handle(
     message: &ClientMessage,
     connection: Dispatch<'_, '_>,
-) -> anyhow::Result<()> {
+) -> Result<(), RoomError> {
     let Dispatch {
         participant_id,
         current_room_id,
@@ -178,7 +178,11 @@ pub(super) async fn handle(
                 .deny_from_lobby(room_id, participant_id, sender, target_participant_id, None)
                 .await?;
         }
-        _ => anyhow::bail!("Not a room-control command"),
+        _ => {
+            return Err(RoomError::Internal(anyhow::anyhow!(
+                "Not a room-control command"
+            )));
+        }
     }
     Ok(())
 }

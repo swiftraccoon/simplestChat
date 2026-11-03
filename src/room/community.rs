@@ -87,12 +87,12 @@ impl RoomManager {
             manager.room_creation_lock.clone().lock_owned(),
         )
         .await
-        .map_err(|_| sqlx::Error::Protocol("Room creation is busy; try again".into()))?;
+        .map_err(|_| Refusal::Unavailable("Room creation is busy; try again".into()))?;
         if manager.drain.is_draining() || manager.deleting_rooms.read().contains_key(&room_id) {
             return Ok(false);
         }
         if manager.identity_updates.read().contains(&room_id) {
-            return Err(sqlx::Error::Protocol("Room identity is busy; try again".into()).into());
+            return Err(Refusal::Unavailable("Room identity is busy; try again".into()).into());
         }
         // Exclude creation of this one room for the update's duration. The
         // process-wide creation lock is released before any SQL so a database
@@ -104,7 +104,7 @@ impl RoomManager {
             Some(room) => Some(
                 tokio::time::timeout(Duration::from_secs(5), control::lock_room(room))
                     .await
-                    .map_err(|_| sqlx::Error::Protocol("Room control is busy; try again".into()))?,
+                    .map_err(|_| Refusal::Unavailable("Room control is busy; try again".into()))?,
             ),
             None => None,
         };
@@ -145,7 +145,7 @@ impl RoomManager {
                         .fetch_optional(&pool),
                 )
                 .await
-                .map_err(|_| sqlx::Error::Protocol("Room owner lookup timed out".into()))??;
+                .map_err(|_| Refusal::Unavailable("Room owner lookup timed out".into()))??;
                 if saved_owner != Some(owner_id) {
                     return Ok(false);
                 }

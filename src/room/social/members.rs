@@ -9,7 +9,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         mut room: HeldRoom<'a>,
         offset: Option<u32>,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Admin)?;
         let offset = page_offset(offset)?;
         let room_id = request.room_id;
@@ -17,14 +17,14 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("Ban service unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Ban service unavailable".into()))?;
             let released = release(room);
             let bans = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 moderation::list_bans(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
             )
             .await
-            .map_err(|_| timed_out("Ban service timed out"))??;
+            .map_err(|_| Refusal::TimedOut("Ban service timed out".into()))??;
             drop(request.reacquire(released).await?);
             bans
         } else {
@@ -45,9 +45,11 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         mut room: HeldRoom<'a>,
         ban_id: &str,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Admin)?;
-        let id: Uuid = ban_id.parse().map_err(|_| invalid("Invalid ban"))?;
+        let id: Uuid = ban_id
+            .parse()
+            .map_err(|_| Refusal::Invalid("Invalid ban".into()))?;
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_name = request.actor_name.clone();
@@ -55,7 +57,7 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("Ban service unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Ban service unavailable".into()))?;
             let released = release(room);
             let actor_id = *participant_id;
             let removed = request
@@ -76,7 +78,7 @@ impl RoomManager {
                 })
                 .await?;
             room = request.reacquire(released).await?;
-            let removed = removed.ok_or_else(|| not_found("Ban not found"))?;
+            let removed = removed.ok_or_else(|| Refusal::NotFound("Ban not found".into()))?;
             (
                 removed.user_id.map(ParticipantId::from),
                 removed.user_id.is_none().then_some(removed.ip).flatten(),
@@ -87,7 +89,7 @@ impl RoomManager {
                 .social
                 .bans
                 .remove(ban_id)
-                .ok_or_else(|| not_found("Ban not found"))?;
+                .ok_or_else(|| Refusal::NotFound("Ban not found".into()))?;
             let target_id = ban
                 .entry
                 .authenticated
@@ -123,7 +125,7 @@ impl RoomManager {
         request: &SocialRequest<'a>,
         room: HeldRoom<'a>,
         offset: Option<u32>,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let offset = page_offset(offset)?;
         let room_id = request.room_id;
@@ -131,13 +133,13 @@ impl RoomManager {
             let pool = self
                 .db_pool
                 .as_ref()
-                .ok_or_else(|| unavailable("Member service unavailable"))?;
+                .ok_or_else(|| Refusal::Unavailable("Member service unavailable".into()))?;
             let released = release(room);
             let rows: Vec<(Uuid, String, roles::Role)> = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
                 sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
                     .bind(room_id).bind(offset as i64).fetch_all(pool),
-            ).await.map_err(|_| timed_out("Member service timed out"))??;
+            ).await.map_err(|_| Refusal::TimedOut("Member service timed out".into()))??;
             let room = request.reacquire(released).await?;
             rows.into_iter()
                 .map(|(id, name, role)| MemberEntry {
@@ -184,27 +186,30 @@ impl RoomManager {
         room: HeldRoom<'a>,
         target_user_id: &UserId,
         role: roles::Role,
-    ) -> Result<SocialResponse> {
+    ) -> Result<SocialResponse, RoomError> {
         require_role(request.actor_role, roles::Role::Moderator)?;
         let room_id = request.room_id;
         let participant_id = request.participant_id;
         let actor_role = request.actor_role;
         let actor_authenticated = request.actor_authenticated;
         if !room.persisted || !actor_authenticated {
-            return Err(forbidden("Offline roles require a persistent room"));
+            return Err(
+                Refusal::Forbidden("Offline roles require a persistent room".into()).into(),
+            );
         }
         let target: Uuid = target_user_id.as_uuid();
         let setter: Uuid = participant_id.as_uuid();
         let new_role = role;
         if new_role < roles::Role::User {
-            return Err(forbidden(
-                "Registered accounts require at least the user role",
-            ));
+            return Err(Refusal::Forbidden(
+                "Registered accounts require at least the user role".into(),
+            )
+            .into());
         }
         let pool = self
             .db_pool
             .as_ref()
-            .ok_or_else(|| unavailable("Member service unavailable"))?;
+            .ok_or_else(|| Refusal::Unavailable("Member service unavailable".into()))?;
         let released = release(room);
         // Absent targets must already belong to this room's roster; no account enumeration.
         let current = tokio::time::timeout(
@@ -212,10 +217,10 @@ impl RoomManager {
             roles::current_role(pool, room_id, target),
         )
         .await
-        .map_err(|_| timed_out("Member service timed out"))??;
-        let current = current.ok_or_else(|| not_found("Room member not found"))?;
+        .map_err(|_| Refusal::TimedOut("Member service timed out".into()))??;
+        let current = current.ok_or_else(|| Refusal::NotFound("Room member not found".into()))?;
         if !actor_role.can_set_role(current, new_role) {
-            return Err(forbidden("Insufficient role permissions"));
+            return Err(Refusal::Forbidden("Insufficient role permissions".into()).into());
         }
         request
             .persist(

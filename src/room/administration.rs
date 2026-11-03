@@ -221,6 +221,10 @@ fn database_error(error: impl Into<RoomError>) -> api::RoomApiError {
                 "Room administration is unavailable; reload before retrying a change",
             )
         }
+        error => {
+            tracing::warn!(%error, "Saved room administration failed inside the server");
+            database_error(error.into_refusal())
+        }
     }
 }
 
@@ -535,7 +539,9 @@ impl Context {
             .ok_or_else(|| Refusal::NotFound("The waiting room is no longer active".into()))?;
         let expires = self.expires_at.min(self.session_expires_at);
         let authorize = move || {
-            anyhow::ensure!(Utc::now() < expires, "Sign-in expired; sign in again");
+            if Utc::now() >= expires {
+                return Err(Refusal::Unauthorized("Sign-in expired; sign in again".into()).into());
+            }
             Ok(())
         };
         let control = super::control::RoomControl::from_guard(control);
