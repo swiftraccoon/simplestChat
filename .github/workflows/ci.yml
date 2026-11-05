@@ -45,7 +45,7 @@ jobs:
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh
       - name: Select the pinned Python Unicode oracle
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14.8'
           cache: pip
@@ -165,7 +165,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Select the pinned Python Unicode oracle
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14.8'
           cache: pip
@@ -311,7 +311,7 @@ jobs:
           persist-credentials: false
 
       - name: Select the pinned Python Unicode oracle
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14.8'
 
