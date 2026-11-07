@@ -166,8 +166,6 @@ pub(in crate::release::attestation) enum ReceiverFault {
     Read,
     Interrupt,
     Deadline,
-    Flush,
-    Fsync,
 }
 #[cfg(test)]
 thread_local! {
@@ -384,9 +382,7 @@ impl Streams {
         #[cfg(test)]
         if !cleanup
             && observed.body_bytes >= 1024 * 1024
-            && let Some(
-                fault @ (ReceiverFault::Read | ReceiverFault::Interrupt | ReceiverFault::Deadline),
-            ) = self.receiver_fault
+            && let Some(fault) = self.receiver_fault
         {
             self.receiver_fault = None;
             self.output_stopped = true;
@@ -397,7 +393,6 @@ impl Streams {
                     owner.expire_body();
                     owner.check(Window::Body)
                 }
-                _ => unreachable!(),
             };
         }
         #[cfg(test)]
@@ -791,13 +786,6 @@ async fn run_with(owner: &mut Owner, request: Invocation, faults: Faults) -> Com
                 }
                 owner.record(Cause::Policy);
             } else if let Some(file) = &mut streams.file {
-                #[cfg(test)]
-                if matches!(
-                    streams.receiver_fault,
-                    Some(ReceiverFault::Flush | ReceiverFault::Fsync)
-                ) {
-                    owner.record(Cause::Io);
-                }
                 let sealed = file.seal(digest, owner);
                 if sealed.is_err() && matches!(request.role, Role::Receiver { .. }) {
                     observed.receiver_failure = Some("filesystem_error");

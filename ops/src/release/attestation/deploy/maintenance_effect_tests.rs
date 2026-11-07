@@ -206,7 +206,7 @@ impl Prepared {
             None
         };
         if fault == Fault::Receipt {
-            data.access.fault = Some(super::super::files::Fault::BackupReceiptWrite);
+            data.access.fault = Some(super::super::files::Fault::ReceiptWrite);
         }
         Self {
             data,

@@ -2012,16 +2012,6 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },
     {
-      "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
-      "scope": ".github/workflows/ci.yml#jobs/automation-references/steps/2/uses",
-      "owner": "swiftraccoon",
-      "rationale": "The complete unchanged-Python reference comparisons run in their own required free-runner job to preserve the existing ten-minute ceiling. The immutable action installs the exact Rust 1.99.0 compiler before running source-built xtask and Ops.",
-      "reachability": "Reviewed 2026-10-24 for this exact new step only. Checkout disables persisted credentials; Python and Rust are explicitly pinned. The reviewed official HTTPS rustup bootstrap is unchanged. No API token or restored result selects installer arguments, and this job uses no result cache. Every reference comparison and all eleven required correctness/security results remain blocking.",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
-    },
-    {
       "scanner": "codeql",
       "fingerprint": "codeql:ece698dca3f9f392c1b830efe410e4d218e30fa87652a5b1e3986bed5bfed0a0",
       "scope": "build/security_vm_maintain_prerequisite_guest.py:741:745:19:6",

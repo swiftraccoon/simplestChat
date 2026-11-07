@@ -3,13 +3,10 @@
 //! This Linux/macOS CLI creates four metadata copies and one unsigned predicate.
 //! It never signs, verifies a signature, fetches, runs Git/Docker or deploys.
 //! Run it in a dedicated CLI process with explicit caller-selected whole and
-//! finalization budgets. The existing Python command remains the reference.
+//! finalization budgets. The existing Python command remains available.
 
 #[path = "options.rs"]
 mod options;
-#[cfg(test)]
-#[path = "oracle_tests.rs"]
-mod oracle_tests;
 #[path = "policy.rs"]
 mod policy;
 #[cfg(test)]

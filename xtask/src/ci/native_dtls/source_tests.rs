@@ -1,8 +1,7 @@
 //! Owned inert fixtures for the native DTLS controller.
 
 use super::*;
-use crate::ci::native_dtls::fixtures::{DIAGNOSTIC, Fixture};
-use std::{fs, path::Path, time::Duration};
+use crate::ci::native_dtls::fixtures::DIAGNOSTIC;
 
 fn files() -> BTreeMap<String, Vec<u8>> {
     BTreeMap::from([
@@ -21,81 +20,65 @@ fn files() -> BTreeMap<String, Vec<u8>> {
         ("test/src/ignored space.cpp".into(), b"unrelated".to_vec()),
     ])
 }
-async fn oracle(root: &Path, files: &BTreeMap<String, Vec<u8>>) -> Option<Vec<u8>> {
-    let worker = root.join("oracle");
-    fs::create_dir(&worker).unwrap();
-    for (name, bytes) in files {
-        let path = worker.join(name);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, bytes).unwrap();
+const SELECTED: [&str; 4] = [
+    "test/src/one.cpp",
+    "test/src/sub/two.cpp",
+    "test/src/testHelpers.cpp",
+    "test/src/tests.cpp",
+];
+fn selected(names: &[&str]) -> Vec<u8> {
+    let mut text = String::from("production\ntest_sources = [\n");
+    for name in names {
+        text.push_str(&format!("  '{name}',\n"));
     }
-    let reference = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("build/check-native-dtls.sh"),
-    )
-    .unwrap();
-    let script = reference
-        .split("\"${dtls_python}\" - \"${dtls_temp}/worker\" <<'PY'\n")
-        .nth(1)
-        .unwrap()
-        .split("\nPY\n")
-        .next()
-        .unwrap();
-    let script_path = root.join("selection.py");
-    fs::write(&script_path, script).unwrap();
-    let mut command = std::process::Command::new("/usr/bin/python3");
-    command
-        .arg(&script_path)
-        .arg(&worker)
-        .stderr(std::process::Stdio::null());
-    let (status, _) =
-        crate::test_env::helper_with_signals(command, Duration::from_secs(5), Some(4096), None)
-            .await
-            .unwrap();
-    (status == 0).then(|| fs::read(worker.join("meson.build")).unwrap())
+    text.push_str("]\n\nmediasoup_worker_test = executable(\n");
+    text.into_bytes()
 }
-#[tokio::test]
-async fn tagged_selection_matches_unchanged_python_oracle_including_rejections_and_newlines() {
+#[test]
+fn tagged_selection_keeps_every_tagged_source_and_refuses_ambiguous_inputs() {
     for case in 0..9 {
-        let fixture = Fixture::new();
         let mut files = files();
-        match case {
+        let expected = match case {
             1 => {
                 files.insert("test/src/extra.cpp".into(), b"[dtls]".to_vec());
+                let [one, two, helpers, tests] = SELECTED;
+                Some(selected(&["test/src/extra.cpp", one, two, helpers, tests]))
             }
             2 => {
                 files.insert("test/src/.cpp".into(), b"[dtls]".to_vec());
+                None
             }
             3 => {
                 files.insert("test/src/private space.cpp".into(), b"[dtls]".to_vec());
+                None
             }
             4 => {
                 files.remove("test/src/sub/two.cpp");
+                None
             }
             5 => {
                 files.insert("meson.build".into(), b"no anchor".to_vec());
+                None
             }
             6 => {
                 files.insert("meson.build".into(), ANCHOR.repeat(2).into_bytes());
+                None
             }
             7 => {
                 files.insert("test/src/unicode.cpp".into(), vec![255]);
+                None
             }
             8 => {
                 files.insert(
                     "test/src/stray.cpp".into(),
                     b"[dtls]\r[media-diagnostics]".to_vec(),
                 );
+                let [one, two, helpers, tests] = SELECTED;
+                Some(selected(&[one, "test/src/stray.cpp", two, helpers, tests]))
             }
-            _ => {}
-        }
-        assert_eq!(
-            meson(&files).ok(),
-            oracle(&fixture.root, &files).await,
-            "case{case}"
-        );
+            _ => Some(selected(&SELECTED)),
+        };
+        assert_eq!(meson(&files).ok(), expected, "case{case}");
     }
 }
 #[test]

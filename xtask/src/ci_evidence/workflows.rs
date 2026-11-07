@@ -112,18 +112,6 @@ impl Inventory {
             .into_iter()
             .map(str::to_owned)
             .collect();
-        let references = matrix(job(ci, "automation-references")?)?;
-        ensure!(
-            references.keys().map(String::as_str).collect::<Vec<_>>() == ["group"],
-            "local_ci_reference_matrix_shape"
-        );
-        let reference_groups = strings(member(references, "group")?)?;
-        ensure!(
-            reference_groups.iter().copied().collect::<BTreeSet<_>>()
-                == BTreeSet::from(["foundation", "fetch", "host", "deploy"])
-                && reference_groups.len() == 4,
-            "local_ci_reference_coverage"
-        );
         let browser = matrix(job(ci, "browser")?)?;
         ensure!(
             browser.keys().map(String::as_str).collect::<BTreeSet<_>>()
@@ -176,11 +164,6 @@ impl Inventory {
                 languages
                     .into_iter()
                     .map(|language| format!("codeql-{language}")),
-            )
-            .chain(
-                reference_groups
-                    .into_iter()
-                    .map(|group| format!("reference-{group}")),
             )
             .chain(["security-fast".to_owned()])
             .collect();

@@ -9,8 +9,8 @@ image building are explicit options; each measurement creates a new run.
 The Rust `xtask vps-capacity` operation uses the same workload policy and the
 capacity engine through an explicitly selected signed Ops artifact. It owns
 preparation, SSH transport, systemd execution, collection, recovery and local
-evidence extraction. The Python controller remains available as the reference;
-Ansible still provisions the host. The standalone host binary targets Debian
+evidence extraction. The Python controller remains available; Ansible still
+provisions the host. The standalone host binary targets Debian
 13/x86_64 with systemd. Fedora runtime images remain separate measured workload
 inputs and do not establish the host executable's ABI compatibility.
 

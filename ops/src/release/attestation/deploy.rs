@@ -4,8 +4,6 @@ mod budget;
 mod execution;
 mod files;
 mod options;
-#[cfg(test)]
-mod oracle_tests;
 mod policy;
 pub(super) mod process;
 pub(super) mod records;

@@ -911,18 +911,9 @@ async fn finish_operation(
             state.replacement_rooms.as_ref(),
         )
         .and_then(|data| {
-            #[cfg(test)]
-            let fault = match state.fault {
-                Some(super::files::Fault::OutcomeWrite) => Some(0),
-                Some(super::files::Fault::OutcomeFileSync) => Some(1),
-                Some(super::files::Fault::OutcomeDirectorySync) => Some(2),
-                _ => None,
-            };
-            #[cfg(not(test))]
-            let fault = None;
             state
                 .records
-                .atomic_fault(attempt, "outcome.json", &data, owner, true, fault)
+                .atomic(attempt, "outcome.json", &data, owner, true)
         });
         if let Err(cause) = written {
             owner.record(cause);

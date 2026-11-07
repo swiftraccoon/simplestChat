@@ -4,9 +4,9 @@
 //! the default graph requires no server, media or native TLS implementation.
 //!
 //! Validated metadata is not signature evidence or authorization to deploy. The
-//! explicit production builder owns its local Git/Docker operation; Python stays
-//! available as its reference. Signing, delivery and installed host operations
-//! retain their existing independent runtime and distribution requirements.
+//! explicit production builder owns its local Git/Docker operation. Signing,
+//! delivery and installed host operations retain their existing independent
+//! runtime and distribution requirements.
 
 pub mod capacity_vps;
 pub mod distribution;

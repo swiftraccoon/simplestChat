@@ -129,101 +129,39 @@ failure stays negative. The manual signed Debian run remains the actual guest
 execution and first-install gate.
 
 Operations automation runs the standalone Ops library suite with its default
-dependency profile before the reference comparisons. On Linux this includes the
-host, process and archive cases. This exercises the distributed capacity runtime
-profile early; the workspace suite also checks the combined feature profile.
-Both jobs select CPython 3.14.8 before fingerprinting or creating the controller
-environment, keeping the manifest oracle's Unicode database consistent.
-Ignored subprocess workers run only through their owning tests, and Python
-comparisons have explicit invocations in the pinned controller environment.
+dependency profile. On Linux this includes the host, process and archive cases.
+This exercises the distributed capacity runtime profile early; the workspace
+suite also checks the combined feature profile. Both jobs select CPython 3.14.8
+before fingerprinting or creating the controller environment, keeping the
+manifest oracle's Unicode database consistent. Ignored subprocess workers run
+only through their owning tests.
 
 The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
 exercise lease-stream EOF, quiet-child cancellation, release ordering and the
 first interrupt surviving a later signal during joined cleanup. The source
 inventory CLI also runs with 196 selected files and a child-only 96-descriptor
-limit. These checks do not execute a remote capacity workload.
+limit. These checks do not execute a remote capacity workload. A signed musl
+binary, Debian kernel/process behavior and a measured host run need their own
+evidence.
 
-Whole-controller parity requires the pinned Python environment. Operations
-automation and its local-CI route explicitly run the otherwise ignored test;
-missing dependencies fail instead of skipping it:
-
-```sh
-PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
-  cargo test --locked -p xtask --bin xtask \
-  ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas \
-  -- --ignored --exact
-```
-
-The unchanged Python controller runs with inert external adapters in all eight
-scenarios. This checks local policy and documented transport differences; a
-signed musl binary, Debian kernel/process behavior and a measured host run need
-their own evidence. The Python controller remains available as the reference.
-
-Linux operations automation also explicitly runs the host policy comparison:
-
-```sh
-PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
-  cargo test --locked -p simplestchat-ops --lib \
-  capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle \
-  -- --ignored --exact
-```
-
-That host test is compiled only on Linux. Direct automation on other platforms
-reports its absence; `ci-local` runs the Linux workflow. The ignored inert child
-used by the real process regression is launched only by its exact parent test.
-Do not replace either oracle command with a broad `--ignored` invocation.
+The host tests are compiled only on Linux; `ci-local` runs the Linux workflow.
+The ignored inert child used by the real process regression is launched only by
+its exact parent test.
 
 ### Production release builder
 
 The native [production build/export command](../ops/README.md#production-release-build-and-export)
-has a closed whole-reference driver at
-`ops/ansible/tests/release_build_oracle.py`. Its 26 scenario families contain
-112 finite cases, using unchanged actual `build_release`, real source/image tar
-bytes, extraction, hashes, lock/state policy, archive validation, publication and
-failure finalizers. Only tool, clock and privileged-state observations are inert.
-The driver starts no Docker, Git, network or host workload. Its bounded JSON keeps
-fixture inputs separate from observed verdicts, commands and retained records.
+has whole-builder tests that run the actual controller, extraction, metadata
+validation, publication and finalizers over owned real files and inert Git and
+Docker observations. They execute no Git, Docker or image.
 
-Run the driver tests with the pinned operations Python environment:
-
-```sh
-ops/ansible/.venv/bin/python -B -m unittest discover \
-  -s ops/ansible/tests -p test_release_build_oracle.py -v
-ops/ansible/.venv/bin/python -B ops/ansible/tests/release_build_oracle.py \
-  --scenario export-missing-tag
-```
-
-Its optional `--fixture-directory PATH` creates a fresh private directory of exact
-source/image input archives, with relative names, SHA-256 and byte counts in the
-result. These inputs are generated independently of the candidate's output.
-Fixed test fixtures are limited to 2 MiB each and 64 MiB per export; these test-only
-limits do not narrow the production builder's source/archive acceptance domain.
-
-Operations automation and its local-CI route explicitly run the otherwise ignored
-Rust comparison with that same environment. Missing dependencies fail; the test
-does not silently skip:
-
-```sh
-PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::build::tests::whole_reference_scenarios_match_unchanged_python \
-  -- --ignored --exact
-```
-
-Broad database `--include-ignored` runs must skip this exact test and run it through
-the explicit pinned-Python automation route instead. They must also skip
+Broad database `--include-ignored` runs must skip
 `release::build::process::tests::signal_worker`, the ignored child fixture launched
 only by its two owning native signal regressions. Run those ordinary parent tests
 to exercise the child; a broad ignored run supplies no owning selector.
-Offline comparison establishes
-policy across build/export, preflight refusal, original selectors and tags, malformed
-source/image archives, migrations, deadline exhaustion and retained failure records.
-The comparison admits one explicit Docker-save transport difference: Rust omits
-the reference's exact `--output` and known archive-path pair and requires the
-original writer loan. Other argv, environment, capture and selector checks remain
-exact; the Python reference is unchanged.
-It does not prove process ownership, physical Docker effects or signing provenance.
+These tests do not prove process ownership, physical Docker effects or signing
+provenance.
 Separate actual inert child tests cover concurrent pipe pressure, per-stream and
 inspection budgets, signed status, descendants, cancellation, escalation, original
 first failure and all-peer closes on Linux and macOS. Custody tests separately
@@ -279,11 +217,10 @@ cap-plus-one checks. Actual protected-file cases retain the separate 64 KiB
 benchmark and 16 KiB persistent-state encoded bounds.
 
 The metadata adapter accepts UTF-8 strings and rejects raw NUL or a leading BOM,
-matching the reference's already decoded string boundary rather than generic
+matching the Python builder's already decoded string boundary rather than generic
 JSON byte encoding detection. Escaped `\u0000` remains valid. These tests document
 the explicit Rust profile; they do not establish full Python acceptance parity
-for deeper or otherwise out-of-profile ignored metadata. The Python reference
-remains unchanged.
+for deeper or otherwise out-of-profile ignored metadata.
 
 The focused budget fixtures cover export selections 60, 139, 140 and 300 seconds.
 The whole export end remains `N + 60`, verification reserve and cap are both
@@ -817,10 +754,9 @@ diagnostics. Set `TEST_POSTGRES_PORT` when another local service owns that port.
 
 The database commands select the server package. Run ordinary workspace tests
 separately using the command at the start of this guide. The workspace also has
-ignored tooling fixtures that require an owning parent or the pinned Python
-automation environment; a blanket `--include-ignored` would launch them outside
-that owner. CI includes database tests while skipping those three named fixtures;
-operations automation explicitly runs both complete Python reference comparisons.
+ignored tooling fixtures that require an owning parent; a blanket
+`--include-ignored` would launch them outside that owner. CI includes database
+tests while skipping those three named fixtures.
 The trust-authenticated database is disposable, never a shared development DB.
 
 Each harness test command owns a fresh process group. It retains the leader's
@@ -1044,8 +980,9 @@ and changing selected bytes or directory membership. Source files are stamped
 when read and revalidated after copying. These are optimistic identity/stamp
 checks, not an atomic source snapshot or an authenticated Cargo/runtime closure.
 Retained namespace walks permit at most 24 absolute path components. The original
-`build/check-native-dtls.sh` remains the unchanged reference for inert selection
-and command-policy tests; ordinary checks do not compile the worker.
+`build/check-native-dtls.sh` remains the unchanged reference helper; inert
+selection and command-policy tests pin the native controller's expected
+selections and commands, and ordinary checks do not compile the worker.
 
 Python, CC, CXX and pkg-config selection uses captured PATH/caller-directory
 semantics, including literal paths with spaces. Python executes through its
@@ -1084,9 +1021,8 @@ and exact staged inode/stamp, including uncertain rename/sync outcomes. If close
 or re-admission fails, a marker may remain; its presence alone is not final
 process/close proof or a release signature. Late failure logs are retained under
 a fresh private `.failed` prefix only if that original parent can be re-admitted.
-The existing artifact glob covers both prefixes. Inert fixtures and Python oracle
-comparisons do not establish native compilation, wheel installation or hosted
-runtime parity.
+The existing artifact glob covers both prefixes. Inert fixtures do not establish
+native compilation, wheel installation or hosted runtime parity.
 
 Exercise call outcomes with real browser decoding on owned loopback services:
 
@@ -1986,7 +1922,7 @@ and cleans recursively. Existing authenticated bundles can be moved from
 the same receipts and analyzer/query checks apply at the new location.
 
 The shared `cargo run --locked -q -p xtask -- ci required` policy reads
-`GATE_RESULTS` once and requires successful results from exactly the eleven canonical
+`GATE_RESULTS` once and requires successful results from exactly the ten canonical
 workflow jobs. It rejects missing, skipped, cancelled or failed jobs, duplicate
 job/result fields, malformed JSON and input above 64 KiB. Other job metadata and
 outputs cannot establish success and are never printed. Both hosted and local
@@ -2174,63 +2110,27 @@ playbook's syntax check, ShellCheck and operations unit tests. Each command's
 arguments are explicit and the first failure stops the gate. It installs no
 tools and applies no playbook to a host.
 
-Hosted and local CI split that complete plan between `ci automation --checks`
-and `ci automation --references`. The first retains quality, syntax, ordinary
-Ops/CLI tests and full Python test discovery. The second owns every exact ignored
-whole-operation comparison: VPS controller/host, image builder and the eight
-release operations. With no selector the local command retains their original
-complete order. The checks job and reference matrix run in parallel under the
-same ten-minute ceiling per job; every entry must succeed before signing. Fixed
-reference groups are `foundation` (VPS controller/host, builder, prepare and cached
-verify), `fetch` (fresh acquisition and fetch), `host` (receive, stage and standalone
-restore verification),
-and `deploy` (the complete host deployment comparison). For example,
-`cargo run --locked -q -p xtask -- ci automation --references deploy` selects
-the deployment comparison; replace `deploy` with another fixed group as needed.
-The reference matrix's pinned setup action explicitly requests every component
-in `rust-toolchain.toml` before the first Cargo invocation: `rustfmt`, `clippy`
-and `rust-analyzer`. The action otherwise uses the minimal install profile;
-Cargo's rustup proxy can provision additive toolchain-file components later.
-Actual run `40150788623` installed the minimal compiler successfully, completed
-its pinned Python installation, then failed at that later provisioning step on
-an existing `bin/cargo-clippy` conflict. The host-reference job ran no operation
-comparisons. The conflicting file's origin remains unproved. Completing the
-existing request during setup closes the implicit provisioning gap; it does not
-delete toolchains, repair arbitrary component corruption or establish that a
-future hosted run passes.
+Hosted and local CI run that complete plan through `ci automation --checks`,
+which selects the same steps as the bare command: quality, syntax, ordinary
+Ops/CLI tests and full Python test discovery, under the job's ten-minute ceiling.
+The ordinary Ops gate also runs `release_backup_cli`.
 
-Bare `--references` still runs every comparison. Matrix failure does not cancel the
-other groups. Reference comparisons always run and use no result cache.
-Both Python setup steps cache pip download bytes, keyed by the checker and
-controller requirement files. Each job still creates its own environment and
+The Python setup step caches pip download bytes, keyed by the checker and
+controller requirement files. The job still creates its own environment and
 installs the complete hash-pinned wheel requirements; a download-cache hit never
 skips installation or checks. This uses the pinned setup action's
 [dependency cache](https://github.com/actions/setup-python/blob/ece7cb06caefa5fff74198d8649806c4678c61a1/docs/advanced-usage.md#caching-packages).
 In run `40803995276`, downloading the 61.1 MB Node wheel took 199–217 seconds,
 versus 0.607 seconds in run `40799322008`. Setup consumed most of the ten-minute
-automation and host-reference limits, and both jobs were cancelled during their
-checks. Those cancellations are failures to complete, not passing comparisons.
-Download reuse reduces repeated network work; a cold cache remains dependent on
-the package service and does not establish a runtime guarantee. Job and workload
-limits are unchanged.
+automation limit and the job was cancelled during its checks; a cancellation is a
+failure to complete, not a pass. Download reuse reduces repeated network work; a
+cold cache remains dependent on the package service and does not establish a
+runtime guarantee. Job and workload limits are unchanged.
 
-Local CI also requires a successful execution receipt for each of the four
-reference matrix groups. Missing, duplicate, unknown or filtered groups fail
-completion even if an aggregate job result says success.
-The existing automation receipt proves only the checks
-job, with workflow/xtask changes invalidating prior keys.
-
-Standalone restore verification is one additional exact process in `host`, after
-receive and stage. A saved hosted host-comparison step took 136 seconds; the new
-90-scenario restore comparison took 95.343 seconds wall locally. Their approximate
-231-second sum is comparison-only, combines different environments and excludes
-bootstrap, compilation and contention. It is a placement estimate, not a hosted
-capacity guarantee. The full job still has ten minutes; a timeout fails its
-required matrix entry. Deploy remains separate, and no comparison is dropped,
-filtered or replaced by a receipt. The ordinary Ops gate also runs
-`release_backup_cli`. Tracked workflow, `xtask`, native and external Python oracle
-changes invalidate the existing checks/Rust-test keys; no cache namespace or
-fingerprint selection policy is broadened.
+The existing automation receipt proves the checks job, with workflow/xtask
+changes invalidating prior keys. Tracked workflow, `xtask` and native changes
+invalidate the existing checks/Rust-test keys; no cache namespace or fingerprint
+selection policy is broadened.
 
 The production-image job completes Compose and Caddy validation, including the
 always-retained closed validation metadata, before starting the release-fixture
@@ -2241,12 +2141,6 @@ validator container was created. Its underlying cause and whether the earlier
 bootstrap was still active are unknown. The ordering change prevents this
 bootstrap's package work from overlapping validation; it changes no command,
 retry, deadline, required gate or cleanup policy and is not a proven cause fix.
-
-The preceding receiver head's hosted automation took 537 seconds of its 600-second
-job limit, including 435 seconds in the complete automation command. Local staging
-adds about 52 seconds of native/reference comparison and 74 seconds of Python
-reference tests. Those measured costs motivated this split; they do not establish
-new hosted runtimes or the aspirational five-minute CI target.
 
 `cargo run --locked -q -p xtask -- ci native-security` verifies the native
 dependency versions, source pins and overlay hashes used by the Rust test job,
@@ -2791,95 +2685,49 @@ for any later installed-callsite switch.
 
 ### Offline server attestation preparation
 
-The closed `ops/ansible/tests/release_prepare_oracle.py` executes unchanged
-Python preparation with real inert archives, raw hashes, ordered file copies,
-late runtime/UTC checks and exact retained outputs. Its 72 named scenarios cover
-success, all eight evidence hashes, booleans/check sets, destination conflicts,
-partial copy I/O, runtime identity/VEX/expiry, opaque source/SBOM, empty/raw
-hash-only evidence and byte-JSON encodings. Only the fixed UTC date and named
-real-file copy faults are adapted. The exported pre-prepare inputs have a
-2 MiB/32-file test-fixture bound; production hash-only inputs gain no such cap.
-The four explicit nofollow/Unicode-scalar/depth/value profile differences remain
-separate from matching observations.
+Run the native preparation tests and the actual CLI suite:
 
 ```sh
-ops/ansible/.venv/bin/python -B -m unittest discover \
-  -s ops/ansible/tests -p test_release_prepare_oracle.py -v
-PYTHON_CHECK_ENV="$(pwd -P)/ops/ansible/.venv" \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python \
-  -- --ignored --exact --test-threads=1
+cargo test --locked -p simplestchat-ops --lib release::attestation::prepare:: \
+  -- --test-threads=1
 cargo test --locked -p simplestchat-ops --test release_attestation_cli
 ```
 
-The ignored comparison runs the actual pinned Python driver and complete Rust
-operation on independently exported original files. It compares file sets,
-bytes/SHA-256/modes, original-four retention and exact predicate serialization;
-it does not turn decoded metadata into signing authority. Native tests also
-exercise explicit closes, source exchanges, first-error ordering, original
-budget/reserve exhaustion, copy/readback effects and real registered INT/TERM
-while retaining a hash input. The real CLI suite uses empty environment and
-private inert files, including a complete successful offline preparation.
-No test starts Git, Docker, network or a host workload.
+Native tests exercise explicit closes, source exchanges, first-error ordering,
+original budget/reserve exhaustion, copy/readback effects and real registered
+INT/TERM while retaining a hash input; they do not turn decoded metadata into
+signing authority. The real CLI suite uses empty environment and private inert
+files, including a complete successful offline preparation. No test starts Git,
+Docker, network or a host workload.
 
 `release::attestation::prepare::signal_tests::retained_hash_signal_child` is an
 ignored owned worker. Its ordinary parent alone supplies its private fixture
 paths and observes registered-signal readiness, then settles the exact child
 group, reaps it and closes both capture readers before checking results. The
-broad database `--include-ignored` route must skip that worker and the pinned
-whole-oracle test by their exact names. Automation invokes the oracle explicitly
-in its maintained Python environment; neither test silently skips missing
-prerequisites. These are separate test contracts from attested installation or
-production signing/deployment proof.
+broad database `--include-ignored` route must skip that worker by its exact name.
+These are separate test contracts from attested installation or production
+signing/deployment proof.
 
 
 ## Cached verification checks
 
 The native cached `release attestation verify` operation has separate policy,
-actual local process, empty-environment CLI and whole-reference coverage. Its
-closed Python oracle executes the unchanged `verify_directory` against real inert
-ZIP/tar/files with only verifier observations and UTC adapted. It never contacts
-GitHub or a host. All 111 named scenarios are available through:
-
-```sh
-ops/ansible/.venv/bin/python3 -B ops/ansible/tests/release_verify_oracle.py \
-  --scenario success
-```
-
-The exact ignored Rust comparison is
-`release::attestation::verify::oracle_tests::whole_verify_scenarios_match_unchanged_python`.
-Run it explicitly under the pinned controller Python environment in automation:
-
-```sh
-PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::verify::oracle_tests::whole_verify_scenarios_match_unchanged_python \
-  -- --ignored --exact
-```
-
-The broad workspace `--include-ignored` command skips the unique basename
-`whole_verify_scenarios_match_unchanged_python`; the owning automation still
-invokes its qualified name with `--ignored --exact`. The whole test owns the
-bounded Python child, both captures, group retirement/reap,
-original caller deadline and subsequent Rust verification. Repeated use requires
-eight fresh verifier observations, while each ordinary call requires four.
-The oracle compares passive envelopes, exact argv/environment/caps, refusal
-prefixes, raw stdout hashes and retained bytes. Three explicit native profile
-cases distinguish witnessed ZIP/inode changes and Unicode-scalar refusal from
-reference-positive behavior. Actual helper tests use owned inert subprocesses,
-including cap sentinels, backpressure, descendant pipes, signal/deadline and
-close/read/conversion faults; the same exact ordinary test owns its child role,
-so no independently invoked ignored child route is added.
+actual local process and empty-environment CLI coverage. It never contacts
+GitHub or a host. Repeated use requires eight fresh verifier observations, while
+each ordinary call requires four. Actual helper tests use owned inert
+subprocesses, including cap sentinels, backpressure, descendant pipes,
+signal/deadline and close/read/conversion faults; the same exact ordinary test
+owns its child role, so no independently invoked ignored child route is added.
 
 The actual `release_verification_cli` target checks route/help/notices/usage,
 selector limits and fixed errors in an empty environment/private cwd. Its
 successful case uses a controlled local `gh` fixture, proving native dispatch and
 policy together without claiming cryptography. The shared preparation owner,
-file custody and late bindings keep their existing 17-native/4-CLI/72-oracle
-regression contract and must be rerun on the final combined source.
+file custody and late bindings keep their existing 17-native/4-CLI regression
+contract and must be rerun on the final combined source.
 
-Local Python oracle/quality results, default-stack process/CLI results, target
-checks and actual maintained-GH verification are separate evidence. Before any
+Local Python quality results, default-stack process/CLI results, target checks
+and actual maintained-GH verification are separate evidence. Before any
 caller switch, record four fresh authenticated verifier results on exact original
 signed production inputs, repeat the operation, reject modified/certificate/run
 mismatches, measure the existing caller budget, and prove verification still
@@ -2890,9 +2738,8 @@ runtime/authentication gate.
 
 ## Fresh release verification checks
 
-The complete native `release verify` operation has separate native fault,
-actual CLI and whole-reference checks. Run its ordinary tests with the normal
-parallel test runner:
+The complete native `release verify` operation has separate native fault and
+actual CLI checks. Run its ordinary tests with the normal parallel test runner:
 
 ```sh
 cargo test --locked -p simplestchat-ops --lib release::attestation::acquire::
@@ -2904,7 +2751,7 @@ default `xtask release verify` bridge. This dispatch is synchronous before Tokio
 it adds neither nested Cargo nor another verification implementation. Ansible
 native mode uses N600/M60 inside its unchanged 660-second guard and runs before
 remote preflight, including check mode. Omission selects the frozen Python
-reference; wrong boolean types refuse. Native failure stops the operation without
+verifier; wrong boolean types refuse. Native failure stops the operation without
 fallback. Current Rust mutation contracts and offline Ansible cases must check
 both branches, skipped-result isolation, exact arguments and failure ordering;
 their execution is separate from actual cryptographic and deployment proof.
@@ -2915,39 +2762,11 @@ run in an owned exact subprocess rather than changing the unit-test process's
 global mask. Their fixtures establish neither real GitHub selection nor TLS or
 cryptographic verification.
 
-The finite Python oracle executes the unchanged `build/verify-release.py` entry
-point and its real selection/download/extraction/cached-verification policy on
-103 named scenarios, adapting HTTP and cryptographic observations locally:
-
-```sh
-ops/ansible/.venv/bin/python3 -B \
-  ops/ansible/tests/release_fresh_verify_oracle.py --scenario fresh-success
-```
-
-Its genuine Rust comparison owns the reference process and then exercises the
-complete native operation with inert tools and real fixture bytes. Invoke the
-ignored test explicitly under the pinned controller Python environment:
-
-```sh
-PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::acquire::oracle_tests::whole_fresh_release_matches_unchanged_python \
-  -- --ignored --exact
-```
-
-Operations automation owns this exact comparison in hosted and local CI. The
-broad database `--include-ignored` route skips only its unique basename
-`whole_fresh_release_matches_unchanged_python`; the oracle remains an explicit
-required automation step. The ordinary CLI target runs in the same Ops gate.
-No separately ignored native signal worker is introduced.
-
-The comparison covers both branches, repeat calls, current API relationships,
-token/grant roles, raw headers/targets, body limits and retained failure prefixes,
-late file/run/certificate refusals and the final public result. Native boundary
-differences include curl framing/platform trust, read-idle timing and UTF-8
-output paths. Cached operation
-must still acquire fresh API metadata and perform four verifications while curl
-and token retrieval are unavailable.
+The ordinary CLI target runs in the Ops gate. No separately ignored native
+signal worker is introduced. The native operation's boundary differences from
+the Python verifier include curl framing/platform trust, read-idle timing and
+UTF-8 output paths. Cached operation must still acquire fresh API metadata and
+perform four verifications while curl and token retrieval are unavailable.
 
 Keep this fixture evidence separate from actual authenticated acquisition.
 Before switching an operational caller, use current explicit signed artifact
@@ -2995,27 +2814,13 @@ caller change; its success does not exercise the newly selected native branch.
 ## SSH release fetch checks
 
 The native `release fetch` command verifies locally before starting its single
-OpenSSH session with the existing Python receiver. Run ordinary native and CLI
-checks separately from the whole-reference comparison:
+OpenSSH session with the existing Python receiver. Run its ordinary native and
+CLI checks:
 
 ```sh
 cargo test --locked -p simplestchat-ops --lib release::attestation::fetch::
 cargo test --locked -p simplestchat-ops --test release_fetch_cli
-PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::fetch::oracle_tests::whole_fetch_controller_matches_unchanged_python \
-  -- --ignored --exact
 ```
-
-The finite comparison executes the unchanged Python controller and receiver on
-73 scenarios. Its inert SSH bridge runs the original receiver as an owned
-child; it supplies external GitHub, signature and HTTP observations locally.
-It checks both local acquisition branches, exact preflight/Ready/grant ordering,
-private evidence and failure prefixes, current exit and natural EOF, projected
-receipts and resource settlement. Its real subprocesses and filesystem checks
-establish neither real SSH authentication nor production remote effects.
-Operations automation runs the exact ignored comparison explicitly; the broad
-database ignored-test route skips its unique basename instead.
 
 Native regressions exercise both frames, stdin ownership through the final
 receipt, cancellation, subordinate status, missing EOF and descendants. Receive
@@ -3029,8 +2834,8 @@ key admission and explicit-empty cached paths. Actual CLI signal tests and the
 runtime/umask fence run in owned subprocesses.
 
 Syntax errors and unknown flags return usage status 2. Parsed selector or key
-refusals return the reference's fixed three-field `invalid_options` result and
-status 1. Invalid native-only whole/finalization budgets are usage errors.
+refusals return the Python controller's fixed three-field `invalid_options`
+result and status 1. Invalid native-only whole/finalization budgets are usage errors.
 The native path profile rejects an explicit-empty cached directory; it never
 turns that supplied value into a fresh download.
 
@@ -3048,25 +2853,12 @@ SSH or the receiver's download. Existing operational callers remain available.
 
 The explicit native `release receive` operation has its own host contract and
 CLI, separate from the controller's default prepared Python receiver route. Run
-its ordinary regressions and actual CLI checks before the complete comparison:
+its ordinary regressions and actual CLI checks:
 
 ```sh
 cargo test --locked -p simplestchat-ops --lib release::attestation::receive::
 cargo test --locked -p simplestchat-ops --test release_receive_cli
-PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::receive::oracle_tests::whole_host_receiver_matches_unchanged_python \
-  -- --ignored --exact
 ```
-
-The comparison runs 104 cases through the unchanged Python host receiver with
-real private files, ZIP extraction, locks, syncs and publication. It supplies
-inert HTTP/process observations and compares retained effects, report classes
-and progress. Before/after censuses include the original reference sources and
-the maintained Python set. They establish source stability during each run,
-not that every unrelated policy test is unchanged since an older commit.
-Operations automation owns this exact ignored comparison; the broad database
-route skips its unique basename.
 
 Native cases cover original publication aliases, empty CA-directory custody,
 close and sync failures, final report ordering, descriptor flags and the retained
@@ -3081,8 +2873,8 @@ The command keeps fixed host paths and root admission, requires explicit
 `0 < finalization-seconds < timeout-seconds <= 300`, and does not change prepared
 callers or bootstrap installation. Its curl/OpenSSL/CA prerequisites, fixed
 User-Agent, parser bounds and socket-idle behavior are native-profile
-differences. A finite comparison does
-not establish unrestricted Python compatibility or actual TLS behavior.
+differences. These tests do not establish unrestricted Python compatibility or
+actual TLS behavior.
 
 The separate manual signed musl runtime proof
 (`.github/workflows/release-receive-runtime.yml`) authenticates both artifacts, installs the retained Ops executable in a free
@@ -3095,23 +2887,15 @@ do not establish a successful workflow run, signed musl execution or deployment.
 ## Native host staging checks
 
 The explicit `release stage` command keeps the prepared Python callers available.
-Run ordinary, actual CLI and whole-reference checks with the pinned environment:
+Run its ordinary and actual CLI checks:
 
 ```sh
 cargo test --locked -p simplestchat-ops --lib release::attestation::stage::
 cargo test --locked -p simplestchat-ops --test release_stage_cli
-PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::stage::oracle_tests::whole_stage_matches_unchanged_python \
-  -- --ignored --exact
 ```
 
-The 81-case comparison executes the complete unchanged Python staging main
-with real private files, TARs, flock, atomic records and actual inert Docker
-children. The native operation uses independent lower observations; its process
-adapter has separate actual owned-child tests. The comparison checks both
-config and selected image-manifest IDs, received hardlinks, repeat identity,
-command/effect order, journals and retained failures. It contacts no Docker daemon.
+The process adapter has separate actual owned-child tests. These checks contact
+no Docker daemon.
 
 Native cases distinguish natural response completion from EOF caused by cleanup,
 retain known validator IDs after other stream-close failures, refuse unknown
@@ -3173,33 +2957,20 @@ installation and invocation require their own runtime evidence.
 
 ## Native standalone restore verification
 
-The complete `release backup verify` operation compares 90 finite scenarios with
-unchanged `restore_verify.py` main, using actual private files, locking, retained
-snapshots and owned inert child processes with Docker/database replies. The exact local comparison
-passed in 92.25 test seconds (95.343 seconds wall). It retains raw original/native
-outcomes and effects, including the named stricter readiness and admission
-profiles. It does not
-establish authenticated musl distribution, a prepared-host public CLI run, actual
-PostgreSQL restore/amcheck or an operational caller switch.
-
-Run its sole ignored process in the pinned controller environment:
+The complete `release backup verify` operation has native tests over actual
+private files, locking, retained snapshots and owned inert child processes with
+Docker/database replies. They do not establish authenticated musl distribution,
+a prepared-host public CLI run, actual PostgreSQL restore/amcheck or an
+operational caller switch. Run them with the actual CLI target:
 
 ```sh
-PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
-  cargo test --locked -p simplestchat-ops --lib \
-  release::attestation::restore::oracle_tests::whole_restore_matches_unchanged_python \
-  -- --ignored --exact --test-threads=1
+cargo test --locked -p simplestchat-ops --lib release::attestation::restore:: \
+  -- --test-threads=1
+cargo test --locked -p simplestchat-ops --test release_backup_cli
 ```
 
-Operations automation configures this exact command in the existing `host`
-reference group for hosted and local CI. The full local plan also retains it;
-`ci automation --references host` selects receive, stage and restore together.
-The broad all-features database test explicitly skips only the unique basename
-`whole_restore_matches_unchanged_python`. It must not launch this fixture under
-`--include-ignored`: its sole-process guard precedes the actual umask and Owner,
-and a broad or shortened selector is refused. The separate ordinary Ops gate runs
-`release_backup_cli`; full Python discovery retains the producer regressions.
-No job timeout, group/receipt roster, dependency or installed caller changes.
+The ordinary Ops gate runs `release_backup_cli`; full Python discovery retains
+the producer regressions.
 
 The optional signed backup-verification runtime fixture
 (`.github/workflows/release-backup-runtime.yml`) adds three independent free Debian KVM cases: current data, a valid historical

@@ -15,10 +15,6 @@ from test_support import obj, string, strings, yaml_value
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECKS = {
-    "reference-foundation",
-    "reference-fetch",
-    "reference-host",
-    "reference-deploy",
     "browser-accounts",
     "browser-media",
     "browser-stress",
@@ -110,7 +106,6 @@ class LocalCiEvidenceTests(unittest.TestCase):
         """Act parses literal limits with Atoi and otherwise silently serializes matrices."""
         for name, job, dimension, limit in (
             ("ci.yml", "browser", "group", 3),
-            ("ci.yml", "automation-references", "group", 4),
             ("codeql.yml", "source-analysis", "language", 4),
         ):
             workflow = obj(
@@ -127,10 +122,6 @@ class LocalCiEvidenceTests(unittest.TestCase):
             "browser-media",
             "codeql-rust",
             "security-fast",
-            "reference-foundation",
-            "reference-fetch",
-            "reference-host",
-            "reference-deploy",
         ):
             path = self.output / "receipts" / f"{identifier}.json"
             original = path.read_bytes()

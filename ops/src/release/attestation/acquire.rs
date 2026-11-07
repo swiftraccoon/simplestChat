@@ -9,9 +9,6 @@ mod headers;
 pub(super) mod licenses;
 #[path = "acquire/options.rs"]
 pub(super) mod options;
-#[cfg(test)]
-#[path = "acquire/oracle_tests.rs"]
-mod oracle_tests;
 #[path = "acquire/policy.rs"]
 mod policy;
 #[cfg(test)]

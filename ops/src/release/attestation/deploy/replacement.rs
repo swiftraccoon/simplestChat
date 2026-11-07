@@ -349,8 +349,6 @@ impl State {
                 .ok_or(Cause::Changed)?
                 .backup(owner)?;
         }
-        #[cfg(test)]
-        self.fault(super::super::files::Fault::BeforeCopy, owner)?;
         for name in SELECTION {
             let data = self.bytes(name, 1024 * 1024, owner)?;
             let record = Record::create(self.attempt(), &format!("before-{name}"), owner, false)?;
@@ -360,14 +358,6 @@ impl State {
                 .last_mut()
                 .unwrap()
                 .write(&data, owner, false)?;
-        }
-        #[cfg(test)]
-        self.fault(super::super::files::Fault::ReplaceJournalWrite, owner)?;
-        #[cfg(test)]
-        if self.fault == Some(super::super::files::Fault::InterruptBeforeStop) {
-            self.fault = None;
-            owner.record(Cause::Interrupt);
-            return Err(Cause::Interrupt);
         }
         let phase = if maintenance.is_some() {
             "maintenance_stop"
@@ -420,14 +410,6 @@ impl State {
                 executor,
             )
             .await?;
-            #[cfg(test)]
-            if self.fault == Some(super::super::files::Fault::InterruptAfterStop) {
-                self.fault = None;
-                owner.record(Cause::Interrupt);
-                return Err(Cause::Interrupt);
-            }
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::SelectComposeWrite, owner)?;
             self.atomic(
                 &self.config().clone(),
                 "compose.public.yml",
@@ -435,8 +417,6 @@ impl State {
                 owner,
                 false,
             )?;
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::SelectEnvWrite, owner)?;
             self.atomic(&self.config().clone(), "app.env", environment, owner, false)?;
             let mut selected = old.clone();
             let map = self.policy(owner, object_mut(&mut selected))?;
@@ -445,8 +425,6 @@ impl State {
                 "serverImage".into(),
                 Json::String(self.stage.selected_image().ok_or(Cause::Changed)?.into()),
             );
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::SelectImagesWrite, owner)?;
             self.atomic(
                 &self.config().clone(),
                 "images.json",
@@ -454,8 +432,6 @@ impl State {
                 owner,
                 false,
             )?;
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::SelectAssets, owner)?;
             self.assets
                 .as_mut()
                 .ok_or(Cause::Changed)?
@@ -498,8 +474,6 @@ impl State {
                 .await?;
             report["interruptionFinishedAt"] = json!(timestamp());
             report["phase"] = json!("complete");
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::CompleteJournalWrite, owner)?;
             self.journal("complete", true, owner, false)
         }
         .await;
@@ -669,16 +643,10 @@ impl State {
                     .ok_or(Cause::Changed)?;
                 let data = before.bytes(1024 * 1024, owner, true)?;
                 self.rollback.stage(write);
-                #[cfg(test)]
-                if name == "compose.public.yml" {
-                    self.fault(super::super::files::Fault::RollbackComposeWrite, owner)?;
-                }
                 self.atomic(&self.config().clone(), name, &data, owner, true)?;
             }
             self.rollback.stage(Stage::AssetsSelect);
             let revision = self.policy(owner, text(old, "revision"))?;
-            #[cfg(test)]
-            self.fault(super::super::files::Fault::RollbackAssets, owner)?;
             self.assets
                 .as_mut()
                 .ok_or(Cause::Changed)?

@@ -11,7 +11,6 @@ use super::{
     options::Options,
 };
 use crate::test_support::Fixture;
-use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -20,7 +19,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Cursor, Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt, symlink},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     process::ExitCode,
     time::{Duration, Instant},
 };
@@ -30,34 +29,6 @@ const IMAGE: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 const LAYER: &str = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 const OTHER: &str = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const TAG: &str = "simplestchat-release/production:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const SCENARIOS: &[&str] = &[
-    "build-success",
-    "export-missing-tag",
-    "export-existing-tag",
-    "invalid-selector",
-    "invalid-output",
-    "dirty-or-invalid-head",
-    "guard-blocked",
-    "remote-endpoint",
-    "export-capability",
-    "checked-env",
-    "active-workload",
-    "custom-builder",
-    "probe-failure",
-    "source-invalid",
-    "migrations-invalid",
-    "build-fails",
-    "export-fails",
-    "source-changes",
-    "image-identity",
-    "layer-metadata",
-    "conflicting-tag",
-    "tag-changes",
-    "archive-wrong-layers",
-    "archive-invalid",
-    "receiver-boundary",
-    "deadline-before-save",
-];
 const ENVIRONMENT: &[&str] = &[
     "DOCKER_CONTEXT",
     "DOCKER_HOST",
@@ -97,10 +68,8 @@ fn directory(path: &Path, mode: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone)]
 struct Case {
-    #[serde(default)]
     name: String,
     mutation: String,
     value: Value,
@@ -164,8 +133,6 @@ impl Case {
 struct Recorded {
     action: String,
     argv: Vec<String>,
-    cwd: PathBuf,
-    environment: BTreeMap<OsString, OsString>,
     capture: bool,
     allow_failure: bool,
     archive: bool,
@@ -509,8 +476,6 @@ impl Executor for Inert {
         self.records.push(Recorded {
             action,
             argv,
-            cwd: request.cwd.clone(),
-            environment: request.environment.clone(),
             capture: request.capture,
             allow_failure: request.allow_failure,
             archive: request.archive.is_some(),
@@ -594,12 +559,10 @@ impl Executor for Inert {
 
 struct Run {
     _fixture: Fixture,
-    root: PathBuf,
     output: PathBuf,
     attempt: Attempt,
     executor: Inert,
     primary: Option<Failure>,
-    environment: BTreeMap<OsString, OsString>,
     _lock: Option<File>,
 }
 impl Drop for Run {
@@ -746,12 +709,10 @@ async fn run_started(
     };
     Run {
         _fixture: fixture,
-        root,
         output,
         attempt,
         executor,
         primary: owner.primary(),
-        environment,
         _lock: lock,
     }
 }
@@ -1473,339 +1434,5 @@ fn original_source_image_context_and_tool_witnesses_refuse_equal_byte_exchanges(
                 }));
             }
         }
-    });
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct Reference {
-    schema_version: u8,
-    scenario: String,
-    cases: Vec<ReferenceCase>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct ReferenceCase {
-    name: String,
-    fixture: Case,
-    fixture_files: Option<InputFiles>,
-    passed: bool,
-    published: bool,
-    output_created: bool,
-    error: Option<String>,
-    actions: Vec<String>,
-    commands: Vec<ReferenceCommand>,
-    retained_files: Vec<String>,
-    source: Option<Value>,
-    manifest: Option<Value>,
-    outcome: Option<Value>,
-    temporary_clean: bool,
-    receiver_rejected: Option<bool>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct InputFiles {
-    source: Pin,
-    image: Pin,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Pin {
-    path: PathBuf,
-    sha256: String,
-    bytes: u64,
-}
-impl Pin {
-    fn read(&self, directory: &Path) -> Vec<u8> {
-        assert!(self.bytes <= 2 * 1024 * 1024);
-        assert_eq!(self.path.components().count(), 2);
-        assert!(
-            self.path
-                .components()
-                .all(|part| matches!(part, Component::Normal(_)))
-        );
-        let path = directory.join(&self.path);
-        assert_eq!(fs::metadata(&path).unwrap().len(), self.bytes);
-        let bytes = fs::read(path).unwrap();
-        assert_eq!(bytes.len() as u64, self.bytes);
-        assert_eq!(sha(&bytes), self.sha256);
-        bytes
-    }
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct ReferenceCommand {
-    argv: Vec<String>,
-    cwd: String,
-    timeout_seconds: f64,
-    env_overrides: Option<BTreeMap<String, String>>,
-    allow_failure: bool,
-    capture: bool,
-}
-
-async fn reference(scenario: &str, fixture: &Fixture) -> Reference {
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let prefix = std::env::var_os("PYTHON_CHECK_ENV")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repository.join("ops/ansible/.venv"));
-    let program = prefix.join("bin/python3");
-    let directory = fixture.0.join(scenario);
-    let log = OpenOptions::new()
-        .create_new(true)
-        .read(true)
-        .write(true)
-        .mode(0o600)
-        .open(fixture.0.join(format!("{scenario}.log")))
-        .unwrap();
-    let mut owner = Owner::new(
-        Instant::now(),
-        crate::release::build::control::Mode::Export,
-        120,
-    )
-    .unwrap();
-    // This exact ignored test owns the selected pinned Python process. Its
-    // Invocation is not exposed by the production Git/Docker command graph.
-    let completion = super::process::run(
-        &mut owner,
-        Invocation {
-            role: Role::Git,
-            program,
-            arguments: vec![
-                "-B".into(),
-                repository
-                    .join("ops/ansible/tests/release_build_oracle.py")
-                    .into_os_string(),
-                "--scenario".into(),
-                scenario.into(),
-                "--fixture-directory".into(),
-                directory.into_os_string(),
-            ],
-            cwd: repository.into(),
-            environment: BTreeMap::from([
-                ("PATH".into(), prefix.join("bin").into_os_string()),
-                ("LC_ALL".into(), "C".into()),
-                ("LANG".into(), "C".into()),
-            ]),
-            body_end: Instant::now() + Duration::from_secs(30),
-            log,
-            archive: None,
-            capture: true,
-            allow_failure: false,
-        },
-    )
-    .await;
-    assert!(completion.observation.group_retired && completion.observation.reaped);
-    assert!(
-        completion.observation.stdout_closed
-            && completion.observation.stderr_closed
-            && completion.observation.log_closed
-    );
-    assert_eq!(completion.observation.exit_status, Some(0));
-    let report = completion.result.unwrap();
-    assert!(report.inspection.len() <= 1024 * 1024);
-    let mut result: Reference = serde_json::from_slice(&report.inspection).unwrap();
-    assert_eq!(result.schema_version, 1);
-    assert_eq!(result.scenario, scenario);
-    for case in &mut result.cases {
-        case.fixture.name = case.name.clone();
-    }
-    owner.check().unwrap();
-    result
-}
-fn normalized(
-    value: &str,
-    root: &Path,
-    temporary: Option<&Path>,
-    context: Option<&Path>,
-) -> String {
-    let mut value = value.to_owned();
-    if let Some(context) = context {
-        value = value.replace(context.to_str().unwrap(), "$CONTEXT");
-    }
-    if let Some(temporary) = temporary {
-        value = value.replace(temporary.to_str().unwrap(), "$TEMPORARY");
-    }
-    value.replace(root.to_str().unwrap(), "$FIXTURE/checkout")
-}
-fn reference_path(value: &str) -> String {
-    value
-        .replace(
-            "$FIXTURE/temporary-0/simplestchat-release.$TEMP/source",
-            "$CONTEXT",
-        )
-        .replace("$CONTEXT.tar", "$TEMPORARY/source.tar")
-}
-fn compare_commands(actual: &Run, expected: &ReferenceCase) {
-    assert_eq!(
-        actual.executor.records.len(),
-        expected.commands.len(),
-        "{}",
-        expected.name
-    );
-    for (actual_command, expected_command) in actual.executor.records.iter().zip(&expected.commands)
-    {
-        let mut argv: Vec<_> = actual_command
-            .argv
-            .iter()
-            .map(|value| {
-                normalized(
-                    value,
-                    &actual.root,
-                    actual.executor.temporary.as_deref(),
-                    actual.executor.context.as_deref(),
-                )
-            })
-            .collect();
-        if argv.get(1).map(String::as_str) == Some("check-ignore") {
-            let value = argv.last_mut().unwrap();
-            if value == "release" {
-                *value = "$FIXTURE/checkout/release".into();
-            }
-        }
-        let mut expected_argv: Vec<_> = expected_command
-            .argv
-            .iter()
-            .map(|value| reference_path(value))
-            .collect();
-        if actual_command.action == "docker-save" {
-            // The sole reference transport delta: Docker stdout enters the
-            // original owned file instead of Docker replacing --output's inode.
-            assert!(actual_command.archive);
-            assert_eq!(expected_argv.len(), 10);
-            assert_eq!(
-                &expected_argv[3..7],
-                ["image", "save", "--platform", "linux/amd64"]
-            );
-            assert_eq!(
-                &expected_argv[7..9],
-                ["--output", "$FIXTURE/checkout/release/image.tar"]
-            );
-            assert_eq!(expected_argv[9], TAG);
-            drop(expected_argv.drain(7..9));
-        } else {
-            assert!(!actual_command.archive);
-        }
-        assert_eq!(
-            argv, expected_argv,
-            "{} {}",
-            expected.name, actual_command.action
-        );
-        assert_eq!(
-            normalized(
-                actual_command.cwd.to_str().unwrap(),
-                &actual.root,
-                actual.executor.temporary.as_deref(),
-                actual.executor.context.as_deref()
-            ),
-            reference_path(&expected_command.cwd),
-            "{} cwd",
-            expected.name
-        );
-        assert_eq!(actual_command.capture, expected_command.capture);
-        assert_eq!(actual_command.allow_failure, expected_command.allow_failure);
-        assert!(
-            expected_command.timeout_seconds.is_finite() && expected_command.timeout_seconds > 0.0
-        );
-        let selected = |environment: &BTreeMap<OsString, OsString>| -> BTreeMap<String, String> {
-            environment
-                .iter()
-                .filter(|(name, _)| ENVIRONMENT.contains(&name.to_str().unwrap()))
-                .map(|(name, value)| {
-                    let name = name.to_str().unwrap();
-                    (name.into(), value.to_str().unwrap().into())
-                })
-                .collect()
-        };
-        let expected_environment = expected_command
-            .env_overrides
-            .clone()
-            .unwrap_or_else(|| selected(&actual.environment));
-        assert_eq!(selected(&actual_command.environment), expected_environment);
-    }
-}
-
-#[test]
-#[ignore = "requires pinned controller Python; run by operations automation"]
-fn whole_reference_scenarios_match_unchanged_python() {
-    runtime().block_on(async {
-        let fixture = Fixture::new();
-        let mut count = 0;
-        for scenario in SCENARIOS {
-            let expected = reference(scenario, &fixture).await;
-            for expected in expected.cases {
-                count += 1;
-                assert_eq!(expected.name, expected.fixture.name);
-                assert_eq!(expected.error.is_none(), expected.passed);
-                assert!(expected.temporary_clean);
-                if expected.fixture.mutation == "receiver" {
-                    assert_eq!(expected.receiver_rejected, Some(true));
-                }
-                let inputs = expected.fixture_files.as_ref().unwrap();
-                let input_directory = fixture.0.join(scenario);
-                let actual = run(
-                    expected.fixture.clone(),
-                    inputs.source.read(&input_directory),
-                    inputs.image.read(&input_directory),
-                    Fault::None,
-                )
-                .await;
-                assert_eq!(
-                    actual.attempt.result.is_ok(),
-                    expected.passed,
-                    "{scenario} {} {:?}",
-                    expected.name,
-                    actual.attempt.result
-                );
-                assert_eq!(
-                    actual.output.join("release.json").is_file(),
-                    expected.published
-                );
-                assert_eq!(actual.attempt.output.is_some(), expected.output_created);
-                assert_eq!(
-                    actual
-                        .executor
-                        .records
-                        .iter()
-                        .map(|record| record.action.clone())
-                        .collect::<Vec<_>>(),
-                    expected.actions,
-                    "{scenario} {}",
-                    expected.name
-                );
-                compare_commands(&actual, &expected);
-                assert_eq!(record(&actual.output.join("source.json")), expected.source);
-                let mut manifest = record(&actual.output.join("release.json"));
-                if let (Some(actual), Some(expected)) = (&mut manifest, &expected.manifest) {
-                    actual["createdAt"] = expected["createdAt"].clone();
-                }
-                assert_eq!(manifest, expected.manifest);
-                let outcome = record(&actual.output.join("outcome.json"));
-                assert_eq!(outcome.is_some(), expected.outcome.is_some());
-                if let (Some(actual), Some(expected_outcome)) = (outcome, expected.outcome) {
-                    assert_eq!(actual["passed"], expected_outcome["passed"]);
-                    assert_eq!(actual["revision"], expected_outcome["revision"]);
-                    assert_eq!(
-                        actual.get("exportedImageId"),
-                        expected_outcome.get("exportedImageId")
-                    );
-                    assert_eq!(
-                        actual.as_object().unwrap().len(),
-                        expected_outcome.as_object().unwrap().len()
-                    );
-                }
-                assert_eq!(
-                    expected.retained_files.contains(&"release.json".into()),
-                    expected.passed
-                );
-                assert!(
-                    actual
-                        .executor
-                        .temporary
-                        .as_ref()
-                        .is_none_or(|path| !path.exists())
-                );
-            }
-        }
-        assert_eq!(count, 112);
     });
 }

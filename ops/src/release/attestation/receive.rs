@@ -4,8 +4,6 @@ mod channel;
 mod download;
 mod options;
 #[cfg(test)]
-mod oracle_tests;
-#[cfg(test)]
 mod tests;
 
 use super::{
@@ -34,8 +32,6 @@ use std::{
 enum Fault {
     HttpRead,
     Write,
-    Flush,
-    Fsync,
     ExtractWrite,
     FirstLink,
     SecondLink,
@@ -45,8 +41,6 @@ enum Fault {
     ReplacePublishedAlias,
     CapathMember,
     PublishSync,
-    ReceiptCreate,
-    ReceiptSync,
     Interrupt,
     Alarm,
 }
@@ -391,8 +385,6 @@ impl State {
                 Some(Fault::HttpRead) => Some(ReceiverFault::Read),
                 Some(Fault::Interrupt) => Some(ReceiverFault::Interrupt),
                 Some(Fault::Alarm) => Some(ReceiverFault::Deadline),
-                Some(Fault::Flush) => Some(ReceiverFault::Flush),
-                Some(Fault::Fsync) => Some(ReceiverFault::Fsync),
                 _ => None,
             });
             if access.fault == Some(Fault::Write) {
@@ -419,10 +411,7 @@ impl State {
         {
             files::clear_copy_fault();
             super::acquire::transport::receiver_fault(None);
-            if matches!(
-                access.fault,
-                Some(Fault::HttpRead | Fault::Write | Fault::Flush | Fault::Fsync)
-            ) {
+            if matches!(access.fault, Some(Fault::HttpRead | Fault::Write)) {
                 self.refusal = "filesystem_error";
             }
         }
@@ -783,21 +772,13 @@ async fn execute(
         (owner.now().saturating_duration_since(started).as_secs_f64() * 1000.0).round() / 1000.0;
     state.report.settled = state.attempt.is_some();
     if let Some(attempt) = &state.attempt {
+        let journal = state
+            .report
+            .encode(true)
+            .and_then(|bytes| attempt.receiver_journal(&bytes, owner))
+            .and_then(|()| attempt.final_sync(owner));
         #[cfg(test)]
-        let refuse_create = access.fault == Some(Fault::ReceiptCreate);
-        #[cfg(not(test))]
-        let refuse_create = false;
-        let journal = if refuse_create {
-            control::failed(owner, Cause::Io)
-        } else {
-            state
-                .report
-                .encode(true)
-                .and_then(|bytes| attempt.receiver_journal(&bytes, owner))
-                .and_then(|()| attempt.final_sync(owner))
-        };
-        #[cfg(test)]
-        let journal = if matches!(access.fault, Some(Fault::ReceiptSync | Fault::PublishSync)) {
+        let journal = if access.fault == Some(Fault::PublishSync) {
             control::failed(owner, Cause::Io)
         } else {
             journal

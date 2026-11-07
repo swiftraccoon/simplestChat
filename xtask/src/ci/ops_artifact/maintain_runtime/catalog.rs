@@ -289,7 +289,6 @@ pub(super) fn sources() -> BTreeSet<String> {
     for name in [
         "files",
         "options",
-        "oracle_tests",
         "process",
         "process_io_tests",
         "process_restore_io_tests",
@@ -310,7 +309,6 @@ pub(super) fn sources() -> BTreeSet<String> {
         "maintenance_effect_tests",
         "maintenance_selection",
         "options",
-        "oracle_tests",
         "policy",
         "process",
         "process_recovery_tests",

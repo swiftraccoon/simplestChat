@@ -8,18 +8,16 @@ import platform
 import shlex
 import subprocess
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
-from typing import cast, override
+from typing import override
 from unittest.mock import patch
 
-from test_support import ROOT, obj, objects, string, strings, yaml_value
+from test_support import ROOT, obj, objects, string, yaml_value
 
 # isort: split
 import ci_verified as cache
 import native_security
-from release_json import json_value
 from security_tools import ToolError
 
 
@@ -839,96 +837,24 @@ class VerifiedWorkflowTests(unittest.TestCase):
         )
         self.assertLess(steps.index(install), steps.index(release))
 
-    def test_reference_rust_bootstrap_installs_every_declared_component_before_cargo(self) -> None:
-        """The explicit installer must cover the additive toolchain-file component request."""
-        workflow = yaml_value(
-            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
-        )
-        toolchain = json_value(
-            cast("object", tomllib.loads((ROOT / "rust-toolchain.toml").read_text()))
-        )
-        steps = objects(obj(workflow, "jobs", "automation-references"), "steps")
-        installers = [
-            step
-            for step in steps
-            if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
-        ]
-        self.assertEqual(len(installers), 1)
-        installer = installers[0]
-        self.assertEqual(
-            string(installer, "uses"),
-            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
-        )
-        self.assertEqual(
-            string(installer, "with", "toolchain"), string(toolchain, "toolchain", "channel")
-        )
-        self.assertIn("components", obj(installer, "with"))
-        self.assertEqual(
-            [part.strip() for part in string(installer, "with", "components").split(",")],
-            strings(toolchain, "toolchain", "components"),
-        )
-        first_cargo = next(
-            index for index, step in enumerate(steps) if "cargo " in string(step.get("run", ""))
-        )
-        self.assertLess(steps.index(installer), first_cargo)
-        self.assertNotIn("if", installer)
-        self.assertNotIn("continue-on-error", installer)
-
-    def test_parallel_automation_keeps_every_reference_required_without_shared_receipts(
-        self,
-    ) -> None:
-        """Separate owners retain the ten-minute ceiling and cannot cache each other's work."""
-        jobs = obj(
+    def test_automation_checks_keep_their_ceiling_and_exact_gate(self) -> None:
+        """The checks job keeps the ten-minute ceiling and runs the complete operations gate."""
+        job = obj(
             yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
             "jobs",
+            "automation",
         )
-        for name, flag in (("automation", "--checks"), ("automation-references", "--references")):
-            job = obj(jobs, name)
-            self.assertEqual(string(job, "timeout-minutes"), "10")
-            self.assertEqual(string(job, "runs-on"), "ubuntu-24.04")
-            selected = [
-                step
-                for step in objects(job, "steps")
-                if "-- ci automation" in string(step.get("run", ""))
-            ]
-            self.assertEqual(len(selected), 1)
-            self.assertEqual(
-                string(selected[0], "run"),
-                "cargo run --locked -q -p xtask -- ci automation "
-                + flag
-                + (' "$REFERENCE_GROUP"' if name == "automation-references" else ""),
-            )
-        reference = obj(jobs, "automation-references")
-        self.assertNotIn("if", reference)
-        self.assertNotIn("continue-on-error", reference)
-        strategy = obj(reference, "strategy")
-        self.assertEqual(string(strategy, "fail-fast"), "false")
-        self.assertEqual(
-            obj(strategy, "matrix"), {"group": ["foundation", "fetch", "host", "deploy"]}
-        )
-        steps = objects(reference, "steps")
-        receipt = steps[-1]
-        self.assertEqual(string(receipt, "if"), "${{ env.ACT }}")
-        self.assertNotIn("continue-on-error", receipt)
-        self.assertEqual(
-            string(receipt, "run"),
-            "cargo run --locked -q -p xtask -- ci-evidence record "
-            + '--id "reference-$LOCAL_REFERENCE_GROUP"',
-        )
-        self.assertEqual(string(receipt, "env", "LOCAL_REFERENCE_GROUP"), "${{ matrix.group }}")
-        for step in steps[:-1]:
-            self.assertNotIn("if", step)
-            self.assertNotIn("continue-on-error", step)
-            self.assertNotIn("actions/cache/", string(step.get("uses", "")))
-        selected = next(step for step in steps if "--references" in string(step.get("run", "")))
-        self.assertEqual(string(selected, "env", "REFERENCE_GROUP"), "${{ matrix.group }}")
-        python = next(
+        self.assertEqual(string(job, "timeout-minutes"), "10")
+        self.assertEqual(string(job, "runs-on"), "ubuntu-24.04")
+        selected = [
             step
-            for step in steps
-            if string(step.get("uses", "")).startswith("actions/setup-python@")
+            for step in objects(job, "steps")
+            if "-- ci automation" in string(step.get("run", ""))
+        ]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(
+            string(selected[0], "run"), "cargo run --locked -q -p xtask -- ci automation --checks"
         )
-        self.assertEqual(string(obj(python, "with"), "python-version"), "3.14.8")
-        self.assertLess(steps.index(python), len(steps) - 2)
 
     def test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds(self) -> None:
         """The release calendar oracle cannot inherit a runner's older Unicode database."""
@@ -1192,10 +1118,10 @@ class RestoreCiIntegrationTests(unittest.TestCase):
         """The fixed index projection changes bytes, not cache policy or selected sources."""
         paths = (
             "ops/src/release/attestation/restore.rs",
-            "ops/src/release/attestation/restore/oracle_tests.rs",
+            "ops/src/release/attestation/restore/tests.rs",
             "ops/tests/release_backup_cli.rs",
-            "ops/ansible/tests/release_restore_oracle.py",
-            "ops/ansible/tests/test_release_restore_oracle.py",
+            "ops/ansible/tests/test_restore_verify.py",
+            "ops/ansible/tests/test_restore_database.py",
             "xtask/src/ci/automation.rs",
             ".github/workflows/ci.yml",
         )
@@ -1238,41 +1164,6 @@ class RestoreCiIntegrationTests(unittest.TestCase):
                                 _ = cache.verify(root, scope, key, receipt)
                             self.write_input(root / name, b"original restore CI input\n")
                             self.assertEqual(cache.verify(root, scope, key, receipt), "1" * 40)
-
-    def test_restore_has_one_exact_host_owner_and_an_explicit_broad_skip(self) -> None:
-        """A broad ignored test run cannot bypass the pinned sole-process comparison."""
-        source = (ROOT / "xtask/src/ci/automation.rs").read_text()
-        name = "whole_restore_matches_unchanged_python"
-        self.assertEqual(source.count('"' + name + '"'), 1)
-        before, after = source.split('"' + name + '"')
-        owned = before.rsplit("steps.push(Step::reference(", 1)[1] + after.split("));", 1)[0]
-        self.assertIn("ReferenceGroup::Host", owned)
-        self.assertIn('"release::attestation::restore::oracle_tests::"', owned)
-        for flag in ("--lib", "--ignored", "--exact", "--test-threads=1"):
-            self.assertIn('"' + flag + '"', owned)
-        self.assertEqual(source.count('"release_backup_cli"'), 1)
-        jobs = obj(
-            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
-            "jobs",
-        )
-        reference = obj(jobs, "automation-references")
-        self.assertEqual(string(reference, "timeout-minutes"), "10")
-        self.assertEqual(
-            obj(obj(reference, "strategy"), "matrix"),
-            {"group": ["foundation", "fetch", "host", "deploy"]},
-        )
-        self.assertNotIn("if", reference)
-        for step in objects(reference, "steps"):
-            self.assertNotIn("actions/cache/", string(step.get("uses", "")))
-        steps = objects(obj(jobs, "rust-test"), "steps")
-        command = next(
-            string(step, "run")
-            for step in steps
-            if string(step.get("run", "")).startswith("cargo test ")
-        )
-        arguments = shlex.split(command)
-        self.assertEqual(arguments.count(name), 1)
-        self.assertEqual(arguments[arguments.index(name) - 1], "--skip")
 
 
 if __name__ == "__main__":

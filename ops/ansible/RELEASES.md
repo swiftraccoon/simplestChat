@@ -233,8 +233,8 @@ stdout can also precede a runtime, mask or signal-unregistration failure. Requir
 the actual CLI exit zero as well as the complete successful summary; earlier
 positive output cannot replace that result.
 
-The frozen Python frontend retains its reference and explicit force app-only
-roles. The Rust `release deploy` operation does not accept force, maintenance or
+The frozen Python frontend retains its explicit force app-only role. The Rust
+`release deploy` operation does not accept force, maintenance or
 chat-posting options; those operations keep their separate entry points.
 Source, parser and inert process checks do not themselves establish a new
 authenticated production run. The preceding frontend at `66219eaa` was qualified
@@ -246,8 +246,8 @@ branch requires its own current-head authentication and actual caller evidence.
 This is a breaking routine caller change. `release.yml` still stages by default,
 but explicit deployment now requires both signed application and Ops coordinates.
 The frozen `build/deploy.py` / `build/release_deploy.py` ordinary signed route
-cannot supply them and is no longer a supported routine entry point. Keep it as
-the unchanged reference. The Rust frontend above supplies the complete current
+cannot supply them and is no longer a supported routine entry point. The Rust
+frontend above supplies the complete current
 selection and caller operation; the direct interface below selects all inputs
 explicitly and remains available for staging and reviewed operator use.
 The [explicit force app-only route](#explicit-force-deployment) retains its
@@ -314,7 +314,7 @@ stage-only and requires no signed Ops selectors. Controller paths are required
 when opting into native verification, even for stage-only use.
 
 `scpub_release_native_verification` accepts only a JSON boolean. Omission means
-`false` and retains the Python verification reference; the automatic Rust
+`false` and retains the Python verification route; the automatic Rust
 frontend always supplies `true`. Explicit null, strings and numeric coercion
 refuse before verification or remote work. Native mode requires absolute trusted
 `scpub_ops_xtask` and `scpub_ops_gh_executable` paths. The declared and canonical
@@ -339,7 +339,7 @@ with the selected revision, an absolute directory string and two lowercase
 authority. The checked native result is normalized into the existing
 `scpub_validated_release` variable after the Python branch skips, so a skipped
 result cannot overwrite verified output. A native failure never triggers the
-reference branch. Omitted/false native mode keeps the original Python task and
+Python branch. Omitted/false native mode keeps the original Python task and
 downstream result contract without decoding an absent native result.
 
 For a separately retained input, add the optional
@@ -632,7 +632,7 @@ Use the direct playbooks below. [Routine signed app-only deployment](#routine-up
 also uses direct typed Ansible; explicit force app-only releases keep their
 existing entry point. This maintenance path requires a
 signed Ops artifact and has no unsigned force bootstrap fallback. Existing
-Python remains in application staging, Ansible and retained reference helpers.
+Python remains in application staging, Ansible and the retained helpers.
 
 ### Prepare the controller before credentials
 

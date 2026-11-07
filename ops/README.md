@@ -4,10 +4,11 @@
 Docker/OCI image archives, and inspects local executable identities. Its production
 release builder can invoke the selected local Git and Docker tools to build or
 export an unsigned image. Local unsigned artifact preparation can write a new
-private directory, as described below. Python remains the reference implementation
-and retains application staging, explicit force app-only release and other keeper
-roles. Signed routine deployment and prepared-host maintenance have the explicit
-native callers described below.
+private directory, as described below. Python retains application staging,
+explicit force app-only release and other keeper roles; where this guide compares
+a native command with "the reference", it means the corresponding Python
+implementation. Signed routine deployment and prepared-host maintenance have the
+explicit native callers described below.
 A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
@@ -163,13 +164,13 @@ beyond `u64` or finite `f64` range. Float spelling is retained when conversion i
 finite; underflow to zero is allowed, while overflow, NaN and Infinity are refused.
 Booleans and null retain their own types.
 
-This adapter rejects raw NUL bytes and a leading UTF-8 BOM. The Python reference
+This adapter rejects raw NUL bytes and a leading UTF-8 BOM. The Python builder
 receives already decoded strings from strict subprocess UTF-8 or `read_text`;
 `json.loads(str)` does not perform the generic byte decoder's UTF-16/32 or BOM
 autodetection. Escaped `\u0000` inside a JSON string remains valid. The Rust metadata
 profile is an explicit accepted-domain boundary: deeper ignored objects accepted
-by Python can be refused here. The unchanged Python builder remains the reference;
-these limits are not a claim of full Python metadata parity.
+by Python can be refused here. These limits are not a claim of full Python
+metadata parity.
 
 Both modes stream `docker image save --platform linux/amd64 TAG` stdout into
 an original writer for the admitted `image.tar`. Docker receives no output path:
@@ -282,16 +283,15 @@ evidence; an offline oracle or successful compilation cannot establish that fit.
 Neither caller obtains a same-run signed Ops artifact: that would depend on the
 very CI completion that production export helps establish.
 
-The unchanged `build/build-release.py` and `build/release_build.py` remain runnable
-references. Installed Python operations and other users of `release_build.Runner`
-keep their existing roles. The [testing guide](../docs/testing.md#production-release-builder)
-distinguishes whole-reference comparison, actual inert process tests and hosted
-Docker/signing evidence.
+The unchanged `build/build-release.py` and `build/release_build.py` remain runnable.
+Installed Python operations and other users of `release_build.Runner` keep their
+existing roles. The [testing guide](../docs/testing.md#production-release-builder)
+distinguishes actual inert process tests and hosted Docker/signing evidence.
 
 ## Read-only release preflight
 
 The implemented command is available for eventual independently verified Ops
-distribution; Ansible still supplies and runs the unchanged Python reference.
+distribution; Ansible still supplies and runs the unchanged Python helper.
 Do not install or substitute an unverified development binary on a release host.
 The native check requires effective UID 0, kernel Linux/x86_64 and Debian major
 13. It starts no process and does not import or execute an installed helper.
@@ -1841,7 +1841,7 @@ adapters, with no new public library compatibility promise or package metadata.
 
 The [capacity guide](ansible/CAPACITY.md#rust-controller-and-authenticated-host-operation)
 documents `xtask vps-capacity`, its mandatory CI artifact selectors, the fixed
-Debian host and the retained Python reference. The public Ops entry points serve
+Debian host and the retained Python controller. The public Ops entry points serve
 one framed request or one canonical systemd worker; decoded protocol records
 alone grant no execution authority. No module import starts a workload.
 
@@ -1880,7 +1880,7 @@ Unrelated guideline rows and the planned retrospective review remain pending.
 server release and successful scanner evidence, creates four metadata copies,
 and writes the unsigned `release-predicate.json`. It performs no signature
 verification, signing, Git, Docker, network, installation or deployment action.
-The unchanged `build/release_attestation.py prepare` remains the reference.
+The unchanged `build/release_attestation.py prepare` remains available.
 
 ```sh
 target/release/simplestchat-ops release attestation prepare \
@@ -1983,8 +1983,8 @@ Same-UID writable-filesystem/check-read races remain outside that claim.
 `simplestchat-ops release attestation verify` verifies an already downloaded
 candidate with four fresh maintained `gh attestation verify` invocations. It
 performs no API selection, download, extraction, signing, SSH, engine or host
-operation. The original Python `verify_directory` remains available as a frozen
-reference. Routine deployment uses this verifier through the complete fresh
+operation. The original Python `verify_directory` remains available. Routine
+deployment uses this verifier through the complete fresh
 verification owner described below, which acquires current API metadata before
 cached verification. No saved selection or receipt replaces that observation.
 
@@ -2145,7 +2145,7 @@ as evidence of a fresh selection.
 
 The routine Ansible caller opts into native verification with the strict boolean
 `scpub_release_native_verification`. Omission means false and retains the Python
-reference route; the Rust deployment frontend supplies true. Native mode requires
+verification route; the Rust deployment frontend supplies true. Native mode requires
 trusted absolute controller/GitHub CLI paths and uses 600 seconds including a
 60-second final reserve, inside the existing 660-second Ansible guard. A distinct
 native result is normalized into the existing downstream verification variable
@@ -2283,7 +2283,7 @@ establish installed-binary or host readiness.
 `simplestchat-ops release fetch` implements the complete local transaction in
 `build/release_fetch_controller.py`: fresh explicit API selection, local signed
 bundle verification, then the prepared Python receiver's SSH protocol. The
-Python reference, receiver and deployment/Ansible callers remain operational.
+Python controller, receiver and deployment/Ansible callers remain operational.
 This standalone route does not install a target executable, change bootstrap,
 retry an uncertain fetch or stage/deploy an image.
 
@@ -2582,16 +2582,14 @@ Ops delivery follows signed application staging, before the installed canonical
 `release deploy`. The routine caller defaults to quiet observation 600 seconds,
 configurable within `0..600`; native timeout 1800/finalization 60 and systemd
 runtime 1800/stop 240 remain unchanged. The native CLI's own quiet default remains
-zero. The frozen Python frontend retains its reference and explicit force
-app-only roles; its ordinary signed route cannot supply the current Ops inputs,
-and there is no fallback to it from the Rust frontend.
+zero. The frozen Python frontend retains its explicit force app-only role; its
+ordinary signed route cannot supply the current Ops inputs, and there is no
+fallback to it from the Rust frontend.
 
-Source/oracle checks alone do not prove Docker/DB/Caddy/TLS or signed-musl host
-execution. The complete 97-case comparison against unchanged Python passed
-locally in 365.12 test seconds, using real private
-files, locks and owned inert children with inert service replies. The corrected
-ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tests;
-these are historical local counts. The later signed fixture at
+Source checks alone do not prove Docker/DB/Caddy/TLS or signed-musl host
+execution. The corrected ordinary Ops suite passed 484 tests. The new VM fixture
+has 23 passing inert tests; these are historical local counts. The later signed
+fixture at
 `ebf8564ba646be944e2ebbd8398a9447829d812d` passed both actual native deployment
 and the deliberately stopped candidate's successful rollback; that proof
 does not qualify a different caller or revision. The direct Ansible seam was
@@ -2611,7 +2609,7 @@ simplestchat-ops release backup verify --release-attempt release.NAME \
 This explicit example verifies one root-owned recorded release backup on the fixed
 prepared Linux host. N/M are required,0<M<N<=1800;1200/120 is not a default or
 measured capacity guarantee. Existing installed Python, nightly/offsite callers
-and authenticated Ops bootstrap remain unchanged. The standalone Python reference
+and authenticated Ops bootstrap remain unchanged. The standalone Python helper
 has no whole-operation clock; the native readiness profile is stricter.
 
 The operation admits the source outcome/manifest and its nonempty exact subset
@@ -2633,16 +2631,10 @@ optional three-case disposable KVM fixture
 (`.github/workflows/release-backup-runtime.yml`). Its source and inert checks
 pass; actual runtime proof and any operational caller switch remain pending.
 
-The CI comparison has one exact owner in the existing `host` reference group:
-`cargo run --locked -q -p xtask -- ci automation --references host`. This also runs
-receive and stage comparisons under the pinned controller environment. Its
-standalone fully qualified command and scope are in the
+The native test commands and scope are in the
 [testing guide](../docs/testing.md#native-standalone-restore-verification).
-Ordinary Ops testing includes `release_backup_cli`; broad ignored-test execution
-skips the uniquely named restore oracle. The complete host reference group
-[passed at `1381912`](https://github.com/swiftraccoon/simplestChat/actions/runs/40219584194).
-That is hosted reference execution; actual database validation and authenticated
-caller cutover remain separate.
+Ordinary Ops testing includes `release_backup_cli`; actual database validation
+and authenticated caller cutover remain separate.
 
 ## Explicit prepared-host maintenance
 
@@ -2696,8 +2688,8 @@ signed application staging and a caller-trusted controller build before
 credentials. The [operator sequence](ansible/RELEASES.md#prepare-the-controller-before-credentials)
 specifies the breaking typed-input migration; the frozen deployment wrapper
 cannot supply these Ops inputs. Python staging, explicit force app-only deployment
-and retained reference routes keep their existing roles; signed routine
-deployment uses the separate direct caller described above.
+and retained Python routes keep their existing roles; signed routine deployment
+uses the separate direct caller described above.
 
 `distribution install` retains its
 schema 1 first-install/exact-repeat contract. Explicit `distribution upgrade`

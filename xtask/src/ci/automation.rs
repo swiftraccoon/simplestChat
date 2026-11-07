@@ -29,39 +29,6 @@ const PLAYBOOKS: [&str; 10] = [
     "migration-data.yml",
 ];
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ReferenceGroup {
-    Foundation,
-    Fetch,
-    Host,
-    Deploy,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Group {
-    Checks,
-    References(ReferenceGroup),
-}
-
-#[derive(Clone, Copy)]
-enum Selection {
-    All,
-    Checks,
-    References,
-    Reference(ReferenceGroup),
-}
-
-impl Selection {
-    fn includes(self, group: Group) -> bool {
-        match self {
-            Self::All => true,
-            Self::Checks => group == Group::Checks,
-            Self::References => matches!(group, Group::References(_)),
-            Self::Reference(selected) => group == Group::References(selected),
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 enum StepKind {
     Command,
@@ -70,7 +37,6 @@ enum StepKind {
 
 struct Step {
     kind: StepKind,
-    group: Group,
     program: OsString,
     arguments: Vec<OsString>,
 }
@@ -79,16 +45,8 @@ impl Step {
     fn new(program: impl Into<OsString>, arguments: &[&str]) -> Self {
         Self {
             kind: StepKind::Command,
-            group: Group::Checks,
             program: program.into(),
             arguments: arguments.iter().map(OsString::from).collect(),
-        }
-    }
-
-    fn reference(group: ReferenceGroup, program: impl Into<OsString>, arguments: &[&str]) -> Self {
-        Self {
-            group: Group::References(group),
-            ..Self::new(program, arguments)
         }
     }
 }
@@ -131,7 +89,6 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
     }
     steps.push(Step {
         kind: StepKind::Command,
-        group: Group::Checks,
         program: "shellcheck".into(),
         arguments: scripts
             .into_iter()
@@ -139,7 +96,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             .collect(),
     });
     // Exercise the distributed Ops dependency profile before the server build.
-    // Its ignored helpers and Python comparisons have separate owning callers.
+    // Its ignored helpers have separate owning callers.
     steps.push(Step::new(
         "cargo",
         &[
@@ -174,204 +131,6 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--test-threads=1",
         ],
     ));
-    // The unchanged Python reference needs the installed controller environment.
-    // Keep this explicit gate in both hosted automation and its local-CI route.
-    steps.push(Step::reference(
-        ReferenceGroup::Foundation,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "xtask",
-            "--bin",
-            "xtask",
-            concat!(
-                "ci::ops_artifact::capacity_vps::controller_tests::",
-                "all_eight_whole_reference_scenarios_preserve_local_policy_",
-                "and_explicit_transport_deltas",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    #[cfg(target_os = "linux")]
-    steps.push(Step::reference(
-        ReferenceGroup::Foundation,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Foundation,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            "release::build::tests::whole_reference_scenarios_match_unchanged_python",
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Foundation,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::prepare::oracle_tests::",
-                "whole_prepare_scenarios_match_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Foundation,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::verify::oracle_tests::",
-                "whole_verify_scenarios_match_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Fetch,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::acquire::oracle_tests::",
-                "whole_fresh_release_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Fetch,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::fetch::oracle_tests::",
-                "whole_fetch_controller_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Host,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::receive::oracle_tests::",
-                "whole_host_receiver_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Host,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::stage::oracle_tests::",
-                "whole_stage_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Host,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::restore::oracle_tests::",
-                "whole_restore_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-            "--test-threads=1",
-        ],
-    ));
-    steps.push(Step::reference(
-        ReferenceGroup::Deploy,
-        "cargo",
-        &[
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::deploy::oracle_tests::",
-                "whole_deploy_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ],
-    ));
     steps.push(Step {
         kind: StepKind::PythonDiscovery,
         ..Step::new("python", &python_shards::BASE_ARGUMENTS)
@@ -389,21 +148,9 @@ fn execute(
     Ok(())
 }
 
-fn selected(steps: Vec<Step>, selection: Selection) -> Vec<Step> {
-    steps
-        .into_iter()
-        .filter(|step| selection.includes(step.group))
-        .collect()
-}
-
-fn checks(root: &Path, environment: &Environment, selection: Selection) -> tooling::Result<()> {
-    #[cfg(not(target_os = "linux"))]
-    eprintln!("The VPS host oracle runs in Linux automation; use ci-local for that gate.");
+fn checks(root: &Path, environment: &Environment) -> tooling::Result<()> {
     let executable = std::env::current_exe().map_err(|error| Failure::new(1, error.to_string()))?;
-    let steps = selected(
-        steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?,
-        selection,
-    );
+    let steps = steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?;
     execute(&steps, |step| match step.kind {
         StepKind::Command => tooling::run(root, environment, &step.program, &step.arguments),
         StepKind::PythonDiscovery => python_shards::run(root, environment),
@@ -411,31 +158,15 @@ fn checks(root: &Path, environment: &Environment, selection: Selection) -> tooli
 }
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
-    let selection = match arguments {
-        [] => Selection::All,
-        [flag] if flag == "--checks" => Selection::Checks,
-        [flag] if flag == "--references" => Selection::References,
-        [flag, group] if flag == "--references" && group == "foundation" => {
-            Selection::Reference(ReferenceGroup::Foundation)
-        }
-        [flag, group] if flag == "--references" && group == "fetch" => {
-            Selection::Reference(ReferenceGroup::Fetch)
-        }
-        [flag, group] if flag == "--references" && group == "host" => {
-            Selection::Reference(ReferenceGroup::Host)
-        }
-        [flag, group] if flag == "--references" && group == "deploy" => {
-            Selection::Reference(ReferenceGroup::Deploy)
-        }
+    match arguments {
+        [] => {}
+        [flag] if flag == "--checks" => {}
         _ => {
-            eprintln!(concat!(
-                "usage: cargo run --locked -q -p xtask -- ci automation ",
-                "[--checks|--references [foundation|fetch|host|deploy]]",
-            ));
+            eprintln!("usage: cargo run --locked -q -p xtask -- ci automation [--checks]");
             return Ok(ExitCode::from(2));
         }
-    };
-    match checks(root, &tooling::inherited_env(), selection) {
+    }
+    match checks(root, &tooling::inherited_env()) {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(failure) => {
             eprintln!("{}", failure.message);

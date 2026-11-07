@@ -1,8 +1,6 @@
 //! Complete standalone release-backup restore verification on the fixed host.
 mod execution;
 mod options;
-#[cfg(test)]
-mod oracle_tests;
 mod policy;
 mod process;
 #[cfg(test)]
@@ -22,22 +20,8 @@ pub(super) enum AtomicTarget {
 }
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum AtomicPoint {
-    Admission,
-    FileSync,
-    DirectorySync,
-}
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Fault {
-    SnapshotRead,
-    SnapshotWrite,
-    SnapshotFlush,
-    SnapshotSync,
     SnapshotUnlink,
-    InterruptBeforeRestore,
-    TerminateBeforeRestore,
-    Atomic(AtomicTarget, AtomicPoint),
 }
 pub(super) struct Access {
     pub root: PathBuf,

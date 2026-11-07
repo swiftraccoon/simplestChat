@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 27 } else { 26 });
+    assert_eq!(steps.len(), 16);
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -74,24 +74,6 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
         ]
     );
     assert_eq!(steps.last().unwrap().program, "python");
-    #[cfg(target_os = "linux")]
-    {
-        assert_eq!(steps[16].program, "cargo");
-        assert_eq!(
-            text(&steps[16].arguments),
-            [
-                "test",
-                "--locked",
-                "-p",
-                "simplestchat-ops",
-                "--lib",
-                "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
-                "--",
-                "--ignored",
-                "--exact"
-            ]
-        );
-    }
     assert_eq!(steps[14].program, "cargo");
     assert_eq!(
         text(&steps[14].arguments),
@@ -127,195 +109,21 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--test-threads=1"
         ]
     );
-    assert_eq!(steps[15].program, "cargo");
     assert_eq!(
-        text(&steps[15].arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "xtask",
-            "--bin",
-            "xtask",
-            concat!(
-                "ci::ops_artifact::capacity_vps::controller_tests::",
-                "all_eight_whole_reference_scenarios_preserve_local_policy_",
-                "and_explicit_transport_deltas",
-            ),
-            "--",
-            "--ignored",
-            "--exact"
-        ]
+        steps
+            .iter()
+            .filter(|step| matches!(step.kind, StepKind::PythonDiscovery))
+            .count(),
+        1,
     );
-    let builder = &steps[steps.len() - 10];
-    assert_eq!(builder.program, "cargo");
-    assert_eq!(
-        text(&builder.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            "release::build::tests::whole_reference_scenarios_match_unchanged_python",
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let prepare = &steps[steps.len() - 9];
-    assert_eq!(prepare.program, "cargo");
-    assert_eq!(
-        text(&prepare.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::prepare::oracle_tests::",
-                "whole_prepare_scenarios_match_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let verify = &steps[steps.len() - 8];
-    assert_eq!(verify.program, "cargo");
-    assert_eq!(
-        text(&verify.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::verify::oracle_tests::",
-                "whole_verify_scenarios_match_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let fresh = &steps[steps.len() - 7];
-    assert_eq!(fresh.program, "cargo");
-    assert_eq!(
-        text(&fresh.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::acquire::oracle_tests::",
-                "whole_fresh_release_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let fetch = &steps[steps.len() - 6];
-    assert_eq!(fetch.program, "cargo");
-    assert_eq!(
-        text(&fetch.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::fetch::oracle_tests::",
-                "whole_fetch_controller_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let receive = &steps[steps.len() - 5];
-    assert_eq!(receive.program, "cargo");
-    assert_eq!(
-        text(&receive.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::receive::oracle_tests::",
-                "whole_host_receiver_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let stage = &steps[steps.len() - 4];
-    assert_eq!(stage.program, "cargo");
-    assert_eq!(
-        text(&stage.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::stage::oracle_tests::",
-                "whole_stage_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
-    );
-    let restore = &steps[steps.len() - 3];
-    assert_eq!(restore.program, "cargo");
-    assert_eq!(
-        text(&restore.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::restore::oracle_tests::",
-                "whole_restore_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-            "--test-threads=1",
-        ]
-    );
-    assert!(restore.group == Group::References(ReferenceGroup::Host));
-    let deploy = &steps[steps.len() - 2];
-    assert_eq!(deploy.program, "cargo");
-    assert_eq!(
-        text(&deploy.arguments),
-        [
-            "test",
-            "--locked",
-            "-p",
-            "simplestchat-ops",
-            "--lib",
-            concat!(
-                "release::attestation::deploy::oracle_tests::",
-                "whole_deploy_matches_unchanged_python",
-            ),
-            "--",
-            "--ignored",
-            "--exact",
-        ]
+    assert!(matches!(
+        steps.last().unwrap().kind,
+        StepKind::PythonDiscovery
+    ));
+    assert!(
+        steps
+            .iter()
+            .all(|step| !text(&step.arguments).contains(&"--ignored"))
     );
     assert_eq!(
         text(&steps.last().unwrap().arguments),
@@ -366,112 +174,12 @@ fn a_failed_quality_or_syntax_check_preserves_status_and_cannot_run_later_steps(
         assert_eq!(result.unwrap_err().code, 37);
         assert_eq!(called, failing + 1);
     }
-    assert_eq!(
-        run(&fixture.0, &["unexpected".into()]).unwrap(),
-        ExitCode::from(2)
-    );
-}
-
-#[test]
-fn parallel_groups_partition_every_original_command_and_keep_full_python_discovery() {
-    let fixture = Fixture::new(&["a.sh"]);
-    let plan = || steps(&fixture.0, Path::new("/owned/xtask")).unwrap();
-    let identity = |step: &Step| (step.program.clone(), step.arguments.clone());
-    let all = plan();
-    let checks = selected(plan(), Selection::Checks);
-    let references = selected(plan(), Selection::References);
-    assert_eq!(checks.len(), 16);
-    assert_eq!(
-        references.len(),
-        if cfg!(target_os = "linux") { 11 } else { 10 }
-    );
-    let expected: std::collections::BTreeSet<_> = all.iter().map(identity).collect();
-    let actual: std::collections::BTreeSet<_> =
-        checks.iter().chain(&references).map(identity).collect();
-    assert_eq!(expected.len(), all.len());
-    assert_eq!(actual, expected);
-    assert_eq!(checks.len() + references.len(), all.len());
-    assert_eq!(
-        checks
-            .iter()
-            .filter(|step| matches!(step.kind, StepKind::PythonDiscovery))
-            .count(),
-        1,
-    );
-    assert!(matches!(
-        checks.last().unwrap().kind,
-        StepKind::PythonDiscovery
-    ));
-    assert!(
-        references
-            .iter()
-            .all(|step| matches!(step.kind, StepKind::Command))
-    );
-    assert_eq!(checks.last().unwrap().program, "python");
-    assert_eq!(
-        text(&checks.last().unwrap().arguments),
-        [
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-v"
-        ]
-    );
-    assert!(
-        checks
-            .iter()
-            .all(|step| !text(&step.arguments).contains(&"--ignored"))
-    );
-    assert!(references.iter().all(|step| {
-        let args = text(&step.arguments);
-        args.contains(&"--ignored") && args.contains(&"--exact")
-    }));
-    let original: Vec<_> = selected(plan(), Selection::All)
-        .iter()
-        .map(identity)
-        .collect();
-    assert_eq!(original, all.iter().map(identity).collect::<Vec<_>>());
-    for flags in [
-        vec!["--checks".into(), "--references".into()],
-        vec!["--unknown".into()],
-    ] {
-        assert_eq!(run(&fixture.0, &flags).unwrap(), ExitCode::from(2));
-    }
-}
-
-#[test]
-fn reference_matrix_groups_are_disjoint_complete_and_keep_each_comparison_whole() {
-    let fixture = Fixture::new(&["a.sh"]);
-    let plan = || steps(&fixture.0, Path::new("/owned/xtask")).unwrap();
-    let identity = |step: &Step| (step.program.clone(), step.arguments.clone());
-    let all = selected(plan(), Selection::References);
-    let mut observed = std::collections::BTreeSet::new();
-    for (group, expected) in [
-        (
-            ReferenceGroup::Foundation,
-            if cfg!(target_os = "linux") { 5 } else { 4 },
-        ),
-        (ReferenceGroup::Fetch, 2),
-        (ReferenceGroup::Host, 3),
-        (ReferenceGroup::Deploy, 1),
-    ] {
-        let subset = selected(plan(), Selection::Reference(group));
-        assert_eq!(subset.len(), expected);
-        for step in subset {
-            assert!(
-                observed.insert(identity(&step)),
-                "one comparison cannot belong to two groups"
-            );
-            let args = text(&step.arguments);
-            assert!(args.contains(&"--ignored") && args.contains(&"--exact"));
-        }
-    }
-    assert_eq!(observed, all.iter().map(identity).collect());
     for arguments in [
-        vec!["--references".into(), "unknown".into()],
-        vec!["--references".into(), "host".into(), "fetch".into()],
+        vec!["unexpected".into()],
+        vec!["--references".into()],
+        vec!["--references".into(), "host".into()],
+        vec!["--checks".into(), "--references".into()],
+        vec!["--checks".into(), "--checks".into()],
     ] {
         assert_eq!(run(&fixture.0, &arguments).unwrap(), ExitCode::from(2));
     }

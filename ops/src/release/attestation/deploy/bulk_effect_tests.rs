@@ -231,10 +231,10 @@ fn failed_list_retires_original_input_then_finishes_its_relocated_log_owners() {
 fn validated_dump_digest_precedes_receipt_and_survives_failure_with_all_owners_closed() {
     use super::super::files::Fault;
     for (fault, renamed, digest_known) in [
-        (Fault::BackupFileSync, false, false),
-        (Fault::BackupRename, false, false),
-        (Fault::BackupDirectorySync, true, false),
-        (Fault::BackupReceiptWrite, true, true),
+        (Fault::FileSync, false, false),
+        (Fault::Rename, false, false),
+        (Fault::DirectorySync, true, false),
+        (Fault::ReceiptWrite, true, true),
     ] {
         for pair_close in [false, true] {
             let data = effect_tests::Data::new();

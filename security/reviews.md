@@ -743,16 +743,9 @@ no independent downloaded-installer checksum is claimed. This exact
 informational location review expires on 2026-11-29 and establishes no actual
 Stage VM execution.
 
-The staging feature partitions automation into checks and complete reference
-comparisons, each on a free runner with the existing ten-minute ceiling.
-`ci.yml#jobs/automation-references/steps/2/uses` reuses only the reviewed immutable
-`dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d` action
-(source SHA-256 `88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`)
-and explicit Rust 1.99.0. This exact informational portability review expires
-2026-11-29. Checkout disables persisted credentials; no API token is supplied.
-The official HTTPS bootstrap boundary is unchanged, without an independent
-installer checksum claim. Reference comparisons use no result cache, and the
-required-job policy now demands all eleven correctness/security jobs before
-signing. Existing automation receipts prove the separate checks job only;
-changed workflow and xtask inputs invalidate old cache keys. This review waives
-no source, reference, dependency or runtime check.
+The `automation-references` job and its
+`ci.yml#jobs/automation-references/steps/2/uses` toolchain step were removed on
+2026-11-07 together with the Python reference comparisons, so that record is
+retired from the active ledger. The other `dtolnay/rust-toolchain` reviews in
+this section are unchanged; the required-job policy now demands ten
+correctness/security jobs before signing.

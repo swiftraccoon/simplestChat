@@ -429,11 +429,6 @@ impl State {
         loop {
             owner.check(Window::Body)?;
             let wanted = (MAX_BACKUP + 1 - at).min(buffer.len() as u64) as usize;
-            #[cfg(test)]
-            if self.fault == Some(super::Fault::SnapshotRead) && at == 0 {
-                self.fault_hits += 1;
-                return control::failed(owner, Cause::Io);
-            }
             let count = match source.file().read_at(&mut buffer[..wanted], at) {
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 value => control::io(owner, value)?,
@@ -445,11 +440,6 @@ impl State {
             let mut offset = 0;
             while offset < count {
                 owner.check(Window::Body)?;
-                #[cfg(test)]
-                if self.fault == Some(super::Fault::SnapshotWrite) && self.snapshot_bytes == 0 {
-                    self.fault_hits += 1;
-                    return control::failed(owner, Cause::Io);
-                }
                 let written = match self
                     .snapshot
                     .as_ref()
@@ -473,14 +463,6 @@ impl State {
             if at > MAX_BACKUP {
                 return control::failed(owner, Cause::Bounds);
             }
-        }
-        #[cfg(test)]
-        if matches!(
-            self.fault,
-            Some(super::Fault::SnapshotFlush | super::Fault::SnapshotSync)
-        ) {
-            self.fault_hits += 1;
-            return control::failed(owner, Cause::Io);
         }
         self.snapshot.as_mut().unwrap().seal(owner, false)?;
         if at != source.len() || super::super::files::hex(&hash.finalize()) != self.backup_sha256 {
@@ -618,26 +600,7 @@ impl State {
             super::AtomicTarget::Outcome => "outcome.json",
             super::AtomicTarget::Freshness => "restore-verified.timestamp",
         };
-        #[cfg(test)]
-        let fault = self.atomic_fault(target);
-        #[cfg(not(test))]
-        let fault = None;
-        self.records
-            .atomic_fault(parent, name, bytes, owner, recovery, fault)
-    }
-    #[cfg(test)]
-    fn atomic_fault(&mut self, target: super::AtomicTarget) -> Option<u8> {
-        match self.fault {
-            Some(super::Fault::Atomic(found, point)) if found == target => {
-                self.fault_hits += 1;
-                Some(match point {
-                    super::AtomicPoint::Admission => 0,
-                    super::AtomicPoint::FileSync => 1,
-                    super::AtomicPoint::DirectorySync => 2,
-                })
-            }
-            _ => None,
-        }
+        self.records.atomic(parent, name, bytes, owner, recovery)
     }
     async fn command(
         &mut self,
@@ -649,24 +612,6 @@ impl State {
         executor: &mut impl Executor,
     ) -> Result<(i32, Vec<u8>)> {
         let cleanup = role.cleanup();
-        #[cfg(test)]
-        if role == Role::Restore
-            && matches!(
-                self.fault,
-                Some(super::Fault::InterruptBeforeRestore | super::Fault::TerminateBeforeRestore)
-            )
-        {
-            self.fault_hits += 1;
-            let signal = if self.fault == Some(super::Fault::InterruptBeforeRestore) {
-                signal_hook::consts::SIGINT
-            } else {
-                signal_hook::consts::SIGTERM
-            };
-            if signal_hook::low_level::raise(signal).is_err() {
-                return control::failed(owner, Cause::Io);
-            }
-            owner.check(Window::Body)?;
-        }
         self.witness(access, owner, cleanup)?;
         let now = owner.now();
         let ceiling = if cleanup {

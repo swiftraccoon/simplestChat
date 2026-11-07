@@ -26,11 +26,6 @@ pub(in crate::release) enum Window {
     Body,
     Final,
 }
-#[cfg(test)]
-pub(super) enum LateClock {
-    Failure,
-    Date(chrono::NaiveDate),
-}
 pub(in crate::release) struct Owner {
     start: Instant,
     end: Instant,
@@ -49,8 +44,6 @@ pub(in crate::release) struct Owner {
     pub today: Option<chrono::NaiveDate>,
     #[cfg(test)]
     pub utc_error: bool,
-    #[cfg(test)]
-    pub(super) late_clock: Option<LateClock>,
 }
 impl Owner {
     pub fn new(start: Instant, whole: Duration, reserve: Duration) -> Result<Self> {
@@ -77,8 +70,6 @@ impl Owner {
             today: None,
             #[cfg(test)]
             utc_error: false,
-            #[cfg(test)]
-            late_clock: None,
         })
     }
     /// Consume the original owner only after runtime/output/umask restoration.
@@ -355,14 +346,6 @@ impl Owner {
     #[cfg(test)]
     pub fn expire_body(&mut self) {
         self.elapsed = Some(self.body.duration_since(self.start));
-    }
-    #[cfg(test)]
-    pub fn after_verifiers(&mut self) {
-        match self.late_clock.take() {
-            Some(LateClock::Failure) => self.utc_error = true,
-            Some(LateClock::Date(date)) => self.today = Some(date),
-            None => {}
-        }
     }
     pub fn utc_date(&mut self) -> Result<chrono::NaiveDate> {
         self.check(Window::Body)?;

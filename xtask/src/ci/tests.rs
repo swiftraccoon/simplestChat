@@ -827,7 +827,7 @@ fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
         "ops/src/release/manifest.rs",
         "ops/src/release/manifest_tests.rs",
         "ops/src/release/attestation/restore.rs",
-        "ops/src/release/attestation/restore/oracle_tests.rs",
+        "ops/src/release/attestation/restore/tests.rs",
         "ops/tests/release_backup_cli.rs",
     ];
     for path in inputs {
@@ -894,11 +894,11 @@ fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity
 }
 
 #[test]
-fn restore_reference_and_registration_inputs_invalidate_existing_success_receipts() {
+fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
     let fixture = Fixture::new();
     let paths = [
-        "ops/ansible/tests/release_restore_oracle.py",
-        "ops/ansible/tests/test_release_restore_oracle.py",
+        "ops/ansible/tests/test_restore_verify.py",
+        "ops/ansible/tests/test_restore_database.py",
         "xtask/src/ci/automation.rs",
         ".github/workflows/ci.yml",
     ];

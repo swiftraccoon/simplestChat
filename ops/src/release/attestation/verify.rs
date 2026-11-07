@@ -7,9 +7,6 @@ use super::verification_fixture as fixture;
 pub(super) mod licenses;
 #[path = "verify/options.rs"]
 pub(super) mod options;
-#[cfg(test)]
-#[path = "verify/oracle_tests.rs"]
-mod oracle_tests;
 #[path = "verify/policy.rs"]
 mod policy;
 #[path = "verify/process.rs"]
@@ -225,8 +222,6 @@ impl State {
             policy::statement(&output, &options.metadata, &claim, owner)?;
             verification.insert(name.to_owned(), files::hex(&Sha256::digest(&output)));
         }
-        #[cfg(test)]
-        owner.after_verifiers();
         let actual = self.file("release-attestation.jsonl").hash(owner)?;
         policy::require(owner, actual == bundle_digest)?;
         let envelope = policy::envelope(

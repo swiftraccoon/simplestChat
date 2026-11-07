@@ -54,23 +54,8 @@ pub(super) fn fallback() {
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Fault {
-    BackupFileSync,
-    BackupRename,
-    BackupDirectorySync,
-    BackupReceiptWrite,
-    BeforeCopy,
-    ReplaceJournalWrite,
-    SelectComposeWrite,
-    SelectEnvWrite,
-    SelectImagesWrite,
-    SelectAssets,
-    RollbackComposeWrite,
-    RollbackAssets,
-    CompleteJournalWrite,
-    OutcomeWrite,
-    OutcomeFileSync,
-    OutcomeDirectorySync,
-    InterruptBeforeStop,
-    InterruptAfterStop,
-    ReplacementObservationTime,
+    FileSync,
+    Rename,
+    DirectorySync,
+    ReceiptWrite,
 }

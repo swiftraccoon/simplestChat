@@ -2,8 +2,6 @@
 //! change an installed caller. Daemon observations are separate from archive facts.
 mod files;
 mod options;
-#[cfg(test)]
-mod oracle_tests;
 pub(super) mod process;
 mod reentry;
 #[cfg(test)]

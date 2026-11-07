@@ -378,10 +378,10 @@ impl State {
             return Err(Cause::Command);
         }
         #[cfg(test)]
-        self.fault(super::super::files::Fault::BackupFileSync, owner)?;
+        self.fault(super::super::files::Fault::FileSync, owner)?;
         self.records.files[at].seal(owner, false)?;
         #[cfg(test)]
-        self.fault(super::super::files::Fault::BackupRename, owner)?;
+        self.fault(super::super::files::Fault::Rename, owner)?;
         if attempt.exists("database-before.dump".as_ref(), owner)? {
             return self.refused(owner, "Backup already exists");
         }
@@ -397,7 +397,7 @@ impl State {
         })?;
         self.records.files[at].renamed("database-before.dump", owner, false)?;
         #[cfg(test)]
-        self.fault(super::super::files::Fault::BackupDirectorySync, owner)?;
+        self.fault(super::super::files::Fault::DirectorySync, owner)?;
         attempt.sync(owner)?;
         let sha = self.records.files[at]
             .sha256()
@@ -410,7 +410,7 @@ impl State {
             "bytes":self.records.files[at].len(),"sha256":sha,"revision":revision,
             "completedAt":chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S+00:00").to_string()});
         #[cfg(test)]
-        self.fault(super::super::files::Fault::BackupReceiptWrite, owner)?;
+        self.fault(super::super::files::Fault::ReceiptWrite, owner)?;
         self.atomic(
             &attempt,
             "database-before.receipt.json",

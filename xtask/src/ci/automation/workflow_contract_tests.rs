@@ -72,24 +72,10 @@ fn restart(steps: &[Value]) -> Check<()> {
     )?;
     require(upload["with"]["retention-days"] == 7, "upload-retention")
 }
-const SKIPS: [&str; 14] = [
+const SKIPS: [&str; 3] = [
     "capacity_vps::process::tests::inert_child_signal_mask",
-    "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
-    concat!(
-        "ci::ops_artifact::capacity_vps::controller_tests::",
-        "all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas"
-    ),
-    "release::build::tests::whole_reference_scenarios_match_unchanged_python",
     "release::build::process::tests::signal_worker",
-    "release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python",
     "release::attestation::prepare::signal_tests::retained_hash_signal_child",
-    "whole_verify_scenarios_match_unchanged_python",
-    "whole_fresh_release_matches_unchanged_python",
-    "whole_fetch_controller_matches_unchanged_python",
-    "whole_host_receiver_matches_unchanged_python",
-    "whole_stage_matches_unchanged_python",
-    "whole_deploy_matches_unchanged_python",
-    "whole_restore_matches_unchanged_python",
 ];
 fn complete_graph(jobs: &BTreeMap<String, Value>) -> Check<()> {
     for (name, role) in [
@@ -151,7 +137,7 @@ fn complete_graph(jobs: &BTreeMap<String, Value>) -> Check<()> {
                 .split_whitespace()
                 .collect::<Vec<_>>()
                 == expected,
-            "every-test-and-reference-skip",
+            "every-test-and-child-fixture-skip",
         )?;
         require(
             before < at && build["if"] == execute["if"] && build["if"] == GUARD,
@@ -325,7 +311,7 @@ fn graph_contract_refuses_old_browser_role_incomplete_tests_and_guard_changes() 
     let run = jobs["rust-test"]["steps"][at]["run"]
         .as_str()
         .unwrap()
-        .replace("--skip whole_restore_matches_unchanged_python", "");
+        .replace("--skip release::build::process::tests::signal_worker", "");
     jobs.get_mut("rust-test").unwrap()["steps"][at]["run"] = run.into();
     assert!(complete_graph(&jobs).is_err());
 }

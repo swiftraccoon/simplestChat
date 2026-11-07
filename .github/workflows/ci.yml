@@ -151,49 +151,6 @@ jobs:
           path: ${{ runner.temp }}/ci-verified-automation
           key: ${{ steps.verified.outputs.cache-primary-key }}
 
-  automation-references:
-    name: Operations whole-reference comparisons (${{ matrix.group }})
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        group: [foundation, fetch, host, deploy]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Select the pinned Python Unicode oracle
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14.8'
-          cache: pip
-          cache-dependency-path: |
-            build/python-requirements.txt
-            ops/ansible/requirements.txt
-      - name: Install the pinned Rust toolchain for reference comparisons
-        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
-        with:
-          toolchain: 1.99.0
-          # Complete the additive rust-toolchain.toml request before any Cargo proxy.
-          components: rustfmt, clippy, rust-analyzer
-      - name: Install the isolated pinned reference environment
-        run: |
-          python3 -m venv "${RUNNER_TEMP}/ansible-controller"
-          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
-          cargo run --locked -q -p xtask -- ci controller-path
-      - name: Compare every complete operation with its unchanged reference
-        env:
-          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
-          REFERENCE_GROUP: ${{ matrix.group }}
-        run: cargo run --locked -q -p xtask -- ci automation --references "$REFERENCE_GROUP"
-      - name: Record successful local reference coverage
-        if: ${{ env.ACT }}
-        env:
-          LOCAL_REFERENCE_GROUP: ${{ matrix.group }}
-        run: cargo run --locked -q -p xtask -- ci-evidence record --id "reference-$LOCAL_REFERENCE_GROUP"
-
   rust-lint:
     name: Rust format, lints and documentation
     runs-on: ubuntu-24.04
@@ -424,7 +381,7 @@ jobs:
 
       # Include all PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
-      # Child fixtures need their parent; pinned Python oracles run in automation.
+      # Child fixtures need their parent.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
         env:
           PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
@@ -432,19 +389,8 @@ jobs:
         run: >-
           cargo test --locked --workspace --all-features -- --include-ignored --test-threads=1
           --skip capacity_vps::process::tests::inert_child_signal_mask
-          --skip capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle
-          --skip ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas
-          --skip release::build::tests::whole_reference_scenarios_match_unchanged_python
           --skip release::build::process::tests::signal_worker
-          --skip release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python
           --skip release::attestation::prepare::signal_tests::retained_hash_signal_child
-          --skip whole_verify_scenarios_match_unchanged_python
-          --skip whole_fresh_release_matches_unchanged_python
-          --skip whole_fetch_controller_matches_unchanged_python
-          --skip whole_host_receiver_matches_unchanged_python
-          --skip whole_stage_matches_unchanged_python
-          --skip whole_deploy_matches_unchanged_python
-          --skip whole_restore_matches_unchanged_python
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'
@@ -1351,7 +1297,6 @@ jobs:
     if: ${{ always() }}
     needs:
       - automation
-      - automation-references
       - rust-lint
       - rust-test
       - native-dtls

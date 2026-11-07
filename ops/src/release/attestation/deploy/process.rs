@@ -2,8 +2,6 @@
 
 use super::super::control::{Cause, Owner, Window};
 pub(super) use super::super::stage::process::Invocation;
-#[cfg(test)]
-pub(super) use super::super::stage::process::run;
 use super::super::stage::process::{Io, Observation, Sink, run_io};
 use super::{CommandOutput, Executor, Role};
 use sha2::{Digest, Sha256};

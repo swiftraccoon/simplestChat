@@ -23,7 +23,6 @@ execFileSync("cargo", ["build", "--locked", "-q", "-p", "xtask"], {
 const binary = path.join(repository, "target/debug/xtask");
 const gates = [
   "automation",
-  "automation-references",
   "rust-lint",
   "rust-test",
   "native-dtls",
@@ -35,10 +34,6 @@ const gates = [
   "codeql",
 ];
 const checks = [
-  "reference-foundation",
-  "reference-fetch",
-  "reference-host",
-  "reference-deploy",
   "browser-accounts",
   "browser-media",
   "browser-stress",
@@ -129,13 +124,8 @@ test("local evidence CLI records all real matrices and completes exactly once", 
   assert.equal(f.run(["complete"]).status, 1);
 });
 
-test("local evidence rejects each missing whole-reference group despite successful jobs", (t) => {
-  for (const missing of [
-    "reference-foundation",
-    "reference-fetch",
-    "reference-host",
-    "reference-deploy",
-  ]) {
+test("local evidence rejects each missing matrix receipt despite successful jobs", (t) => {
+  for (const missing of ["browser-media", "codeql-rust", "security-fast"]) {
     const f = fixture(t);
     for (const check of checks.filter((check) => check !== missing)) {
       const result = f.run(["record", "--id", check]);

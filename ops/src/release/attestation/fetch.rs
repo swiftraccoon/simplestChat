@@ -2,8 +2,6 @@
 //! A private live verification result, never a saved JSON receipt, supplies the envelope.
 
 mod options;
-#[cfg(test)]
-mod oracle_tests;
 mod process;
 #[cfg(test)]
 mod tests;

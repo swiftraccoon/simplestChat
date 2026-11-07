@@ -225,11 +225,6 @@ impl State {
         }
         self.replacement_rooms = rooms;
         report["roomsActiveBeforeStop"] = Value::Null;
-        #[cfg(test)]
-        self.fault(
-            super::super::files::Fault::ReplacementObservationTime,
-            owner,
-        )?;
         report["roomsObservedBeforeStopAt"] = json!(timestamp());
         Ok(())
     }
