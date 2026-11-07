@@ -39,7 +39,7 @@ mod media;
 #[path = "connection_moderation.rs"]
 mod moderation;
 #[path = "connection_token_bucket.rs"]
-mod token_bucket;
+pub(crate) mod token_bucket;
 use super::telemetry::WarningFamily;
 use bandwidth::BandwidthTierUpdate;
 use gates::*;

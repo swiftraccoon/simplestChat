@@ -2,6 +2,7 @@
 //! participants.
 
 use super::super::*;
+use crate::limits::Budget;
 
 impl RoomManager {
     /// Admit a participant from the lobby into the room.

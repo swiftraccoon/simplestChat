@@ -113,6 +113,9 @@ src/**
 !src/auth/
 src/auth/**
 !src/auth/*.rs
+!src/limits/
+src/limits/**
+!src/limits/*.rs
 !src/media/
 src/media/**
 !src/media/*.rs

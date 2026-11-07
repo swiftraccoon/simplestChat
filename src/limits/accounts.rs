@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg(test)]
-#[path = "limiter_property_tests.rs"]
+#[path = "accounts_property_tests.rs"]
 mod property_tests;
 
 const FREE_PAIR_FAILURES: u32 = 3;

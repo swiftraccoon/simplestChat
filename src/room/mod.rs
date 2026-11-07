@@ -15,7 +15,7 @@ pub(crate) mod roles;
 pub(crate) mod settings;
 pub use settings::{RoomSettings, RoomSettingsView, SettingsPatch};
 pub(crate) mod social;
-mod window;
+pub(crate) mod window;
 
 #[cfg(test)]
 mod broadcaster_ceiling_tests;

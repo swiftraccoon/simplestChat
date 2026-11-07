@@ -1,5 +1,6 @@
 use super::*;
 use crate::ids::fixtures::{pid, prid, rid};
+use crate::limits::Budget;
 
 #[tokio::test]
 async fn live_counts_skip_empty_rooms_and_keep_locked_rooms_unknown() {
@@ -1210,7 +1211,8 @@ fn no_op_media_mutation_refund_preserves_aggregate_capacity() {
     let start = std::time::Instant::now();
     for _ in 0..(MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW * 2) {
         assert!(room.media_mutations.reserve(start));
-        assert!(room.media_mutations.refund(start));
+        room.media_mutations.refund(start);
+        assert!(room.media_mutations.is_empty());
     }
     assert!(room.media_mutations.is_empty());
     for _ in 0..MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW {
@@ -1258,7 +1260,8 @@ fn no_op_media_control_ipc_refund_preserves_aggregate_capacity() {
     let start = std::time::Instant::now();
     for _ in 0..(MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW * 2) {
         assert!(room.media_control_ipc.reserve(start));
-        assert!(room.media_control_ipc.refund(start));
+        room.media_control_ipc.refund(start);
+        assert!(room.media_control_ipc.is_empty());
     }
     assert!(room.media_control_ipc.is_empty());
     for _ in 0..MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW {

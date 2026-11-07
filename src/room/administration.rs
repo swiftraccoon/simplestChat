@@ -10,6 +10,7 @@ use crate::auth::{
     types::{AuthError, Principal},
 };
 use crate::ids::{ParticipantId, RoomId, UserId};
+use crate::limits::Budget;
 use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::{
     SignalingServer,

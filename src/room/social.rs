@@ -2,6 +2,7 @@
 //! Private text stays out of reports and logs; account PM retention lives in `history`.
 use super::*;
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
+use crate::limits::Budget;
 use crate::room::moderation::{
     Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId,
     ReportStatus, Target, record_event,

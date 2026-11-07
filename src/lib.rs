@@ -16,6 +16,7 @@ pub(crate) mod diagnostics;
 pub mod ids;
 pub(crate) mod invite_codes;
 pub(crate) mod labels;
+pub(crate) mod limits;
 pub mod media;
 pub(crate) mod metrics;
 pub(crate) mod net;

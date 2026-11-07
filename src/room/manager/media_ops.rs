@@ -2,6 +2,7 @@
 //! per-sender media budgets and the broadcaster authorization they share.
 
 use super::super::*;
+use crate::limits::Budget;
 
 impl RoomManager {
     pub(in crate::room) fn media_participant_id(

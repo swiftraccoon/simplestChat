@@ -555,7 +555,7 @@ async fn database_password_and_passkey_signup_share_taken_email_budget() {
         .unwrap(),
     ));
     server.challenge_store = Some(Arc::new(ChallengeStore::new()));
-    server.registration_limiter = Arc::new(crate::auth::limiter::WindowLimiter::new(
+    server.registration_limiter = Arc::new(crate::limits::accounts::WindowLimiter::new(
         1,
         Duration::from_secs(3600),
     ));

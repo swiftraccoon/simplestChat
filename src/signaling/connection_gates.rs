@@ -6,6 +6,7 @@
 
 pub(super) use super::token_bucket::{TOKEN_US, TokenBucket, ViolationWindow};
 use super::*;
+use crate::limits::Budget;
 
 /// Token bucket rate limiter: max tokens (burst capacity).
 pub(super) const RATE_LIMIT_MAX_TOKENS: u64 = 100;
@@ -184,11 +185,11 @@ impl MediaSessionRateState {
 
     pub(super) fn limit_exceeded(&mut self, message: &ClientMessage, now: Instant) -> bool {
         if is_media_mutation(message) {
-            !self.media_mutations.try_consume(now)
+            !self.media_mutations.reserve(now)
         } else if is_transport_mutation(message) {
-            !self.transport_mutations.try_consume(now)
+            !self.transport_mutations.reserve(now)
         } else if is_consumer_mutation(message) {
-            !self.consumer_mutations.try_consume(now)
+            !self.consumer_mutations.reserve(now)
         } else {
             false
         }
@@ -290,7 +291,7 @@ impl CommandGates {
 
     /// Charge one inbound frame of any kind to the connection's frame budget.
     pub(super) fn admit_frame(&mut self, now: Instant) -> FrameAdmission {
-        if self.frames.try_consume(now) {
+        if self.frames.reserve(now) {
             FrameAdmission::Allowed
         } else {
             FrameAdmission::Refused {
@@ -314,7 +315,7 @@ impl CommandGates {
                 Admission::Refused(response)
             };
         }
-        if is_admin_mutation(message) && !self.admin.try_consume(now) {
+        if is_admin_mutation(message) && !self.admin.reserve(now) {
             let violations = self
                 .admin_refusals
                 .record(now, ADMIN_MUTATION_VIOLATION_WINDOW);
@@ -334,7 +335,7 @@ impl CommandGates {
             ClientMessage::ChatMessage { .. }
                 | ClientMessage::PrivateMessage { .. }
                 | ClientMessage::RetryChatMessage(_)
-        ) && !self.chat.try_consume(now)
+        ) && !self.chat.reserve(now)
         {
             return Admission::Close {
                 response: social_rate_limited(message, "Chat rate limit exceeded"),

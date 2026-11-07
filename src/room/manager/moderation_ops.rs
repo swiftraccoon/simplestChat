@@ -2,6 +2,7 @@
 //! requests, each committed through the room's control order.
 
 use super::super::*;
+use crate::limits::Budget;
 use crate::room::publication::{RemovalPublication, SanctionPublication};
 
 impl RoomManager {

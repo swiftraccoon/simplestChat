@@ -142,6 +142,8 @@ impl AuthGuard {
     }
 }
 
+/// Each account's requests in a fixed window, estimated by a sketch every clone
+/// shares; [`crate::limits`] says why it offers no refund.
 #[derive(Clone)]
 struct PrincipalRateLimiter {
     state: Arc<Mutex<PrincipalRateState>>,
@@ -315,8 +317,8 @@ pub(crate) struct SignalingServer {
     session_cleanup: crate::auth::session::SessionCleanup,
     principal_auth_limiter: PrincipalRateLimiter,
     room_creation_limiter: PrincipalRateLimiter,
-    sign_in_failures: crate::auth::limiter::FailureLimiter,
-    registration_limiter: Arc<crate::auth::limiter::WindowLimiter>,
+    sign_in_failures: crate::limits::accounts::FailureLimiter,
+    registration_limiter: Arc<crate::limits::accounts::WindowLimiter>,
     db_pool: Option<PgPool>,
     /// The push signing key. `new` leaves it `None`; `run_server` attaches it
     /// through `push::start` whenever a database is configured. Without it the
@@ -424,8 +426,8 @@ impl SignalingServer {
             session_cleanup: crate::auth::session::SessionCleanup::default(),
             principal_auth_limiter: PrincipalRateLimiter::new(auth_requests_per_account_per_minute),
             room_creation_limiter: PrincipalRateLimiter::new(room_creations_per_account),
-            sign_in_failures: crate::auth::limiter::FailureLimiter::new(),
-            registration_limiter: Arc::new(crate::auth::limiter::WindowLimiter::new(
+            sign_in_failures: crate::limits::accounts::FailureLimiter::new(),
+            registration_limiter: Arc::new(crate::limits::accounts::WindowLimiter::new(
                 registrations_per_ip_per_hour,
                 Duration::from_secs(3600),
             )),

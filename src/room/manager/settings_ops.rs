@@ -2,6 +2,7 @@
 //! commit point, then publication and producer revocation.
 
 use super::super::*;
+use crate::limits::Budget;
 
 impl RoomManager {
     pub(in crate::room) fn validate_capacity(

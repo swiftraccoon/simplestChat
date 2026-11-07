@@ -1,6 +1,7 @@
 //! Trailing-window admission budgets: each room keeps one per kind of work it
 //! admits, so a burst from one participant cannot starve the room.
 
+use crate::limits::Budget;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -23,8 +24,20 @@ impl SlidingWindow {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.reserved.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.reserved.is_empty()
+    }
+}
+
+impl Budget for SlidingWindow {
     /// Admits an event at `now` when the window still has room, and remembers it.
-    pub(crate) fn reserve(&mut self, now: Instant) -> bool {
+    fn reserve(&mut self, now: Instant) -> bool {
         while self
             .reserved
             .front()
@@ -39,23 +52,11 @@ impl SlidingWindow {
         true
     }
 
-    /// Forgets one reservation taken at `reserved_at`; false when none remains.
-    pub(crate) fn refund(&mut self, reserved_at: Instant) -> bool {
-        let Some(position) = self.reserved.iter().position(|entry| *entry == reserved_at) else {
-            return false;
-        };
-        self.reserved.remove(position);
-        true
-    }
-
-    #[cfg(test)]
-    pub(crate) fn len(&self) -> usize {
-        self.reserved.len()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.reserved.is_empty()
+    /// Forgets one reservation taken at `reserved_at`, when one remains.
+    fn refund(&mut self, reserved_at: Instant) {
+        if let Some(position) = self.reserved.iter().position(|entry| *entry == reserved_at) {
+            self.reserved.remove(position);
+        }
     }
 }
 
@@ -77,12 +78,19 @@ mod tests {
 
     #[test]
     fn a_refund_returns_exactly_one_matching_reservation() {
-        let mut window = SlidingWindow::new(Duration::from_secs(1), 1);
+        let mut window = SlidingWindow::new(Duration::from_secs(1), 2);
         let start = Instant::now();
         assert!(window.reserve(start));
+        assert!(window.reserve(start));
         assert!(!window.reserve(start));
-        assert!(window.refund(start));
-        assert!(!window.refund(start));
+        window.refund(start);
+        assert_eq!(window.len(), 1);
+        // No reservation was taken at this instant, so nothing is forgotten.
+        window.refund(start + Duration::from_millis(1));
+        assert_eq!(window.len(), 1);
+        window.refund(start);
+        assert!(window.is_empty());
+        window.refund(start);
         assert!(window.is_empty());
         assert!(window.reserve(start));
     }

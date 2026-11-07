@@ -1,5 +1,6 @@
 use super::*;
 use crate::ids::fixtures::{coid, pid, prid, rid, trid};
+use crate::limits::Budget;
 
 #[tokio::test]
 async fn shutdown_aborts_owned_tasks_on_drop() {
@@ -357,7 +358,7 @@ fn consumer_and_frame_bursts_admit_the_configured_media_startup() {
         for _ in
             0..MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS + TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS + 2
         {
-            assert!(frame_bucket.try_consume(now));
+            assert!(frame_bucket.reserve(now));
         }
         for index in 0..limit {
             for message in [
@@ -375,7 +376,7 @@ fn consumer_and_frame_bursts_admit_the_configured_media_startup() {
                 },
             ] {
                 assert!(!session.limit_exceeded(&message, now));
-                assert!(frame_bucket.try_consume(now));
+                assert!(frame_bucket.reserve(now));
             }
         }
         let extra = ClientMessage::ResumeConsumer {
