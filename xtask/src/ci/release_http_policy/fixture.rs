@@ -102,10 +102,6 @@ pub(super) fn response(index: usize) -> native::Response {
         .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
         .collect::<std::collections::BTreeMap<_, _>>();
     headers.insert(
-        "strict-transport-security".into(),
-        "max-age=31536000".into(),
-    );
-    headers.insert(
         "content-security-policy".into(),
         table["contentSecurityPolicy"].as_str().unwrap().into(),
     );

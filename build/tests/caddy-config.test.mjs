@@ -61,7 +61,7 @@ test('Caddy does not enable access, credential, or verbose request logging', () 
 
 test('Caddy retains browser isolation, transport security, and media permissions', () => {
   for (const expected of [
-    'Strict-Transport-Security "max-age=31536000"',
+    'Strict-Transport-Security "max-age=31536000; includeSubDomains"',
     'X-Content-Type-Options "nosniff"',
     'X-Frame-Options "DENY"',
     'Referrer-Policy "no-referrer"',

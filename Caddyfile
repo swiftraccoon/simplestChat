@@ -28,7 +28,7 @@
 	# untrusted bytes (attachment downloads, room images, avatars). The ? prefix
 	# keeps the proxy's copy as the default for responses the proxy answers itself.
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		?Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
@@ -46,8 +46,11 @@
 	}
 
 	# Do not enable access logging: WebSocket URLs can contain credentials.
-	# Authentication answers carry tokens beside caller-chosen text; never
-	# compress them, or their compressed length can reveal token bytes.
+
+	# Never compress the /api/auth/ tree: sign-in answers carry tokens, and its
+	# inbox, contacts, sessions, attachments, profiles and updates carry private
+	# account data, each beside text a caller chose, so a compressed length
+	# could reveal those secret bytes.
 	@compressible not path /api/auth/*
 	encode @compressible zstd gzip
 	# Only validated public files can answer an upstream miss. This directory is

@@ -45,25 +45,22 @@ ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 POLICY_PATH = Path(__file__).resolve().parents[1] / "security/http-policy.json"
 
 
-def reviewed_policy() -> tuple[dict[str, str], dict[str, str]]:
-    """Read the server's policy as `cargo run -q -p xtask -- http-policy` wrote it.
-
-    Caddy owns transport security at the edge, so the backend's HSTS header is
-    not part of the proxy response check.
-    """
+def reviewed_policy() -> tuple[dict[str, str], dict[str, str], str]:
+    """Read the server's policy as `cargo run -q -p xtask -- http-policy` wrote it."""
     document = object_value(decode_json(POLICY_PATH.read_text(encoding="utf-8")))
     directives = {
         key: string_value(value) for key, value in object_value(document["directives"]).items()
     }
+    fixed = object_value(document["headers"])
     headers = {
         key: string_value(value)
-        for key, value in object_value(document["headers"]).items()
+        for key, value in fixed.items()
         if key != "strict-transport-security"
     }
-    return directives, headers
+    return directives, headers, string_value(fixed["strict-transport-security"])
 
 
-CSP, FIXED_HEADERS = reviewed_policy()
+CSP, FIXED_HEADERS, HSTS = reviewed_policy()
 
 
 class PolicyError(Exception):
@@ -193,7 +190,7 @@ def security_headers(headers: dict[str, str]) -> None:
     require("server" not in headers, "http_server_header")
     require("set-cookie" not in headers, "http_anonymous_cookie")
     hsts = headers.get("strict-transport-security", "")
-    require(hsts == "max-age=31536000", "http_hsts")
+    require(hsts == HSTS, "http_hsts")
     directives: dict[str, str] = {}
     for directive in headers.get("content-security-policy", "").split(";"):
         words = directive.strip().split()

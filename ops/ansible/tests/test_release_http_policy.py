@@ -46,7 +46,7 @@ def headers(endpoint: policy.Endpoint) -> dict[str, str]:
     """Provide one complete proxy response policy without credential values."""
     return {
         **policy.FIXED_HEADERS,
-        "strict-transport-security": "max-age=31536000",
+        "strict-transport-security": policy.HSTS,
         "content-security-policy": "; ".join(
             key + " " + value for key, value in policy.CSP.items()
         ).strip(),
@@ -125,6 +125,7 @@ class ResponsePolicyTests(unittest.TestCase):
             ("set-cookie", "fixture=value; Secure; HttpOnly; SameSite=Strict"),
             ("server", "fixture"),
             ("strict-transport-security", "max-age=0"),
+            ("strict-transport-security", "max-age=31536000"),  # The proxy's former value.
         ):
             changed = headers(policy.ENDPOINTS[0])
             changed[name] = value

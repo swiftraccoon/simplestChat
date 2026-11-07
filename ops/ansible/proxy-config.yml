@@ -155,7 +155,7 @@
       ansible.builtin.assert:
         that:
           - scproxy_probe.content_security_policy | default('') == scproxy_policy
-          - scproxy_probe.strict_transport_security | default('') == 'max-age=31536000'
+          - scproxy_probe.strict_transport_security | default('') == 'max-age=31536000; includeSubDomains'
           - scproxy_probe.server is not defined
         fail_msg: The running proxy does not serve the maintained header policy.
 

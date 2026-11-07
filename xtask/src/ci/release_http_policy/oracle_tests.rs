@@ -1,4 +1,6 @@
 //! Retained actual fifteen tests plus policy matrices executed without exec/socket APIs.
+//! The frozen checker predates `includeSubDomains`, so its copy of each case carries its
+//! own required HSTS value wherever the native case carries the policy file's.
 
 use super::{fixture::*, *};
 use crate::{
@@ -331,10 +333,29 @@ fn cases() -> Vec<Value> {
 
     cases
 }
+fn frozen(cases: &[Value]) -> Vec<Value> {
+    let table: Value =
+        serde_json::from_str(include_str!("../../../../security/http-policy.json")).unwrap();
+    let current = table["headers"]["strict-transport-security"]
+        .as_str()
+        .unwrap();
+    let mut cases = cases.to_vec();
+    for rows in cases
+        .iter_mut()
+        .filter_map(|case| case.get_mut("headers").and_then(Value::as_array_mut))
+    {
+        for row in rows {
+            if row[0] == "strict-transport-security" && row[1] == current {
+                row[1] = json!("max-age=31536000");
+            }
+        }
+    }
+    cases
+}
 #[tokio::test]
 async fn actual_fifteen_original_tests_and_bounded_policy_matrix_match() {
     let cases = cases();
-    let old = reference(&cases).await.unwrap();
+    let old = reference(&frozen(&cases)).await.unwrap();
     assert_eq!(old["originalTests"], 15);
     assert_eq!(old["report"], policy::report());
     assert_eq!(old["results"].as_array().unwrap().len(), cases.len());

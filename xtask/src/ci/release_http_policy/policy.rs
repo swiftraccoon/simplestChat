@@ -83,9 +83,14 @@ pub(super) fn security(h: &BTreeMap<String, String>) -> Result<()> {
     let fixed = table["headers"]
         .as_object()
         .ok_or_else(|| fail(1, "http_policy_failed"))?;
+    let hsts = fixed
+        .get("strict-transport-security")
+        .and_then(Table::as_str)
+        .ok_or_else(|| fail(1, "http_policy_failed"))?;
     require(
         fixed
             .iter()
+            // HSTS has its own rule below.
             .filter(|(k, _)| *k != "strict-transport-security")
             .all(|(k, v)| h.get(k).map(String::as_str) == v.as_str()),
         "http_security_headers",
@@ -93,7 +98,7 @@ pub(super) fn security(h: &BTreeMap<String, String>) -> Result<()> {
     require(!h.contains_key("server"), "http_server_header")?;
     require(!h.contains_key("set-cookie"), "http_anonymous_cookie")?;
     require(
-        h.get("strict-transport-security").map(String::as_str) == Some("max-age=31536000"),
+        h.get("strict-transport-security").map(String::as_str) == Some(hsts),
         "http_hsts",
     )?;
     let mut directives = serde_json::Map::new();

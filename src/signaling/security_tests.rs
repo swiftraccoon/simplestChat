@@ -1030,12 +1030,9 @@ fn websocket_ticket_protocol_rejects_bearers_duplicates_and_malformed_values() {
 
 #[test]
 fn the_proxy_repeats_the_applications_fixed_security_headers() {
-    // Caddy owns transport security at the edge; every other fixed header the
-    // application sends appears once in the Caddyfile with the same value.
+    // Every fixed header the application sends, transport security included,
+    // appears once in the Caddyfile with the same value.
     for (name, value) in SECURITY_HEADERS {
-        if name == "strict-transport-security" {
-            continue;
-        }
         let prefix = format!("{name} \"");
         let lines = caddyfile_lines(|line| line.to_ascii_lowercase().starts_with(&prefix));
         assert_eq!(lines.len(), 1, "one proxy line for {name}");

@@ -1479,10 +1479,13 @@ closed. Requests set Host localhost, exact Accept, Accept-Encoding identity and
 Connection close, with proxies, redirects, retries, decompression, cookies and
 authentication disabled. The original exact status/type/security-header/CSP,
 no-cookie/server, no-store, capabilities/auth omission and private 404 predicates
-remain the policy. Bodies retain at most 128KiB for HTML or 4096 bytes for each
-other endpoint, plus one refusal byte. Parsed headers admit at most 64 fields and
-16KiB of projected Latin1 names/values; this is a post-parser accepted limit,
-not a bound on the HTTP library's earlier parser allocations.
+remain the policy, except that the proxy HSTS predicate now requires the
+application's own value from `security/http-policy.json`; the frozen-checker
+comparison maps that value to the older checker's `max-age=31536000`. Bodies
+retain at most 128KiB for HTML or 4096 bytes for each other endpoint, plus one
+refusal byte. Parsed headers admit at most 64 fields and 16KiB of projected
+Latin1 names/values; this is a post-parser accepted limit, not a bound on the
+HTTP library's earlier parser allocations.
 
 One shared absolute 25-second HTTP window covers all five requests. Three seconds
 is connect/read inactivity, not a per-GET total. The checker uses one 180-second

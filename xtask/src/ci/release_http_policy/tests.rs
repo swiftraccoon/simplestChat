@@ -212,3 +212,15 @@ fn recursive_duplicate_nonfinite_and_selected_exact_types_stay_refused() {
     }
     let _: Arc<dyn plan::Clock> = Clock::new();
 }
+#[test]
+fn the_proxy_hsts_value_must_equal_the_policy_file_exactly() {
+    let headers = response(0).headers;
+    assert!(policy::security(&headers).is_ok());
+    let current = headers["strict-transport-security"].clone();
+    // The first value is the proxy's HSTS value before it gained includeSubDomains.
+    for value in ["max-age=31536000".to_owned(), format!("{current}; preload")] {
+        let mut changed = headers.clone();
+        changed.insert("strict-transport-security".into(), value);
+        assert_eq!(policy::security(&changed).unwrap_err().message, "http_hsts");
+    }
+}
