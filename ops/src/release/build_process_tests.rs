@@ -654,6 +654,10 @@ fn inspection_preserves_original_non_utf8_bytes_for_operation_validation() {
     });
 }
 
+/// The worker prints this only after its whole scenario passed, so a parent can
+/// tell a real run from the early return of a child launched without its flag.
+const SIGNAL_WORKER_RAN: &[u8] = b"release signal worker scenario passed\n";
+
 async fn native_signal_case(signal: &str) {
     let fixture = Fixture::new();
     let mut request = fixture.request("unused", true);
@@ -668,6 +672,9 @@ async fn native_signal_case(signal: &str) {
     request
         .environment
         .insert("RELEASE_NATIVE_SIGNAL_CASE".into(), signal.into());
+    request
+        .environment
+        .insert(crate::test_support::CHILD_FIXTURE.into(), "1".into());
     request.body_end = Instant::now() + Duration::from_secs(10);
     let mut owner = owner();
     let completion = run(&mut owner, request).await;
@@ -679,6 +686,13 @@ async fn native_signal_case(signal: &str) {
         String::from_utf8_lossy(&retained)
     );
     assert_eq!(completion.observation.exit_status, Some(0));
+    assert!(
+        retained
+            .windows(SIGNAL_WORKER_RAN.len())
+            .any(|part| part == SIGNAL_WORKER_RAN),
+        "{}",
+        String::from_utf8_lossy(&retained)
+    );
 }
 #[test]
 fn original_native_interrupt_is_observed_in_an_isolated_test_process() {
@@ -771,6 +785,9 @@ fn retained_hash_signal_worker(signal: nix::sys::signal::Signal, expected: Failu
 #[test]
 #[ignore = "subprocess fixture invoked by the owning native and retained-hash signal tests"]
 fn signal_worker() {
+    if !crate::test_support::launched_by_parent() {
+        return;
+    }
     let signal =
         std::env::var("RELEASE_NATIVE_SIGNAL_CASE").expect("owning subprocess test selector");
     let expected = match signal.as_str() {
@@ -817,4 +834,7 @@ fn signal_worker() {
         assert_eq!(completion.observation.exit_status, Some(-15));
         assert!(!completion.observation.timed_out);
     });
+    use std::io::Write;
+    std::io::stdout().write_all(SIGNAL_WORKER_RAN).unwrap();
+    std::io::stdout().flush().unwrap();
 }

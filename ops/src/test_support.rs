@@ -23,3 +23,13 @@ impl Drop for Fixture {
         fs::remove_dir_all(&self.0).unwrap();
     }
 }
+
+/// Set to `1` in a child fixture's environment by the parent test that owns it.
+pub(crate) const CHILD_FIXTURE: &str = "SIMPLESTCHAT_CHILD_FIXTURE";
+
+/// Whether this test process is a child fixture launched by its owning parent.
+/// A broad `--include-ignored` run reaches the fixture without the variable;
+/// the fixture then returns at once instead of failing for want of its parent.
+pub(crate) fn launched_by_parent() -> bool {
+    std::env::var_os(CHILD_FIXTURE).is_some_and(|value| value == "1")
+}

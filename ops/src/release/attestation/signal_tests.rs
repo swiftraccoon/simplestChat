@@ -17,6 +17,9 @@ const MAXIMUM: usize = 65536;
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "owned child fixture; invoke only through its parent signal test"]
 async fn retained_hash_signal_child() {
+    if !crate::test_support::launched_by_parent() {
+        return;
+    }
     let expected = match std::env::var("SC_PREPARE_EXPECT_SIGNAL").as_deref() {
         Ok("INT") => Cause::Interrupt,
         Ok("TERM") => Cause::Terminate,
@@ -113,6 +116,7 @@ async fn original_interrupt_and_termination_during_retained_hash_settle_all_hand
                 "--test-threads=1",
             ])
             .env_clear()
+            .env(crate::test_support::CHILD_FIXTURE, "1")
             .env("SC_PREPARE_EXPECT_SIGNAL", name)
             .env("SC_PREPARE_ARTIFACT", &fixture.artifact)
             .env("SC_PREPARE_SECURITY", &fixture.security)

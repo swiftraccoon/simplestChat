@@ -72,11 +72,6 @@ fn restart(steps: &[Value]) -> Check<()> {
     )?;
     require(upload["with"]["retention-days"] == 7, "upload-retention")
 }
-const SKIPS: [&str; 3] = [
-    "capacity_vps::process::tests::inert_child_signal_mask",
-    "release::build::process::tests::signal_worker",
-    "release::attestation::prepare::signal_tests::retained_hash_signal_child",
-];
 fn complete_graph(jobs: &BTreeMap<String, Value>) -> Check<()> {
     for (name, role) in [
         ("rust-test", "rust-test"),
@@ -117,27 +112,23 @@ fn complete_graph(jobs: &BTreeMap<String, Value>) -> Check<()> {
                     .is_some_and(|run| run.starts_with("cargo test "))
             })
             .ok_or("execute")?;
-        let mut expected = vec![
-            "cargo",
-            "test",
-            "--locked",
-            "--workspace",
-            "--all-features",
-            "--",
-            "--include-ignored",
-            "--test-threads=1",
-        ];
-        for skip in SKIPS {
-            expected.extend(["--skip", skip]);
-        }
         require(
             execute["run"]
                 .as_str()
                 .ok_or("test-argv")?
                 .split_whitespace()
                 .collect::<Vec<_>>()
-                == expected,
-            "every-test-and-child-fixture-skip",
+                == [
+                    "cargo",
+                    "test",
+                    "--locked",
+                    "--workspace",
+                    "--all-features",
+                    "--",
+                    "--include-ignored",
+                    "--test-threads=1",
+                ],
+            "every-test-without-skips",
         )?;
         require(
             before < at && build["if"] == execute["if"] && build["if"] == GUARD,
@@ -306,13 +297,6 @@ fn graph_contract_refuses_old_browser_role_incomplete_tests_and_guard_changes() 
         })
         .unwrap();
     steps.swap(build, execute);
-    assert!(complete_graph(&jobs).is_err());
-    let mut jobs = parsed().jobs;
-    let run = jobs["rust-test"]["steps"][at]["run"]
-        .as_str()
-        .unwrap()
-        .replace("--skip release::build::process::tests::signal_worker", "");
-    jobs.get_mut("rust-test").unwrap()["steps"][at]["run"] = run.into();
     assert!(complete_graph(&jobs).is_err());
 }
 

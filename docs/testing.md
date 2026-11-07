@@ -133,8 +133,8 @@ dependency profile. On Linux this includes the host, process and archive cases.
 This exercises the distributed capacity runtime profile early; the workspace
 suite also checks the combined feature profile. Both jobs select CPython 3.14.8
 before fingerprinting or creating the controller environment, keeping the
-manifest oracle's Unicode database consistent. Ignored subprocess workers run
-only through their owning tests.
+manifest oracle's Unicode database consistent. Ignored subprocess workers do
+their work only when their owning tests launch them.
 
 The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
@@ -146,8 +146,9 @@ binary, Debian kernel/process behavior and a measured host run need their own
 evidence.
 
 The host tests are compiled only on Linux; `ci-local` runs the Linux workflow.
-The ignored inert child used by the real process regression is launched only by
-its exact parent test.
+The ignored inert child used by the real process regression,
+`capacity_vps::process::tests::inert_child_signal_mask`, runs its body only when
+its exact parent test launches it.
 
 ### Production release builder
 
@@ -156,10 +157,11 @@ has whole-builder tests that run the actual controller, extraction, metadata
 validation, publication and finalizers over owned real files and inert Git and
 Docker observations. They execute no Git, Docker or image.
 
-Broad database `--include-ignored` runs must skip
-`release::build::process::tests::signal_worker`, the ignored child fixture launched
-only by its two owning native signal regressions. Run those ordinary parent tests
-to exercise the child; a broad ignored run supplies no owning selector.
+`release::build::process::tests::signal_worker` is the ignored child fixture of
+the owning native signal regressions. A broad `--include-ignored` run reaches it
+without the flag its parents set and it returns at once; run the ordinary parent
+tests to exercise it. Each parent requires the worker's completion line, so an
+early return cannot pass as a real run.
 These tests do not prove process ownership, physical Docker effects or signing
 provenance.
 Separate actual inert child tests cover concurrent pipe pressure, per-stream and
@@ -753,10 +755,23 @@ refuses an occupied port and retains its private temporary directory for
 diagnostics. Set `TEST_POSTGRES_PORT` when another local service owns that port.
 
 The database commands select the server package. Run ordinary workspace tests
-separately using the command at the start of this guide. The workspace also has
-ignored tooling fixtures that require an owning parent; a blanket
-`--include-ignored` would launch them outside that owner. CI includes database
-tests while skipping those three named fixtures.
+separately using the command at the start of this guide. CI runs the whole
+workspace with the database tests and no skip list; the local equivalent is:
+
+```sh
+cargo build --locked --bin simplestChat
+cargo run -q -p xtask -- test-env \
+  cargo test --locked --workspace --all-features -- --include-ignored --test-threads=1
+```
+
+The workspace's three ignored child fixtures,
+`capacity_vps::process::tests::inert_child_signal_mask` (Linux only),
+`release::build::process::tests::signal_worker` and
+`release::attestation::prepare::signal_tests::retained_hash_signal_child`, return
+at once unless their owning parent test launched them with
+`SIMPLESTCHAT_CHILD_FIXTURE=1` in the child's environment. A broad
+`--include-ignored` run therefore passes them without exercising them; their
+parent tests in the same run exercise them.
 The trust-authenticated database is disposable, never a shared development DB.
 
 Each harness test command owns a fresh process group. It retains the leader's
@@ -2703,8 +2718,9 @@ Docker, network or a host workload.
 `release::attestation::prepare::signal_tests::retained_hash_signal_child` is an
 ignored owned worker. Its ordinary parent alone supplies its private fixture
 paths and observes registered-signal readiness, then settles the exact child
-group, reaps it and closes both capture readers before checking results. The
-broad database `--include-ignored` route must skip that worker by its exact name.
+group, reaps it and closes both capture readers before checking results. A
+broad `--include-ignored` run reaches the worker without its parent and it
+returns at once.
 These are separate test contracts from attested installation or production
 signing/deployment proof.
 

@@ -20,6 +20,7 @@ fn invocation() -> (std::path::PathBuf, Vec<String>, BTreeMap<String, String>) {
     ];
     let mut environment = environment();
     environment.insert("SIMPLESTCHAT_OWNED_MASK_CHILD".into(), "1".into());
+    environment.insert(crate::test_support::CHILD_FIXTURE.into(), "1".into());
     (program, args, environment)
 }
 fn observe_spawn(fail_next: bool) {
@@ -47,6 +48,9 @@ fn assert_original_child_reaped() {
 #[test]
 #[ignore = "inert child fixture; invoked only by the owned process parent test"]
 fn inert_child_signal_mask() {
+    if !crate::test_support::launched_by_parent() {
+        return;
+    }
     let mode = std::env::var("SIMPLESTCHAT_OWNED_MASK_CHILD").unwrap();
     assert!(matches!(mode.as_str(), "1" | "exit7"));
     let mask = mask();
