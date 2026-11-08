@@ -153,6 +153,11 @@ jobs:
           npm --prefix web/e2e ci --ignore-scripts
           npm --prefix web/e2e exec -- playwright install --with-deps chromium
 
+      # Each bench below creates its own fresh 0700 evidence leaf but refuses to
+      # create the parent; this step creates that parent, private like the leaves.
+      - name: Create the private impaired evidence root
+        run: install -d -m 700 "$RUNNER_TEMP/impaired"
+
       # netem on loopback, UDP from the server's media port only: the viewer's
       # downlink degrades while signaling and the publisher's uplink stay clean.
       - name: Browser viewer under loss, a bandwidth cap and recovery
