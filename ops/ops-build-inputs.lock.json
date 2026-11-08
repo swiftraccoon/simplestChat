@@ -20,15 +20,15 @@
     {
       "suite": "noble-security",
       "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/binary-amd64/Packages.xz",
-      "sha256": "b1966b71cca741b2253ffe9c14bb14c5eeb0032ee6f065d9d0e454e372ef5b58",
-      "bytes": 1146096,
+      "sha256": "cc9b37e7f02c4552a66d51d784c36b0fbc5c3552c508ec084880ec3815dec52b",
+      "bytes": 1156920,
       "xzMembers": 1
     },
     {
       "suite": "noble-updates",
       "url": "https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages.xz",
-      "sha256": "072a64e2a776d5ad586fe3d7f0d55cbb07d175161137b657dc1e81b35c1f1d2e",
-      "bytes": 1400576,
+      "sha256": "1f0a499734e39e903c4898d11cfcfca70939f3d907051f2946f06e518d675fbd",
+      "bytes": 1424864,
       "xzMembers": 1
     }
   ],
@@ -750,10 +750,10 @@
     {
       "name": "libpcre2-8-0",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/pcre2/libpcre2-8-0_10.42-4ubuntu2.1_amd64.deb",
-      "sha256": "110a797a57673d3ee497a141cf988199258058c57525799c63194d81822529a0",
-      "bytes": 226662,
-      "version": "10.42-4ubuntu2.1",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/pcre2/libpcre2-8-0_10.42-4ubuntu2.2_amd64.deb",
+      "sha256": "f41da7cb7e979d6b037ea92650c72ec8ec532ec3c93aa8d5b997207de56695ea",
+      "bytes": 228546,
+      "version": "10.42-4ubuntu2.2",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
