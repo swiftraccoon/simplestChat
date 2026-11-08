@@ -301,3 +301,21 @@ async fn issuing_for_a_missing_session_writes_nothing() {
     transaction.rollback().await.unwrap();
     assert_eq!(stored(&pool, missing).await, 0);
 }
+
+/// The public lobby seeding helper (`ops/ansible/files/seed_public_room.py`)
+/// sends a sign-in token back as the bearer credential and admits only the
+/// shape this server issues. Its pattern is pinned to the constants here so a
+/// change on either side fails before a deployment's lobby phase does.
+#[test]
+fn the_lobby_seeding_helper_admits_exactly_the_issued_token_shape() {
+    let helper = include_str!("../../ops/ansible/files/seed_public_room.py");
+    let pinned = format!("ACCESS_TOKEN = re.compile(r\"[A-Za-z0-9_-]{{{ENCODED_TOKEN_LEN}}}\")");
+    assert!(
+        helper.contains(&pinned),
+        "seed_public_room.py must admit exactly {ENCODED_TOKEN_LEN} base64url characters"
+    );
+    assert_eq!(
+        URL_SAFE_NO_PAD.encode([0_u8; TOKEN_BYTES]).len(),
+        ENCODED_TOKEN_LEN
+    );
+}
