@@ -673,7 +673,10 @@ fn run_mode(arguments: &[OsString], mode: Mode) -> std::process::ExitCode {
             } else {
                 Plan::parse(&root, arguments, std::env::vars_os().collect())
             }
-            .map_err(|_| Failure(2))?;
+            .map_err(|error| {
+                eprintln!("Impaired plan refused: {error}");
+                Failure(2)
+            })?;
             let readiness = NativeReadiness(controller::NativeReadiness::new()?);
             let services = Services {
                 host: &host,

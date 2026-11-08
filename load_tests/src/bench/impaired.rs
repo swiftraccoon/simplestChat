@@ -53,7 +53,10 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
                 std::env::vars_os().collect(),
                 std::env::consts::OS,
             )
-            .map_err(|_| controller::Failure::new(2))?;
+            .map_err(|error| {
+                eprintln!("Impaired plan refused: {error}");
+                controller::Failure::new(2)
+            })?;
             let services = controller::Services {
                 host: &host,
                 clock: &clock,
