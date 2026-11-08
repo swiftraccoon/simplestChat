@@ -389,18 +389,35 @@ the release helper (`files/release_public.py`).
    `0600` and leave the six remaining 64-hex values untouched: `public.yml`
    accepts exactly those six names and stops with "Operational precondition
    failed" while any other key is present.
-5. Run `public.yml`; it reinstalls the Caddyfile and records the browser-asset
-   receipt, without which the maintenance release is refused. Then start the
-   project again with the [explicit deployment command](#deploy-explicitly):
-   the release helper requires the running services it backs up and replaces.
-   Until the next step installs the new image, the old one runs without a JWT
-   secret, so account sign-in is unavailable.
+5. Run `public.yml` naming the release the host was running, exactly as
+   [preparing the configuration](#prepare-configuration) for a CI-tested image:
+   `-e scpub_release_revision=<running rev> -e scbench_revision=<running rev>`.
+   Without both inputs the playbook records the inventory's provisioning
+   revision, whose image cannot serve a database migrated past it. The run
+   reinstalls the Caddyfile and records the browser-asset receipt, without
+   which the maintenance release is refused. Then recreate the application
+   from that configuration, `sudo /usr/local/bin/simplestchat-public up -d
+   --no-build --pull never`, rather than with the
+   [explicit deployment command](#deploy-explicitly): that command needs
+   the revision's source tree under
+   `/srv/simplestchat-bench/sources`, which routine releases never install,
+   and the maintenance preflight requires every running service to match the
+   configuration on disk. Until the next step installs the new image, the old
+   one runs without a JWT secret, so account sign-in is unavailable.
 6. Run [the maintenance release](RELEASES.md#schema-and-configuration-changes-the-maintenance-release)
    for the migrations with both signed artifacts from step 1. Stage without
    `scpub_release_prepared` so the changed release helper is reconciled, which
    is what the wrapper's `--install-helpers` requests; the
    `build/deploy.py --maintenance` route supplies no signed Ops inputs and
-   cannot drive this release.
+   cannot drive this release. If its native launcher fails after the
+   migrations, inspect the retained evidence and finish the selected
+   deployment with the [explicit deployment command](#deploy-explicitly), as
+   RELEASES.md describes; the maintenance run has already published the
+   configuration and the new revision's source tree. When the fix is a file
+   that `public.yml` installs (the lobby-seeding helper was one), first stop
+   the project with the command below, because the failed launcher leaves
+   the database running, and rerun `public.yml` with both inputs naming the
+   new revision before the deployment command.
 7. Make fresh signed Ops and server selections before the next four-case
    maintenance fixture run ([the testing guide](../../docs/testing.md#optional-maintenance-prerequisite-experiments)):
    its migration pins moved with 037 and 038.
