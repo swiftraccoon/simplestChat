@@ -1,6 +1,6 @@
 import { createScope } from '../disposable';
 import type { ChatEntry } from '../protocol';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { Elements } from '../dom';
 import type { ChatStore } from './store';
 import type { SocialChatOptions } from './context';

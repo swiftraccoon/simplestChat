@@ -1,4 +1,4 @@
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { RoomSettingsPatch } from '../protocol';
 import {
   fieldRow,

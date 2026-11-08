@@ -182,27 +182,45 @@ async function fixture({ rejectStaticQueries = false } = {}) {
   });
   const updates = accountUpdatesFixture();
   const protocol = await loadProtocol();
-  const api = await loadTypeScript('src/community-ui.ts', {
+  const globals = {
+    document: dom.document,
+    TextEncoder,
+    URL: PreviewURL,
+    window: {
+      location: { href: 'http://localhost:3000/?old=value#old-room' },
+      confirm: () => true,
+    },
+    navigator: {
+      clipboard: {
+        writeText: async (value) => {
+          state.copied = value;
+        },
+      },
+    },
+  };
+  const links = await loadTypeScript('src/community/links.ts', { globals });
+  const api = await loadTypeScript('src/community/controller.ts', {
     modules: {
-      './protocol': protocol,
-      './account-updates': updates.module,
-      './ui': ui,
-      './settings-sheet': sheet,
-      './room-administration': await loadTypeScript('src/room-administration.ts', {
+      './links': links,
+      '../protocol': protocol,
+      '../account-updates': updates.module,
+      '../ui': ui,
+      '../settings-sheet': sheet,
+      '../room-administration': await loadTypeScript('src/room-administration.ts', {
         modules: { './protocol': protocol, './ui': ui, './settings-sheet': sheet },
         globals: { document: dom.document },
       }),
-      './room-administration-api': await loadTypeScript('src/room-administration-api.ts', {
+      '../room-administration-api': await loadTypeScript('src/room-administration-api.ts', {
         modules: { './ui': ui },
       }),
-      './discovery': await loadDiscoveryFixture({ ...dom, ui }),
-      './appearance': await loadAppearanceFixture({ ...dom, ui }),
-      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
-      './account-sessions': await loadTypeScript('src/account-sessions.ts', {
+      '../discovery': await loadDiscoveryFixture({ ...dom, ui }),
+      '../appearance': await loadAppearanceFixture({ ...dom, ui }),
+      '../avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+      '../account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
         globals: { document: dom.document },
       }),
-      './chat-history': {
+      '../chat-history': {
         openPrivateInbox() {},
         onInboxChanged(listener) {
           state.inboxListener = listener;
@@ -211,7 +229,7 @@ async function fixture({ rejectStaticQueries = false } = {}) {
           };
         },
       },
-      './account-security': {
+      '../account-security': {
         ...security,
         mountAccountSecurity: (options) => {
           state.securityCompleted = options.completed;
@@ -219,22 +237,7 @@ async function fixture({ rejectStaticQueries = false } = {}) {
         },
       },
     },
-    globals: {
-      document: dom.document,
-      TextEncoder,
-      URL: PreviewURL,
-      window: {
-        location: { href: 'http://localhost:3000/?old=value#old-room' },
-        confirm: () => true,
-      },
-      navigator: {
-        clipboard: {
-          writeText: async (value) => {
-            state.copied = value;
-          },
-        },
-      },
-    },
+    globals,
   });
   state.openedSettings = [];
   state.accountChanges = 0;
@@ -255,7 +258,7 @@ async function fixture({ rejectStaticQueries = false } = {}) {
       state.forgotten++;
     },
   });
-  return { ...dom, ...api, ui, auth, state, profile, community, updates, elements };
+  return { ...dom, ...links, ...api, ui, auth, state, profile, community, updates, elements };
 }
 
 function dialog(fixture, title) {
@@ -1245,30 +1248,30 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     modules: { './ui': dom.ui, './auth': await loadTypeScript('src/auth.ts') },
     globals: { document: dom.document, navigator: { clipboard: { writeText: async () => {} } } },
   });
-  const api = await loadTypeScript('src/community-ui.ts', {
+  const api = await loadTypeScript('src/community/controller.ts', {
     modules: {
-      './protocol': await loadProtocol(),
-      './account-updates': accountUpdatesFixture().module,
-      './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
-      './room-administration': {
+      '../protocol': await loadProtocol(),
+      '../account-updates': accountUpdatesFixture().module,
+      '../ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
+      '../room-administration': {
         administrationSections() {
           return [];
         },
       },
-      './room-administration-api': { roomAdministrationApi: {} },
-      './chat-history': {
+      '../room-administration-api': { roomAdministrationApi: {} },
+      '../chat-history': {
         openPrivateInbox() {},
         onInboxChanged() {
           return () => {};
         },
       },
-      './discovery': await loadDiscoveryFixture(dom),
-      './account-security': security,
-      './account-sessions': await loadTypeScript('src/account-sessions.ts', {
+      '../discovery': await loadDiscoveryFixture(dom),
+      '../account-security': security,
+      '../account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': dom.ui },
       }),
-      './appearance': await loadAppearanceFixture(dom),
-      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+      '../appearance': await loadAppearanceFixture(dom),
+      '../avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
     },
     globals: {
       document: dom.document,

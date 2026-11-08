@@ -2,8 +2,8 @@ import type { AuthManager } from '../auth';
 import type { AuthScreen } from './auth';
 import type { AppNavigation } from '../app-navigation';
 import type { RoomNavigation } from '../room-navigation';
-import type { CommunityUI } from '../community-ui';
-import type { RoomClient } from '../room';
+import type { CommunityUI } from '../community/controller';
+import type { RoomClient } from '../room/client';
 import type { ServerCapabilities } from '../api-validation';
 import { api, button, el, modal } from '../ui';
 

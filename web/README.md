@@ -18,7 +18,7 @@ No handler or transport implementation is replaced. Dependency updates must
 verify the shipped module/types, media tests, and production bundle contents.
 
 The homepage and account surfaces load the application shell without the call engine.
-`room.ts` imports `MediaManager` dynamically only during explicit room setup;
+`room/client.ts` imports `MediaManager` dynamically only during explicit room setup;
 `capture-preferences.ts` contains the lightweight settings and capture helpers shared
 with the private preview UI. Opening account settings, Messages or a contact offer
 neither downloads mediasoup nor captures a device. A failed call-engine download
@@ -116,14 +116,14 @@ Node's native TypeScript execution and module mocks.
 | `src/ui.ts`                                                                                     | Text-safe controls, dialogs and named HTTP API methods                                                                                    |
 | `src/participant-hovercard.ts`                                                                  | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction                      |
 | `src/appearance.ts`                                                                             | Independent profile-card and room-heading appearance controls, previews and palette-only rendering                                        |
-| `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts`                                     | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management                                                |
+| `src/auth.ts`, `account-session-sync.ts`, `community/{controller,links,labels}.ts`              | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management                                                |
 | `src/account-security.ts`, `account-sessions.ts`                                                | Shared account-mutation ownership, passkey/recovery management and signed-in session controls                                             |
 | `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
 | `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                      |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
 | `src/signaling.ts`, `protocol.ts`, `protocol.generated.ts`                                      | WebSocket lifecycle and the generated server protocol                                                                                     |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
-| `src/room.ts`, `room-navigation.ts`                                                             | Membership, confirmed room controls, lobby status and explicit room selection/departure                                                   |
+| `src/room-navigation.ts`, `room/{client,events,errors}.ts`                                      | Membership, confirmed room controls, lobby status and explicit room selection/departure                                                   |
 | `src/app-navigation.ts`                                                                         | Typed account destinations, identity-scoped surface history and Back/Forward restoration                                                  |
 | `src/room-administration.ts`, `room-administration-api.ts`, `room-administration-validation.ts` | Shared room-management screens, authenticated HTTP controls and response validation outside room membership                               |
 | `src/media.ts`                                                                                  | Deferred call engine: transports, capture, producers and consumers                                                                        |

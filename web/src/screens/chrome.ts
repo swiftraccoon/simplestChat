@@ -1,5 +1,5 @@
 import type { Elements } from '../dom';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { SettingsSheet } from '../settings-sheet';
 import type { ClientTelemetry } from '../telemetry';
 import type { RoomLayout } from './room-layout';

@@ -1,18 +1,18 @@
-import type { AuthManager } from './auth';
-import type { Elements } from './dom';
-import { accountUpdatesLive, onAccountUpdate } from './account-updates';
-import { avatarColors } from './avatar-colors';
-import { openPrivateInbox, onInboxChanged } from './chat-history';
-import { administrationSections, type RoomAdministrationView } from './room-administration';
-import { roomAdministrationApi } from './room-administration-api';
-import { AccountSecurityFlow, mountAccountSecurity } from './account-security';
-import { mountAccountSessions } from './account-sessions';
-import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
-import { appearancePicker } from './appearance';
-import type { RoomClient } from './room';
-import { MAX_DISPLAY_NAME_LEN, ROLES, asRole, rank } from './protocol';
-import type { AccountProfile, PublicProfile, Role, RoomListItem } from './protocol';
-import type { RegistrationInvite, RoomInvite } from './api-validation';
+import type { AuthManager } from '../auth';
+import type { Elements } from '../dom';
+import { accountUpdatesLive, onAccountUpdate } from '../account-updates';
+import { avatarColors } from '../avatar-colors';
+import { openPrivateInbox, onInboxChanged } from '../chat-history';
+import { administrationSections, type RoomAdministrationView } from '../room-administration';
+import { roomAdministrationApi } from '../room-administration-api';
+import { AccountSecurityFlow, mountAccountSecurity } from '../account-security';
+import { mountAccountSessions } from '../account-sessions';
+import { mountSavedRooms, createFavoriteButton, offerContact } from '../discovery';
+import { appearancePicker } from '../appearance';
+import type { RoomClient } from '../room/client';
+import { MAX_DISPLAY_NAME_LEN, ROLES, asRole, rank } from '../protocol';
+import type { AccountProfile, PublicProfile, RoomListItem } from '../protocol';
+import type { RegistrationInvite, RoomInvite } from '../api-validation';
 import {
   api,
   asyncButton,
@@ -26,7 +26,7 @@ import {
   rasterUpload,
   safeRasterUrl,
   validatePassword,
-} from './ui';
+} from '../ui';
 import {
   actionRow,
   fieldRow,
@@ -35,7 +35,9 @@ import {
   note,
   type SheetScreen,
   type SheetSection,
-} from './settings-sheet';
+} from '../settings-sheet';
+import { INVITE_ROLES, actionLabel } from './labels';
+import { inviteLink, roomLink } from './links';
 
 interface Options {
   /** Required static hosts are validated once before this controller is mounted. */
@@ -69,26 +71,6 @@ interface Options {
   onJoinRoom: (id: string) => void;
 }
 
-/** Roles an invitation may grant. */
-const INVITE_ROLES: readonly { value: Role; label: string }[] = [
-  { value: 'member', label: 'Member' },
-  { value: 'moderator', label: 'Moderator' },
-  { value: 'admin', label: 'Admin' },
-];
-/** History actions as the server names them, read as what happened to the target. */
-const ACTION_LABELS: Record<string, string> = {
-  message_removed: 'message removed',
-  kick: 'kicked',
-  ban: 'banned',
-  unban: 'unbanned',
-  cam_ban: 'camera banned',
-  cam_unban: 'camera unbanned',
-  text_mute: 'text muted',
-  text_unmute: 'text unmuted',
-  report_resolved: 'report resolved',
-  report_dismissed: 'report dismissed',
-};
-const actionLabel = (action: string): string => ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 /** Where a list of invitations lives: a modal or a sheet screen. */
 interface Surface {
   body: HTMLElement;
@@ -1851,19 +1833,4 @@ export class CommunityUI {
     node.textContent = error instanceof Error ? error.message : 'Unable to complete action';
     node.hidden = false;
   }
-}
-
-export function roomLink(id: string): string {
-  const url = new URL(window.location.href);
-  url.hash = id;
-  url.search = '';
-  return url.href;
-}
-
-/** Keep invitation secrets in the fragment, which browsers never send in an HTTP request. */
-export function inviteLink(code: string, kind: 'room' | 'registration' = 'room'): string {
-  const url = new URL(window.location.href);
-  url.search = '';
-  url.hash = `${kind === 'registration' ? 'register-invite' : 'invite'}=${encodeURIComponent(code)}`;
-  return url.href;
 }

@@ -19,10 +19,13 @@ async function roomWithReplies(replies, telemetry = () => {}) {
       queueMicrotask(() => this.onMessage(reply));
     },
   };
-  const { RoomClient, RoomPasswordRequiredError } = await loadTypeScript('src/room.ts', {
+  const errors = await loadTypeScript('src/room/errors.ts');
+  const { RoomPasswordRequiredError } = errors;
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': {
+      './errors': errors,
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': {
         MediaManager: class {
           async setup() {}
         },

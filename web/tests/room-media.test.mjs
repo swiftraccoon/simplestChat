@@ -20,10 +20,10 @@ test('producer closure updates local controls and still removes remote media', a
       closedConsumers.push(id);
     }
   }
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': { MediaManager: FakeMediaManager },
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': { MediaManager: FakeMediaManager },
     },
   });
   const signaling = {
@@ -102,10 +102,10 @@ test('a rejected remote subscription is reported instead of silently leaving a b
     }
     closeConsumerByProducer() {}
   }
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': { MediaManager: FakeMediaManager },
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': { MediaManager: FakeMediaManager },
     },
   });
   const signaling = {
@@ -170,10 +170,10 @@ async function captureStoppedFixture(events = {}) {
       this.onLocalCaptureStopped?.(kind);
     }
   }
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': { MediaManager: FakeMediaManager },
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': { MediaManager: FakeMediaManager },
     },
   });
   const signaling = {
@@ -367,10 +367,10 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
       assert.fail('receive recovery must preserve local mute intent');
     }
   }
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': { MediaManager: FakeMediaManager },
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': { MediaManager: FakeMediaManager },
     },
   });
   const signaling = {
@@ -636,8 +636,8 @@ test('incoming refresh reports a rejected receiver replacement without consuming
 test('room construction defers the heavy media module and a retired import cannot allocate media', async () => {
   let imports = 0;
   let instances = 0;
-  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
-  Object.defineProperty(modules, './media', {
+  const modules = { '../receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, '../media', {
     get() {
       imports++;
       return {
@@ -650,7 +650,7 @@ test('room construction defers the heavy media module and a retired import canno
       };
     },
   });
-  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', { modules });
   assert.equal(imports, 0);
   const signaling = {
     setOnMessage() {},
@@ -671,8 +671,8 @@ test('a failed deferred import leaves chat connected and an explicit incoming re
   let imports = 0;
   let setups = 0;
   const errors = [];
-  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
-  Object.defineProperty(modules, './media', {
+  const modules = { '../receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, '../media', {
     get() {
       imports++;
       if (imports === 1) throw new Error('Chunk unavailable after release');
@@ -685,7 +685,7 @@ test('a failed deferred import leaves chat connected and an explicit incoming re
       };
     },
   });
-  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', { modules });
   const signaling = {
     connected: true,
     setOnMessage() {},
@@ -708,13 +708,13 @@ test('a failed deferred import leaves chat connected and an explicit incoming re
 
 test('a browser-retained module failure keeps chat and gives explicit leave/reload guidance', async () => {
   const errors = [];
-  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
-  Object.defineProperty(modules, './media', {
+  const modules = { '../receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, '../media', {
     get() {
       throw new Error('Retained module failure');
     },
   });
-  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', { modules });
   const room = new RoomClient(
     {
       connected: true,

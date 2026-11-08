@@ -1,6 +1,6 @@
 import type { AccountPreferences } from '../account-preferences';
 import type { Elements } from '../dom';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { TelemetryHandler } from '../telemetry-types';
 
 export type SocialChatOptions = {

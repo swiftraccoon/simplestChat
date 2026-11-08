@@ -1,5 +1,5 @@
 import { createScope } from './disposable';
-import type { RoomClient } from './room';
+import type { RoomClient } from './room/client';
 import type { ChatEntry, ChatStyle, ServerMessage, TimestampFormat } from './protocol';
 import { ChatStore } from './chat/store';
 import type { SocialChatOptions } from './chat/context';

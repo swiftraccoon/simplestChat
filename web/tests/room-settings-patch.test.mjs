@@ -4,10 +4,10 @@ import { loadTypeScript } from './native-fixtures.mjs';
 
 async function settingsSender() {
   const messages = [];
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': { MediaManager: class {} },
+      '../receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      '../media': { MediaManager: class {} },
     },
   });
   const room = new RoomClient(

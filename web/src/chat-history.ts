@@ -6,7 +6,7 @@ import { mountContacts } from './discovery';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { chatColor } from './avatar-colors';
 import { CHAT_REACTIONS } from './chat-reactions';
-import type { RoomClient } from './room';
+import type { RoomClient } from './room/client';
 import { api, asyncButton, button, el, field, input, modal } from './ui';
 
 type HistoryOptions = {

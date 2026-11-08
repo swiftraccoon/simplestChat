@@ -1,4 +1,4 @@
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import { TIMESTAMP_FORMATS } from '../protocol';
 import type {
   ChatEntry,

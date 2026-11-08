@@ -1,5 +1,5 @@
 import type { ChatEntry, ChatStyle } from '../protocol';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { Elements } from '../dom';
 import { renderAttachments } from '../attachments';
 import { asyncButton, button, busy, el, modal } from '../ui';

@@ -1,14 +1,11 @@
 import type { Elements } from '../dom';
-import {
-  RoomClient,
-  RoomPasswordRequiredError,
-  type Participant,
-  type ConnectionQuality,
-} from '../room';
+import { RoomClient } from '../room/client';
+import { RoomPasswordRequiredError } from '../room/errors';
+import type { ConnectionQuality, Participant } from '../room/events';
 import type { AuthManager } from '../auth';
 import type { SignalingClient } from '../signaling';
 import type { SocialChat } from '../social-chat';
-import type { CommunityUI } from '../community-ui';
+import type { CommunityUI } from '../community/controller';
 import type { ParticipantHovercard } from '../participant-hovercard';
 import type { MediaControls } from '../media-controls';
 import type { SettingsSheet } from '../settings-sheet';

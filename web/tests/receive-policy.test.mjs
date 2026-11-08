@@ -212,10 +212,10 @@ async function fixture(t, count = 12, includeScreen = true, options = {}) {
       assert.fail('receive policy must never capture');
     }
   }
-  const { RoomClient } = await loadTypeScript('src/room.ts', {
+  const { RoomClient } = await loadTypeScript('src/room/client.ts', {
     modules: {
-      './receive-policy': options.policy ?? policy,
-      './media': { MediaManager: Media },
+      '../receive-policy': options.policy ?? policy,
+      '../media': { MediaManager: Media },
     },
   });
   const signaling = {

@@ -1,6 +1,6 @@
 import { createScope } from '../disposable';
 import type { ChatAttachment, ChatEntry } from '../protocol';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { TelemetryHandler, TelemetryOutcome } from '../telemetry-types';
 import { AttachmentComposer } from '../attachments';
 import { button, el } from '../ui';

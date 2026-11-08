@@ -416,3 +416,9 @@ web/src/screens/**
 !web/src/chat/
 web/src/chat/**
 !web/src/chat/*.ts
+!web/src/room/
+web/src/room/**
+!web/src/room/*.ts
+!web/src/community/
+web/src/community/**
+!web/src/community/*.ts

@@ -1,9 +1,9 @@
 import type { Elements } from '../dom';
 import type { AuthManager } from '../auth';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import type { PwaControls } from '../pwa';
 import type { AccountPreferences } from '../account-preferences';
-import type { CommunityUI } from '../community-ui';
+import type { CommunityUI } from '../community/controller';
 import type { AppNavigation } from '../app-navigation';
 import type { MediaControls } from '../media-controls';
 import type { SocialChat } from '../social-chat';

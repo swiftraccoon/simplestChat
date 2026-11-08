@@ -1,5 +1,5 @@
 import { api } from '../src/ui';
-import type { RoomClient } from '../src/room';
+import type { RoomClient } from '../src/room/client';
 import type { SignalingClient } from '../src/signaling';
 import type {
   AccountProfile,

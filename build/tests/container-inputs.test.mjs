@@ -216,6 +216,8 @@ test('container context explicitly admits build configs, help and PWA files with
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
     '!web/src/screens/', 'web/src/screens/**', '!web/src/screens/*.ts',
     '!web/src/chat/', 'web/src/chat/**', '!web/src/chat/*.ts',
+    '!web/src/room/', 'web/src/room/**', '!web/src/room/*.ts',
+    '!web/src/community/', 'web/src/community/**', '!web/src/community/*.ts',
   ].toSorted());
   for (const [index, rule] of ignoreRules.entries()) {
     if (rule.startsWith('!') && rule.endsWith('/') && rule !== '!vendor/') {
@@ -408,6 +410,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',
     'web/src/screens/private.env', 'web/src/screens/CLAUDE.md', 'web/src/chat/private.env', 'web/src/chat/CLAUDE.md',
+    'web/src/room/private.env', 'web/src/room/CLAUDE.md', 'web/src/community/private.env', 'web/src/community/CLAUDE.md',
   ]) assert.equal(excluded(filename), true, `${filename} must stay outside the build context`);
   for (const filename of [
     'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'build.rs',
@@ -462,6 +465,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/scripts/mediasoup-runtime.mjs',
     'web/public/help.html', 'web/public/help.css', ...pwaFiles, ...iconFiles,
     'web/src/main.ts', 'web/src/style.css', 'web/src/screens/room.ts', 'web/src/chat/composer.ts',
+    'web/src/room/client.ts', 'web/src/community/controller.ts',
     'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);
 });

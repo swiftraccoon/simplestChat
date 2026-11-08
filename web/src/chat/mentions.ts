@@ -1,6 +1,6 @@
 import { createScope } from '../disposable';
 import type { ChatStyle } from '../protocol';
-import type { RoomClient } from '../room';
+import type { RoomClient } from '../room/client';
 import { el } from '../ui';
 import { chatColor } from '../avatar-colors';
 

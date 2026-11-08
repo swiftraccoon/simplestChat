@@ -339,7 +339,8 @@ export async function roomScreenFixture({
   });
   const roomModule = await loadTypeScript('src/screens/room.ts', {
     modules: {
-      '../room': { RoomClient, RoomPasswordRequiredError },
+      '../room/client': { RoomClient },
+      '../room/errors': { RoomPasswordRequiredError },
       '../icons': icons,
       '../disposable': scopeModule,
       '../appearance': { applyAppearance() {} },
