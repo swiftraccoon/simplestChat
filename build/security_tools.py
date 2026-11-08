@@ -30,6 +30,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
@@ -59,6 +60,9 @@ MAX_TOOLS = 32
 CONTROL_END = 32
 CHUNK = 65536
 DOWNLOAD_SECONDS = 180
+DOWNLOAD_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2.0
+RETRY_STATUSES = frozenset({500, 502, 503, 504})
 NAME = re.compile(r"[a-z][a-z0-9-]{0,63}")
 DIGEST = re.compile(r"[a-f0-9]{64}")
 
@@ -232,13 +236,34 @@ def default_directory(lock_digest: str, target_platform: str | None = None) -> P
     return ROOT / ".cache/security-tools" / lock_digest / (target_platform or current_platform())
 
 
+def open_release(url: str, deadline: float) -> HTTPResponse:
+    """Open a lock-validated release URL, retrying only transient gateway answers.
+
+    GitHub's release downloads answer 5xx during its incidents; a bounded, delayed
+    retry rides those out, while every 4xx and every digest or size failure stays
+    final.
+    """
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return cast("HTTPResponse", urlopen(url, timeout=30))  # noqa: S310 -- HTTPS validated by Asset.parse.
+        except HTTPError as error:
+            if error.code not in RETRY_STATUSES or attempt >= DOWNLOAD_ATTEMPTS:
+                raise
+            error.close()
+        delay = RETRY_DELAY_SECONDS * attempt
+        require(time.monotonic() + delay < deadline, "tool_download_timeout")
+        time.sleep(delay)
+
+
 def download(asset: Asset) -> bytes:
-    """Bound transport bytes/time and authenticate the archive before parsing it."""
+    """Bound transport attempts, bytes and time; authenticate the archive before parsing."""
     deadline = time.monotonic() + DOWNLOAD_SECONDS
     chunks: list[bytes] = []
     size = 0
     # Only lock-validated release URLs are accepted; redirects must retain TLS.
-    with cast("HTTPResponse", urlopen(asset.url, timeout=30)) as response:  # noqa: S310 -- HTTPS validated by Asset.parse.
+    with open_release(asset.url, deadline) as response:
         require(urlsplit(response.url).scheme == "https", "insecure_tool_redirect")
         while True:
             require(time.monotonic() < deadline, "tool_download_timeout")

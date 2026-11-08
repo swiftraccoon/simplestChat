@@ -11,9 +11,11 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from http.client import HTTPMessage
 from pathlib import Path
 from typing import TYPE_CHECKING, cast, override
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -347,6 +349,70 @@ class InstallationTests(unittest.TestCase):
         with self.assertRaises(OSError):
             _ = self.install()
         self.assertEqual(marker.read_text(), "owner data")
+
+
+RETRY_CONTENT = b"scanner bytes"
+RETRY_ASSET = tools.Asset(
+    URL, hashlib.sha256(RETRY_CONTENT).hexdigest(), "binary", {"scanner": "scanner"}
+)
+
+
+class FakeResponse(io.BytesIO):
+    """A completed HTTPS response carrying fixture bytes."""
+
+    url: str = URL
+
+
+class DownloadRetryTests(unittest.TestCase):
+    """Transient gateway answers are retried within bounds; everything else is final."""
+
+    @staticmethod
+    def gateway(code: int) -> HTTPError:
+        """Build the error urlopen raises for a non-2xx answer."""
+        return HTTPError(URL, code, "gateway", HTTPMessage(), None)
+
+    def test_gateway_failures_are_retried_with_increasing_delays(self) -> None:
+        """Two 5xx answers followed by the archive yield the verified bytes after two waits."""
+        answers = [self.gateway(504), self.gateway(502), FakeResponse(RETRY_CONTENT)]
+        with (
+            patch("security_tools.urlopen", side_effect=answers) as urlopen,
+            patch("security_tools.time.sleep") as sleep,
+        ):
+            self.assertEqual(tools.download(RETRY_ASSET), RETRY_CONTENT)
+        self.assertEqual(urlopen.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2.0, 4.0])
+
+    def test_persistent_gateway_failures_and_client_errors_are_final(self) -> None:
+        """A third 5xx answer and any 4xx answer propagate without further attempts."""
+        with (
+            patch("security_tools.urlopen", side_effect=[self.gateway(504)] * 3) as urlopen,
+            patch("security_tools.time.sleep") as sleep,
+            self.assertRaises(HTTPError) as exhausted,
+        ):
+            _ = tools.download(RETRY_ASSET)
+        exhausted.exception.close()
+        self.assertEqual((urlopen.call_count, sleep.call_count), (3, 2))
+        with (
+            patch("security_tools.urlopen", side_effect=[self.gateway(404)]) as urlopen,
+            patch("security_tools.time.sleep") as sleep,
+            self.assertRaises(HTTPError) as refused,
+        ):
+            _ = tools.download(RETRY_ASSET)
+        refused.exception.close()
+        self.assertEqual((urlopen.call_count, sleep.call_count), (1, 0))
+
+    def test_retries_stay_inside_the_download_deadline(self) -> None:
+        """A retry that would outlive the transport budget fails as a timeout instead."""
+        unavailable = self.gateway(503)
+        with (
+            patch("security_tools.urlopen", side_effect=[unavailable]),
+            patch.object(tools, "DOWNLOAD_SECONDS", 1),
+            patch("security_tools.time.sleep") as sleep,
+            self.assertRaisesRegex(tools.ToolError, "^tool_download_timeout$"),
+        ):
+            _ = tools.download(RETRY_ASSET)
+        unavailable.close()
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":
