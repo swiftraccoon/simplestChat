@@ -888,15 +888,21 @@ async fn stale_digests_are_not_found() {
     assert_ne!(first, second);
     let current = fixture.avatar(&second);
     assert_eq!(fixture.get(&current, false).await.status(), StatusCode::OK);
-    for stale in [
-        fixture.avatar(&first),
-        fixture.avatar(&second.to_uppercase()),
-        fixture.avatar(&second[..15]),
-        current.replace(&format!("?v={second}"), ""),
-        current.replace(&fixture.id().to_string(), &Uuid::new_v4().to_string()),
+    for (variant, stale) in [
+        ("the replaced digest", fixture.avatar(&first)),
+        (
+            "an uppercase digest",
+            fixture.avatar(&second.to_uppercase()),
+        ),
+        ("a truncated digest", fixture.avatar(&second[..15])),
+        ("no digest", current.replace(&format!("?v={second}"), "")),
+        (
+            "another account",
+            current.replace(&fixture.id().to_string(), &Uuid::new_v4().to_string()),
+        ),
     ] {
         let status = fixture.get(&stale, false).await.status();
-        assert_eq!(status, StatusCode::NOT_FOUND, "{stale}");
+        assert_eq!(status, StatusCode::NOT_FOUND, "{variant}");
     }
     fixture.save(serde_json::json!({"avatar_url": null})).await;
     let status = fixture.get(&current, false).await.status();
