@@ -375,6 +375,36 @@ release, therefore, stop the public project as described below, apply
 `public.yml` (it reinstalls the Caddyfile and records the receipt), and run
 the deployment command again.
 
+A release that also removes a deployment secret and adds migrations has one
+working order. The release that replaced JWT access tokens with opaque session
+handles is one: it drops `jwt_secret`, adds migrations 037 and 038 and changes
+the release helper (`files/release_public.py`).
+
+1. Push the revision and follow its hosted CI to green; the maintenance release
+   below needs that run's signed application and Ops artifacts.
+2. Apply `proxy-config.yml` as shown above.
+3. Announce downtime and stop the public project with the command below.
+4. On the host, delete the `jwt_secret` entry from
+   `/etc/simplestchat-public/secrets.json`. Keep the file root-owned with mode
+   `0600` and leave the six remaining 64-hex values untouched: `public.yml`
+   accepts exactly those six names and stops with "Operational precondition
+   failed" while any other key is present.
+5. Run `public.yml`; it reinstalls the Caddyfile and records the browser-asset
+   receipt, without which the maintenance release is refused. Then start the
+   project again with the [explicit deployment command](#deploy-explicitly):
+   the release helper requires the running services it backs up and replaces.
+   Until the next step installs the new image, the old one runs without a JWT
+   secret, so account sign-in is unavailable.
+6. Run [the maintenance release](RELEASES.md#schema-and-configuration-changes-the-maintenance-release)
+   for the migrations with both signed artifacts from step 1. Stage without
+   `scpub_release_prepared` so the changed release helper is reconciled, which
+   is what the wrapper's `--install-helpers` requests; the
+   `build/deploy.py --maintenance` route supplies no signed Ops inputs and
+   cannot drive this release.
+7. Make fresh signed Ops and server selections before the next four-case
+   maintenance fixture run ([the testing guide](../../docs/testing.md#optional-maintenance-prerequisite-experiments)):
+   its migration pins moved with 037 and 038.
+
 Before base-host provisioning, image builds, private benchmarks, or public
 configuration changes, announce downtime and stop the entire public project:
 
