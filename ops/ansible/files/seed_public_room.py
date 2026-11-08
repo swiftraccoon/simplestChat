@@ -41,7 +41,9 @@ MIN_PASSWORD_CHARACTER = 33
 MAX_PASSWORD_CHARACTER = 126
 MAX_COOKIE_BYTES = 1024
 MAX_OWNED_ROOMS = 100
-MAX_TOKEN_BYTES = 8192
+# An access token is 32 random bytes sent once as 43 unpadded base64url
+# characters (src/auth/access_tokens.rs); this helper reads nothing from it.
+ACCESS_TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 PRIVATE_FILE_MODE = 0o600
 ROOM_REQUEST: dict[str, JsonValue] = {
     "id": "lobby",
@@ -430,11 +432,7 @@ def seed(api: SeedApi, owner: Owner, report: SeedReport) -> None:
     if not isinstance(token, str):
         code = "invalid_authentication_token"
         raise SeedError(code)
-    require(
-        re.fullmatch(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token)
-        and len(token) <= MAX_TOKEN_BYTES,
-        "invalid_authentication_token",
-    )
+    require(ACCESS_TOKEN.fullmatch(token) is not None, "invalid_authentication_token")
     api.token = token
     require(api.has_refresh_cookie(), "refresh_cookie_missing")
 

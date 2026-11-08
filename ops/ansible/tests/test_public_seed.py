@@ -28,8 +28,9 @@ OWNER: seed.Owner = {
     "password": "Private-fixture-password-" + "x" * 32,
 }
 OWNER_ID = "11111111-1111-4111-8111-111111111111"
+ACCESS_TOKEN = "owner-access-token-fixture-" + "0" * 16
 AUTH: JsonObject = {
-    "token": "aaaa.bbbb.cccc",
+    "token": ACCESS_TOKEN,
     "user": {"id": OWNER_ID, "email": OWNER["email"]},
 }
 NEW_ROOM: JsonObject = {
@@ -202,6 +203,18 @@ class PublicSeedTests(unittest.TestCase):
         self.assertEqual(api.calls[3], ("POST", "/api/rooms", seed.ROOM_REQUEST))
         self.assertFalse(seed.ROOM_REQUEST["secret"])
         self.assertTrue(seed.ROOM_REQUEST["guests_can_broadcast"])
+
+    def test_only_an_opaque_43_character_access_token_is_accepted(self) -> None:
+        """A sign-in token is 32 random bytes as 43 unpadded base64url characters, never a JWT."""
+        self.assertEqual(len(ACCESS_TOKEN), 43)
+        for token in ["aaaa.bbbb.cccc", ACCESS_TOKEN[:-1], ACCESS_TOKEN + "0", "+" * 43, ""]:
+            api = FakeApi([(200, {**AUTH, "token": token})])
+            with (
+                self.subTest(token=token),
+                self.assertRaisesRegex(seed.SeedError, "^invalid_authentication_token$"),
+            ):
+                seed.seed(api, OWNER, report())
+            self.assertIsNone(api.token)
 
     def test_existing_owned_room_is_preserved(self) -> None:
         """An existing room's user changes survive without registration or update requests."""
