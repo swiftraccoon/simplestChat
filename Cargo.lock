@@ -1957,7 +1957,7 @@ dependencies = [
  "log",
  "lru",
  "mediasoup-sys",
- "mediasoup-types",
+ "mediasoup-types 0.6.0",
  "nohash-hasher",
  "once_cell",
  "parking_lot",
@@ -1986,6 +1986,19 @@ name = "mediasoup-types"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48bb1f01a29d01fe551d526ecfd49561eafc27b24e19d1a51f6cad60a755a374"
+dependencies = [
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mediasoup-types"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0225e5d3e72291c4e819837d21085faa73f5f9a8ee250a88a29a12b7a85601fe"
 dependencies = [
  "once_cell",
  "regex",
@@ -3420,7 +3433,7 @@ dependencies = [
  "icu_properties",
  "lru",
  "mediasoup",
- "mediasoup-types",
+ "mediasoup-types 0.10.0",
  "num_cpus",
  "rand 0.10.3",
  "reqwest",
@@ -3456,7 +3469,7 @@ dependencies = [
  "futures-util",
  "hex",
  "mediasoup",
- "mediasoup-types",
+ "mediasoup-types 0.10.0",
  "nix",
  "rand 0.10.3",
  "regex",
