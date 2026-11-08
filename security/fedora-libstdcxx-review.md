@@ -1,5 +1,16 @@
 # Fedora static C++ runtime license metadata review
 
+## x86_64 scope moved to 16.2.1-3 — 2026-11-08
+
+The canonical x86_64 record now covers `libstdc++-static` `16.2.1-3.fc44` from
+`gcc-16.2.1-3.fc44.src.rpm`, observed in the native receipt of CI run 42453211328
+and reviewed in the
+[runtime license review](fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08).
+The x86_64 16.2.1-2 scope is no longer active. The aarch64 16.2.1-2 record and the
+ARM observation below are unchanged; an ARM 16.2.1-3 package needs its own review.
+
+## Original review — 2026-09-30
+
 Reviewed 2026-09-30; the two exact `image-license` records expire 2026-11-29.
 They apply only to Fedora 44 `libstdc++-static` version `16.2.1-2.fc44`, epoch 0,
 source RPM `gcc-16.2.1-2.fc44.src.rpm`, and the complete unchanged license expression

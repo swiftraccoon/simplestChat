@@ -18,11 +18,15 @@ from security_tools import ToolError
 EVIDENCE = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
 GLIBC_EVIDENCE = ROOT / "security/license-evidence/fedora-glibc-2026-10-01.json"
 TZDATA_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026-10-10.json"
+TZDATA_2026F_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026f-1.fc44.json"
 VIM_EVIDENCE = ROOT / "security/license-evidence/fedora-vim-2026-10-19.json"
+GCC_EVIDENCE = ROOT / "security/license-evidence/fedora-gcc-16.2.1-3.fc44.json"
 GLIBC_PACKAGES = {"glibc", "glibc-common", "glibc-minimal-langpack"}
 TZDATA_PACKAGES = {"tzdata"}
 VIM_PACKAGES = {"vim-data", "vim-minimal"}
-SUPERSEDED_PACKAGES = GLIBC_PACKAGES | TZDATA_PACKAGES | VIM_PACKAGES
+GCC_PACKAGES = {"libgcc", "libgomp", "libstdc++"}
+SUPERSEDED_PACKAGES = GLIBC_PACKAGES | TZDATA_PACKAGES | VIM_PACKAGES | GCC_PACKAGES
+REFRESH_RUN = 42453211328
 TODAY = date(2026, 9, 30)
 
 
@@ -55,8 +59,9 @@ def current_packages() -> list[JsonObject]:
     return [
         *retained,
         *packages(object_value(image.report(GLIBC_EVIDENCE))),
-        *packages(object_value(image.report(TZDATA_EVIDENCE))),
+        *packages(object_value(image.report(TZDATA_2026F_EVIDENCE))),
         *packages(object_value(image.report(VIM_EVIDENCE))),
+        *packages(object_value(image.report(GCC_EVIDENCE))),
     ]
 
 
@@ -138,7 +143,7 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
 
     def test_superseded_tzdata_scope_is_historical_evidence_only(self) -> None:
-        """The 2026e refresh does not accumulate a compatibility approval for 2026c."""
+        """Neither the 2026e refresh nor its 2026c predecessor keeps a compatibility approval."""
         updated = object_value(image.report(TZDATA_EVIDENCE))
         old = [
             item for item in packages(evidence()) if string_value(item["name"]) in TZDATA_PACKAGES
@@ -152,10 +157,10 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         )
         current = reviews.read_exceptions(today=TODAY)
         policy = image.load_policy(ROOT / "security/image-policy.json")
-        self.assertEqual(
-            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 1
-        )
-        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        for historical in (old, new):
+            self.assertEqual(
+                len(array_value(image.license_verdict(historical, policy, current)["blocked"])), 1
+            )
         historical = {
             string_value(object_value(item)["name"]): object_value(item)
             for item in array_value(evidence()["packages"])
@@ -169,6 +174,84 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         new_notices = object_value(object_value(updated["noticeSets"])["N01"])
         self.assertEqual(old_notices["files"], new_notices["files"])
         self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+
+    def test_tzdata_2026f_refresh_supersedes_the_2026e_scope(self) -> None:
+        """The 2026-11-08 refresh replaces the 2026e scope without accumulating approvals."""
+        updated = object_value(image.report(TZDATA_2026F_EVIDENCE))
+        previous = object_value(image.report(TZDATA_EVIDENCE))
+        old = packages(previous)
+        new = packages(updated)
+        self.assertEqual({string_value(item["name"]) for item in new}, TZDATA_PACKAGES)
+        self.assertEqual(len(new), 1)
+        self.assertEqual(
+            {string_value(scope) for scope in array_value(updated["supersedes"])},
+            {string_value(item["purl"]) for item in old},
+        )
+        current = reviews.read_exceptions(today=TODAY)
+        policy = image.load_policy(ROOT / "security/image-policy.json")
+        self.assertEqual(
+            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 1
+        )
+        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        scoped = [entry for entry in current if entry.scope == new[0]["purl"]]
+        self.assertEqual(len(scoped), 1)
+        self.assertIn("fedora-tzdata-2026f-1.fc44.json", scoped[0].reachability)
+        old_declaration = object_value(object_value(previous["declarations"])["D01"])
+        new_declaration = object_value(object_value(updated["declarations"])["D01"])
+        self.assertEqual(old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"])
+        old_notices = object_value(object_value(previous["noticeSets"])["N01"])
+        new_notices = object_value(object_value(updated["noticeSets"])["N01"])
+        self.assertEqual(old_notices["files"], new_notices["files"])
+        self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+        canonical = object_value(updated["canonical"])
+        self.assertEqual(canonical["ciRunId"], REFRESH_RUN)
+        self.assertFalse(canonical["imageCheckPassed"])
+        self.assertFalse(canonical["licenseCheckPassedBeforeReview"])
+        self.assertIn(new[0]["purl"], array_value(canonical["licenseBlockedBeforeReview"]))
+
+    def test_superseded_gcc_scopes_are_historical_evidence_only(self) -> None:
+        """The 16.2.1-3 refresh does not accumulate compatibility approvals for 16.2.1-2."""
+        updated = object_value(image.report(GCC_EVIDENCE))
+        old = [item for item in packages(evidence()) if string_value(item["name"]) in GCC_PACKAGES]
+        new = packages(updated)
+        self.assertEqual({string_value(item["name"]) for item in new}, GCC_PACKAGES)
+        self.assertEqual(len(new), 3)
+        superseded = {string_value(scope) for scope in array_value(updated["supersedes"])}
+        self.assertTrue({string_value(item["purl"]) for item in old} <= superseded)
+        self.assertEqual(len(superseded), 4)
+        current = reviews.read_exceptions(today=TODAY)
+        self.assertTrue(superseded.isdisjoint(entry.scope for entry in current))
+        policy = image.load_policy(ROOT / "security/image-policy.json")
+        self.assertEqual(
+            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 3
+        )
+        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        for package in new:
+            scoped = [entry for entry in current if entry.scope == package["purl"]]
+            with self.subTest(name=package["name"]):
+                self.assertEqual(len(scoped), 1)
+                self.assertIn("fedora-gcc-16.2.1-3.fc44.json", scoped[0].reachability)
+        old_declaration = object_value(object_value(evidence()["declarations"])["D09"])
+        new_declaration = object_value(object_value(updated["declarations"])["D01"])
+        self.assertEqual(old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"])
+        old_notices = object_value(object_value(evidence()["noticeSets"])["N08"])
+        new_notices = object_value(object_value(updated["noticeSets"])["N01"])
+        self.assertEqual(old_notices["files"], new_notices["files"])
+        self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+        canonical = object_value(updated["canonical"])
+        self.assertEqual(canonical["ciRunId"], REFRESH_RUN)
+        self.assertFalse(canonical["imageCheckPassed"])
+        self.assertEqual(
+            set(array_value(object_value(updated["verification"])["beforeReviewBlockedScopes"])),
+            {
+                *(string_value(item["purl"]) for item in new),
+                string_value(
+                    object_value(
+                        object_value(array_value(updated["staticRuntimeInputs"])[0])["canonical"]
+                    )["purl"]
+                ),
+            },
+        )
 
     def test_superseded_vim_scopes_are_historical_evidence_only(self) -> None:
         """The 9.2.1202 refresh does not accumulate compatibility approvals for 9.2.1129."""

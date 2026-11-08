@@ -16,6 +16,7 @@ from release_json import JsonObject, array_value, object_value, string_value
 from security_tools import ToolError
 
 EVIDENCE = ROOT / "security/license-evidence/fedora-libstdcxx-16.2.1-2.fc44.json"
+CANONICAL_EVIDENCE = ROOT / "security/license-evidence/fedora-gcc-16.2.1-3.fc44.json"
 TODAY = date(2026, 9, 30)
 
 
@@ -23,6 +24,24 @@ def observation() -> JsonObject:
     """Read the retained real ARM observation independently of the policy entries."""
     evidence = object_value(image.report(EVIDENCE))
     return object_value(evidence["observation"])
+
+
+def canonical_observation() -> JsonObject:
+    """Read the retained canonical x86_64 native-receipt observation of the 16.2.1-3 refresh."""
+    evidence = object_value(image.report(CANONICAL_EVIDENCE))
+    static = object_value(array_value(evidence["staticRuntimeInputs"])[0])
+    return object_value(static["observation"])
+
+
+def canonical_package() -> JsonObject:
+    """Use the observed canonical x86_64 owner and declared aggregate exactly as received."""
+    observed = canonical_observation()
+    value: JsonObject = {
+        "name": "libstdc++-static",
+        "type": "binary",
+        "licenses": [{"spdxExpression": observed["license"]}],
+    }
+    return image.static_rpm(value, string_value(observed["owner"]).split("\t"))
 
 
 def package(architecture: str = "aarch64", *, epoch: str = "0") -> JsonObject:
@@ -62,20 +81,34 @@ class FedoraRuntimeReviewTests(unittest.TestCase):
         self.assertNotIn("LicenseRef-Fedora-Public-Domain", array_value(policy["allowedLicenses"]))
 
     def test_observed_architectures_keep_distinct_exact_reviews(self) -> None:
-        """Canonical x86 evidence confirms its scope without weakening separate ARM review."""
+        """Canonical x86 evidence moves its scope without weakening the separate ARM review."""
         self.assertEqual(observation()["platform"], "linux/arm64")
+        self.assertEqual(canonical_observation()["platform"], "linux/amd64")
+        self.assertEqual(canonical_observation()["license"], observation()["license"])
         current = reviews.read_exceptions(today=TODAY)
         scoped = [entry for entry in current if entry.scanner == "image-license"]
         policy = image.load_policy(ROOT / "security/image-policy.json")
-        for architecture in ("aarch64", "x86_64"):
-            selected = package(architecture)
-            with self.subTest(architecture=architecture):
+        for selected in (package(), canonical_package()):
+            with self.subTest(purl=selected["purl"]):
                 matching = [entry for entry in scoped if entry.scope == selected["purl"]]
                 self.assertEqual(len(matching), 1)
                 self.assertTrue(image.license_verdict([selected], policy, matching)["passed"])
-                if architecture == "x86_64":
-                    self.assertIn("now confirmed", matching[0].reachability)
-                    self.assertIn("canonical linux/amd64", matching[0].reachability)
+        canonical = canonical_package()
+        self.assertIn("@16.2.1-3.fc44", string_value(canonical["purl"]))
+        self.assertIn("arch=x86_64", string_value(canonical["purl"]))
+        entry = next(entry for entry in scoped if entry.scope == canonical["purl"])
+        self.assertIn("canonical linux/amd64", entry.reachability)
+        self.assertIn("fedora-gcc-16.2.1-3.fc44.json", entry.reachability)
+        # The superseded x86_64 16.2.1-2 scope and an unobserved ARM 16.2.1-3 stay unreviewed.
+        superseded = package("x86_64")
+        unobserved = {
+            **package(),
+            "purl": string_value(package()["purl"]).replace("16.2.1-2", "16.2.1-3"),
+        }
+        for selected in (superseded, unobserved):
+            with self.subTest(purl=selected["purl"]):
+                self.assertFalse(any(entry.scope == selected["purl"] for entry in scoped))
+                self.assertFalse(image.license_verdict([selected], policy, current)["passed"])
         self.assertNotEqual(package()["purl"], package("x86_64")["purl"])
 
     def test_changed_identity_or_license_does_not_borrow_review(self) -> None:

@@ -1,5 +1,106 @@
 # Canonical runtime RPM license context review
 
+## gcc 16.2.1-3 and tzdata 2026f-1 refresh — 2026-11-08
+
+The lost layer cache in
+[CI run 42453211328](https://github.com/swiftraccoon/simplestChat/actions/runs/42453211328)
+(revision `8f00770ef9ea34ce0adb73132d6e597479241fef`, image
+`sha256:b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2`) rebuilt
+both Fedora package layers from the 2026-11-08 repositories. The image license
+check blocked exactly five scopes: `libgcc`, `libgomp`, `libstdc++` and the static
+`libstdc++-static` moved from `16.2.1-2.fc44` to `16.2.1-3.fc44` (x86_64), and
+`tzdata` moved from `2026e-1.fc44` to `2026f-1.fc44` (noarch). Their **exact new
+PURLs replace the five old scopes** in the active ledger. The separate aarch64
+`libstdc++-static` 16.2.1-2 review keeps its own evidence and is not extended to
+16.2.1-3. The 25 other image-license records remain unchanged. The
+[gcc evidence](license-evidence/fedora-gcc-16.2.1-3.fc44.json) and
+[tzdata evidence](license-evidence/fedora-tzdata-2026f-1.fc44.json) record this
+separate source review; earlier evidence remains byte-for-byte historical.
+Owner `swiftraccoon` and expiry **2026-11-29** remain unchanged.
+
+All four GCC packages keep the complete aggregate declaration and fingerprint
+`license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c`; tzdata
+keeps `LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)`
+and `license:adb0ac3b20b5f933623670fd873e969dbac77eadd946649c0b7683e0c87b6f82`.
+Only the Syft declaration's provenance layer digest changes. No term is removed
+from any declaration and no license is added to the global allowlist.
+
+### GCC source and notice comparison
+
+The official read-only Koji `getBuild` response identifies successful
+[build 3130496](https://koji.fedoraproject.org/koji/buildinfo?buildID=3130496),
+`gcc-16.2.1-3.fc44`, completed 2026-10-30, and Fedora dist-git commit
+`79e42aa8526f4487e07566b6a06894ec5eb33baf`; Bodhi update `FEDORA-2026-d732fb97a0`
+reached stable on 2026-11-01. Koji build 3082913 binds the reviewed 16.2.1-2 to
+commit `751f1a1e4dbcefa2345b538165d4b3bad2826c1c`, whose spec is byte-identical to
+the one reviewed on 2026-09-30. Outside `%changelog` the
+[new spec](https://src.fedoraproject.org/rpms/gcc/raw/79e42aa8526f4487e07566b6a06894ec5eb33baf/f/gcc.spec)
+moves the snapshot from GCC revision `95ef1679dd68f27b3d056a497318089d85aa0d55`
+(20260819) to `9854b2abd1c53ec5909a0c6fc2a89d27110865e9` (20261029), regroups the
+configure options into common, native and cross sets, and adds cross-compiler and
+sysroot packaging that is disabled on Fedora 44 (`build_cross 0`,
+`build_sysroot 0`). The single source-wide `License:` line, every Source and Patch
+entry, the existing `%files` sections and the `%license gcc/COPYING* COPYING.RUNTIME`
+installation are unchanged, and no subpackage overrides the license. Only the GCC
+snapshot archive changes in the sources manifest; isl, newlib and nvptx-tools are
+unchanged.
+
+At the new revision `libgcc/libgcc2.c`, `libgomp/libgomp.h`,
+`libstdc++-v3/include/bits/stl_algobase.h` and `COPYING.RUNTIME` are byte-identical
+to the members the 2026-09-30 review hashed (GPL-3.0-or-later with the GCC Runtime
+Library Exception 3.1), and `gcc/COPYING`, `COPYING.LIB`, `COPYING3` and
+`COPYING3.LIB` are byte-identical at both revisions. The five installed
+`/usr/share/licenses/libgcc/` notices match those members, their RPM digests and
+the historical notice set. The authenticated canonical native receipt names
+`libstdc++-static 0:16.2.1-3.fc44.x86_64` with the same complete aggregate, and
+the compiler reports `16.2.1 20261029 (Red Hat 16.2.1-3)`. The new GCC snapshot
+archive itself was not downloaded; its manifest SHA-512 is recorded.
+
+| Package | Context and retained evidence |
+| --- | --- |
+| libgcc | Same declaration and fingerprint; owns the five shared GCC notices, byte-identical to 16.2.1-2 and to the new revision's members. Runtime exception and redistribution conditions are not discharged by this review. |
+| libgomp, libstdc++ | Same source RPM, aggregate and fingerprint; no own notice file, so the same-source libgcc notice set remains required. `libgomp.h` and `stl_algobase.h` are unchanged at the new revision. |
+| libstdc++-static (x86_64) | Static build input observed in the native receipt, not a runtime file. Same aggregate; member survival through final linking is not asserted. The aarch64 16.2.1-2 record is a separate review. |
+
+### tzdata source and notice comparison
+
+Koji [build 3134735](https://koji.fedoraproject.org/koji/buildinfo?buildID=3134735),
+`tzdata-2026f-1.fc44`, completed 2026-11-04, comes from Fedora commit
+`940adc24a59d1b113ba27fc67945a56e6d6e4e09`; Bodhi update `FEDORA-2026-eb1954eea8`
+reached stable on 2026-11-06. The
+[new spec](https://src.fedoraproject.org/rpms/tzdata/raw/940adc24a59d1b113ba27fc67945a56e6d6e4e09/f/tzdata.spec)
+differs from the reviewed 2026e-1 spec (commit
+`64d594762ddecc2a65d9d5b7ee635a396f0dcf26`) outside `%changelog` only in its
+Version and release-version defines and one new patch,
+`0001-Revert-zonenow.tab-to-2026a-mostly.patch`, which changes only `zonenow.tab`.
+Its License line, Source entries, notice installation and subpackages are
+unchanged. The `tzdata2026f.tar.gz` and `tzcode2026f.tar.gz` archives downloaded
+over HTTPS from IANA match the commit's SHA-512 manifest; the javazic entry is
+identical to the reviewed manifest. The 252-byte `LICENSE` member of both archives
+(SHA-256 `0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf`) is
+byte-identical to the installed `/usr/share/licenses/tzdata/LICENSE`, its RPM
+digest and the 2026e-1 review. `tzdata-java` and Java payload paths remain absent
+from the runtime inventory. No downloaded code was executed.
+
+### Artifact binding and limits
+
+The evidence is
+[artifact 13606583207](https://github.com/swiftraccoon/simplestChat/actions/runs/42453211328/artifacts/13606583207)
+of that run (1,816,845 bytes; its SHA-256 matches GitHub's artifact digest, and all
+21 members equal the reviewed copies). Its `outcome.json` binds the runtime notice
+report, runtime proof, native receipt and SPDX document by hash, and the
+independent Syft report agrees on image ID, revision and the ordered declarations.
+That retained image check **failed**: vulnerabilities passed, the license verdict
+blocked exactly these five scopes, and the secret verdict blocked eight layer-001
+regions that the [separate secret review](fedora-rpm-secret-review.md) covers.
+Replaying the tier's own `license_verdict` over the retained SBOM with the updated
+ledger blocks nothing and waives 28 records; that offline replay is not a rerun
+of the image gate, and this assessment does not relabel the retained run as
+successful. Any image-relevant ledger change also invalidates the cached runtime
+package layer, so the next hosted run resolves the Fedora repositories again and
+must itself pass. Ledger matching remains exact **PURL plus fingerprint**; source
+and notice hashes record review evidence, not additional automatic matching fields.
+
 ## util-linux-core 2.41.6 source/RPM assessment — 2026-10-29
 
 The exact `util-linux-core-2.41.6-1.fc44.x86_64` binary RPM and matching source

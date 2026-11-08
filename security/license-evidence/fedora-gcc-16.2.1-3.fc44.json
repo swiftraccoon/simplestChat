@@ -1,0 +1,481 @@
+{
+  "canonical": {
+    "archiveSha256": "c22fa9615cf68a24b219ccec588ed905ba756aba49c343fc51f1c84494a927ee",
+    "artifactId": 13606583207,
+    "artifactUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/42453211328/artifacts/13606583207",
+    "artifactZipBytes": 1816845,
+    "artifactZipDigestMatchesGithubApi": true,
+    "artifactZipSha256": "49c4c985c71471efecd1b17384511bf961bc136e16eb8fd52e1b4ad2a7eb32b4",
+    "binarySha256": "022d3b5a1db8500dda1848c7265f17fcdebd8b65f7753f9e2e70994698bf7af1",
+    "binding": "outcome.json records runtimeLicenseEvidenceSha256, runtimeProofSha256, nativeSha256 and sbomSha256 equal to the member hashes above; the Syft document is retained by its own hash. All 21 artifact members equal the reviewed copies byte for byte.",
+    "ciRunId": 42453211328,
+    "ciRunUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/42453211328",
+    "imageCheckPassed": false,
+    "imageId": "sha256:b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2",
+    "licenseBlockedBeforeReview": [
+      "pkg:rpm/fedora/libgcc@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/libgomp@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/tzdata@2026f-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026f-1.fc44.src.rpm",
+      "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm"
+    ],
+    "licenseCheckPassedBeforeReview": false,
+    "licenseWaivedBeforeReview": 23,
+    "nativeSha256": "4ab89670207f0720a1b75d1516f8ae20ec788ab01c173c03e0f6d38457df6ce2",
+    "noticeCheckPassed": true,
+    "noticeSha256": "8527b0994a8f379bef43575c8355117d1aac5339e9f62a001ad9c0d9f4c1bc6c",
+    "outcomeSha256": "1a9fd76abb18b0127c9ccfe5a38f5b50cf988a2fd141ccaf6d8215669ad04505",
+    "platform": "linux/amd64",
+    "recordedExceptionsSha256": "b9a23f08c88091d6885e9811cb96378c7033e404ec22772008630a9019e2d5ed",
+    "recordedPolicySha256": "793348cbcda877fa794cd84dc4f5f8d3ffe40cc78bcca86f81c9bc939da5cf79",
+    "recordedToolLockSha256": "dc0fe6c4c227dc487103f7eabdf0583a8755e98c51eea650cd30023ca6681bf6",
+    "revision": "8f00770ef9ea34ce0adb73132d6e597479241fef",
+    "runtimeProofPassed": true,
+    "runtimeProofSha256": "32a0fc3c1f73d3d491bcf24c39618e85b24f2963f37ddfbdeb5e16763b6848ac",
+    "secretCheckPassedBeforeReview": false,
+    "secretReview": "security/secret-evidence/fedora-rpm-2026-11-08.json",
+    "selectedImage": {
+      "architecture": "amd64",
+      "archiveConfigSha256": "b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2",
+      "id": "sha256:b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2",
+      "layers": [
+        "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+        "sha256:6c068615fcb8a6443458d2c163588564527536f50336d5763d04732a19c6fe4f",
+        "sha256:6aa38ecb552ab7db3f765fb023c3f1192314840b36affbd3dcf9c68fe77a5d8d",
+        "sha256:ed803a96c37da67dd5dabfd4cffb3d2e40689c2e3dfaa470d133b380fc05e36f",
+        "sha256:3959ea839bb0dc1f0df7c8e6977b605887511b6106be2590dbce4a5bc46616c9",
+        "sha256:2f7342628c5e321696c7139e2f8c3d0c708f76a1343090a58cf7d4aa87834451",
+        "sha256:f832fbabbba6474c9ed0481f2ca921542c914663246bec1fcd0bf4d2275946b4",
+        "sha256:1a2ed30bd1a9a5f01e4348eddec01de8d457551800ecea7792bc1dde62f4000c",
+        "sha256:9260e60639ef97415385ae7e3a0e07472e95c52a287a9bbe7f98eed922c076a9",
+        "sha256:87c5d08ad46d4ce616658eabc56a5ea98225727e80a8d4eab1b86aa4a64bcfbd",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "spdxSha256": "bbc56c25edc07623037d29073ac7000a8496893719d8df6bfd3dfd36a050dfb4",
+    "syftSha256": "6e90d3b3b9ac277532eec64bc27d988186d3ff600b1f2fcd2d04c8e7f176dc09",
+    "vulnerabilityCheckPassed": true
+  },
+  "conditions": [
+    "Each active ledger entry uses the observed canonical PURL including architecture, epoch, version and source RPM, and one current declaration fingerprint. No architecture scope was synthesized; the separate aarch64 libstdc++-static 16.2.1-2 review is unchanged and is not extended to 16.2.1-3.",
+    "Complete ordered declarations and the required shared libgcc notice set matched this image. Original raw record hashes retain scanner provenance; only validated location layer digests changed.",
+    "The existing ledger matches exact PURL plus declaration fingerprint; image, receipt, source and notice hashes in this evidence record the reviewed artifact, not additional automatically enforced matching fields. Changed notice, source or distribution context requires review even if a scanner emits the same PURL and declaration.",
+    "GCC Runtime Library Exception conditions and source/compilation/redistribution conditions remain. Unused code and absent execution do not remove those obligations. This is technical scanner policy, not complete redistribution clearance.",
+    "Changed packages, sources, declarations, notices or expiry require fresh review. No wildcard, automatic renewal, alternate historical fingerprints or general license allowance."
+  ],
+  "declarations": {
+    "D01": {
+      "records": [
+        {
+          "locations": [
+            {
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              },
+              "layerID": "sha256:6c068615fcb8a6443458d2c163588564527536f50336d5763d04732a19c6fe4f",
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite"
+            }
+          ],
+          "spdxExpression": "GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel",
+          "type": "declared",
+          "urls": [],
+          "value": "GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel"
+        }
+      ],
+      "recordsSha256": "1643c3467a034f3ca3bb63b26429fff8c75d24f57372c5814705dbb8d662f916",
+      "reviewFingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c"
+    }
+  },
+  "historicalEvidence": {
+    "disposition": "Historical bytes and observations remain unchanged; the three 16.2.1-2 x86_64 runtime scopes and the x86_64 libstdc++-static 16.2.1-2 scope are removed from active policy. The other 23 runtime reviews are retained: 17 unchanged original entries, the three glibc release-9 entries, the two vim 9.2.1202 entries and the tzdata entry, which this same refresh separately moves to 2026f-1. The aarch64 libstdc++-static 16.2.1-2 review is unchanged.",
+    "path": "security/license-evidence/fedora-runtime-2026-09-30.json",
+    "sha256": "c6b3ad4a9a7d65b1f4472d2204b18ccc2be409851bbab38900fb5e0e9b8796fa",
+    "staticRuntimePath": "security/license-evidence/fedora-libstdcxx-16.2.1-2.fc44.json",
+    "staticRuntimeSha256": "13429c250036ee5029203246694344804e182cdee9b0a0eaca1e5c4a457ef5bd"
+  },
+  "noticeSets": {
+    "N01": {
+      "files": [
+        {
+          "bytes": 18002,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/libgcc/COPYING",
+          "resolvedPath": "/usr/share/licenses/libgcc/COPYING",
+          "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c"
+        },
+        {
+          "bytes": 26440,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/libgcc/COPYING.LIB",
+          "resolvedPath": "/usr/share/licenses/libgcc/COPYING.LIB",
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b"
+        },
+        {
+          "bytes": 3324,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/libgcc/COPYING.RUNTIME",
+          "resolvedPath": "/usr/share/licenses/libgcc/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+        },
+        {
+          "bytes": 35147,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/libgcc/COPYING3",
+          "resolvedPath": "/usr/share/licenses/libgcc/COPYING3",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+        },
+        {
+          "bytes": 7639,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/libgcc/COPYING3.LIB",
+          "resolvedPath": "/usr/share/licenses/libgcc/COPYING3.LIB",
+          "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c"
+        }
+      ],
+      "ownerPurl": "pkg:rpm/fedora/libgcc@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm"
+    }
+  },
+  "packages": [
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/libgcc@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+        "sourceRpm": "gcc-16.2.1-3.fc44.src.rpm",
+        "spdxLicenseDeclared": "(GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel)",
+        "spdxPackageId": "SPDXRef-Package-rpm-libgcc-4c1362c397c65ac8",
+        "version": "16.2.1-3.fc44"
+      },
+      "declaration": "D01",
+      "name": "libgcc",
+      "noticeSet": "N01",
+      "rationale": "Same complete declaration and fingerprint as the 16.2.1-2 review. Koji build 3130496 binds gcc-16.2.1-3.fc44 to Fedora commit 79e42aa8; its spec keeps the identical source-wide License line, Source and Patch entries and existing subpackage file lists, moves the GCC snapshot to revision 9854b2ab and adds cross-compiler and sysroot packaging that is disabled for Fedora 44. At that revision libgcc/libgcc2.c is byte-identical to the reviewed revision and still grants GPL3-or-later with the GCC Runtime Library Exception 3.1. All five installed notices are byte-identical to the 16.2.1-2 notice set and to gcc/COPYING*, COPYING.RUNTIME at the new revision. Compilation and redistribution conditions remain separate from accepting the aggregate metadata.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S011"
+      ]
+    },
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/libgomp@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+        "sourceRpm": "gcc-16.2.1-3.fc44.src.rpm",
+        "spdxLicenseDeclared": "(GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel)",
+        "spdxPackageId": "SPDXRef-Package-rpm-libgomp-3cf42456b536faa3",
+        "version": "16.2.1-3.fc44"
+      },
+      "declaration": "D01",
+      "name": "libgomp",
+      "noticeSet": "N01",
+      "rationale": "Same complete declaration and fingerprint as the 16.2.1-2 review. At GCC revision 9854b2ab libgomp/libgomp.h is byte-identical to the reviewed revision and grants GPL3-or-later with Runtime Library Exception 3.1. This subpackage inherits the unchanged Fedora GCC aggregate and owns no notice file; the same-source libgcc notice set remains required in the image. The entire compiler aggregate is not claimed as a single runtime license.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S009",
+        "S011"
+      ]
+    },
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+        "sourceRpm": "gcc-16.2.1-3.fc44.src.rpm",
+        "spdxLicenseDeclared": "(GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel)",
+        "spdxPackageId": "SPDXRef-Package-rpm-libstdc---b7cfee86b2b14b7d",
+        "version": "16.2.1-3.fc44"
+      },
+      "declaration": "D01",
+      "name": "libstdc++",
+      "noticeSet": "N01",
+      "rationale": "Same complete declaration and fingerprint as the 16.2.1-2 review. The 16.2.1-3 spec has the identical source-wide aggregate and no per-libstdc++ license override. At GCC revision 9854b2ab libstdc++-v3/include/bits/stl_algobase.h and COPYING.RUNTIME are byte-identical to the reviewed revision (GPL 3-or-later with GCC runtime exception 3.1). No individually owned license file appears for this RPM; libgcc carries the shared GCC notices. The libstdc++-static reviews have different PURLs and cannot authorize this dynamic-runtime package.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S010",
+        "S011"
+      ]
+    }
+  ],
+  "review": {
+    "authority": "Agent technical scanner-policy assessment under the owner-authorized security rollout; exact package-scoped exceptions only, not complete redistribution clearance.",
+    "date": "2026-11-08",
+    "disposition": "Accept only the observed 16.2.1-3.fc44 libgcc, libgomp, libstdc++ and x86_64 libstdc++-static package/declaration records with retained source and notice conditions; supersede the 16.2.1-2 x86_64 scopes without renewing the fixed expiry.",
+    "expires": "2026-11-29",
+    "owner": "swiftraccoon"
+  },
+  "schemaVersion": 1,
+  "scope": "Exact canonical linux/amd64 Fedora gcc 16.2.1-3.fc44 runtime (libgcc, libgomp, libstdc++) and static libstdc++-static license-source delta review",
+  "sourceAuthentication": [
+    "Read-only official Koji getBuild responses bind successful exact NVRs gcc-16.2.1-3.fc44 and gcc-16.2.1-2.fc44 to immutable Fedora dist-git commits 79e42aa8526f4487e07566b6a06894ec5eb33baf and 751f1a1e4dbcefa2345b538165d4b3bad2826c1c; Bodhi records the update as stable on 2026-11-01 03:34:39.",
+    "Specs, source manifests and GCC source members were fetched over primary HTTPS (Fedora dist-git and gcc.gnu.org gitweb) and hashed. The four 16.2.1-2-revision members reproduce the hashes retained by the 2026-09-30 review. The 16.2.1-3 GCC snapshot archive itself was not downloaded; its manifest SHA-512 is recorded. No downloaded code, package scripts or tests were executed.",
+    "No independent detached RPM or release-signature verification is claimed. HTTPS source provenance plus exact hashes and the successful build mapping support this bounded source comparison; this is not a reproducible-build proof."
+  ],
+  "sourceComparison": {
+    "fedoraNewCommit": "79e42aa8526f4487e07566b6a06894ec5eb33baf",
+    "fedoraOldCommit": "751f1a1e4dbcefa2345b538165d4b3bad2826c1c",
+    "gccNewRevision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+    "gccOldRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+    "installedNoticeSources": {
+      "gcc/COPYING": "S012",
+      "gcc/COPYING.LIB": "S013",
+      "gcc/COPYING3": "S014",
+      "gcc/COPYING3.LIB": "S015"
+    },
+    "runtimeLicenseSources": {
+      "COPYING.RUNTIME": "S011",
+      "libgcc/libgcc2.c": "S008",
+      "libgomp/libgomp.h": "S009",
+      "libstdc++-v3/include/bits/stl_algobase.h": "S010"
+    },
+    "specDelta": "Outside %changelog the spec changes the snapshot DATE/gitrev (20260819/95ef1679 to 20261029/9854b2ab) and gcc_release (2 to 3), regroups the configure options into common, native and cross sets, adds a RISC-V option for RHEL 11 and adds cross-gcc and sysroot subpackages, build and install steps that are disabled on Fedora 44 (build_cross 0, build_sysroot 0). The single source-wide License line, every Source and Patch entry, the existing %files sections and the %license gcc/COPYING* COPYING.RUNTIME installation are unchanged; no subpackage License override exists.",
+    "unchangedFedoraAuxiliarySources": [
+      "isl-0.24.tar.bz2",
+      "newlib-cygwin-d35cc82b5ec15bb8a5fe0fe11e183d1887992e99.tar.xz",
+      "nvptx-tools-212da2e781ed0f9423824e85eb04819958513f7a.tar.xz"
+    ],
+    "upstreamNewArchive": {
+      "gcc-16.2.1-20261029.tar.xz": "d76eb2a7fe7e7f8f3cdcb8c15fb28db148b202586e053880939b06c5e39c1bb09e403ad07c26bce3e29af60f3b99d27625e4b4cfd9963b41a20bebec5d92cfd0"
+    },
+    "upstreamOldArchive": {
+      "gcc-16.2.1-20260819.tar.xz": "6583ec486ab104dbb46aed2adb27d0e77c02e60ecd275c7bc9f0da51f865a61432b3b6d37d57381fde0d7c097ec231b197f6c9ab1b6787511f425aac9bcc037a"
+    }
+  },
+  "sources": {
+    "S001": {
+      "argument": "gcc-16.2.1-3.fc44",
+      "buildId": 3130496,
+      "completionTime": "2026-10-30 17:02:34.954259+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3130496",
+      "responseBytes": 2875,
+      "responseSha256": "577c5ab7f3a9b3aa856068c78dd2e72a5691d6f1916443c8f9aa7a7310d35009",
+      "source": "git+https://src.fedoraproject.org/rpms/gcc.git#79e42aa8526f4487e07566b6a06894ec5eb33baf",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    },
+    "S002": {
+      "builds": [
+        "gcc-16.2.1-3.fc44"
+      ],
+      "dateStable": "2026-11-01 03:34:39",
+      "method": "HTTPS JSON (read-only)",
+      "responseBytes": 18525,
+      "responseSha256": "300b55b486b64d59f953216a308c7cafacc6e260cc43d8b3873fbe026ca97eae",
+      "status": "stable",
+      "url": "https://bodhi.fedoraproject.org/updates/FEDORA-2026-d732fb97a0"
+    },
+    "S003": {
+      "gccRevision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "licenseLine": "License: GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel",
+      "lines": 5731,
+      "method": "HTTPS raw file",
+      "sha256": "72434812359ee6ab10ef4844b42b74b9cc096cf022efb5a7bfd1e88a76f47e39",
+      "url": "https://src.fedoraproject.org/rpms/gcc/raw/79e42aa8526f4487e07566b6a06894ec5eb33baf/f/gcc.spec"
+    },
+    "S004": {
+      "algorithm": "SHA512",
+      "entries": {
+        "gcc-16.2.1-20261029.tar.xz": "d76eb2a7fe7e7f8f3cdcb8c15fb28db148b202586e053880939b06c5e39c1bb09e403ad07c26bce3e29af60f3b99d27625e4b4cfd9963b41a20bebec5d92cfd0",
+        "isl-0.24.tar.bz2": "aab3bddbda96b801d0f56d2869f943157aad52a6f6e6a61745edd740234c635c38231af20bc3f1a08d416a5e973a90e18249078ed8e4ae2f1d5de57658738e95",
+        "newlib-cygwin-d35cc82b5ec15bb8a5fe0fe11e183d1887992e99.tar.xz": "ef9495745a96d1d76f9f425c4a48c807fface36a1aa92351c5d024103678d144d046e8de55d195103784472c14874e29e4b9284d5d6a2e7bb27fd98c8455a881",
+        "nvptx-tools-212da2e781ed0f9423824e85eb04819958513f7a.tar.xz": "5a5509b0513843254ee2be277e0b8d4733f643b74b98c739e82872181a2c366b9b43de9e5fb505aa1e9967a382da59cab015f63011cbcb5972971f2160870f00"
+      },
+      "method": "HTTPS raw file",
+      "sha256": "546414abd6f999e2f7f93309ae5771e4956ae1f4d3b969a49f415be1f07ac8da",
+      "url": "https://src.fedoraproject.org/rpms/gcc/raw/79e42aa8526f4487e07566b6a06894ec5eb33baf/f/sources"
+    },
+    "S005": {
+      "argument": "gcc-16.2.1-2.fc44",
+      "buildId": 3082913,
+      "completionTime": "2026-08-20 15:39:16.150614+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3082913",
+      "purpose": "binds the reviewed 16.2.1-2 build to its immutable commit, for the spec delta",
+      "responseBytes": 2873,
+      "responseSha256": "2db3576e7ed4e0eadcb568bc2c9c2e611e08893392f2aae32e6366fca76382ea",
+      "source": "git+https://src.fedoraproject.org/rpms/gcc.git#751f1a1e4dbcefa2345b538165d4b3bad2826c1c",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    },
+    "S006": {
+      "gccRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+      "lines": 4473,
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 16.2.1-2 spec; byte-identical to the 2026-09-30 review's spec (fedora-runtime-2026-09-30.json S027)",
+      "sha256": "2f21e09647e424a12fdf8300e0aab40a53dcd7833587d37b15d69f578a5f87ce",
+      "url": "https://src.fedoraproject.org/rpms/gcc/raw/751f1a1e4dbcefa2345b538165d4b3bad2826c1c/f/gcc.spec"
+    },
+    "S007": {
+      "algorithm": "SHA512",
+      "entries": {
+        "gcc-16.2.1-20260819.tar.xz": "6583ec486ab104dbb46aed2adb27d0e77c02e60ecd275c7bc9f0da51f865a61432b3b6d37d57381fde0d7c097ec231b197f6c9ab1b6787511f425aac9bcc037a",
+        "isl-0.24.tar.bz2": "aab3bddbda96b801d0f56d2869f943157aad52a6f6e6a61745edd740234c635c38231af20bc3f1a08d416a5e973a90e18249078ed8e4ae2f1d5de57658738e95",
+        "newlib-cygwin-d35cc82b5ec15bb8a5fe0fe11e183d1887992e99.tar.xz": "ef9495745a96d1d76f9f425c4a48c807fface36a1aa92351c5d024103678d144d046e8de55d195103784472c14874e29e4b9284d5d6a2e7bb27fd98c8455a881",
+        "nvptx-tools-212da2e781ed0f9423824e85eb04819958513f7a.tar.xz": "5a5509b0513843254ee2be277e0b8d4733f643b74b98c739e82872181a2c366b9b43de9e5fb505aa1e9967a382da59cab015f63011cbcb5972971f2160870f00"
+      },
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 16.2.1-2 sources manifest, for the auxiliary-source comparison",
+      "sha256": "30eeb960c191c0aa4a7d9c585ea8754fb98caa0ab5815fe93aead54c5fb2f9fe",
+      "url": "https://src.fedoraproject.org/rpms/gcc/raw/751f1a1e4dbcefa2345b538165d4b3bad2826c1c/f/sources"
+    },
+    "S008": {
+      "byteIdenticalToHistoricalSource": "S028",
+      "bytes": 74420,
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "83e1247be3f78dd8c70d32c4df95f04161c0f47838cf62be8cdb5b9eb2f06c34",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=libgcc/libgcc2.c;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S009": {
+      "byteIdenticalToHistoricalSource": "S029",
+      "bytes": 54798,
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "72224032fd4a1c5e1c3510b1f45ae343954ec712b84a086361f86e106ebab877",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=libgomp/libgomp.h;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S010": {
+      "byteIdenticalToHistoricalSource": "S037",
+      "bytes": 82511,
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "974911a5ac259ce478ff4641451701eb6eb5fbac3311b3ab94ca77502627ec8e",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=libstdc%2B%2B-v3/include/bits/stl_algobase.h;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S011": {
+      "byteIdenticalToHistoricalSource": "S038",
+      "bytes": 3324,
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=COPYING.RUNTIME;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S012": {
+      "bytes": 18002,
+      "equalsInstalledNotice": "/usr/share/licenses/libgcc/COPYING",
+      "equalsSameMemberAtRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=gcc/COPYING;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S013": {
+      "bytes": 26440,
+      "equalsInstalledNotice": "/usr/share/licenses/libgcc/COPYING.LIB",
+      "equalsSameMemberAtRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=gcc/COPYING.LIB;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S014": {
+      "bytes": 35147,
+      "equalsInstalledNotice": "/usr/share/licenses/libgcc/COPYING3",
+      "equalsSameMemberAtRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=gcc/COPYING3;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    },
+    "S015": {
+      "bytes": 7639,
+      "equalsInstalledNotice": "/usr/share/licenses/libgcc/COPYING3.LIB",
+      "equalsSameMemberAtRevision": "95ef1679dd68f27b3d056a497318089d85aa0d55",
+      "method": "HTTPS gitweb blob_plain (read-only)",
+      "representation": "response-bytes",
+      "revision": "9854b2abd1c53ec5909a0c6fc2a89d27110865e9",
+      "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+      "url": "https://gcc.gnu.org/git/?p=gcc.git;a=blob_plain;f=gcc/COPYING3.LIB;hb=9854b2abd1c53ec5909a0c6fc2a89d27110865e9"
+    }
+  },
+  "staticRuntimeInputs": [
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": 0,
+        "purl": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+        "sourceRpm": "gcc-16.2.1-3.fc44.src.rpm",
+        "spdxPackageId": "SPDXRef-Package-rpm-libstdc---static-native-fa6153fd89359b35",
+        "version": "16.2.1-3.fc44"
+      },
+      "name": "libstdc++-static",
+      "observation": {
+        "license": "GPL-3.0-or-later AND LGPL-3.0-or-later AND (GPL-3.0-or-later WITH GCC-exception-3.1) AND (GPL-3.0-or-later WITH Texinfo-exception) AND (LGPL-2.1-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GCC-exception-2.0) AND (GPL-2.0-or-later WITH GNU-compiler-exception) AND BSL-1.0 AND GFDL-1.3-or-later AND Linux-man-pages-copyleft-2-para AND SunPro AND BSD-1-Clause AND BSD-2-Clause AND BSD-2-Clause-Views AND BSD-3-Clause AND BSD-4-Clause AND BSD-Source-Code AND Zlib AND MIT AND Apache-2.0 AND (Apache-2.0 WITH LLVM-Exception) AND ZPL-2.1 AND ISC AND LicenseRef-Fedora-Public-Domain AND HP-1986 AND curl AND Martin-Birgmeier AND HPND-Markus-Kuhn AND dtoa AND SMLNJ AND AMD-newlib AND OAR AND HPND-merchantability-variant AND HPND-Intel",
+        "nativeSha256": "4ab89670207f0720a1b75d1516f8ae20ec788ab01c173c03e0f6d38457df6ce2",
+        "owner": "libstdc++-static\t0:16.2.1-3.fc44.x86_64\tgcc-16.2.1-3.fc44.src.rpm",
+        "platform": "linux/amd64",
+        "runtimeNoticeDisposition": "static-build-input-not-runtime-files",
+        "syftFoundBy": "simplestchat-authenticated-native-inputs"
+      },
+      "rationale": "The authenticated canonical native receipt names this exact x86_64 owner and the complete Fedora GCC aggregate, byte-identical to the expression retained for 16.2.1-2. The 16.2.1-3 spec keeps the same source-wide License line with no libstdc++-static override; at revision 9854b2ab stl_algobase.h and COPYING.RUNTIME are byte-identical to the reviewed revision. Member survival through final linking is not asserted; the whole observed expression is preserved.",
+      "reviewFingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S005",
+        "S006",
+        "S010",
+        "S011"
+      ],
+      "supersedes": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm"
+    }
+  ],
+  "status": "reviewed; exact four replacement ledger entries required; all other gates remain independent",
+  "supersedes": [
+    "pkg:rpm/fedora/libgcc@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+    "pkg:rpm/fedora/libgomp@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+    "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+    "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm"
+  ],
+  "verification": {
+    "afterReviewPassed": true,
+    "beforeReviewBlockedScopes": [
+      "pkg:rpm/fedora/libgcc@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/libgomp@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
+      "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm"
+    ],
+    "declarationDifferenceFromHistorical": "Only the original provenance location layerID changes (the rebuilt runtime package layer); the complete declaration, record fields and order otherwise match.",
+    "exactObservedPackageCount": 4,
+    "noticeBytesKindsAndResolutionMatchHistorical": true,
+    "noticeBytesMatchVerifiedSourceMembers": true,
+    "orderedDeclarationsMatchSyftAndReport": true,
+    "preservedOtherRuntimeReviewCount": 23,
+    "regularNoticeDigestsMatchRpmMetadata": true,
+    "spdxPackageIdentitiesMatch": true,
+    "staticOwnerAndLicenseMatchNativeReceipt": true
+  }
+}

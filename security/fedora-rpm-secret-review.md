@@ -1,5 +1,78 @@
 # Fedora RPM database secret findings
 
+## Eight layer-001 regions after the November 8 refresh — 2026-11-08
+
+The rebuilt dnf-upgrade layer (`001/`, layer
+`sha256:6c068615fcb8a6443458d2c163588564527536f50336d5763d04732a19c6fe4f`) in
+[CI run 42453211328](https://github.com/swiftraccoon/simplestChat/actions/runs/42453211328)
+(revision `8f00770ef9ea34ce0adb73132d6e597479241fef`, image
+`sha256:b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2`) failed
+the secret check with eight blocked regions while the 15 reviewed base-layer
+(`000/`) regions recurred and stayed waived. The
+[new evidence](secret-evidence/fedora-rpm-2026-11-08.json) supports eight exact
+records, one per complete region and exact layer path, reviewed individually
+below. None of the six previously active layer-001 database regions occurs in this
+image; per the dormancy rule they are removed from the active ledger and stay
+historical in the tests. Owner `swiftraccoon` and expiry **2026-11-29** are
+unchanged.
+
+The artifact (`13606583207`, 1,816,845 bytes, SHA-256 equal to GitHub's digest,
+21 members compared byte for byte) holds no database bytes; this run had no
+encrypted database diagnostic. A new bounded local replay (two CPUs, 2 GiB, a
+900-second deadline, the digest-pinned Fedora base and the canonical runtime-base
+`dnf upgrade` plus `dnf install` transaction with the same refresh epoch, on a
+private tmpfs storage root in the podman VM; no application built or executed)
+installed the same 148 runtime package identities as the canonical SBOM. The
+pinned Gitleaks 8.30.1, run with the tier's exact arguments over the maintained
+projection of the four replayed layer-001 files, reports exactly the eight canonical
+fingerprints and nothing else.
+
+**TPM FAPI profiles (2 regions).** `tpm2-tss` 4.1.5-1.fc44 reinstalled
+`P_ECCP384SHA384.json` and `P_RSA3072SHA384.json` in the upgrade layer. Both files
+are byte-identical to upstream tpm2-tss 4.1.5 `dist/fapi-profiles/` and to the
+4.1.3 base-layer files reviewed in [the base review](fedora-base-secret-review.md),
+and each complete 110-byte match equals the reviewed base region: the public
+48-byte SHA-384 `nvPublic.authPolicy` digest, not a secret authorization value.
+
+**`magic.mgc` (2 regions).** `file-libs` 5.48-2.fc44 rewrote the compiled database.
+The file differs from the 5.46 base copy, but the complete 899-byte and 3,482-byte
+matches are byte-identical (length and SHA-256) to the reviewed base regions, and
+file 5.48 `magic/Magdir/ssh` and `ssl` are byte-identical to 5.46. The regions hold
+two and three PEM BEGIN markers from those recognition records, no END marker and
+no encoded key payload.
+
+**RPM database (4 regions).** All four occupy live `Basenames_key_idx` leaf pages
+of the replayed database, whose read-only `PRAGMA integrity_check` passed; every
+covered byte is index-cell structure or freeblock metadata, checked against page
+bounds and cell/freeblock ownership. Every filename belongs to `fedora-gpg-keys`
+44-2, which ships these signing-key files under both `/etc/pki/rpm-gpg/` and
+`/usr/share/pki/rpm-gpg/`; every basename is also a live record of the
+re-authenticated immutable base database (SHA-256
+`93e5a50049dd109d2a3cc0b8d973897d4c4f511f0fb8c4a607daa72c303c0db6`, version 44-1).
+
+| Fingerprint | Bytes | Structure |
+| --- | ---: | --- |
+| `image-match:4c5ae552…815812b` | 58 | Two live `/usr/share/pki/rpm-gpg/` records on page 1647: a 26-byte filename and two row-identifier bytes, then a payload-size varint, three record-header bytes, a 24-byte filename and its two row-identifier bytes; the candidate is that filename plus its row identifier. |
+| `image-match:5c555c92…4da393fa` | 58 | The same two-record structure on page 1647 for another pair of key files. |
+| `image-match:3789d4a1…1fc51b922` | 58 | One live `/etc/pki/rpm-gpg/` record (26 + 2 bytes) on page 1836, then the four-byte header and 26 surviving bytes of a 65-byte freeblock, a freed copy of the same filename; the candidate is the last header byte plus that copy. |
+| `image-match:ad1c986e…2e1e50f` | 62 | One live record (28 + 2 bytes) on page 2003, then the four-byte header and 28 surviving bytes of a 34-byte freeblock equal to the live filename, which is the candidate; the shape of the 2026-10-29 regions. |
+
+The replay database and projection differ from the canonical ones (transaction
+timing shifts the four regions by 46 to 82 projection lines), but the complete
+match bytes, lengths and SHA-256 digests agree. The structural interpretation
+therefore applies to the replay and binds to the canonical scanner bytes through
+the complete span digests, not through whole-file equality. Replaying the tier's
+`secret_verdict` over the retained span report with the updated ledger blocks none
+of the 23 regions; that offline replay is not a rerun of the image gate.
+
+Each record binds the exact rule, original layer path, pinned scanner/projection
+format, complete match length and SHA-256. A base-layer review does not approve
+the same bytes at the `001/` path, a changed region, path, rule or format requires
+a fresh review, and every additional finding remains blocking. No raw candidate,
+filename or database bytes are published. The observed image scan failed; a fresh
+canonical image gate must pass before signing or deployment, and the Fedora
+repositories may move again before it.
+
 ## Two regions after the October 29 RPM refresh — 2026-10-29
 
 The rebuilt runtime image in

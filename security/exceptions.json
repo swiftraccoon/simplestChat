@@ -214,12 +214,12 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
-      "scope": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/libstdc%2B%2B-static@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Exact Fedora GCC 16.2.1-2.fc44 source-spec aggregate inherited by libstdc++-static; upstream libstdc++ code documents GPLv3 with GCC Runtime Library Exception 3.1. Preserve the complete observed expression; this review does not license arbitrary GCC or newlib components.",
-      "reachability": "The former same-source policy inference is now confirmed by the canonical linux/amd64 image 6f3b0661ae0462644633bdc8461c24a1207e31eae68c5c9c23381bb499a53da6 and authenticated native receipt. The exact x86_64 package/version/source RPM and full aggregate match; unknown terms elsewhere remain blocked. This does not establish a complete image or redistribution pass.",
+      "rationale": "Exact Fedora GCC 16.2.1-3.fc44 source-spec aggregate inherited by libstdc++-static: the License line is unchanged from 16.2.1-2 and has no subpackage override, and upstream libstdc++ code (stl_algobase.h and COPYING.RUNTIME, byte-identical at revision 9854b2abd1c53ec5909a0c6fc2a89d27110865e9) documents GPLv3 with GCC Runtime Library Exception 3.1. Preserve the complete observed expression; this review does not license arbitrary GCC or newlib components.",
+      "reachability": "Observed in CI run 42453211328 (canonical linux/amd64 image b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2): the authenticated native receipt names this exact x86_64 owner after the rebuilt builder layer moved it from 16.2.1-2, retained in security/license-evidence/fedora-gcc-16.2.1-3.fc44.json. The exact package/version/source RPM and full aggregate match; unknown terms elsewhere remain blocked. This does not establish a complete image or redistribution pass.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08"
     },
     {
       "scanner": "image-license",
@@ -1364,22 +1364,22 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
-      "scope": "pkg:rpm/fedora/libgcc@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/libgcc@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "The exact Fedora GCC 16.2.1-2 aggregate and source revision are already retained. At that revision libgcc2.c grants GPL3-or-later with the GCC Runtime Library Exception 3.1. All five installed GCC notices remain required, including the exception. Compilation and redistribution conditions remain separate from accepting the aggregate metadata.",
-      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "rationale": "Official Koji build 3130496 binds exact gcc-16.2.1-3.fc44 to Fedora commit 79e42aa8526f4487e07566b6a06894ec5eb33baf (Bodhi FEDORA-2026-d732fb97a0, stable 2026-11-01). Its spec keeps the identical source-wide License line, Source and Patch entries and existing subpackage file lists; it moves the GCC snapshot to revision 9854b2abd1c53ec5909a0c6fc2a89d27110865e9 and adds cross-compiler and sysroot packaging that is disabled for Fedora 44. At that revision libgcc2.c is byte-identical to the reviewed 16.2.1-2 revision and still grants GPL3-or-later with the GCC Runtime Library Exception 3.1. All five installed GCC notices remain required and are byte-identical to the 16.2.1-2 notice set. Compilation and redistribution conditions remain separate from accepting the aggregate metadata.",
+      "reachability": "In CI run 42453211328 (canonical linux/amd64 image b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2) the rebuilt runtime dnf layer moved libgcc from 16.2.1-2 to 16.2.1-3; security/license-evidence/fedora-gcc-16.2.1-3.fc44.json retains the exact libgcc notice set and declaration observed there. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08"
     },
     {
       "scanner": "image-license",
       "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
-      "scope": "pkg:rpm/fedora/libgomp@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/libgomp@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "The exact GCC source revision libgomp.h grants GPL3-or-later with Runtime Library Exception 3.1. This subpackage inherits the unchanged Fedora GCC aggregate and owns no notice file. Require the same-source libgcc notice set in the image; do not claim the entire compiler aggregate applies as a single runtime license.",
-      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "rationale": "The exact gcc-16.2.1-3.fc44 source revision 9854b2abd1c53ec5909a0c6fc2a89d27110865e9 keeps libgomp.h byte-identical to the reviewed revision, granting GPL3-or-later with Runtime Library Exception 3.1. This subpackage inherits the unchanged Fedora GCC aggregate and owns no notice file. Require the same-source libgcc notice set in the image; do not claim the entire compiler aggregate applies as a single runtime license.",
+      "reachability": "In CI run 42453211328 (canonical linux/amd64 image b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2) the rebuilt runtime dnf layer moved libgomp from 16.2.1-2 to 16.2.1-3; security/license-evidence/fedora-gcc-16.2.1-3.fc44.json retains the exact shared libgcc notice set and declaration observed there. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08"
     },
     {
       "scanner": "image-license",
@@ -1394,12 +1394,12 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:bad17455446a307102f26a2bc7d90d0fd8d1b8f8f9d77bf46cdd3b5f0aac5e9c",
-      "scope": "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-2.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-2.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/libstdc%2B%2B@16.2.1-3.fc44?arch=x86_64&distro=fedora-44&upstream=gcc-16.2.1-3.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "The Fedora GCC 16.2.1-2 spec has the previously reviewed source-wide aggregate and no per-libstdc++ license override. Exact GCC revision stl_algobase.h grants GPL 3-or-later with GCC runtime exception 3.1; COPYING.RUNTIME preserves the exception conditions. The official libstdc++ manual separately describes runtime code and documentation licenses. No individually owned license file appears for this RPM; libgcc carries shared GCC notices. Existing libstdc++-static exceptions have different PURLs and cannot authorize this dynamic-runtime package. Keep the entire observed aggregate unchanged.",
-      "reachability": "The canonical artifact retains the exact libgcc notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "rationale": "The Fedora GCC 16.2.1-3 spec has the same reviewed source-wide aggregate and no per-libstdc++ license override. At GCC revision 9854b2abd1c53ec5909a0c6fc2a89d27110865e9 stl_algobase.h and COPYING.RUNTIME are byte-identical to the reviewed revision: GPL 3-or-later with GCC runtime exception 3.1, whose conditions COPYING.RUNTIME preserves. No individually owned license file appears for this RPM; libgcc carries shared GCC notices. libstdc++-static exceptions have different PURLs and cannot authorize this dynamic-runtime package. Keep the entire observed aggregate unchanged.",
+      "reachability": "In CI run 42453211328 (canonical linux/amd64 image b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2) the rebuilt runtime dnf layer moved libstdc++ from 16.2.1-2 to 16.2.1-3; security/license-evidence/fedora-gcc-16.2.1-3.fc44.json retains the exact shared libgcc notice set and declaration observed there. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08"
     },
     {
       "scanner": "image-license",
@@ -1454,12 +1454,12 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:adb0ac3b20b5f933623670fd873e969dbac77eadd946649c0b7683e0c87b6f82",
-      "scope": "pkg:rpm/fedora/tzdata@2026e-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026e-1.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/tzdata@2026f-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026f-1.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Official Koji build 3114496 binds exact 2026e-1.fc44 to Fedora commit 64d594762ddecc2a65d9d5b7ee635a396f0dcf26 (Bodhi FEDORA-2026-7d957ce87d, stable 2026-10-08). The IANA tzdata2026e and tzcode2026e archives and the unchanged javazic-1.8-37392f2f5d59 archive match the commit\u2019s recorded SHA-512 hashes; the spec declares the same expression; the installed IANA LICENSE (sha256 0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf) is byte-identical to the IANA 2026e archive and to the 2026c-2 review. The authenticated Java compiler supplies concrete GPL2/ClassPath source context for the aggregate and the spec\u2019s separate Java output. tzdata-java and Java payload paths are absent from the observed runtime RPM inventory. Preserve the whole declaration and all attribution; no conclusion about generated-output licensing or tool redistribution is inferred.",
-      "reachability": "The canonical artifact retains the exact tzdata notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
+      "rationale": "Official Koji build 3134735 binds exact tzdata-2026f-1.fc44 to Fedora commit 940adc24a59d1b113ba27fc67945a56e6d6e4e09 (Bodhi FEDORA-2026-eb1954eea8, stable 2026-11-06). The IANA tzdata2026f and tzcode2026f archives match the commit\u2019s recorded SHA-512 hashes and the javazic-1.8-37392f2f5d59 entry is unchanged; the spec declares the same expression and adds only an upstream zonenow.tab data patch; the installed IANA LICENSE (sha256 0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf) is byte-identical to both 2026f archives and to the 2026e-1 and 2026c-2 reviews. The authenticated Java compiler supplies concrete GPL2/ClassPath source context for the aggregate and the spec\u2019s separate Java output. tzdata-java and Java payload paths are absent from the observed runtime RPM inventory. Preserve the whole declaration and all attribution; no conclusion about generated-output licensing or tool redistribution is inferred.",
+      "reachability": "In CI run 42453211328 (canonical linux/amd64 image b4b3dc32e864f92c17f0cb42062d7799c47d28e6556687f2eba4876691ca1af2) the rebuilt runtime dnf layer moved tzdata from 2026e-1 to 2026f-1; security/license-evidence/fedora-tzdata-2026f-1.fc44.json retains the exact tzdata notice set and declaration observed there. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md#gcc-1621-3-and-tzdata-2026f-1-refresh--2026-11-08"
     },
     {
       "scanner": "image-license",
@@ -1663,63 +1663,83 @@
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:731ba4ebc7682de27cb10050c381c382883ff0a9c6fad9ce10a2e8a71d6bf5e0",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "fingerprint": "image-match:4b00e1ddf6612dc8e4a612731db7535b745c2ffb1d5a87355cacdfeb12320b68",
+      "scope": "001/etc/tpm2-tss/fapi-profiles/P_ECCP384SHA384.json",
       "owner": "swiftraccoon",
-      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay made after the vim 9.2.1202 refresh. Every detected byte is one live public fedora-gpg-keys filename index record (26 filename bytes and two serialized row-identifier bytes) followed by a 32-byte SQLite freeblock whose header and surviving content are a freed copy of the same public filename; that filename is also a live record in the authenticated immutable Fedora base database. The detector's candidate is exactly the public filename. This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "rationale": "tpm2-tss 4.1.5-1.fc44 reinstalled this profile in the dnf-upgrade layer: the complete file is byte-identical to upstream tpm2-tss 4.1.5 and to the reviewed 4.1.3 base-layer file, and the complete 110-byte match equals the reviewed base region. The match is a 48-byte SHA-384 authorization-policy digest in public NV metadata, not a bearer token or secret authorization value.",
+      "reachability": "The complete detected region is reviewed public upstream test or format data at this exact original layer path. Only the pinned scanner/projection format, rule, complete match byte length and SHA-256 inherit this review; other matches and changed paths or regions remain blocking. Complete file/projection hashes retain per-image provenance, and no approval of the containing package or its other behavior is implied. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:61937b657d1400ca48c69f80ff380abb1c0ec5f0d8e01b5399fbd5187a5a2d18",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "fingerprint": "image-match:84dd9af054b840e03b4fb0757aac266dc217d6f1dfcac5f000ab4d2bcdcbbc02",
+      "scope": "001/etc/tpm2-tss/fapi-profiles/P_RSA3072SHA384.json",
       "owner": "swiftraccoon",
-      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "rationale": "tpm2-tss 4.1.5-1.fc44 reinstalled this profile in the dnf-upgrade layer: the complete file is byte-identical to upstream tpm2-tss 4.1.5 and to the reviewed 4.1.3 base-layer file, and the complete 110-byte match equals the reviewed base region. The match is a 48-byte SHA-384 authorization-policy digest in public NV metadata, not a bearer token or secret authorization value.",
+      "reachability": "The complete detected region is reviewed public upstream test or format data at this exact original layer path. Only the pinned scanner/projection format, rule, complete match byte length and SHA-256 inherit this review; other matches and changed paths or regions remain blocking. Complete file/projection hashes retain per-image provenance, and no approval of the containing package or its other behavior is implied. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:8151be4ea07844ef88e1ed64c3fb599452bca5db2e923a848c39b65bcbfa2cd5",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "fingerprint": "image-match:8ac0ace929525126aad293493cfdc751c8ada2dfad8eae2c56d734a242eb781d",
+      "scope": "001/usr/share/misc/magic.mgc",
       "owner": "swiftraccoon",
-      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "rationale": "file-libs 5.48-2.fc44 rewrote magic.mgc in the dnf-upgrade layer; this complete 899-byte match is byte-identical to the reviewed file 5.46 base-layer region, and file 5.48 magic/Magdir/ssh and ssl are byte-identical to 5.46. The binary ASCII projection places distinct compiled file-recognition records next to each other; the match holds two PEM BEGIN markers from those sources, no END marker and no encoded key payload.",
+      "reachability": "The complete detected region is reviewed public upstream test or format data at this exact original layer path. Only the pinned scanner/projection format, rule, complete match byte length and SHA-256 inherit this review; other matches and changed paths or regions remain blocking. Complete file/projection hashes retain per-image provenance, and no approval of the containing package or its other behavior is implied. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:3126abb26c2adac0d96b381546b424f003bdfbd0279685874c637e76bebed294",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "fingerprint": "image-match:1e419931789310648a93cd2f2f42c6df4d10c07ddbedfd47483103cd0d36de0e",
+      "scope": "001/usr/share/misc/magic.mgc",
       "owner": "swiftraccoon",
-      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay made after the vim 9.2.1202 refresh. Every detected byte is covered by two live public fedora-gpg-keys filename index records, including the cell size, record header and printable serialized row-identifier bytes; the candidate is a public filename plus one row-identifier byte. The replay's complete projection differs from the canonical one only by line offsets while the complete match bytes agree. This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
+      "rationale": "file-libs 5.48-2.fc44 rewrote magic.mgc in the dnf-upgrade layer; this complete 3482-byte match is byte-identical to the reviewed file 5.46 base-layer region, and file 5.48 magic/Magdir/ssh and ssl are byte-identical to 5.46. The binary ASCII projection places distinct compiled file-recognition records next to each other; the match holds three PEM BEGIN markers from those sources, no END marker and no encoded key payload.",
+      "reachability": "The complete detected region is reviewed public upstream test or format data at this exact original layer path. Only the pinned scanner/projection format, rule, complete match byte length and SHA-256 inherit this review; other matches and changed paths or regions remain blocking. Complete file/projection hashes retain per-image provenance, and no approval of the containing package or its other behavior is implied. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:def870c113a9bac23cd32643d5a7fa6ed7436782a3a26f2961f078591d5ece50",
+      "fingerprint": "image-match:4c5ae552460f0f1f289c1e0de4c7dcdd400e0abd820499c08e6b4581b815812b",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete 62-byte canonical region was inspected directly in the retained database after authenticated CMS decryption. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for. The exact filename and full path join current fedora-gpg-keys 44-2 records and independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption.",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte belongs to two live Basenames_key_idx records of public fedora-gpg-keys 44-2 signing-key files under /usr/share/pki/rpm-gpg/: a 26-byte filename and two serialized row-identifier bytes, then the next cell's payload-size varint, three record-header bytes, a 24-byte filename and its two row-identifier bytes. The candidate is that 24-byte filename plus its two row-identifier bytes. Both basenames are also live 44-2 records under /etc/pki/rpm-gpg/ and live records of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:93900801893e96e5268f964a9fc987cefbc7ed99e7b68e0d60142836844e9957",
+      "fingerprint": "image-match:5c555c9212ae3c99912d2e4215cacaec4608d5ec4704f94514c3aad04da393fa",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete 62-byte canonical region was inspected directly in the retained database after authenticated CMS decryption. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for. The exact filename and full path join current fedora-gpg-keys 44-2 records and independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption.",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte belongs to two live Basenames_key_idx records of public fedora-gpg-keys 44-2 signing-key files under /usr/share/pki/rpm-gpg/: a 26-byte filename and two serialized row-identifier bytes, then the next cell's payload-size varint, three record-header bytes, a 24-byte filename and its two row-identifier bytes. The candidate is that 24-byte filename plus its two row-identifier bytes. Both basenames are also live 44-2 records under /etc/pki/rpm-gpg/ and live records of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:3789d4a167b48392bfc5a5e34718071175c61b315c376c71cfb0fe61fc51b922",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte is one live public fedora-gpg-keys 44-2 filename index record (26 filename bytes and two serialized row-identifier bytes) followed by the four-byte header and 26 surviving content bytes of a 65-byte SQLite freeblock; the surviving bytes are a freed copy of the same filename. The candidate is the last freeblock-header byte plus that freed filename. The filename and full path also join a live record of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:ad1c986e93b1bce33c49aed5af7693e3baa22c4d5d01a08ea631fbc042e1e50f",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 62-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for; the freed bytes equal the live filename, which is the detector's candidate. The exact filename and full path join current fedora-gpg-keys 44-2 records and an independent live record in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
     },
     {
       "scanner": "codeql",
