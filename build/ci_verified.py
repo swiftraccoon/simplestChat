@@ -304,7 +304,9 @@ def backend_dependencies(root: Path, directory: Path, name: str, *, built: bool)
             require(backend_input(relative), "ci_backend_dep_unkeyed")
             require(path.is_file(), "ci_backend_dep_missing")
             source_count += 1
-        elif path.is_dir() and (relative == "vendor" or relative.startswith("vendor/")):
+        elif path.is_dir() and backend_input(relative + "/"):
+            # A build script's rerun-if-changed=<directory> lists the directory itself.
+            # Admit it only inside a keyed prefix with every tracked child keyed.
             children = [entry for entry in tracked if entry.startswith(relative + "/")]
             require(
                 children and all(backend_input(entry) for entry in children), "ci_backend_dep_tree"

@@ -533,9 +533,17 @@ fn git_boundary_uses_only_the_explicit_read_only_inventories() {
 #[test]
 fn dependency_refusals_precede_backend_cache_publication() {
     let fixture = Fixture::new();
-    for dependency in ["docs/example.md", "src/untracked.txt", "target/unbound.rs"] {
+    // `web` is a directory with tracked children outside every keyed prefix.
+    for dependency in [
+        "docs/example.md",
+        "src/untracked.txt",
+        "target/unbound.rs",
+        "web",
+    ] {
         fixture.backend();
-        fixture.write(dependency, b"unbound input\n");
+        if !fixture.context.root.join(dependency).is_dir() {
+            fixture.write(dependency, b"unbound input\n");
+        }
         for name in inputs::BINARIES {
             let path = fixture.context.root.join("target/debug").join(name);
             let target = format!("{}:", path.display()).replace(' ', "\\ ");
@@ -583,6 +591,9 @@ fn generated_dependencies_are_bound_and_restored_depinfo_is_authenticated() {
     for path in paths {
         fixture.write(path, b"generated compiler input\n");
     }
+    // build.rs lists the embedded `migrations` directory; its tracked children bind it.
+    fixture.write("migrations/001_create_users.sql", b"original migration\n");
+    fixture.git(&["add", "migrations/001_create_users.sql"]);
     fixture.context.environment.insert(
         "OPENSSL_DIR".to_owned(),
         fixture
@@ -620,6 +631,12 @@ fn generated_dependencies_are_bound_and_restored_depinfo_is_authenticated() {
                 .display()
                 .to_string(),
             fixture.context.root.join("vendor").display().to_string(),
+            fixture
+                .context
+                .root
+                .join("migrations")
+                .display()
+                .to_string(),
         ];
         words.extend(
             paths
@@ -639,6 +656,12 @@ fn generated_dependencies_are_bound_and_restored_depinfo_is_authenticated() {
     let key = assert_key_parity(&fixture, Scope::Backend);
     let directory = fixture.context.root.join("cache");
     receipts::save(&fixture.context, Scope::Backend, &key, &directory).unwrap();
+    let python = fixture.context.root.join("python-cache");
+    fixture.oracle("save", Scope::Backend, &key, &python);
+    assert_eq!(
+        fs::read(directory.join("receipt.json")).unwrap(),
+        fs::read(python.join("receipt.json")).unwrap()
+    );
     for path in paths {
         fs::remove_file(fixture.context.root.join(path)).unwrap();
     }

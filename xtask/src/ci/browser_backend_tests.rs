@@ -229,16 +229,22 @@ fn new_receipts_retain_four_artifact_checks_and_reject_old_scope_or_tampering() 
 
 #[test]
 fn excluded_tracked_and_untracked_dependencies_refuse_before_save_or_install() {
+    // `web` and `xtask` are directories with tracked children outside this
+    // scope's keyed prefixes; `xtask/` is keyed only for the legacy backend scope.
     for extra in [
         "ops/src/foreign.rs",
         "xtask/src/ci/ops_artifact/foreign.rs",
         "docs/foreign.md",
         "src/untracked.txt",
+        "web",
+        "xtask",
     ] {
         let fixture = Fixture::new();
-        fixture.write(extra, b"hostile dependency\n");
-        if extra != "src/untracked.txt" {
-            fixture.git(&["add", extra]);
+        if !fixture.context.root.join(extra).is_dir() {
+            fixture.write(extra, b"hostile dependency\n");
+            if extra != "src/untracked.txt" {
+                fixture.git(&["add", extra]);
+            }
         }
         fixture.backend();
         let original = key(&fixture);
@@ -281,6 +287,56 @@ fn excluded_tracked_and_untracked_dependencies_refuse_before_save_or_install() {
         .unwrap_err();
         assert!(error.to_string().contains("ci_backend_dep_unkeyed"));
         assert_no_binaries(&fixture);
+    }
+}
+
+#[test]
+fn keyed_directory_dependencies_need_tracked_children_before_save_or_install() {
+    let fixture = Fixture::new();
+    fixture.write("migrations/001_create_users.sql", b"original migration\n");
+    fixture.backend();
+    for name in inputs::BINARIES {
+        fixture.write(
+            &format!("target/debug/{name}.d"),
+            &dependency(&fixture, name, "migrations"),
+        );
+    }
+    let unpublished = fixture.context.root.join("unpublished");
+    let error = receipts::save(
+        &fixture.context,
+        Scope::BrowserBackend,
+        &key(&fixture),
+        &unpublished,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("ci_backend_dep_tree"));
+    assert!(!unpublished.exists());
+    fixture.git(&["add", "migrations/001_create_users.sql"]);
+    let original = key(&fixture);
+    let directory = fixture.context.root.join("browser-cache");
+    receipts::save(
+        &fixture.context,
+        Scope::BrowserBackend,
+        &original,
+        &directory,
+    )
+    .unwrap();
+    remove_binaries(&fixture);
+    assert_eq!(
+        receipts::verify(
+            &fixture.context,
+            Scope::BrowserBackend,
+            &original,
+            &directory
+        )
+        .unwrap(),
+        "1".repeat(40)
+    );
+    for name in inputs::BINARIES {
+        assert_eq!(
+            fs::read(fixture.context.root.join("target/debug").join(name)).unwrap(),
+            b"owned executable fixture"
+        );
     }
 }
 

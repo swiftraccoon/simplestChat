@@ -131,7 +131,10 @@ fn dependencies(
             )?;
             require(path.is_file(), "ci_backend_dep_missing")?;
             sources += 1;
-        } else if path.is_dir() && (relative == "vendor" || relative.starts_with("vendor/")) {
+        } else if path.is_dir() && inputs::backend_artifact_input(scope, &format!("{relative}/")) {
+            // A build script's `rerun-if-changed=<directory>` lists the directory
+            // itself. It is admitted only inside a keyed prefix and only when every
+            // tracked child it covers is keyed, so the fingerprint binds its contents.
             let prefix = format!("{relative}/");
             let children = tracked
                 .iter()

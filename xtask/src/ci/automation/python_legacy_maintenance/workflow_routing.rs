@@ -6,9 +6,9 @@ use std::ffi::OsString;
 pub(in super::super) const QUALITY_BYTES: usize = 16299;
 pub(in super::super) const QUALITY_SHA256: &str =
     "71d11f0964026a63f32de99f96bf642e4b3f6b14d566c91e0e249db64474332b";
-pub(in super::super) const VERIFIED_BYTES: usize = 56968;
+pub(in super::super) const VERIFIED_BYTES: usize = 58221;
 pub(in super::super) const VERIFIED_SHA256: &str =
-    "ffc3e83c10fce225659dc5916f8abbf7f7b7a01070a0f21ffee379914bf61233";
+    "560f1f68d0b3872b779942125538580a60a7509015645ed80eecb992cf92c020";
 pub(in super::super) const SUPPORT_BYTES: usize = 2574;
 pub(in super::super) const SUPPORT_SHA256: &str =
     "ae56c5e0254594f61c0ff242c5bb55d642f36d3c9b9bb4ddf366a00d56e10ce7";
@@ -42,7 +42,7 @@ pub(super) const LEGACY: [&str; 4] = [
         "test_only_sanitized_report_is_retained_even_on_failure",
     ),
 ];
-const METHODS: [&str; 60] = [
+const METHODS: [&str; 61] = [
     concat!(
         "test_python_quality.PythonPolicyTests.",
         "test_restart_browser_keeps_the_three_minute_owner_and_guarded_evidence",
@@ -166,6 +166,10 @@ const METHODS: [&str; 60] = [
     concat!(
         "test_ci_verified.VerifiedCacheTests.",
         "test_backend_dependency_guard_binds_generated_inputs_and_depinfo_bytes",
+    ),
+    concat!(
+        "test_ci_verified.VerifiedCacheTests.",
+        "test_backend_dependency_guard_admits_keyed_directories_with_tracked_children",
     ),
     concat!(
         "test_ci_verified.VerifiedCacheTests.",

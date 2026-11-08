@@ -694,11 +694,12 @@ class VerifiedCacheTests(unittest.TestCase):
                 self.assertNotEqual(cache.cache_key(self.root, "backend"), before)
 
     def test_backend_dependency_guard_rejects_unbound_sources_before_publication(self) -> None:
-        """A successfully compiled embedded file must still be tracked and keyed."""
-        for dependency in ("docs/example.md", "src/untracked.txt", "target/unbound.rs"):
+        """A compiled embedded file or a directory outside every keyed prefix is refused."""
+        for dependency in ("docs/example.md", "src/untracked.txt", "target/unbound.rs", "web"):
             path = self.root / dependency
-            path.parent.mkdir(parents=True, exist_ok=True)
-            _ = path.write_text("unbound input\n")
+            if not path.is_dir():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                _ = path.write_text("unbound input\n")
             _ = self.backend_fixture(("src/main.rs", dependency))
             destination = self.root / "cache"
             with self.assertRaisesRegex(ToolError, "ci_backend_dep_unkeyed"):
@@ -738,6 +739,26 @@ class VerifiedCacheTests(unittest.TestCase):
             with self.assertRaisesRegex(ToolError, "ci_cache_binary_changed"):
                 _ = cache.verify(self.root, "backend", key, directory)
             self.assertFalse(any((output / name).exists() for name in cache.BINARIES))
+
+    def test_backend_dependency_guard_admits_keyed_directories_with_tracked_children(self) -> None:
+        """A rerun-if-changed directory is bound through its tracked keyed children."""
+        migration = self.root / "migrations/001_create_users.sql"
+        migration.parent.mkdir(parents=True, exist_ok=True)
+        _ = migration.write_text("original migration\n")
+        output = self.backend_fixture(("src/main.rs", "migrations"))
+        unpublished = self.root / "unpublished"
+        with self.assertRaisesRegex(ToolError, "ci_backend_dep_tree"):
+            cache.save(self.root, "backend", cache.cache_key(self.root, "backend"), unpublished)
+        self.assertFalse(unpublished.exists())
+        self.git("add", "migrations/001_create_users.sql")
+        key = cache.cache_key(self.root, "backend")
+        directory = self.root / "cache"
+        cache.save(self.root, "backend", key, directory)
+        for name in cache.BINARIES:
+            (output / name).unlink()
+        self.assertEqual(cache.verify(self.root, "backend", key, directory), "1" * 40)
+        for name in cache.BINARIES:
+            self.assertEqual((output / name).read_bytes(), b"owned executable fixture")
 
     def test_backend_dependency_guard_rejects_wrong_targets_and_unsupported_rules(self) -> None:
         """Unsupported dependency formats and external files fail instead of being ignored."""

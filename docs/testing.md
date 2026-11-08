@@ -2179,8 +2179,11 @@ independent image-job, operations-test and documentation edits do not rebuild
 unchanged binaries. Unsupported workflow layouts fail closed.
 Before publication, both Cargo `.d` files must name the expected binary and only
 tracked, keyed sources or the known generated FlatBuffers/current pinned OpenSSL
-inputs. External files, untracked embedded files and unknown generated inputs
-are rejected. Restores recheck this dependency boundary before installing either
+inputs. A listed directory (a build script's `rerun-if-changed=migrations`, a
+vendored crate) is admitted only inside a keyed prefix and only when it has
+tracked children that are all keyed. External files, untracked embedded files,
+other directories and unknown generated inputs are rejected. Restores recheck
+this dependency boundary before installing either
 binary. Every browser suite still runs against the current frontend. Entries are
 saved only after the corresponding build or check succeeds, without prefix
 fallback. Cold caches and changed compiler inputs still require complete builds.
