@@ -1129,3 +1129,164 @@ fresh source review and independently matching analysis. The same analysis
 also identified two older inert Caddy test contexts without an explicit TLS
 minimum; those tests now set TLS1.2, matching the real fixture. No exception
 covers that TLS finding. Hosted ingestion remains a separate required check.
+
+## Source re-review: changes from 2026-10-31 to 2026-11-07 (2026-11-07)
+
+The commits from `87f527b2` to `303e43f0` shifted lines in the exact-review
+files or changed their complete-file digests. Fresh local CodeQL `2.27.1`
+security analysis of `83f5a954144f62b2bfd257d19ae16164960a5fe3` (Rust,
+Python and JavaScript/TypeScript, `build/security_codeql_local.py`) supplies
+the current findings. Each record in the first table below was rebound with
+the line-mapping tool after its flagged lines were confirmed byte-identical to
+the reviewed source; `rebind.py validate` matches every rebound identity that
+the local policy reports contain, and replaying the three SARIFs against the
+updated ledger blocks nothing.
+
+| Alerts | Reviewed range | Current range | Commits that moved or changed the file |
+|---|---|---|---|
+| 27 | `build/release_container_fixture.py:171:175` | `170:174` | `21770b4f` |
+| 30 | `ops/ansible/tests/test_public_templates.py:83` | `82` | `21770b4f` |
+| 33, 34 | `src/metrics.rs:1139`, `:1143` | `1137`, `1141` | `c01f4f08` |
+| 35, 63, 69 | `src/signaling/security_tests.rs:174`, `:607`, `:165` | `184`, `568`, `175` | `488b1b95`, `76d79ca2`, `735ec735`, `be6c33cd`, `21770b4f`, `b60b6f81`, `303e43f0` |
+| 42–57 | `src/auth/password.rs:55`–`:111` | `56`–`112` | `3a870e6e`, `c01f4f08` |
+| 58 | `src/auth/routes.rs:881` | `932` | `87f527b2`, `5c62ab8d`, `858b7644`, `c01f4f08`, `e8cbb02b`, `be6c33cd`, `21770b4f` |
+| 66 | `src/turn.rs:137` | `135` | `87f527b2`, `c01f4f08`, `e8cbb02b` |
+| 953 | `load_tests/src/account_session.rs:274` | `267` | `21770b4f` |
+
+Alert 63's passphrase fixture is not reported by the local analysis; its record
+is rebound by line text only. It stays bound rather than retired like alerts
+59–62 because the hosted analysis reported this finding at this exact text
+(run `36709013559` at `407ec7e`) while the local suite did not, and a retired
+record would block the hosted job if it reports the finding again; the hosted
+run is the arbiter. Alert 69 is a Medium finding and the report lists it as
+advisory; its recomputed identity equals the reported one.
+
+Complete-source SHA256 per rebound file:
+
+- `build/release_container_fixture.py`: `1175aa1bd35a7ebd0f4e41a2389194a44d7e1b53c12015987ebde9f399176ddc`
+- `ops/ansible/tests/test_public_templates.py`: `e2d3342d865080e0cb735f0feb3036bf3f937fce431015e800c1520212eeb590`
+- `src/metrics.rs`: `7a45d99e7190083537894d64e54da4dc8e1a9c6ec30ce8b3ca92d50c360d9473`
+- `src/signaling/security_tests.rs`: `0ae923163602d5c00a75e62fa5bd34ced9e000cd49a8f14b00682a128b6428b9`
+- `src/auth/password.rs`: `6349b33f58d75253500f4cd3e112359bae4456fad98b48874c91d7f3da06ee36`
+- `src/auth/routes.rs`: `4f2f1234e2dc738d973a27324f8642037f46f1b51780f941183d65208f6cf2a2`
+- `src/turn.rs`: `1a23a7affb133dfd08341b693175c8d6f20fab55935490b95cdfe07e50498bd9`
+- `load_tests/src/account_session.rs`: `cab3d288e40d4f006dd979246287380dcf7d7c7c36d3e9191f71cb3babfae5cb`
+- `src/room/dormant_join_tests.rs`: `1ba8e0d4799cc0be493ecd7a076a39b8561acc3dafc9ad530a693a39d31cadac`
+- `build/security_vm_maintain_prerequisite_guest.py`: `53e12b5019fb6062d904dc7439d00b2f58232780986a1cbe537848d4bd82e937`
+- `src/signaling/connection_authorization_tests.rs`: `40c7b911d5ab4c13386e11e6e71c59f6a64d71c4c016d52cd80a2915bf5112e6`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 27 | `build/release_container_fixture.py:170:174:19:6` | `codeql:0b22620ccfedbaf4669bc3b26311f206a3ddaf0287b74224df433136aff90e89` |
+| 30 | `ops/ansible/tests/test_public_templates.py:82:82:9:65` | `codeql:b19ab9c32deb5bf133a701ab6b0b66dd07d09cb7b6c9c9c0c3a9a74a732c6a8c` |
+| 33 | `src/metrics.rs:1137:1137:13:21` | `codeql:af0f3efe6b17dda257d9262b35e9d54af0167e4b51f98300c9058ab7af10c7cd` |
+| 34 | `src/metrics.rs:1141:1141:13:21` | `codeql:25a68f9d0aa50ced11d12818a03e4eb7fc78d105a6e96ccdf0a026dd8df0a231` |
+| 35 | `src/signaling/security_tests.rs:184:184:149:161` | `codeql:ac14787758dd5da24e4a8462ed2b02bc7341af8c18dd3e42296246901afe65c5` |
+| 36 | `src/signaling/connection_authorization_tests.rs:414:414:21:62` | `codeql:90be87c928e075f97f67db43573d990c9d0bc9bf72d9c7f0907e24e8a15e58b4` |
+| 37 | `src/signaling/connection_authorization_tests.rs:463:463:17:51` | `codeql:4d924fa17a7be350893ab9570cce1d2d21cc6d3005f4a332b1c6398ba348758c` |
+| 42 | `src/auth/password.rs:56:56:26:51` | `codeql:30fae6883e60891ae2ed2b3e87bb5cb9e2864f792b103e3402bdfead7f32f1de` |
+| 43 | `src/auth/password.rs:57:57:24:43` | `codeql:c67b0e2d51f2294520f522f98b4dda73a445051dedd476bd8d9d9c7a5a371c42` |
+| 44 | `src/auth/password.rs:62:62:42:62` | `codeql:1a2504ca03755585fd4da285f1f7ad015ba77d8177f14342ab70ef637a77eddf` |
+| 45 | `src/auth/password.rs:63:63:35:60` | `codeql:841c49d0f7dfa2563118aa14693d61aaefb3395b774d6b79ea2538f00f167c67` |
+| 46 | `src/auth/password.rs:64:64:41:66` | `codeql:fb2520d591f28eb89252edf9c77f503e046493a90cf6e3cea77ef0bde2134b78` |
+| 47 | `src/auth/password.rs:74:74:33:43` | `codeql:a62f44831c5dda7c1b5751f553df05c876ec5dec545e3ca5a8117dd91ce2dbe5` |
+| 48 | `src/auth/password.rs:75:75:34:50` | `codeql:83b3b2e04caf5a548feca6a8417ba7cc16503dc32e4f10146f9cfc852226ff75` |
+| 49 | `src/auth/password.rs:80:80:24:54` | `codeql:7cc0e9996bbac762daacce6b5bcce31d4694c53b42e38b21112f45cf4e4682a2` |
+| 50 | `src/auth/password.rs:83:83:34:50` | `codeql:dc5989d021fe5f4937705a690025645104ccc280d9c3105937fb594f98d81394` |
+| 51 | `src/auth/password.rs:88:88:35:46` | `codeql:cb3448c06b4ab114649100b5b26415fe9a150fb88cf6f1c55d87866e403ea944` |
+| 52 | `src/auth/password.rs:89:89:35:46` | `codeql:5e28cb3aa7f8a50e2072352361b371bd1cc1ea5082ec642af7676aba8cfcf152` |
+| 53 | `src/auth/password.rs:104:104:33:44` | `codeql:8bc2783c4d0a75689b66d9a8e35c157afa8ba1b45564dc2c2ede457a885a2326` |
+| 54 | `src/auth/password.rs:105:105:33:44` | `codeql:d727f895f64dd9dd70d0c1bd8e29e1a1631163dbbcca78270fc1441df0afe6d3` |
+| 55 | `src/auth/password.rs:110:110:34:36` | `codeql:59e42a4ce1c3983cbb9023b4f1e1caeb6f8f3fc71f15e0e8dceb3c611f47a9ff` |
+| 56 | `src/auth/password.rs:111:111:33:35` | `codeql:5d2ee6618e82ba0fea9e75592ed5bc4f63b41202604016fd8a70231d6d5f1cb6` |
+| 57 | `src/auth/password.rs:112:112:34:45` | `codeql:468b0ab38a35d9f8c5f931765a3913fa5154547b0207fd97d4d7a305f9e1bc1c` |
+| 58 | `src/auth/routes.rs:932:932:44:68` | `codeql:e3df8dd0f64d6c2f62fafefafd42b9c9550ea1782b84af68c4d0a2909169aa79` |
+| 63 | `src/signaling/security_tests.rs:568:568:27:52` | `codeql:55e0f1d1cf2d47e983df78f98fe260ae80b552dbde9f10dc0d2359734d21043f` |
+| 66 | `src/turn.rs:135:135:49:59` | `codeql:227218b08594a7fca28f8fb2bc4003b94a045281740cf604295e414139a8ad0c` |
+| 69 | `src/signaling/security_tests.rs:175:175:75:87` | `codeql:56ce3be505256cc5dd31f709d3cd1d2788f524d0c16e2e807b3f4ba1962e7f90` |
+| 953 | `load_tests/src/account_session.rs:267:267:19:62` | `codeql:30e6f4ae0a299bf17aaeb08fee0e2cf1201025a8b829a5f07339f948c9c4840a` |
+| — | `src/room/dormant_join_tests.rs:102:102:57:79` | `codeql:2e60b934a00860a65f5f1420bcecd33f694d90882e8fd52263d59b6bfb632fe8` |
+| — | `build/security_vm_maintain_prerequisite_guest.py:742:746:19:6` | `codeql:4ca4412d3df3a36aa53f09c206530e73b684b942bde90e5fa64e0c9d782952e3` |
+
+The two exception-only records take the local report's identity directly: the
+stored fingerprint of each is reproduced from the reported message with the old
+range and digest, so only the source identity and range moved. The dormant-join
+passphrase keeps line 102 (`f514deb9` changed the file elsewhere); the
+maintenance renderer moved from `741:745` to `742:746` (`cd75e0eb`,
+`21770b4f`).
+
+Re-reviewed, and resolved in the source:
+
+- Alerts 36 and 37 (`src/signaling/connection_authorization_tests.rs:414` and
+  `:463`) are re-reviewed as false positives with the changed flow named. The
+  flagged lines are unchanged, but `f514deb9` made the logged `result` the
+  dispatcher's `Result<(), RoomError>`, and the rendered message now names six
+  sources instead of four: the two `password` values and two
+  `verify_room_password` calls in `src/room/manager/membership.rs`, plus a
+  closure and `session.media_session_id` at
+  `src/room/manager/moderation_ops.rs:495`. The sink still prints that result
+  in a cfg(test) assertion. Its `Ok` payload is unit, and every refusal those
+  paths raise carries fixed text: `verify_room_password` consumes the supplied
+  password and refuses with the fixed `Forbidden("Incorrect room password")`;
+  the media session id only selects the session to remove, its absence becomes
+  the fixed `NotFound("Target participant not found")` refusal, and a media
+  cleanup failure is logged there, not returned; neither the supplied room
+  password nor the media session id is bound into any query on these paths, so
+  a database error on them cannot echo either value. Neither the password nor
+  a session identifier can reach the printed text, and the fixture uses fixed
+  synthetic participants. Both records take the fresh report's identity
+  (message, digest and fingerprint) with an extended rationale; owner, scope
+  semantics and expiry are unchanged.
+- The `rust/cleartext-logging` finding that `cd75e0eb` introduced at
+  `src/auth/account_tests.rs:899` (an assertion message printing an avatar URL
+  built from the fixture account id) is resolved by `83f5a954` ("test(server):
+  name the stale avatar variant instead of printing its URL"): the message now
+  names the variant. The analysis reports nothing in that file; no record is
+  added.
+
+Retired in place (no finding at the analyzed revision). As with alerts 64 and
+65, the false-positive records for alerts 59–62 and 32 stay bound to their last
+reviewed bytes, waive nothing and lapse with their exceptions on 2026-11-29;
+fix-pending alert 25 has no exception and no expiry and stays as its
+2026-09-30 observation:
+
+- Alerts 59–62 (`src/room/settings.rs:601`, `:606`, `:608`, `:611`):
+  `87f527b2` changed each flagged line's `.to_string()` to `.into()` for a
+  `SecretString` field, which the hard-coded-value query does not trace. Later
+  commits moved the lines to 684, 689, 691 and 697.
+- Alert 32 (`build/release_container_harness.py:179`): `da6f7b41` removed the
+  caller-supplied mode, so `write_new` always creates files with mode `0o600`.
+  The analysis reports no `py/overly-permissive-file` finding.
+- Alert 25 (fix-pending, `build/release_http_policy.py:273`, the `wrap_socket`
+  call now at line 270): the ledger keeps fix-pending records as the 2026-09-30
+  observation and grants them no exception. `af2b7502` set the TLS 1.2 minimum,
+  and the analysis reports no `py/insecure-protocol` finding anywhere (alerts
+  24 and 26 included), so there is no current finding to bind.
+
+Retired Gitleaks fixture allowlists, each removed from `gitleaks.toml` with its
+`public-fixture:` record because its exact path and value no longer occur in
+the tracked tree:
+
+- `src/auth/jwt.rs` (`claim-validation-…`): `21770b4f` deleted the file.
+- `src/signaling/connection_heartbeat_tests.rs` (`interrupted-renewal-…`) and
+  `src/signaling/connection_authentication.rs` (`renewal-priority-…`,
+  `ordinary-renewal-…`): `21770b4f` deleted the three fixture secrets. Both
+  files remain.
+- `vendor/mediasoup-0.27.0/src/scalability_modes.rs` (two enum strings),
+  `vendor/mediasoup-0.27.0/src/router/plain_transport.rs` (the documentation
+  key) and `vendor/mediasoup-sys-0.17.0/test/src/RTC/ICE/TestStunPacket.cpp`
+  (the STUN test password): `75117341` replaced those vendored versions with
+  `mediasoup-0.29.0` and `mediasoup-sys-0.19.0`. The values now live at the new
+  paths, which these allowlists never matched. Vendor sources are outside the
+  default scan.
+
+The retained release-HTTP fixture copy's record no longer calls the copy
+byte-identical to alert 27's file: `21770b4f` changed
+`build/release_container_fixture.py`, while the frozen copy under
+`xtask/src/ci/release_http_policy/reference/` keeps the bytes reviewed as
+alert 27 (SHA256 `072ef7e7…`, the live file from `198f6f93` until
+`21770b4f`), pinned by `reference_pins.rs`. Its identity is unchanged and the
+local analysis still waives it.
+
+Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged for
+every other record. Hosted ingestion remains a separate required check.
