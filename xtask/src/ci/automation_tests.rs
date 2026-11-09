@@ -109,32 +109,31 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--test-threads=1"
         ]
     );
-    assert_eq!(
-        steps
-            .iter()
-            .filter(|step| matches!(step.kind, StepKind::PythonDiscovery))
-            .count(),
-        1,
-    );
-    assert!(matches!(
-        steps.last().unwrap().kind,
-        StepKind::PythonDiscovery
-    ));
     assert!(
         steps
             .iter()
             .all(|step| !text(&step.arguments).contains(&"--ignored"))
     );
+}
+
+#[test]
+fn automation_runs_one_discovery_child_without_routing() {
+    let fixture = Fixture::new(&["a.sh"]);
+    let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
+    let python = steps
+        .iter()
+        .filter(|step| step.program == "python")
+        .collect::<Vec<_>>();
+    assert_eq!(python.len(), 1);
     assert_eq!(
-        text(&steps.last().unwrap().arguments),
-        [
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-v"
-        ]
+        text(&python[0].arguments),
+        ["-m", "unittest", "discover", "-s", "ops/ansible/tests"]
+    );
+    // No step selects, shards or reroutes individual Python tests.
+    assert!(
+        steps
+            .iter()
+            .all(|step| !text(&step.arguments).contains(&"-k"))
     );
 }
 

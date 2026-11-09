@@ -1,4 +1,4 @@
-//! Current counterparts of three unchanged Python workflow-reference methods.
+//! Current restart-owner, complete-test-graph and backend-projection contracts.
 //! These source contracts run no browser, compiler, workflow or Python loader.
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -138,7 +138,7 @@ fn complete_graph(jobs: &BTreeMap<String, Value>) -> Check<()> {
     Ok(())
 }
 #[test]
-fn current_restart_and_complete_graph_preserve_all_frozen_method_obligations() {
+fn current_restart_and_complete_graph_contracts_hold() {
     let workflow = parsed();
     restart(workflow.jobs["browser"]["steps"].as_array().unwrap()).unwrap();
     complete_graph(&workflow.jobs).unwrap();

@@ -222,6 +222,13 @@ fn routine_contract(document: &Value, shared: &Value) -> Check<()> {
         if task.get("ansible.builtin.import_tasks").is_some() {
             require(task["name"] == DELIVERY, "one-static-delivery-import")?;
         }
+        // The host downloads the release itself and checks it against the digests
+        // the controller re-verified; no task copies the controller's release.json
+        // and image.tar to the host.
+        require(
+            task["loop"] != json!(["release.json", "image.tar"]),
+            "no-controller-release-copy",
+        )?;
     }
     Ok(())
 }
@@ -234,6 +241,33 @@ fn shared_task_mut<'a>(shared: &'a mut Value, name: &str) -> &'a mut Value {
 #[test]
 fn explicit_routine_deploy_uses_the_actual_authenticated_shared_delivery() {
     routine_contract(&original_release(), &original_shared_delivery()).unwrap();
+}
+
+#[test]
+fn routine_release_never_copies_the_controller_release_pair() {
+    let caller = original_release();
+    let shared = original_shared_delivery();
+    routine_contract(&caller, &shared).unwrap();
+    // The host downloads the release itself and checks it against the digests
+    // the controller re-verified; no task copies the controller's release.json
+    // and image.tar to the host.
+    let mut changed = caller;
+    changed[0]["tasks"].as_array_mut().unwrap().insert(
+        0,
+        json!({
+            "name": "Copy the controller release to the host",
+            "ansible.builtin.copy": {
+                "src": "{{ item }}",
+                "dest": "{{ scpub_root }}/releases/{{ scpub_release_revision }}/{{ item }}",
+                "mode": "0600",
+            },
+            "loop": ["release.json", "image.tar"],
+        }),
+    );
+    assert_eq!(
+        routine_contract(&changed, &shared),
+        Err("no-controller-release-copy")
+    );
 }
 
 #[test]

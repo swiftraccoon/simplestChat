@@ -375,59 +375,19 @@ PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
   cargo run --locked -q -p xtask -- ci automation --checks
 ```
 
-The shared `ci automation --checks` command preserves quality, syntax and
-standalone Ops checks. Its complete suite uses two current discovery children
-plus one frozen maintenance-class child. Disjoint module selectors come from
-the sorted, alternating flat inventory. The unchanged release-playbook module
-has twelve tests: seven unaffected release cases and one public-selection case
-run against current YAML. Its three old Python-verifier/deploy/flat-task
-assertions and one legacy maintenance case run unchanged against explicitly
-byte-pinned old YAML in a private runtime copy. Exact method selectors keep the current and historical
-sets disjoint. No Python source, loader, process role or additional deadline is
-added. Current native routine and maintenance caller policy is checked by Rust
-YAML contract and mutation tests, including their actual shared delivery import.
-The verifier branch requires an explicit strict boolean, unchanged outer guard,
-separate native registration and success-only normalization before remote work.
-Every Python test ID remains in exactly one current or historical owner.
-The module's full content pin prevents future methods from being silently omitted.
-
-With inherited `DISPOSABLE_TEST_DATABASE=1`, there is one current discovery
-child with explicit module/class selectors plus the read-only legacy child.
-Database-mutating cases still share one current process. Unsupported names,
-packages, symlinks, byte-pin changes and observed inventory changes refuse.
-The separate workflow database checks keep their existing owners. Direct raw
-`python -m unittest discover` is no longer the complete current suite: it would
-apply frozen old-launcher assertions to the new native callers. Focused
-unchanged modules may still be run directly; use the Rust driver for the complete
-current/reference contract.
-
-An ordinary test failure is retained while the peer finishes naturally. Spawn,
-I/O, cancellation and deadline failures settle every admitted child before the
-operation returns. One 600-second unit-suite interval starts before preparation,
-reserves 30 seconds for finalization, and spans all active children, runtime teardown,
-replay, closes and the final signal check. The outer ten-minute job limit stays
-independent and can expire earlier. Combined stdout/stderr is capped at eight
-MiB per current child and one MiB for the legacy child, then replayed in fixed
-role order after all settle. Success requires every
-selected child and finalizer; group cleanup does not certify escaped sessions,
-all SDK descriptors or a hard bound on blocked kernel I/O.
-
-The cancelled `c8c04c4` job passed validation but expired at receipt creation; its
-2,108 Python cases took 332.757 seconds versus 266.512 in the previous successful
-run. On this Mac, unchanged sequential discovery passed the same 2,108 cases in
-227.871 seconds. The Rust runner's 997- and 1,111-case processes passed in 110.052
-and 131.246 seconds, with the exact same case-ID multiset and 17 existing skips.
-The complete automation command, including quality, Ansible and native checks,
-took 230.516 seconds locally. These measurements use the same pinned Python
-environment with no database; they do not establish hosted timing or the
-five-minute CI ceiling and one-minute target. Those measurements precede the
-native caller/class split; direct discovery was that historical sequential
-baseline and is not advertised as today's complete suite. Run focused inert ownership tests with:
-
-```sh
-cargo test --locked -p xtask --bin xtask \
-  ci::automation::python_shards::tests:: -- --test-threads=1
-```
+The shared `ci automation --checks` command runs its steps in a fixed order and
+stops at the first failure with that step's exit status: `check --python`,
+strict offline ansible-lint over `ops/ansible` and `security/vm/stage.yml`, the
+syntax check of each listed playbook, shellcheck over `ops/ansible/files/*.sh`,
+the standalone Ops library and CLI tests, and one
+`python -m unittest discover -s ops/ansible/tests` child that runs the whole
+Python suite against the current playbooks and workflows. Every step is an
+ordinary child of the checkout with the inherited environment, so `python` and
+the Ansible tools are the ones on `PATH` (the environment above locally, the
+installed controller environment in CI), and its output goes straight to the
+terminal or job log. The driver adds no deadline or output limit of its own; the
+hosted job's ten-minute limit bounds the whole command. The same discovery run
+directly is the complete Python suite.
 
 The Python group of `check`, run by default and by `--python`, starts with the
 Python line ratchet, `cargo run -q -p xtask -- python-lines`, which `check` runs
@@ -1678,16 +1638,11 @@ matching artifact hash cannot admit an input outside its role, and receipt
 serialization grants no release or execution authority. The existing file,
 process, error and explicit-finalization contracts retain their prior scope.
 
-Three historical CI-shape methods run against a byte-pinned workflow reference
-without changing their Python source. The other 42 methods in those two modules
-continue to inspect current inputs. Current Rust tests preserve the complete
-restart ownership/evidence checks, workflow projection changes and refusals, and
-locked workspace test graph with its exact skip list. The existing reference
-child shares the original 600/30 owner and captures; no child or timer is added.
-Its unchanged test/support copies and original helper paths retain checked file
-and directory custody. Copies do not isolate imports from privileged same-UID
-mutation. These reference results cannot substitute for current browser suites
-or release provenance.
+The restart owner, the complete test graph (with no skips) and the backend
+workflow projection are pinned against the current `.github/workflows/ci.yml` by
+`xtask/src/ci/automation/workflow_contract_tests.rs` and
+`workflow_projection_tests.rs`. These source contracts read the workflow; they
+run no browser, build or test.
 
 The test job separately primes all targets with
 `cargo build --locked --workspace --all-targets --all-features --profile test`,

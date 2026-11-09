@@ -1,4 +1,4 @@
-//! All mutation and rejection cases from the unchanged Python projection method.
+//! The backend workflow projection's six edits and six rejected YAML shapes.
 use super::{BUILD, source};
 use std::{
     fs,

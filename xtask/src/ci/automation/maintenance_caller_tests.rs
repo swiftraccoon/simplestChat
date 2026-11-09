@@ -1544,7 +1544,10 @@ fn caller_yaml_rejects_duplicate_keys_aliases_tags_and_extra_documents() {
     }
 }
 
-fn reference_context_contract(text: &str) -> Check<()> {
+/// The context admits the xtask tree only through its ancestor directories,
+/// each re-excluded at once, and narrow source rules beneath them; the
+/// automation directory contributes nothing but its Rust sources.
+fn context_contract(text: &str) -> Check<()> {
     let rules = text
         .lines()
         .map(str::trim)
@@ -1575,25 +1578,6 @@ fn reference_context_contract(text: &str) -> Check<()> {
         )?;
         previous = at;
     }
-    let reference = "xtask/src/ci/automation/reference";
-    let expected = [
-        "!xtask/src/ci/automation/reference/",
-        "xtask/src/ci/automation/reference/**",
-        "!xtask/src/ci/automation/reference/maintenance-python.yml",
-        "!xtask/src/ci/automation/reference/source-python.yml",
-        "!xtask/src/ci/automation/reference/release-python.yml",
-        "!xtask/src/ci/automation/reference/ci-python.yml",
-    ];
-    let positions = rules
-        .windows(expected.len())
-        .enumerate()
-        .filter(|(_, block)| *block == expected)
-        .map(|(at, _)| at)
-        .collect::<Vec<_>>();
-    require(
-        positions.len() == 1 && positions[0] > previous,
-        "context-exact-reference-block",
-    )?;
     let mut admitted = std::collections::BTreeSet::new();
     for rule in &rules {
         let Some(pattern) = rule.strip_prefix('!') else {
@@ -1606,15 +1590,6 @@ fn reference_context_contract(text: &str) -> Check<()> {
             continue;
         }
         require(admitted.insert(pattern), "context-duplicate-admission")?;
-        if pattern.starts_with(reference) {
-            require(
-                expected
-                    .iter()
-                    .filter_map(|rule| rule.strip_prefix('!'))
-                    .any(|allowed| allowed == pattern),
-                "context-reference-whitelist",
-            )?;
-        }
         require(
             !pattern.contains(['*', '?', '[']) || pattern.ends_with("/*.rs"),
             "context-data-wildcard",
@@ -1622,44 +1597,66 @@ fn reference_context_contract(text: &str) -> Check<()> {
         if ancestors.contains(&pattern.trim_end_matches('/')) {
             require(pattern.ends_with('/'), "context-ancestor-shape")?;
         }
+        if let Some(inner) = pattern.strip_prefix("xtask/src/ci/automation/") {
+            require(
+                inner.is_empty() || inner == "*.rs",
+                "context-automation-sources",
+            )?;
+        }
     }
     Ok(())
 }
 
 #[test]
-fn docker_context_admits_only_the_four_fixed_legacy_yaml_inputs() {
+fn docker_context_admits_xtask_sources_narrowly() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();
-    let bytes = std::fs::read(root.join(".dockerignore")).unwrap();
-    assert_eq!(
-        bytes,
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../.dockerignore"))
-    );
-    let text = std::str::from_utf8(&bytes).unwrap();
-    reference_context_contract(text).unwrap();
-    for admission in [
-        "!xtask/src/ci/automation/reference/*.yml",
-        "!xtask/src/ci/automation/reference/**",
-        "!xtask/src/ci/automation/reference/private.env",
-        "!xtask/src/ci/automation/**",
-        "!xtask/**",
-        "!**/*.yaml",
+    let text = std::fs::read_to_string(root.join(".dockerignore")).unwrap();
+    context_contract(&text).unwrap();
+    for (admission, cause) in [
+        ("!xtask/**", "context-data-wildcard"),
+        ("!**/*.yaml", "context-global-wildcard"),
+        ("!xtask/src/ci/automation/**", "context-data-wildcard"),
+        (
+            "!xtask/src/ci/automation/private.env",
+            "context-automation-sources",
+        ),
+        ("!xtask/src/ci", "context-ancestor-shape"),
+        ("!xtask/src/ci/", "context-directory"),
+        ("!xtask/Cargo.toml", "context-duplicate-admission"),
     ] {
-        assert!(
-            reference_context_contract(&format!("{text}\n{admission}\n")).is_err(),
-            "{admission}"
+        let changed = format!("{text}\n{admission}\n");
+        assert_eq!(context_contract(&changed), Err(cause), "{admission}");
+    }
+    // Drop exactly one line: the deny-by-default rule or one re-exclusion.
+    let without = |dropped: &str| {
+        let lines = text.lines().collect::<Vec<_>>();
+        let kept = lines
+            .iter()
+            .copied()
+            .filter(|line| *line != dropped)
+            .collect::<Vec<_>>();
+        assert_eq!(kept.len() + 1, lines.len(), "{dropped}");
+        kept.join("\n")
+    };
+    assert_eq!(
+        context_contract(&without("**")),
+        Err("context-deny-default")
+    );
+    for ancestor in [
+        "xtask",
+        "xtask/src",
+        "xtask/src/ci",
+        "xtask/src/ci/automation",
+    ] {
+        let deny = format!("{ancestor}/**");
+        assert_eq!(
+            context_contract(&without(&deny)),
+            Err("context-reexclude"),
+            "{deny}"
         );
     }
-    let missing_reexclude = text.replace("xtask/src/ci/automation/reference/**\n", "");
-    assert_ne!(missing_reexclude, text);
-    assert!(reference_context_contract(&missing_reexclude).is_err());
-    let unlisted = text.replace(
-        "!xtask/src/ci/automation/reference/source-python.yml",
-        "!xtask/src/ci/automation/reference/other.yaml",
-    );
-    assert_ne!(unlisted, text);
-    assert!(reference_context_contract(&unlisted).is_err());
 }
 
 #[test]

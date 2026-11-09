@@ -1,4 +1,4 @@
-total 143628
+total 143219
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -148,7 +148,7 @@ total 143628
 180	ops/ansible/tests/test_ci_local_act.py
 165	ops/ansible/tests/test_ci_local_evidence.py
 352	ops/ansible/tests/test_ci_release_checks.py
-1191	ops/ansible/tests/test_ci_verified.py
+1079	ops/ansible/tests/test_ci_verified.py
 245	ops/ansible/tests/test_database_logging.py
 766	ops/ansible/tests/test_deploy_controller.py
 134	ops/ansible/tests/test_dns_handoff.py
@@ -177,11 +177,11 @@ total 143628
 2018	ops/ansible/tests/test_public_release.py
 310	ops/ansible/tests/test_public_seed.py
 611	ops/ansible/tests/test_public_templates.py
-353	ops/ansible/tests/test_python_quality.py
+308	ops/ansible/tests/test_python_quality.py
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
-547	ops/ansible/tests/test_release_container_ci.py
+499	ops/ansible/tests/test_release_container_ci.py
 400	ops/ansible/tests/test_release_container_fixture.py
 1906	ops/ansible/tests/test_release_container_harness.py
 893	ops/ansible/tests/test_release_fetch.py
@@ -189,7 +189,7 @@ total 143628
 183	ops/ansible/tests/test_release_fetch_runtime_workflow.py
 491	ops/ansible/tests/test_release_http_policy.py
 317	ops/ansible/tests/test_release_json.py
-678	ops/ansible/tests/test_release_playbook.py
+474	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py
 224	ops/ansible/tests/test_release_timing.py
 183	ops/ansible/tests/test_release_workflow.py

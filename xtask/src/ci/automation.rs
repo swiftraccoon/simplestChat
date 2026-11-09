@@ -8,9 +8,6 @@ use std::process::ExitCode;
 
 #[cfg(test)]
 mod maintenance_caller_tests;
-mod python_captures;
-mod python_inventory;
-mod python_shards;
 #[cfg(test)]
 mod workflow_contract_tests;
 #[cfg(test)]
@@ -29,14 +26,7 @@ const PLAYBOOKS: [&str; 10] = [
     "migration-data.yml",
 ];
 
-#[derive(Clone, Copy)]
-enum StepKind {
-    Command,
-    PythonDiscovery,
-}
-
 struct Step {
-    kind: StepKind,
     program: OsString,
     arguments: Vec<OsString>,
 }
@@ -44,7 +34,6 @@ struct Step {
 impl Step {
     fn new(program: impl Into<OsString>, arguments: &[&str]) -> Self {
         Self {
-            kind: StepKind::Command,
             program: program.into(),
             arguments: arguments.iter().map(OsString::from).collect(),
         }
@@ -88,7 +77,6 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ));
     }
     steps.push(Step {
-        kind: StepKind::Command,
         program: "shellcheck".into(),
         arguments: scripts
             .into_iter()
@@ -131,10 +119,11 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--test-threads=1",
         ],
     ));
-    steps.push(Step {
-        kind: StepKind::PythonDiscovery,
-        ..Step::new("python", &python_shards::BASE_ARGUMENTS)
-    });
+    // One discovery runs the whole Python suite, as a direct run would.
+    steps.push(Step::new(
+        "python",
+        &["-m", "unittest", "discover", "-s", "ops/ansible/tests"],
+    ));
     Ok(steps)
 }
 
@@ -151,9 +140,8 @@ fn execute(
 fn checks(root: &Path, environment: &Environment) -> tooling::Result<()> {
     let executable = std::env::current_exe().map_err(|error| Failure::new(1, error.to_string()))?;
     let steps = steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?;
-    execute(&steps, |step| match step.kind {
-        StepKind::Command => tooling::run(root, environment, &step.program, &step.arguments),
-        StepKind::PythonDiscovery => python_shards::run(root, environment),
+    execute(&steps, |step| {
+        tooling::run(root, environment, &step.program, &step.arguments)
     })
 }
 

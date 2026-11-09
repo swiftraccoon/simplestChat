@@ -388,54 +388,6 @@ class ReleaseContainerCiTests(unittest.TestCase):
         commands = "\n".join(string(step.get("run", "")) for step in self.steps)
         self.assertNotIn("npm --prefix web run build", commands)
 
-    def test_only_sanitized_report_is_retained_even_on_failure(self) -> None:
-        """Verify only sanitized report is retained even on failure."""
-        retention = self.step(RETENTION)
-        self.assertRegex(string(retention, "uses"), r"^actions/upload-artifact@[a-f0-9]{40}$")
-        self.assertEqual(retention["if"], "${{ !cancelled() && !env.ACT }}")
-        self.assertEqual(
-            retention["with"],
-            {
-                "name": "release-container",
-                "path": "${{ runner.temp }}/release-container/report.json",
-                "if-no-files-found": "warn",
-                "retention-days": "7",
-            },
-        )
-        self.assertNotIn("run", retention, "Retention must not rewrite a failed test outcome")
-        self.assertNotIn("continue-on-error", retention)
-        uploads = [
-            step for step in self.steps if "upload-artifact@" in string(step.get("uses", ""))
-        ]
-        self.assertEqual(
-            {string(step, "with", "path") for step in uploads},
-            {
-                "${{ runner.temp }}/container-smoke",
-                "${{ runner.temp }}/release-container/report.json",
-                "${{ runner.temp }}/simplestchat-config-validation-caddy-*/config-validation.json",
-                "${{ runner.temp }}/simplestchat-release",
-                "\n".join(
-                    "${{ runner.temp }}/production-security/image/" + name
-                    for name in (
-                        "outcome.json",
-                        "checks.json",
-                        "elf.json",
-                        "runtime-proof.json",
-                        "vex.openvex.json",
-                        "runtime-license-evidence.json",
-                        "native.json",
-                        "database-status.json",
-                        "scanner-result-*.json",
-                        "secret-paths.json",
-                        "sbom/sbom.syft.json",
-                        "spdx/sbom.spdx.json",
-                    )
-                )
-                + "\n",
-            },
-            "Do not upload private release fixture directories or broad runner paths",
-        )
-
     def test_completed_layers_are_saved_before_later_checks_can_fail(self) -> None:
         """A successful build survives fixture failures without saving partial layers."""
         restore = self.step("Restore image layer cache")

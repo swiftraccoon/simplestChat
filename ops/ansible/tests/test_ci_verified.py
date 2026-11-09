@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import os
 import platform
-import shlex
 import subprocess
 import tempfile
 import unittest
@@ -632,37 +631,6 @@ class VerifiedCacheTests(unittest.TestCase):
             self.assertNotEqual(cache.cache_key(self.root, "backend"), original, name)
             _ = path.write_text("original\n")
 
-    def test_backend_workflow_projection_preserves_the_actual_build_contract(self) -> None:
-        """Execute key construction against real workflow edits, including rejected YAML shapes."""
-        path = self.root / ".github/workflows/ci.yml"
-        original = path.read_text()
-        key = cache.cache_key(self.root, "backend")
-        for before, after, changed in (
-            ("name: Build production container", "name: Build the production image", False),
-            ("test:stress", "test:stress-extra", False),
-            ("cargo build --locked --workspace --bins", "cargo build --locked --bins", True),
-            ('OPENSSL_STATIC: "1"', 'OPENSSL_STATIC: "0"', True),
-            ("target/openssl-4.1.0", "target/openssl-4.1.1", True),
-            ("cache-key: rust-build", "cache-key: different-build", True),
-        ):
-            with self.subTest(before=before):
-                self.assertIn(before, original)
-                _ = path.write_text(original.replace(before, after))
-                self.assertEqual(cache.cache_key(self.root, "backend") != key, changed)
-        for altered in (
-            original + "\nenv:\n  RUSTFLAGS: changed\n",
-            original.replace("  browser:\n", "  browser: &shared\n"),
-            original.replace("    env:\n", "    env: *shared\n"),
-            original.replace("Save the exact backend success", "renamed boundary"),
-            original.replace(
-                "  web:\n", "    defaults:\n      run:\n        shell: custom\n\n  web:\n"
-            ),
-            original.replace("  web:\n", "    container: changed\n\n  web:\n"),
-        ):
-            _ = path.write_text(altered)
-            with self.assertRaisesRegex(ToolError, "ci_backend_workflow"):
-                _ = cache.cache_key(self.root, "backend")
-
     def test_backend_setup_defaults_stay_stable_and_compiler_overrides_invalidate(self) -> None:
         """Pinned setup's observed exports cannot break cold publication or weaken overrides."""
         with patch.dict(os.environ):
@@ -984,86 +952,6 @@ class VerifiedWorkflowTests(unittest.TestCase):
         self.assertNotIn("security-deep", jobs)
         for helper in ("build/native_security.py", "build/native_security_cache.py"):
             self.assertTrue(cache.native_security_input(helper), helper)
-
-    def test_rust_tests_prime_their_own_complete_graph_before_executing_every_test(self) -> None:
-        """A binary-only cache must not prevent the test dependency graph being retained."""
-        jobs = obj(
-            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
-            "jobs",
-        )
-        for name, key in (("rust-test", "rust-test"), ("browser", "rust-build")):
-            steps = objects(obj(jobs, name), "steps")
-            toolchain = next(
-                step for step in steps if step.get("uses") == "./.github/actions/native-toolchain"
-            )
-            self.assertEqual(string(obj(toolchain, "with"), "cache-key"), key)
-            build = next(
-                step for step in steps if string(step.get("run", "")).startswith("cargo build ")
-            )
-            arguments = shlex.split(string(build, "run"))
-            self.assertIn("--locked", arguments)
-            self.assertIn("--workspace", arguments)
-            if name == "browser":
-                self.assertIn("--bins", arguments)
-                self.assertNotIn("--all-targets", arguments)
-                continue
-            self.assertIn("--all-targets", arguments)
-            self.assertIn("--all-features", arguments)
-            self.assertIn("--profile", arguments)
-            self.assertEqual(arguments[arguments.index("--profile") + 1], "test")
-            execute = next(
-                step for step in steps if string(step.get("run", "")).startswith("cargo test ")
-            )
-            self.assertEqual(
-                shlex.split(string(execute, "run")),
-                [
-                    "cargo",
-                    "test",
-                    "--locked",
-                    "--workspace",
-                    "--all-features",
-                    "--",
-                    "--include-ignored",
-                    "--test-threads=1",
-                    "--skip",
-                    "capacity_vps::process::tests::inert_child_signal_mask",
-                    "--skip",
-                    "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
-                    "--skip",
-                    (
-                        "ci::ops_artifact::capacity_vps::controller_tests::"
-                        "all_eight_whole_reference_scenarios_preserve_local_policy_"
-                        "and_explicit_transport_deltas"
-                    ),
-                    "--skip",
-                    "release::build::tests::whole_reference_scenarios_match_unchanged_python",
-                    "--skip",
-                    "release::build::process::tests::signal_worker",
-                    "--skip",
-                    (
-                        "release::attestation::prepare::oracle_tests::"
-                        "whole_prepare_scenarios_match_unchanged_python"
-                    ),
-                    "--skip",
-                    "release::attestation::prepare::signal_tests::retained_hash_signal_child",
-                    "--skip",
-                    "whole_verify_scenarios_match_unchanged_python",
-                    "--skip",
-                    "whole_fresh_release_matches_unchanged_python",
-                    "--skip",
-                    "whole_fetch_controller_matches_unchanged_python",
-                    "--skip",
-                    "whole_host_receiver_matches_unchanged_python",
-                    "--skip",
-                    "whole_stage_matches_unchanged_python",
-                    "--skip",
-                    "whole_deploy_matches_unchanged_python",
-                    "--skip",
-                    "whole_restore_matches_unchanged_python",
-                ],
-            )
-            self.assertLess(steps.index(build), steps.index(execute))
-            self.assertEqual(build["if"], execute["if"])
 
     def test_audits_helpers_and_browser_suites_are_not_replaced_by_cached_success(self) -> None:
         """Cached Rust work cannot suppress UI or advisory checks."""

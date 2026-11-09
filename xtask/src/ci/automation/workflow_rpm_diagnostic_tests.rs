@@ -1,4 +1,4 @@
-//! Current deployment retention policy beside the unchanged historical Python assertion.
+//! Current deployment retention policy: five ordinary uploads and one encrypted diagnostic.
 //! These YAML contracts execute no scanner, encryption tool, workflow or Python loader.
 
 use serde_json::{Value, json};
@@ -237,15 +237,8 @@ fn mutate(name: &str, change: impl FnOnce(&mut Value)) {
 }
 
 #[test]
-fn current_retention_keeps_the_historical_five_uploads_and_only_two_encrypted_files() {
+fn current_retention_keeps_five_ordinary_uploads_and_only_two_encrypted_files() {
     assert_eq!(contract(&current()), Ok(()));
-    let historical: Value =
-        serde_saphyr::from_str(include_str!("reference/ci-python.yml")).unwrap();
-    let steps = historical["jobs"]["deployment"]["steps"]
-        .as_array()
-        .unwrap();
-    assert_eq!(uploads(steps), ordinary_uploads());
-    assert_eq!(named(steps, SANITIZED).unwrap().1, &ordinary_uploads()[3]);
 }
 
 #[test]
