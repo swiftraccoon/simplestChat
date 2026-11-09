@@ -1,8 +1,8 @@
 //! Publication remains within the original deadline and signal-owner lifetime.
 
 use super::*;
-use crate::ci::{command::Command, process::Executor};
 use serde_json::{Value, json};
+use simplestchat_ci::{command::Command, process::Executor};
 use std::time::Duration;
 
 #[derive(Default)]

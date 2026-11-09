@@ -131,7 +131,7 @@ fn catalogue_caps_actual_records_total_bytes_names_and_exact_ids() {
 async fn selected_git_hash_or_pending_refusal_checked_closes_original_file_and_parents() {
     struct Pending(Option<u8>);
     impl Executor for Pending {
-        async fn run(&mut self, _: crate::ci::command::Command) -> Result<Vec<u8>> {
+        async fn run(&mut self, _: simplestchat_ci::command::Command) -> Result<Vec<u8>> {
             panic!("selected Git admission cannot execute a command")
         }
         async fn ready(&mut self) -> Result<()> {
@@ -205,7 +205,7 @@ fn incomplete_or_redirected_repository_checked_closes_both_original_chains() {
 async fn selected_git_multi_chunk_hash_has_a_small_unboxed_yielding_future() {
     struct Yielding(usize);
     impl Executor for Yielding {
-        async fn run(&mut self, _: crate::ci::command::Command) -> Result<Vec<u8>> {
+        async fn run(&mut self, _: simplestchat_ci::command::Command) -> Result<Vec<u8>> {
             panic!("selected Git measurement must not execute a command");
         }
         async fn ready(&mut self) -> Result<()> {

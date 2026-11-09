@@ -9,7 +9,7 @@ use super::{
     plan::{self, Clock, Plan},
     sources,
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program, ReleaseRole},
     process::Executor,
 };
@@ -538,7 +538,7 @@ impl Executor for Remote {
             .unwrap();
         }
         if let Err(error) = proof.begin(&command) {
-            let _ = crate::ci::process::settle_unforwarded(command).await;
+            let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
         let (stdout, stderr, status) = match command.program {
@@ -582,11 +582,12 @@ impl Executor for Remote {
             out_closed.and(err_closed).map_err(|_| super::failure(1))
         });
         let (written, out, err) = tokio::join!(writer, logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
-            sha256: value.sha256,
-            bytes: value.bytes,
-            metadata: value.metadata,
-        };
+        let seal =
+            |value: simplestchat_ci::bounded_log::Finished| simplestchat_ci::bounded_log::Seal {
+                sha256: value.sha256,
+                bytes: value.bytes,
+                metadata: value.metadata,
+            };
         let captures = match (out, err) {
             (Ok(out), Ok(err)) if out.complete && err.complete => Some(super::tools::Captures {
                 stdout: seal(out),

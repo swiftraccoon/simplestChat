@@ -1,7 +1,7 @@
 //! Always-joined file work clipped to the original export phase and signal owner.
 
 use super::{failure, keep, plan::Plan};
-use crate::ci::process::Executor;
+use simplestchat_ci::process::Executor;
 use simplestchat_toolkit::tooling::Result;
 use std::{
     sync::{

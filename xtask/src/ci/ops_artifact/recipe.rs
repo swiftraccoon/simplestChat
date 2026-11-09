@@ -5,8 +5,8 @@ use super::{
     HOST, TARGET, failure, io,
     namespace::{self, Budget, Chain, Held, OwnedRun},
 };
-use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use rustix::fs::{AtFlags, OFlags};
+use simplestchat_ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::{OsStr, OsString},

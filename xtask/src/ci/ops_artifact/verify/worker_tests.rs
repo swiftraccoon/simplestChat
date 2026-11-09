@@ -2,7 +2,7 @@
 //! Watchdogs bound broken fixtures; no elapsed-performance assertion is used.
 
 use super::{failure, fixture, hash, plan};
-use crate::ci::{command::Command, process::Executor};
+use simplestchat_ci::{command::Command, process::Executor};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::{self, File},

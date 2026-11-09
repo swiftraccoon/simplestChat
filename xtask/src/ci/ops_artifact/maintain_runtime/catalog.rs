@@ -218,14 +218,18 @@ pub(super) fn sources() -> BTreeSet<String> {
         "crates/toolkit/src/owned_process.rs",
         "crates/toolkit/src/replay.rs",
         "crates/toolkit/src/tooling.rs",
+        "crates/ci/Cargo.toml",
+        "crates/ci/src/lib.rs",
+        "crates/ci/src/main.rs",
+        "crates/ci/src/runner.rs",
+        "crates/ci/src/apt_mirror.rs",
+        "crates/ci/src/automation/workflow_rpm_diagnostic_tests.rs",
+        "crates/ci/src/release_controller_files.rs",
+        "crates/ci/src/release_controller_plan.rs",
+        "crates/ci/src/rpm_diagnostic.rs",
+        "crates/ci/src/rpm_diagnostic_tests.rs",
+        "crates/ci/src/tests.rs",
         "xtask/src/ci/mod.rs",
-        "xtask/src/ci/runner.rs",
-        "xtask/src/ci/apt_mirror.rs",
-        "xtask/src/ci/automation/workflow_rpm_diagnostic_tests.rs",
-        "xtask/src/ci/release_controller_files.rs",
-        "xtask/src/ci/release_controller_plan.rs",
-        "xtask/src/ci/rpm_diagnostic.rs",
-        "xtask/src/ci/rpm_diagnostic_tests.rs",
         "xtask/src/ci/ops_artifact.rs",
         "xtask/src/ci/ops_artifact/fixture.rs",
         "xtask/src/ci/ops_artifact/fixture_driver.rs",
@@ -233,7 +237,6 @@ pub(super) fn sources() -> BTreeSet<String> {
         "xtask/src/ci/ops_artifact/native_tests.rs",
         "xtask/src/ci/ops_artifact/recipe.rs",
         "xtask/src/ci/ops_artifact/resolution.rs",
-        "xtask/src/ci/tests.rs",
         "ops/src/owned_process.rs",
         "ops/src/owned_process_tests.rs",
         "ops/src/release/attestation.rs",
@@ -271,7 +274,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         names.insert(name.into());
     }
     for name in ["files", "files_tests", "policy", "tests"] {
-        names.insert(format!("xtask/src/ci/apt_mirror/{name}.rs"));
+        names.insert(format!("crates/ci/src/apt_mirror/{name}.rs"));
     }
     for name in ["identity", "process", "protocol", "supervisor", "tests"] {
         names.insert(format!(

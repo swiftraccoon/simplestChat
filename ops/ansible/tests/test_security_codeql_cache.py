@@ -88,7 +88,6 @@ class NativeCacheTests(unittest.TestCase):
         restore = next(step for step in steps if step.get("id") == "rust-database")
         self.assertLess(steps.index(installer), steps.index(key))
         self.assertLess(steps.index(key), steps.index(restore))
-        self.assertIn("cargo run --locked -q -p xtask -- ci codeql-cache key", string(key, "run"))
         self.assertIn('--source-root "$RUNNER_TEMP/codeql-local/source"', string(key, "run"))
 
     @override

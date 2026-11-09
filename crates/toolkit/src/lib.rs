@@ -29,4 +29,17 @@ mod tests {
         assert_send_sync::<crate::test_env::Stop>();
         assert_send_sync::<crate::media_ip::NativeDetector<'static>>();
     }
+
+    #[test]
+    fn xtask_developer_gates_run_through_the_pinned_toolchain() {
+        let (program, arguments) = crate::tooling::xtask_command("9.88.7", ["check", "--python"]);
+        assert_eq!(program, "rustup");
+        assert_eq!(
+            arguments,
+            [
+                "run", "9.88.7", "cargo", "run", "--locked", "-q", "-p", "xtask", "--", "check",
+                "--python",
+            ]
+        );
+    }
 }

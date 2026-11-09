@@ -76,7 +76,7 @@ pub(super) fn run(started: Instant, path: &Path, selected: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ci::process::{Executor, Native};
+    use simplestchat_ci::process::{Executor, Native};
     use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
     use std::process::Command;
 

@@ -9,7 +9,7 @@ use super::{
     prepare::PrepareInvocation,
     worker::Checkpoint,
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program},
     process::{self, Executor},
 };

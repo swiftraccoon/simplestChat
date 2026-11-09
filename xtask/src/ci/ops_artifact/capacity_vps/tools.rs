@@ -3,8 +3,8 @@
 
 use super::super::namespace::{self, Budget, Permit};
 use super::{Result, failure, inventory::Inventory, plan, sources::Sources, worker::Checkpoint};
-pub(in crate::ci) use crate::ci::bounded_log::Captures;
-use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+pub(in crate::ci) use simplestchat_ci::bounded_log::Captures;
+use simplestchat_ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use simplestchat_toolkit::{
     executable::{self, Executable},
     tooling::Environment,

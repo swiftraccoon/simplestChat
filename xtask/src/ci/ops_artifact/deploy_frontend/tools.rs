@@ -1,8 +1,8 @@
 //! Closed routine-deployment roles over the existing process and log owners.
 //! Paths and environments stay private. Snapshots are not descriptor execution
 //! or exclusion of a same-user writer; the outer owner supplies source custody.
-pub(in crate::ci) use crate::ci::bounded_log::Captures;
-use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+pub(in crate::ci) use simplestchat_ci::bounded_log::Captures;
+use simplestchat_ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use simplestchat_toolkit::{
     executable::{self, Executable},
     tooling::{Environment, Failure, Result},
@@ -195,7 +195,7 @@ impl Invocation {
             .ok_or_else(|| failure(1))
     }
     pub(in crate::ci) fn observed_io(&self, captures: Option<Captures>) {
-        let regular = |seal: &crate::ci::bounded_log::Seal| {
+        let regular = |seal: &simplestchat_ci::bounded_log::Seal| {
             seal.bytes == seal.metadata.len()
                 && seal.metadata.is_file()
                 && seal.metadata.nlink() == 1

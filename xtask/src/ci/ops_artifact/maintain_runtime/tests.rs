@@ -866,7 +866,7 @@ fn retained_catalog_covers_every_guest_controller_and_authenticated_producer_mod
         "xtask/src/ci/ops_artifact/maintain_runtime",
         "xtask/src/ci/ops_artifact/export",
         "xtask/src/ci/ops_artifact/hosted",
-        "xtask/src/ci/apt_mirror",
+        "crates/ci/src/apt_mirror",
     ] {
         let mut pending = vec![root.join(prefix)];
         let mut actual = std::collections::BTreeSet::new();
@@ -907,11 +907,14 @@ fn retained_catalog_covers_every_guest_controller_and_authenticated_producer_mod
         "crates/toolkit/src/owned_process.rs",
         "crates/toolkit/src/replay.rs",
         "crates/toolkit/src/tooling.rs",
+        "crates/ci/Cargo.toml",
+        "crates/ci/src/lib.rs",
+        "crates/ci/src/main.rs",
+        "crates/ci/src/runner.rs",
+        "crates/ci/src/apt_mirror.rs",
+        "crates/ci/src/release_controller_files.rs",
+        "crates/ci/src/release_controller_plan.rs",
         "xtask/src/ci/mod.rs",
-        "xtask/src/ci/runner.rs",
-        "xtask/src/ci/apt_mirror.rs",
-        "xtask/src/ci/release_controller_files.rs",
-        "xtask/src/ci/release_controller_plan.rs",
         "ops/ops-build-inputs.lock.json",
         "xtask/src/ci/ops_artifact/recipe.rs",
         "xtask/src/ci/ops_artifact/resolution.rs",

@@ -120,7 +120,7 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
         &["protocol-ts", "--check"],
         &["http-policy", "--check"],
     ] {
-        run_xtask(root, environment, &channel, command)?;
+        tooling::run_xtask(root, environment, &channel, command)?;
     }
     let mut flags = environment
         .get(OsStr::new("RUSTDOCFLAGS"))
@@ -150,26 +150,8 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
 /// it runs before the Python environment is required.
 fn python_group(root: &Path, environment: &Environment) -> tooling::Result<()> {
     let channel = tooling::pinned_toolchain(root)?;
-    run_xtask(root, environment, &channel, &["python-lines"])?;
+    tooling::run_xtask(root, environment, &channel, &["python-lines"])?;
     python::run(root, environment)
-}
-
-/// `rustup run <channel> cargo run --locked -q -p xtask -- <command>`.
-fn run_xtask(
-    root: &Path,
-    environment: &Environment,
-    channel: &str,
-    command: &[&str],
-) -> tooling::Result<()> {
-    let cargo = [
-        "run", channel, "cargo", "run", "--locked", "-q", "-p", "xtask", "--",
-    ];
-    tooling::run(
-        root,
-        environment,
-        "rustup",
-        cargo.into_iter().chain(command.iter().copied()),
-    )
 }
 
 /// Expand the maintained flat globs as separate arguments, including filenames
@@ -195,10 +177,11 @@ fn matching(root: &Path, directory: &str, suffix: &str) -> tooling::Result<Vec<O
     Ok(files)
 }
 
-// Cargo uplifts this shared executable even for fresh builds. On macOS that
-// removes then copies the destination, so a different file must not spawn it
-// concurrently. Keep standalone files self-building; serialize only this pool.
-const SHARED_XTASK_TESTS: &[&str] = &[
+// Cargo uplifts a shared executable (xtask or simplestchat-ci) even for fresh
+// builds. On macOS that removes then copies the destination, so a different
+// file must not spawn it concurrently. Keep standalone files self-building;
+// serialize only this pool.
+const SHARED_EXECUTABLE_TESTS: &[&str] = &[
     "build/tests/ci-evidence.test.mjs",
     "build/tests/ci-verified.test.mjs",
     "build/tests/performance-thresholds.test.mjs",
@@ -225,7 +208,7 @@ fn helpers(root: &Path, environment: &Environment) -> tooling::Result<()> {
     tests.push("load_tests/benchmark-local.test.mjs".into());
     tests.push("load_tests/report-command.test.mjs".into());
     let (serial, parallel): (Vec<_>, Vec<_>) = tests.into_iter().partition(|path| {
-        SHARED_XTASK_TESTS
+        SHARED_EXECUTABLE_TESTS
             .iter()
             .any(|name| path.as_os_str() == OsStr::new(name))
     });

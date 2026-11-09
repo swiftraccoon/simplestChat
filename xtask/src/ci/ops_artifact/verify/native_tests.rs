@@ -2,11 +2,11 @@
 //! is an owned inert shell fixture: no GitHub, credential helper or verifier runs.
 
 use super::{files::Output, hash::Checkpoint, request::Request, tools};
-use crate::ci::{
+use serde_json::json;
+use simplestchat_ci::{
     command::{Command, Program},
     process::{Executor, Native},
 };
-use serde_json::json;
 use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Result},
@@ -117,7 +117,7 @@ impl Drop for Fixture {
 
 struct Dispatched {
     result: Result<Vec<u8>>,
-    captures: Result<crate::ci::bounded_log::Captures>,
+    captures: Result<simplestchat_ci::bounded_log::Captures>,
     names: [String; 2],
 }
 fn invocation(tools: &tools::Tools, index: usize) -> Arc<tools::Invocation> {

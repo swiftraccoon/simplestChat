@@ -1,0 +1,618 @@
+//! Hosted CI steps for this repository, and the bounded command runner they
+//! share with the release control plane.
+//!
+//! The `simplestchat-ci` binary routes its arguments through [`run`]. The
+//! runner's public surface is the closed command vocabulary ([`command`]), the
+//! owned native executor ([`process`]) and the bounded output logs
+//! ([`bounded_log`]); every CI step module stays private to this crate.
+//!
+//! Exact-input CI keys bind the index's inventory/modes and the worktree's
+//! current bytes, not HEAD. Receipt revision is attribution only. CodeQL
+//! scopes name extraction inputs and cannot substitute a successful stamp for
+//! an analyzed database.
+
+use anyhow::{Result, bail};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::process::{ExitCode, Stdio};
+use std::time::Duration;
+use tokio::io::AsyncReadExt;
+
+mod apt_mirror;
+mod audit_rust;
+mod automation;
+pub mod bounded_log;
+mod browser_suite;
+mod codeql_cache;
+pub mod command;
+mod commit_subject;
+mod config_validation;
+mod container_benchmark;
+mod container_engine;
+mod container_smoke;
+mod database_check;
+mod evidence;
+mod evidence_copy;
+mod fingerprint;
+mod github_output;
+mod image_cache;
+mod inputs;
+mod install_compose;
+mod io;
+mod load_generator_image;
+mod local;
+mod mdns;
+mod native_dtls;
+mod native_security;
+mod npm_path;
+mod performance_compare;
+pub mod process;
+mod production_image;
+#[cfg(feature = "public-smoke")]
+mod public_smoke;
+mod receipts;
+mod release_checks;
+mod release_controller;
+#[cfg(feature = "release-http-policy")]
+mod release_http_policy;
+mod required;
+mod retention;
+mod rpm_diagnostic;
+mod runner;
+mod selected_executable;
+mod session_soak;
+#[cfg(test)]
+mod tests;
+
+const USAGE: &str = "\
+Usage: cargo run --locked -q -p simplestchat-ci -- <command> [ARG ...]
+
+Commands:
+  key|save|verify --scope SCOPE [--github-output] [--key KEY --directory PATH]
+                [--root CHECKOUT]
+                Exact-input CI keys and success receipts; key --github-output appends
+                the fixed key output to GITHUB_OUTPUT. CodeQL extraction keys never
+                substitute for analyzed databases.
+  native-security
+                Verify dependency pins, overlays and server linkage.
+  automation [--checks]
+                Run installed controller quality, syntax and unit checks.
+  codeql-cache key|validate-bundle|validate-source|save|restore [OPTIONS]
+                Key and validate analyzed databases with fresh receipts.
+  required      Reject any missing or unsuccessful canonical workflow job.
+  browser-suite SUITE
+                Run a maintained suite in Chromium then Firefox.
+  copy-evidence KIND
+                Preserve a fixed private local-CI artifact projection.
+  production-image build|verify
+                Build and verify the immutable CI production image.
+  install-compose
+                Install the authenticated Compose release in explicit CI.
+  apt-mirror    Prefer official archives in the fixed root/hosted Ubuntu profile.
+  rpm-diagnostic --root ABSOLUTE_SCAN_OUTPUT --output ABSOLUTE_NEW_DIRECTORY
+                Encrypt one failed image's RPM database for the configured recipient.
+  audit-rust    Install verified audit tooling and apply the advisory policy.
+  release-checks --http-policy-binary ABSOLUTE_FEATURE_BINARY
+                Discover Chromium and run the disposable release checks.
+  release-http-policy
+                Check only the owned loopback fixture; needs a binary built with
+                --features release-http-policy (see release-http-policy --help).
+  release-controller start|wait
+                Overlap bounded controller preparation with the image build.
+  commit-subject
+                Check the branch tip against the local hook's byte grammar.
+  container-smoke [--local]
+                Check immutable production startup and database assertions in CI;
+                --local checks an already-built image on the selected local Unix
+                engine and removes only its own disposable smoke containers.
+  container-benchmark run|cleanup
+                Standalone root/Linux private benchmark run or locked recovery.
+  validate-config promtool|caddy
+                Run fixed Promtool or Caddy validation in an owned container.
+  load-generator-image
+                Build and retain the unsigned manual generator image.
+  mdns preflight|snapshot [--artifact-only]
+                Own the opt-in macOS service snapshot and disposable registration diagnostic.
+  database-check monitoring|restore|migration
+                Run monitoring, restore or migration checks in owned PostgreSQL.
+  session-soak  Supervise the fixed workload and runner-owned database outage.
+  performance-compare
+                Own the three builds, worktree and fixed six-run comparison.
+  native-dtls [--record-success]
+                Check tagged native regressions in a disposable source copy.
+  npm-path      Publish the pinned npm bin directory through the runner file.
+  controller-path
+                Publish the installed automation controller bin directory.
+  image-cache hint|status preparation|status production
+                Publish validated database-byte cache selectors.
+  public-smoke  Check an explicitly authorized HTTPS origin; writes ONE PUBLIC TEST MESSAGE.
+                Requires --features public-smoke; private summary only; see public-smoke --help.
+  local [all|JOB] [options]
+                Run all required local workflow jobs, or one explicitly partial job,
+                against only an owned disposable engine; see `local --help`.
+  evidence record|complete|requirements [--id CHECK] [--root CHECKOUT]
+                Record or require complete executed local-CI matrix evidence.
+  retention [--apply --run-id ID --revision SHA]
+                Print an allowlisted main-cache retention plan; --apply requires exact
+                successful main CI and refreshed inventory before each deletion.
+";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Scope {
+    Automation,
+    RustLint,
+    RustTest,
+    Backend,
+    BrowserBackend,
+    NativeAsan,
+    NativeUbsan,
+    NativeReplay,
+    CodeqlNative,
+    CodeqlRust,
+}
+
+impl Scope {
+    fn parse(value: &str) -> Option<Self> {
+        if value != "browser-backend" && !inputs::REFERENCE_SCOPES.contains(&value) {
+            return None;
+        }
+        Some(match value {
+            "automation" => Self::Automation,
+            "rust-lint" => Self::RustLint,
+            "rust-test" => Self::RustTest,
+            "backend" => Self::Backend,
+            "browser-backend" => Self::BrowserBackend,
+            "native-asan" => Self::NativeAsan,
+            "native-ubsan" => Self::NativeUbsan,
+            "native-replay" => Self::NativeReplay,
+            "codeql-native" => Self::CodeqlNative,
+            "codeql-rust" => Self::CodeqlRust,
+            _ => return None,
+        })
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Automation => "automation",
+            Self::RustLint => "rust-lint",
+            Self::RustTest => "rust-test",
+            Self::Backend => "backend",
+            Self::BrowserBackend => "browser-backend",
+            Self::NativeAsan => "native-asan",
+            Self::NativeUbsan => "native-ubsan",
+            Self::NativeReplay => "native-replay",
+            Self::CodeqlNative => "codeql-native",
+            Self::CodeqlRust => "codeql-rust",
+        }
+    }
+
+    fn binary_reuse(self) -> bool {
+        matches!(self, Self::Backend | Self::BrowserBackend)
+    }
+
+    fn native(self) -> bool {
+        matches!(
+            self,
+            Self::NativeAsan | Self::NativeUbsan | Self::NativeReplay
+        )
+    }
+
+    fn codeql(self) -> bool {
+        matches!(self, Self::CodeqlNative | Self::CodeqlRust)
+    }
+}
+
+pub(crate) fn require(condition: bool, code: &str) -> Result<()> {
+    if !condition {
+        bail!("{code}");
+    }
+    Ok(())
+}
+
+/// Capture process inputs once; tests vary explicit contexts rather than global env.
+pub(crate) struct Context {
+    root: PathBuf,
+    environment: BTreeMap<String, String>,
+    system: String,
+    architecture: String,
+}
+
+impl Context {
+    fn current(root: &Path) -> Result<Self> {
+        let host = rustix::system::uname();
+        let environment = std::env::vars_os()
+            .map(|(name, value)| {
+                Ok((
+                    name.into_string()
+                        .map_err(|_| anyhow::anyhow!("ci_cache_environment"))?,
+                    value
+                        .into_string()
+                        .map_err(|_| anyhow::anyhow!("ci_cache_environment"))?,
+                ))
+            })
+            .collect::<Result<_>>()?;
+        Ok(Self {
+            root: root.canonicalize()?,
+            environment,
+            system: host.sysname().to_str()?.to_owned(),
+            architecture: host.machine().to_str()?.to_owned(),
+        })
+    }
+
+    fn env(&self, name: &str) -> &str {
+        self.environment.get(name).map_or("", String::as_str)
+    }
+
+    fn trusted(&self) -> bool {
+        self.env("GITHUB_REF") == "refs/heads/main"
+            && self.env("GITHUB_EVENT_NAME") != "pull_request"
+    }
+
+    /// The command boundary accepts only the two original read-only Git inventories.
+    fn tracked(&self, staged: bool) -> Result<Vec<u8>> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async {
+            let mut command = tokio::process::Command::new("git");
+            command.arg("ls-files");
+            if staged {
+                command.arg("--stage");
+            }
+            let mut child = command
+                .arg("-z")
+                .current_dir(&self.root)
+                .env_clear()
+                .envs(&self.environment)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+            let mut stdout = child
+                .stdout
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("ci_cache_git"))?
+                .take(64 * 1024 * 1024 + 1);
+            let mut stderr = child
+                .stderr
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("ci_cache_git"))?
+                .take(65537);
+            let work = async {
+                let mut output = Vec::new();
+                let mut errors = Vec::new();
+                let read_output = async {
+                    stdout.read_to_end(&mut output).await?;
+                    require(output.len() <= 64 * 1024 * 1024, "ci_cache_git")
+                };
+                let read_errors = async {
+                    stderr.read_to_end(&mut errors).await?;
+                    require(errors.len() <= 65536, "ci_cache_git")
+                };
+                let (status, _, _) = tokio::try_join!(
+                    async { Ok::<_, anyhow::Error>(child.wait().await?) },
+                    read_output,
+                    read_errors,
+                )?;
+                require(
+                    status.success() && output.len() <= 64 * 1024 * 1024 && errors.len() <= 65536,
+                    "ci_cache_git",
+                )?;
+                Ok(output)
+            };
+            tokio::time::timeout(Duration::from_secs(30), work)
+                .await
+                .map_err(|_| anyhow::anyhow!("ci_cache_git_timeout"))?
+        })
+    }
+}
+
+struct Options {
+    operation: String,
+    scope: Scope,
+    key: String,
+    directory: PathBuf,
+    root: PathBuf,
+    github_output: bool,
+}
+
+fn options(root: &Path, arguments: &[String]) -> Option<Options> {
+    let mut operation = None;
+    let mut scope = None;
+    let mut key = String::new();
+    let mut directory = PathBuf::from(".");
+    let mut checkout = root.to_path_buf();
+    let mut github_output = false;
+    let mut receipt_arguments = false;
+    let mut arguments = arguments.iter();
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "key" | "save" | "verify" if operation.is_none() => operation = Some(argument.clone()),
+            "--scope" => scope = Some(Scope::parse(arguments.next()?)?),
+            "--github-output" if !github_output => github_output = true,
+            "--key" => {
+                key = arguments.next()?.clone();
+                receipt_arguments = true;
+            }
+            "--directory" => {
+                directory = PathBuf::from(arguments.next()?);
+                receipt_arguments = true;
+            }
+            "--root" => checkout = PathBuf::from(arguments.next()?),
+            _ => return None,
+        }
+    }
+    let operation = operation?;
+    if github_output && (operation != "key" || receipt_arguments) {
+        return None;
+    }
+    Some(Options {
+        operation,
+        scope: scope?,
+        key,
+        directory,
+        root: checkout,
+        github_output,
+    })
+}
+
+fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()> {
+    if github_output {
+        let target = github_output::Target::open(context)?;
+        let key = fingerprint::key(context, scope)?;
+        target.append(scope, context.trusted(), &key)
+    } else {
+        println!("{}", fingerprint::key(context, scope)?);
+        Ok(())
+    }
+}
+
+/// Run one `simplestchat-ci` command from `root`, the repository checkout.
+///
+/// `arguments` excludes the program name. The reserved replay child is routed
+/// by the binary before this is called; see
+/// [`simplestchat_toolkit::replay::route`]. A command's own refusals and
+/// failures become its exit status here; an `Err` is a failure the binary
+/// prints and reports as status 1.
+pub fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "local")
+    {
+        return local::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "evidence")
+    {
+        return evidence::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "retention")
+    {
+        return retention::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "public-smoke")
+    {
+        #[cfg(feature = "public-smoke")]
+        return public_smoke::run(&arguments[1..]);
+        #[cfg(not(feature = "public-smoke"))]
+        bail!(
+            "public-smoke requires: cargo run --locked -q -p simplestchat-ci --features \
+             public-smoke -- public-smoke --help"
+        );
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "rpm-diagnostic")
+    {
+        return rpm_diagnostic::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "apt-mirror")
+    {
+        return apt_mirror::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|a| a == "release-http-policy")
+    {
+        #[cfg(feature = "release-http-policy")]
+        return release_http_policy::run(&arguments[1..]);
+        #[cfg(not(feature = "release-http-policy"))]
+        {
+            eprintln!(
+                "release-http-policy requires a prebuilt simplestchat-ci with --features \
+                 release-http-policy"
+            );
+            return Ok(ExitCode::from(2));
+        }
+    }
+    if arguments.first().is_some_and(|arg| arg == "mdns") {
+        return mdns::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "load-generator-image")
+    {
+        return load_generator_image::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "validate-config")
+    {
+        return config_validation::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "performance-compare")
+    {
+        return performance_compare::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "native-dtls")
+    {
+        return native_dtls::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|a| a == "container-benchmark")
+    {
+        return container_benchmark::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "container-smoke")
+    {
+        return container_smoke::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "session-soak")
+    {
+        return session_soak::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "commit-subject")
+    {
+        return commit_subject::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "release-controller")
+    {
+        return release_controller::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "database-check")
+    {
+        return database_check::run(root, &arguments[1..]);
+    }
+
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "release-checks")
+    {
+        return release_checks::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "image-cache")
+    {
+        return image_cache::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "controller-path")
+    {
+        return npm_path::run_controller(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "npm-path")
+    {
+        return npm_path::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "audit-rust")
+    {
+        return audit_rust::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "install-compose")
+    {
+        return install_compose::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "production-image")
+    {
+        return production_image::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "copy-evidence")
+    {
+        return evidence_copy::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "browser-suite")
+    {
+        return browser_suite::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "required")
+    {
+        return required::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "codeql-cache")
+    {
+        return codeql_cache::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "automation")
+    {
+        return automation::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "native-security")
+    {
+        return native_security::run(root, &arguments[1..]);
+    }
+    if arguments
+        .iter()
+        .any(|argument| argument == "--help" || argument == "-h")
+    {
+        println!("{USAGE}");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let Some(options) = options(root, arguments) else {
+        eprintln!("{USAGE}");
+        return Ok(ExitCode::from(2));
+    };
+    let work = || -> Result<()> {
+        let context = Context::current(&options.root)?;
+        if options.operation == "key" {
+            print_key(&context, options.scope, options.github_output)?;
+        } else {
+            require(
+                options.directory.is_absolute() && !options.directory.is_symlink(),
+                "ci_cache_directory",
+            )?;
+            if options.operation == "save" {
+                receipts::save(&context, options.scope, &options.key, &options.directory)?;
+            } else {
+                let revision =
+                    receipts::verify(&context, options.scope, &options.key, &options.directory)?;
+                println!(
+                    "Reused {} success for identical inputs; original revision: {revision}",
+                    options.scope.name()
+                );
+            }
+        }
+        Ok(())
+    };
+    match work() {
+        Ok(()) => Ok(ExitCode::SUCCESS),
+        Err(error) => {
+            eprintln!("CI cache rejected: {error}");
+            Ok(ExitCode::FAILURE)
+        }
+    }
+}

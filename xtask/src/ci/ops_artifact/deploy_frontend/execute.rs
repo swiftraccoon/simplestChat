@@ -12,11 +12,11 @@ use super::{
     tools::{Spec, Tools},
     worker::{self, Checkpoint},
 };
-use crate::ci::{
+use serde_json::{Value, json};
+use simplestchat_ci::{
     command::{Command, Program},
     process::{Executor, Native},
 };
-use serde_json::{Value, json};
 use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Result},
@@ -233,7 +233,7 @@ async fn call<E: Executor>(
     let invocation = match prepared {
         Ok(value) => value,
         Err(error) => {
-            let _ = crate::ci::process::settle_unforwarded(command).await;
+            let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
     };

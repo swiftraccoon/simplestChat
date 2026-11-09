@@ -578,7 +578,7 @@ impl PreparationFixture {
                 )
                 .unwrap()
         };
-        use crate::ci::command::{Command, Program};
+        use simplestchat_ci::command::{Command, Program};
         let lease_args = vec!["lease-fixture".into()];
         let ansible_args = vec!["ansible-fixture".into()];
         let lease_proof = make(

@@ -55,6 +55,7 @@ jobs:
       - name: Compile trusted acquisition and passive ELF inspection before credentials
         run: |
           cargo build --locked -p xtask --bin xtask
+          cargo build --locked -p simplestchat-ci --bin simplestchat-ci
           cargo build --locked --release --target x86_64-unknown-linux-gnu \
             -p simplestchat-ops --bin simplestchat-ops
       - name: Prefer official Ubuntu archive mirrors for KVM dependencies
@@ -62,7 +63,7 @@ jobs:
         timeout-minutes: 1
         run: |
           sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
-            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+            -- "$GITHUB_WORKSPACE/target/debug/simplestchat-ci" apt-mirror
       - name: Prepare the free owned KVM and pinned controller dependencies
         run: |
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet

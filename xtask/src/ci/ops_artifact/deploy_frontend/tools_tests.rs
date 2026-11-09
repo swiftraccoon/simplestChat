@@ -1,6 +1,6 @@
 //! Actual local inert children over the shared Native owner; no network/host work.
 use super::*;
-use crate::ci::{
+use simplestchat_ci::{
     bounded_log::Log,
     command::SeparateLogs,
     process::{Executor, Native},

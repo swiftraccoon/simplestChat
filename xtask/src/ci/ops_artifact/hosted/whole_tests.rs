@@ -4,11 +4,11 @@
 
 use super::super::{archive_tests, fixture, native_build_tests, signing_tests};
 use super::*;
-use crate::ci::{
+use serde_json::json;
+use simplestchat_ci::{
     bounded_log::{Captures, Seal},
     command::{Program, ReleaseRole, SeparateLogs},
 };
-use serde_json::json;
 use std::{
     fs,
     io::Write,

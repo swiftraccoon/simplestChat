@@ -12,10 +12,10 @@ use super::{
     namespace::{self, Budget, Chain, Held, OwnedRun},
     sha,
 };
-use crate::ci::process::Executor;
 use request::Request;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use simplestchat_ci::process::Executor;
 use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeMap, ffi::OsStr, io::Read, os::unix::fs::MetadataExt, path::Path};
 
@@ -261,7 +261,7 @@ async fn hydrate<E: Executor, C: Clock>(
 }
 
 pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
-    use crate::ci::process::Native;
+    use simplestchat_ci::process::Native;
     use simplestchat_toolkit::owned_process::Signals;
     let mut signals = Signals::new()?;
     let clock = NativeClock;

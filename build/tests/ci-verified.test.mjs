@@ -15,11 +15,11 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-execFileSync('cargo', ['build', '--locked', '-q', '-p', 'xtask'], {
+execFileSync('cargo', ['build', '--locked', '-q', '-p', 'simplestchat-ci'], {
   cwd: repository,
   stdio: 'inherit',
 });
-const binary = path.join(repository, 'target/debug/xtask');
+const binary = path.join(repository, 'target/debug/simplestchat-ci');
 
 function fixture(t) {
   const root = realpathSync(
@@ -29,7 +29,7 @@ function fixture(t) {
   for (const name of [
     'src/main.rs',
     'vendor/worker.cpp',
-    'xtask/src/ci/mod.rs',
+    'crates/ci/src/lib.rs',
   ]) {
     mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     writeFileSync(path.join(root, name), 'original\n');
@@ -49,7 +49,7 @@ function fixture(t) {
     root,
     env,
     run: (arguments_, overrides = {}) =>
-      spawnSync(binary, ['ci', ...arguments_, '--root', root], {
+      spawnSync(binary, [...arguments_, '--root', root], {
         cwd: repository,
         encoding: 'utf8',
         env: { ...env, ...overrides },

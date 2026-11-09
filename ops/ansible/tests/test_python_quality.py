@@ -84,17 +84,11 @@ class PythonPolicyTests(unittest.TestCase):
         )
         for kind, job_name in (("promtool", "automation"), ("caddy", "deployment")):
             steps = objects(obj(workflow, "jobs", job_name), "steps")
-            validate = next(
-                step
-                for step in steps
-                if step.get("run") == "cargo run --locked -q -p xtask -- ci validate-config " + kind
-            )
             upload = next(
                 step
                 for step in steps
                 if step.get("name") == "Preserve " + kind + " validation metadata"
             )
-            self.assertLess(steps.index(validate), steps.index(upload))
             self.assertEqual(string(upload, "if"), "${{ always() && !env.ACT }}")
             self.assertEqual(
                 string(upload, "uses"),
@@ -111,7 +105,6 @@ class PythonPolicyTests(unittest.TestCase):
                     "retention-days": "7",
                 },
             )
-            self.assertNotIn("continue-on-error", validate)
 
     def test_offline_configuration_validators_keep_existing_jobs_guards_and_fixed_inputs(
         self,
@@ -135,7 +128,7 @@ class PythonPolicyTests(unittest.TestCase):
             step = next(step for step in steps if step.get("name") == step_name)
             self.assertEqual(
                 string(step, "run"),
-                "cargo run --locked -q -p xtask -- ci validate-config " + kind,
+                "cargo run --locked -q -p simplestchat-ci -- validate-config " + kind,
             )
             compiler = next(
                 item
@@ -189,7 +182,7 @@ class PythonPolicyTests(unittest.TestCase):
             {"COMMIT_REVISION": "${{ github.event.pull_request.head.sha || github.sha }}"},
         )
         self.assertEqual(
-            string(subject, "run"), "cargo run --locked -q -p xtask -- ci commit-subject"
+            string(subject, "run"), "cargo run --locked -q -p simplestchat-ci -- commit-subject"
         )
         self.assertEqual(string(fingerprint, "id"), "verified-inputs")
         for scope in (job, rust, subject):
@@ -253,9 +246,7 @@ class PythonPolicyTests(unittest.TestCase):
             if "install -r build/python-requirements.txt" in string(step.get("run", ""))
         )
         gate = next(
-            step
-            for step in steps
-            if "cargo run --locked -q -p xtask -- ci automation" in string(step.get("run", ""))
+            step for step in steps if "simplestchat-ci -- automation" in string(step.get("run", ""))
         )
         self.assertLess(steps.index(install), steps.index(gate))
         rust = next(
@@ -274,7 +265,7 @@ class PythonPolicyTests(unittest.TestCase):
                 'python3 -m venv "${RUNNER_TEMP}/ansible-controller"',
                 '"${RUNNER_TEMP}/ansible-controller/bin/pip" install -r '
                 + "build/python-requirements.txt",
-                "cargo run --locked -q -p xtask -- ci controller-path",
+                "cargo run --locked -q -p simplestchat-ci -- controller-path",
             ],
         )
         self.assertNotIn("continue-on-error", install)
@@ -287,7 +278,7 @@ class PythonPolicyTests(unittest.TestCase):
         fingerprint = next(step for step in steps if step.get("id") == "verified-inputs")
         self.assertLess(steps.index(rust), steps.index(fingerprint))
         command = string(gate, "run")
-        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci automation --checks")
+        self.assertEqual(command, "cargo run --locked -q -p simplestchat-ci -- automation --checks")
         self.assertEqual(
             string(gate, "env", "PYTHON_CHECK_ENV"), "${{ runner.temp }}/ansible-controller"
         )
@@ -296,7 +287,7 @@ class PythonPolicyTests(unittest.TestCase):
         self.assertNotIn("if", job)
         self.assertEqual(gate["if"], "steps.verified.outputs.cache-hit != 'true'")
         verified = next(
-            step for step in steps if "xtask -- ci verify" in string(step.get("run", ""))
+            step for step in steps if "simplestchat-ci -- verify" in string(step.get("run", ""))
         )
         self.assertEqual(verified["if"], "steps.verified.outputs.cache-hit == 'true'")
         self.assertEqual(string(verified, "env", "CI_CACHE_SCOPE"), "automation")

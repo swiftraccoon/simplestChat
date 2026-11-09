@@ -1,8 +1,8 @@
 //! Tiny inert archives and private namespace faults; imported code never runs.
 
 use super::*;
-use crate::ci::command::Command;
 use serde_json::{Value, json};
+use simplestchat_ci::command::Command;
 use std::{
     cell::Cell,
     fs,

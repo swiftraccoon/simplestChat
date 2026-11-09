@@ -35,9 +35,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          # The runner's rustup reads rust-toolchain.toml; only xtask tooling is built.
+          # The runner's rustup reads rust-toolchain.toml; only xtask and simplestchat-ci tooling is built.
           rustup toolchain install --profile minimal
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Install pinned browser tooling
         id: tooling
@@ -55,7 +55,7 @@ jobs:
         env:
           MDNS_DIAGNOSTIC_E2E: '1'
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
-        run: cargo run --locked -q -p xtask -- ci mdns preflight --artifact-only
+        run: cargo run --locked -q -p simplestchat-ci -- mdns preflight --artifact-only
 
       - name: WebKit receive-only ICE
         if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
@@ -89,7 +89,7 @@ jobs:
         env:
           MDNS_DIAGNOSTIC_E2E: '1'
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
-        run: cargo run --locked -q -p xtask -- ci mdns snapshot --artifact-only
+        run: cargo run --locked -q -p simplestchat-ci -- mdns snapshot --artifact-only
 
       - name: Preserve both browser reports
         if: ${{ !cancelled() }}

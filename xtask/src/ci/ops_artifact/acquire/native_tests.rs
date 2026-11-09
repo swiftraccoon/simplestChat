@@ -4,7 +4,7 @@ use super::{
     fixture::{Fixture, bytes},
     *,
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program},
     process::{Executor, Native},
 };

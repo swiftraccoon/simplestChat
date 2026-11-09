@@ -12,6 +12,7 @@ pub fn populate(root: &Path) -> Vec<(String, Vec<u8>)> {
         "load_tests/Cargo.toml",
         "xtask/Cargo.toml",
         "crates/toolkit/Cargo.toml",
+        "crates/ci/Cargo.toml",
         "vendor/mediasoup-0.29.0/Cargo.toml",
         "vendor/mediasoup-sys-0.19.0/Cargo.toml",
         "ops/src/main.rs",

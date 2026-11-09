@@ -1,7 +1,7 @@
 //! Same held File, cooperative cancellation and checked close before return.
 
 use super::{failure, fixture, plan, worker};
-use crate::ci::{command::Command, process::Executor};
+use simplestchat_ci::{command::Command, process::Executor};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::File,

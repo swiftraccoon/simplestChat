@@ -53,21 +53,21 @@ jobs:
             build/python-requirements.txt
             ops/ansible/requirements.txt
       - name: Install the pinned Rust toolchain for CI receipts
-        # Subject/key/receipt checks use xtask before native setup or cache reuse.
+        # Subject/key/receipt checks use simplestchat-ci before native setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
       - name: Check the branch tip commit subject
         env:
           COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: cargo run --locked -q -p xtask -- ci commit-subject
+        run: cargo run --locked -q -p simplestchat-ci -- commit-subject
 
       - name: Fingerprint the exact automation inputs
         id: verified-inputs
         env:
           CI_CACHE_SCOPE: automation
         run: |
-          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+          cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified automation result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -81,7 +81,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
         run: |
-          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - name: Install isolated controller checks
@@ -91,27 +91,27 @@ jobs:
           sudo apt-get install -y python3-venv shellcheck jq postgresql
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
           "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
-          cargo run --locked -q -p xtask -- ci controller-path
+          cargo run --locked -q -p simplestchat-ci -- controller-path
       - name: Validate automation without contacting any host
         if: steps.verified.outputs.cache-hit != 'true'
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
-        run: cargo run --locked -q -p xtask -- ci automation --checks
+        run: cargo run --locked -q -p simplestchat-ci -- automation --checks
 
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo run --locked -q -p xtask -- ci database-check monitoring
+        run: cargo run --locked -q -p simplestchat-ci -- database-check monitoring
 
       - name: Verify isolated backup restoration with pinned PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
         env:
           RESTORE_CONTAINER_E2E: "1"
-        run: cargo run --locked -q -p xtask -- ci database-check restore
+        run: cargo run --locked -q -p simplestchat-ci -- database-check restore
 
       - name: Verify server migration data preservation in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo run --locked -q -p xtask -- ci database-check migration
+        run: cargo run --locked -q -p simplestchat-ci -- database-check migration
 
       - name: Preserve isolated restore failure diagnostics
         if: ${{ failure() && !env.ACT }}
@@ -124,7 +124,7 @@ jobs:
 
       - name: Verify production alert rule behavior with pinned Prometheus
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo run --locked -q -p xtask -- ci validate-config promtool
+        run: cargo run --locked -q -p simplestchat-ci -- validate-config promtool
 
       - name: Preserve promtool validation metadata
         if: ${{ always() && !env.ACT }}
@@ -142,7 +142,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
         run: |
-          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact automation success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -164,7 +164,7 @@ jobs:
           persist-credentials: false
 
       - name: Install the pinned Rust toolchain for CI receipts
-        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        # Key/receipt checks use simplestchat-ci before native-library setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -174,7 +174,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: rust-lint
         run: |
-          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+          cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified rust-lint result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -188,7 +188,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
         run: |
-          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -207,7 +207,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Check helper syntax, safety and cleanup
         run: cargo run --locked -q -p xtask -- check --helpers
@@ -217,7 +217,7 @@ jobs:
         run: cargo run --locked -q -p xtask -- check --rust
 
       - name: Audit Rust dependencies
-        run: cargo run --locked -q -p xtask -- ci audit-rust
+        run: cargo run --locked -q -p simplestchat-ci -- audit-rust
 
       - name: Record the successful rust-lint verification
         if: steps.verified.outputs.cache-hit != 'true'
@@ -226,7 +226,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
         run: |
-          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact rust-lint success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -275,7 +275,7 @@ jobs:
       # setup-python exports its own PKG_CONFIG_PATH. Each Rust/native consumer
       # below restores the pinned OpenSSL path at step scope.
       - name: Install the pinned Rust toolchain for CI receipts
-        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        # Key/receipt checks use simplestchat-ci before native-library setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -287,7 +287,7 @@ jobs:
           CI_CACHE_SCOPE: rust-test
         run: |
           python -m pip install --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
-          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+          cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified rust-test result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -302,7 +302,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
         run: |
-          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -334,7 +334,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       # The shutdown, diagnostics, migration and media smoke steps below start
       # the server from this checkout, and it refuses to start without the bundle.
@@ -371,7 +371,7 @@ jobs:
         env:
           PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo run --locked -q -p xtask -- ci native-security
+        run: cargo run --locked -q -p simplestchat-ci -- native-security
 
       - name: Migrate disposable test database with the real server
         env:
@@ -402,7 +402,7 @@ jobs:
             --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
             --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
 
-      # !env.ACT: xtask ci-local runs jobs with act, whose artifact server does
+      # !env.ACT: simplestchat-ci local runs jobs with act, whose artifact server does
       # not speak the upload-artifact v7 protocol; retained files stay on its runner.
       - name: Preserve media smoke diagnostics
         if: ${{ !cancelled() && !env.ACT }}
@@ -424,7 +424,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
         run: |
-          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact rust-test success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -488,7 +488,7 @@ jobs:
         timeout-minutes: 12
         env:
           OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.1.0
-        run: cargo run --locked -q -p xtask -- ci native-dtls --record-success
+        run: cargo run --locked -q -p simplestchat-ci -- native-dtls --record-success
 
       - name: Preserve native media failure diagnostics
         if: ${{ failure() && !env.ACT }}
@@ -553,7 +553,7 @@ jobs:
           persist-credentials: false
 
       - name: Install the pinned Rust toolchain for CI receipts
-        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        # Key/receipt checks use simplestchat-ci before native-library setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -563,7 +563,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: browser-backend
         run: |
-          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
+          cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified backend result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -577,7 +577,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-browser-backend
         run: |
-          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -601,10 +601,10 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
-      # This cache retains only the server and full load generator, not Ops
-      # or xtask executables. Workspace tests keep their separate complete
+      # This cache retains only the server and full load generator, not Ops,
+      # xtask or simplestchat-ci executables. Workspace tests keep their separate complete
       # all-feature graph and always use the rust-test cache role.
       - name: Build server and load generator
         if: steps.verified.outputs.cache-hit != 'true'
@@ -617,7 +617,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-browser-backend
         run: |
-          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p simplestchat-ci -- save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact backend success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -631,7 +631,7 @@ jobs:
         timeout-minutes: 1
         run: |
           sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
-            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+            -- "$GITHUB_WORKSPACE/target/debug/simplestchat-ci" apt-mirror
 
       - name: Build UI and install pinned browser tooling
         id: browser-tooling
@@ -651,7 +651,7 @@ jobs:
         timeout-minutes: 4
         env:
           AUTH_LIFECYCLE_E2E: "1"
-        run: cargo run --locked -q -p xtask -- ci browser-suite auth-lifecycle
+        run: cargo run --locked -q -p simplestchat-ci -- browser-suite auth-lifecycle
 
       - name: Preserve authentication lifecycle diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
@@ -667,14 +667,14 @@ jobs:
         timeout-minutes: 4
         env:
           AUTH_CROSS_TAB_E2E: "1"
-        run: cargo run --locked -q -p xtask -- ci browser-suite auth-cross-tab
+        run: cargo run --locked -q -p simplestchat-ci -- browser-suite auth-cross-tab
 
       - name: Confirm room controls and retain failed edits
         if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           ROOM_CONTROL_E2E: "1"
-        run: cargo run --locked -q -p xtask -- ci browser-suite room-control-confirmation
+        run: cargo run --locked -q -p simplestchat-ci -- browser-suite room-control-confirmation
 
       - name: Real passkey registration and discoverable authentication
         if: matrix.group == 'accounts'
@@ -772,7 +772,7 @@ jobs:
           MEDIA_CONTINUITY_E2E: "1"
         # The command selects one owned non-loopback announcement for Firefox;
         # HTTP and the disposable database remain on loopback.
-        run: cargo run --locked -q -p xtask -- ci browser-suite media-continuity
+        run: cargo run --locked -q -p simplestchat-ci -- browser-suite media-continuity
 
       - name: Reconcile interrupted chat sends without duplicate delivery
         if: matrix.group == 'accounts'
@@ -788,7 +788,7 @@ jobs:
         env:
           PRESENTATION_E2E: "1"
           PRESENTATION_IMPAIRMENT: "1"
-        run: cargo run --locked -q -p xtask -- ci browser-suite presentation
+        run: cargo run --locked -q -p simplestchat-ci -- browser-suite presentation
 
       - name: Preserve presentation quality diagnostics
         if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
@@ -889,7 +889,7 @@ jobs:
         if: ${{ env.ACT }}
         env:
           LOCAL_BROWSER_GROUP: ${{ matrix.group }}
-        run: cargo run --locked -q -p xtask -- ci-evidence record --id "browser-$LOCAL_BROWSER_GROUP"
+        run: cargo run --locked -q -p simplestchat-ci -- evidence record --id "browser-$LOCAL_BROWSER_GROUP"
 
   web:
     name: Web lint + format + tests + typecheck + build
@@ -916,7 +916,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - run: npm ci --ignore-scripts
       - run: cargo run --locked -q -p xtask -- check --web
@@ -942,7 +942,7 @@ jobs:
         run: build/ci-local-docker.sh
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs
-        run: cargo run --locked -q -p xtask -- ci image-cache hint
+        run: cargo run --locked -q -p simplestchat-ci -- image-cache hint
       - name: Restore vulnerability database download bytes
         id: image-database
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -960,7 +960,7 @@ jobs:
             --output "${RUNNER_TEMP}/image-database-preparation" \
             --tools-directory "${RUNNER_TEMP}/image-database-preparation/tools" \
             --database-cache "${RUNNER_TEMP}/image-database-cache"
-          cargo run --locked -q -p xtask -- ci image-cache status preparation
+          cargo run --locked -q -p simplestchat-ci -- image-cache status preparation
       - name: Save refreshed vulnerability database download bytes
         if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.prepared-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -970,7 +970,7 @@ jobs:
       - name: Preserve local database preparation evidence
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci copy-evidence image-database
+        run: cargo run --locked -q -p simplestchat-ci -- copy-evidence image-database
       - name: Preserve bounded database preparation evidence
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1015,7 +1015,7 @@ jobs:
       - name: Install checksum-pinned production Compose
         timeout-minutes: 3
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci install-compose
+        run: cargo run --locked -q -p simplestchat-ci -- install-compose
 
       - name: Validate Compose rendering
         env:
@@ -1027,7 +1027,7 @@ jobs:
       - name: Validate Caddyfile
         env:
           TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
-        run: cargo run --locked -q -p xtask -- ci validate-config caddy
+        run: cargo run --locked -q -p simplestchat-ci -- validate-config caddy
 
       - name: Preserve caddy validation metadata
         if: ${{ always() && !env.ACT }}
@@ -1042,7 +1042,7 @@ jobs:
       # It can overlap the image build; the later collector checks its result.
       # The launcher hands off before returning; it makes no worker-exit claim.
       - name: Start the isolated release-container controller build
-        run: cargo run --locked -q -p xtask -- ci release-controller start
+        run: cargo run --locked -q -p simplestchat-ci -- release-controller start
 
       # Publish newly compiled application layers when build inputs change.
       # A dependency-only immutable key otherwise keeps restoring the first
@@ -1062,7 +1062,7 @@ jobs:
         shell: bash
         env:
           CACHE_PRIMARY_HIT: ${{ steps.production-cache.outputs.cache-hit }}
-        run: cargo run --locked -q -p xtask -- ci production-image build
+        run: cargo run --locked -q -p simplestchat-ci -- production-image build
 
       # Persist completed layers before later checks can fail. This cache is
       # build input only; image verification and release gates still run below.
@@ -1075,13 +1075,13 @@ jobs:
 
       - name: Verify production image contents and user
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci production-image verify
+        run: cargo run --locked -q -p simplestchat-ci -- production-image verify
 
       - name: Production startup, migration and database-backed API smoke
         timeout-minutes: 5
         env:
           CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
-        run: cargo run --locked -q -p xtask -- ci container-smoke
+        run: cargo run --locked -q -p simplestchat-ci -- container-smoke
 
       - name: Export the tested immutable production image
         timeout-minutes: 6
@@ -1092,7 +1092,7 @@ jobs:
 
       - name: Install isolated release-container checks
         timeout-minutes: 5
-        run: cargo run --locked -q -p xtask -- ci release-controller wait
+        run: cargo run --locked -q -p simplestchat-ci -- release-controller wait
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1104,7 +1104,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Restore pinned rollover Chromium download bytes
         id: rollover-chromium
@@ -1118,7 +1118,7 @@ jobs:
         timeout-minutes: 1
         run: |
           sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
-            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+            -- "$GITHUB_WORKSPACE/target/debug/simplestchat-ci" apt-mirror
 
       - name: Install pinned rollover browser tooling
         timeout-minutes: 10
@@ -1149,7 +1149,7 @@ jobs:
           # host TLS owner uses the installed headers in a separate target tree.
           env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
             -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
-            cargo build --locked -p xtask --features release-http-policy \
+            cargo build --locked -p simplestchat-ci --features release-http-policy \
               --target-dir "$RUNNER_TEMP/release-http-policy-build"
 
       - name: App-only release and rollback on a disposable host
@@ -1157,22 +1157,22 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
         run: |
-          "$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \
-            --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"
+          "$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci" release-checks \
+            --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci"
 
       - name: Preserve private local release-container diagnostics
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci copy-evidence release-container
+        run: cargo run --locked -q -p simplestchat-ci -- copy-evidence release-container
 
       - name: Preserve private local release-check preparation diagnostics
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci copy-evidence release-checks
+        run: cargo run --locked -q -p simplestchat-ci -- copy-evidence release-checks
 
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs
-        run: cargo run --locked -q -p xtask -- ci image-cache hint
+        run: cargo run --locked -q -p simplestchat-ci -- image-cache hint
 
       - name: Restore vulnerability database download bytes
         id: image-database
@@ -1191,7 +1191,7 @@ jobs:
             --image-tools "${RUNNER_TEMP}/release-checks/tools" \
             --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
             --output "${RUNNER_TEMP}/production-security"
-          cargo run --locked -q -p xtask -- ci image-cache status production
+          cargo run --locked -q -p simplestchat-ci -- image-cache status production
 
       - name: Encrypt the optional failed-image RPM diagnostic
         id: encrypted-rpm-diagnostic
@@ -1206,7 +1206,7 @@ jobs:
         env:
           RPM_DIAGNOSTIC_RECIPIENT: ${{ vars.SCPUB_RPM_DIAGNOSTIC_RECIPIENT }}
         run: |
-          cargo run --locked -q -p xtask -- ci rpm-diagnostic \
+          cargo run --locked -q -p simplestchat-ci -- rpm-diagnostic \
             --root "${RUNNER_TEMP}/production-security" \
             --output "${RUNNER_TEMP}/encrypted-rpm-diagnostic"
 
@@ -1318,7 +1318,7 @@ jobs:
       - name: Require every declared gate to finish successfully
         env:
           GATE_RESULTS: ${{ toJSON(needs) }}
-        run: cargo run --locked -q -p xtask -- ci required
+        run: cargo run --locked -q -p simplestchat-ci -- required
       - name: Require healthy stored CodeQL analyses for this exact revision
         if: ${{ !env.ACT }}
         env:
@@ -1342,7 +1342,7 @@ jobs:
         if: ${{ env.ACT }}
         env:
           GATE_RESULTS: ${{ toJSON(needs) }}
-        run: cargo run --locked -q -p xtask -- ci-evidence complete
+        run: cargo run --locked -q -p simplestchat-ci -- evidence complete
 
   release-prepare:
     name: Prepare the verified production signing inputs

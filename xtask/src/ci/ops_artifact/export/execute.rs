@@ -9,8 +9,8 @@ use super::{
     request::Request,
     worker::{self, Checkpoint},
 };
-use crate::ci::process::{Executor, Native};
 use serde_json::json;
+use simplestchat_ci::process::{Executor, Native};
 use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Result},

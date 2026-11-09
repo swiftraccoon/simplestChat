@@ -3,10 +3,10 @@
 //! catalog authenticates component content, not the host's curl/dpkg runtime.
 
 use super::{failure, plan};
-use crate::ci::{
+use crate::ci::ops_artifact::namespace::{Budget, Permit};
+use simplestchat_ci::{
     bounded_log::Captures,
     command::{Command, Program, ReleaseProof, ReleaseRole},
-    ops_artifact::namespace::{Budget, Permit},
 };
 use simplestchat_toolkit::{
     executable::{self, Executable},

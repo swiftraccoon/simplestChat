@@ -2,7 +2,7 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, request::Request};
-use crate::ci::{
+use simplestchat_ci::{
     bounded_log::Captures,
     command::{Command, Program, ReleaseProof, ReleaseRole},
 };

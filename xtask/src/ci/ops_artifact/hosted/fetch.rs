@@ -8,7 +8,7 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
     worker,
 };
-use crate::ci::{bounded_log::Captures, command::Command, process::Executor};
+use simplestchat_ci::{bounded_log::Captures, command::Command, process::Executor};
 use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsString,
@@ -379,7 +379,7 @@ pub(super) async fn decoded_deb<E: Executor>(
         let (input, input_permit) = match tree.input(input_name) {
             Ok(v) => v,
             Err(error) => {
-                let _ = crate::ci::process::settle_unforwarded(command).await;
+                let _ = simplestchat_ci::process::settle_unforwarded(command).await;
                 return Err(error);
             }
         };

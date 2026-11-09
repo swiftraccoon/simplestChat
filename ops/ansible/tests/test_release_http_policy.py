@@ -448,7 +448,6 @@ class TransportAndHarnessTests(unittest.TestCase):
                 args,
                 [
                     str(Path(sys.executable).resolve()),
-                    "ci",
                     "release-http-policy",
                     "--fixture-token",
                     TOKEN,

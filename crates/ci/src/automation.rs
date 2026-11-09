@@ -1,0 +1,172 @@
+//! The workflow's installed controller checks, in the original failure order.
+
+use anyhow::Result;
+use simplestchat_toolkit::tooling::{self, Environment, Failure};
+use std::ffi::OsString;
+use std::path::Path;
+use std::process::ExitCode;
+
+#[cfg(test)]
+mod maintenance_caller_tests;
+#[cfg(test)]
+mod pins;
+#[cfg(test)]
+mod workflow_contract_tests;
+#[cfg(test)]
+mod workflow_rpm_diagnostic_tests;
+
+const PLAYBOOKS: [&str; 10] = [
+    "site.yml",
+    "public.yml",
+    "release.yml",
+    "host-hardening.yml",
+    "proxy-config.yml",
+    "reboot.yml",
+    "turn.yml",
+    "monitoring.yml",
+    "migration-prepare.yml",
+    "migration-data.yml",
+];
+
+struct Step {
+    program: OsString,
+    arguments: Vec<OsString>,
+}
+
+impl Step {
+    fn new(program: impl Into<OsString>, arguments: &[&str]) -> Self {
+        Self {
+            program: program.into(),
+            arguments: arguments.iter().map(OsString::from).collect(),
+        }
+    }
+}
+
+/// Resolve the shell glob to argument boundaries before launching any checks.
+/// No script name, playbook or command is evaluated as shell text. The Python
+/// gate is xtask's developer command, run through the pinned toolchain.
+fn steps(root: &Path, channel: &str) -> std::io::Result<Vec<Step>> {
+    let (program, arguments) = tooling::xtask_command(channel, ["check", "--python"]);
+    let mut steps = vec![
+        Step { program, arguments },
+        Step::new("ansible-lint", &["--offline", "--strict", "ops/ansible"]),
+        Step::new(
+            "ansible-lint",
+            &["--offline", "--strict", "security/vm/stage.yml"],
+        ),
+    ];
+    for name in PLAYBOOKS {
+        steps.push(Step::new(
+            "ansible-playbook",
+            &[
+                "-i",
+                "ops/ansible/inventory.example.yml",
+                &format!("ops/ansible/{name}"),
+                "--syntax-check",
+            ],
+        ));
+    }
+    let mut scripts = std::fs::read_dir(root.join("ops/ansible/files"))?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    scripts.retain(|name| {
+        Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension == "sh")
+    });
+    scripts.sort();
+    if scripts.is_empty() {
+        return Err(std::io::Error::other(
+            "No controller shell scripts were found.",
+        ));
+    }
+    steps.push(Step {
+        program: "shellcheck".into(),
+        arguments: scripts
+            .into_iter()
+            .map(|name| Path::new("ops/ansible/files").join(name).into_os_string())
+            .collect(),
+    });
+    // Exercise the distributed Ops dependency profile before the server build.
+    // Its ignored helpers have separate owning callers.
+    steps.push(Step::new(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            "--test",
+            "release_build_cli",
+            "--test",
+            "release_attestation_cli",
+            "--test",
+            "release_verification_cli",
+            "--test",
+            "release_fresh_verify_cli",
+            "--test",
+            "release_fetch_cli",
+            "--test",
+            "release_receive_cli",
+            "--test",
+            "release_stage_cli",
+            "--test",
+            "release_deploy_cli",
+            "--test",
+            "release_backup_cli",
+            "--test",
+            "archive_cli",
+            "--test",
+            "manifest_cli",
+            "--",
+            "--test-threads=1",
+        ],
+    ));
+    // One discovery runs the whole Python suite, as a direct run would.
+    steps.push(Step::new(
+        "python",
+        &["-m", "unittest", "discover", "-s", "ops/ansible/tests"],
+    ));
+    Ok(steps)
+}
+
+fn execute(
+    steps: &[Step],
+    mut child: impl FnMut(&Step) -> tooling::Result<()>,
+) -> tooling::Result<()> {
+    for step in steps {
+        child(step)?;
+    }
+    Ok(())
+}
+
+fn checks(root: &Path, environment: &Environment) -> tooling::Result<()> {
+    let channel = tooling::pinned_toolchain(root)?;
+    let steps = steps(root, &channel).map_err(|error| Failure::new(1, error.to_string()))?;
+    execute(&steps, |step| {
+        tooling::run(root, environment, &step.program, &step.arguments)
+    })
+}
+
+pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    match arguments {
+        [] => {}
+        [flag] if flag == "--checks" => {}
+        _ => {
+            eprintln!("usage: cargo run --locked -q -p simplestchat-ci -- automation [--checks]");
+            return Ok(ExitCode::from(2));
+        }
+    }
+    match checks(root, &tooling::inherited_env()) {
+        Ok(()) => Ok(ExitCode::SUCCESS),
+        Err(failure) => {
+            eprintln!("{}", failure.message);
+            Ok(ExitCode::from(failure.code))
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "automation_tests.rs"]
+mod tests;

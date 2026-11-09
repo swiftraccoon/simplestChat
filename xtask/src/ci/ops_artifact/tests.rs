@@ -181,8 +181,8 @@ async fn actual_build_construction_passes_original_cutoff_to_delayed_fake_setup(
         attempted: usize,
         spawned: usize,
     }
-    impl crate::ci::process::Executor for Delayed<'_> {
-        async fn run(&mut self, command: crate::ci::command::Command) -> Result<Vec<u8>> {
+    impl simplestchat_ci::process::Executor for Delayed<'_> {
+        async fn run(&mut self, command: simplestchat_ci::command::Command) -> Result<Vec<u8>> {
             self.attempted += 1;
             let latest = command
                 .ops_stage_dispatch

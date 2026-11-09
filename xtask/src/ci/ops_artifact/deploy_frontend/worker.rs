@@ -4,7 +4,7 @@ use super::{
     failure, keep,
     plan::{Clock, Plan},
 };
-use crate::ci::process::Executor;
+use simplestchat_ci::process::Executor;
 use simplestchat_toolkit::tooling::Result;
 use std::{
     sync::{

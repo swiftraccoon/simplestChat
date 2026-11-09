@@ -602,7 +602,7 @@ an operator may temporarily set the repository variable
 `SCPUB_RPM_DIAGNOSTIC_RECIPIENT` to a single canonical PEM X.509 certificate.
 Keep its RSA private key outside GitHub and remove the variable after collecting
 the evidence. On a trusted main-push image-scan failure, the Rust
-`xtask ci rpm-diagnostic` command encrypts only the retained RPM SQLite database
+`simplestchat-ci rpm-diagnostic` command encrypts only the retained RPM SQLite database
 using the runner's OpenSSL CMS AES-256-GCM and RSA-OAEP with SHA-256. Its bounded
 children, retained file identities, source hashes and explicit finalization must
 all succeed before the workflow uploads the ciphertext and a revision/run-bound

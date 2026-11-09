@@ -200,3 +200,33 @@ fn aggregate_original_byte_budget_refuses_many_individually_valid_files() {
         .unwrap();
     assert_eq!(collect_inputs(&path), Err(Failure::Bounds));
 }
+
+#[test]
+fn fixed_profile_lists_every_workspace_member_manifest() {
+    // The Ops build loads every member manifest from the exported tree, so a
+    // member the profile omits would be an unbound build input.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    let manifest = format!("\n{}", fs::read_to_string(root.join("Cargo.toml")).unwrap());
+    let workspace = manifest
+        .split("\n[")
+        .find(|table| table.starts_with("workspace]"))
+        .unwrap();
+    let list = workspace.split_once("members = [").unwrap().1;
+    let list = list.split_once(']').unwrap().0;
+    let members = list
+        .split(',')
+        .map(|member| member.trim().trim_matches('"'))
+        .filter(|member| !member.is_empty())
+        .collect::<Vec<_>>();
+    assert!(members.len() >= 5, "{members:?}");
+    assert!(FIXED.contains(&"Cargo.toml"));
+    for member in members {
+        let path = format!("{member}/Cargo.toml");
+        assert!(
+            FIXED.contains(&path.as_str()),
+            "{path} is missing from FIXED"
+        );
+    }
+}

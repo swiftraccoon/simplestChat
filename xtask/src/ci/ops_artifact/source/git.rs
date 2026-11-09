@@ -2,8 +2,8 @@
 //! Git/runtime/object database authority is caller-owned, not upstream authentication.
 
 use super::*;
-use crate::ci::command::{ReleaseProof, ReleaseRole};
 use rustix::fs::{Mode, OFlags};
+use simplestchat_ci::command::{ReleaseProof, ReleaseRole};
 use std::{
     fs::{File, Metadata},
     io::Read,

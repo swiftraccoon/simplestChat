@@ -1,7 +1,7 @@
 //! Complete early ownership/failure paths; no hosted component is acquired.
 
 use super::*;
-use crate::ci::command::{Program, ReleaseRole};
+use simplestchat_ci::command::{Program, ReleaseRole};
 use std::{fs, os::unix::fs::PermissionsExt};
 
 fn context(root: &Path) -> Context {

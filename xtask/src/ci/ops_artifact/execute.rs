@@ -9,13 +9,13 @@ use super::{
     request::Request,
     resolution, sha,
 };
-use crate::ci::{
+use rustix::fs::{Mode, OFlags};
+use serde::Serialize;
+use simplestchat_ci::{
     bounded_log::Log,
     command::{Command, Program},
     process::Executor,
 };
-use rustix::fs::{Mode, OFlags};
-use serde::Serialize;
 use simplestchat_ops::distribution::{
     self,
     manifest::{
@@ -352,7 +352,7 @@ pub(super) async fn complete<E: Executor, C: Clock>(
     deadline.check(true)
 }
 pub(super) async fn native(path: &std::path::Path, selected: &str) -> Result<()> {
-    use crate::ci::process::Native;
+    use simplestchat_ci::process::Native;
     use simplestchat_toolkit::owned_process::Signals;
     let mut signals = Signals::new()?;
     let clock = super::NativeClock;

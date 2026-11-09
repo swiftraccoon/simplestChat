@@ -40,7 +40,7 @@ jobs:
 
       - name: Build the load-test image
         shell: bash
-        run: cargo run --locked -q -p xtask -- ci load-generator-image
+        run: cargo run --locked -q -p simplestchat-ci -- load-generator-image
 
       - name: Retain the image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

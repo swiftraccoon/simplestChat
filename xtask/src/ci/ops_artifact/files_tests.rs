@@ -203,7 +203,7 @@ async fn material_symlinks_and_special_aliases_are_refused_without_spawn_or_leak
 }
 #[tokio::test]
 async fn measured_source_and_staged_changes_are_rejected_before_receipt() {
-    use crate::ci::{command::Command, process::Executor};
+    use simplestchat_ci::{command::Command, process::Executor};
     use simplestchat_toolkit::tooling::Result;
 
     struct Yielding(usize);

@@ -10,11 +10,7 @@ use super::{
     progress::{Checkpoint, Edge, Progress},
     tools::{InvocationSpec, Role, Tools},
 };
-use crate::ci::{
-    command::Command,
-    ops_artifact::namespace::{self, Held},
-    process::Executor,
-};
+use crate::ci::ops_artifact::namespace::{self, Held};
 use object::{
     LittleEndian,
     read::{
@@ -25,6 +21,7 @@ use object::{
 use rustix::fs::OFlags;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use simplestchat_ci::{command::Command, process::Executor};
 use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},

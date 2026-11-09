@@ -778,7 +778,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             [
                 "python -m pip install --require-hashes --only-binary=:all: "
                 + "-r ops/ansible/requirements.txt",
-                'cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" '
+                'cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" '
                 + "--github-output",
             ],
         )
@@ -836,13 +836,11 @@ class VerifiedWorkflowTests(unittest.TestCase):
         self.assertEqual(string(job, "timeout-minutes"), "10")
         self.assertEqual(string(job, "runs-on"), "ubuntu-24.04")
         selected = [
-            step
-            for step in objects(job, "steps")
-            if "-- ci automation" in string(step.get("run", ""))
+            step for step in objects(job, "steps") if "-- automation" in string(step.get("run", ""))
         ]
         self.assertEqual(len(selected), 1)
         self.assertEqual(
-            string(selected[0], "run"), "cargo run --locked -q -p xtask -- ci automation --checks"
+            selected[0]["run"], "cargo run --locked -q -p simplestchat-ci -- automation --checks"
         )
 
     def test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds(self) -> None:
@@ -965,8 +963,6 @@ class VerifiedWorkflowTests(unittest.TestCase):
             self.assertNotIn("if", step)
             if name == "Check helper syntax, safety and cleanup":
                 self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- check --helpers")
-            else:
-                self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- ci audit-rust")
         self.assertEqual(obj(jobs, "rust-lint")["timeout-minutes"], "30")
         browser = objects(obj(jobs, "browser"), "steps")
         for step in browser:
@@ -994,10 +990,10 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 if not restores:
                     continue
                 verify = next(
-                    step for step in steps if "xtask -- ci verify" in string(step.get("run", ""))
+                    s for s in steps if "simplestchat-ci -- verify" in string(s.get("run", ""))
                 )
                 save = next(
-                    step for step in steps if "xtask -- ci save" in string(step.get("run", ""))
+                    s for s in steps if "simplestchat-ci -- save" in string(s.get("run", ""))
                 )
                 self.assertEqual(verify["if"], "steps.verified.outputs.cache-hit == 'true'")
                 self.assertEqual(save["if"], "steps.verified.outputs.cache-hit != 'true'")
@@ -1005,7 +1001,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 for step in steps:
                     if step.get("id") == "verified":
                         self.assertNotIn("restore-keys", obj(step, "with"))
-                    if "xtask -- ci " in string(step.get("run", "")):
+                    if "simplestchat-ci -- " in string(step.get("run", "")):
                         self.assertNotIn("${{", string(step, "run"))
 
 

@@ -16,15 +16,15 @@ use super::{
     namespace::{self, Budget, Chain, Held, OwnedRun},
     sha,
 };
-use crate::ci::{
-    command::{Command, Program},
-    process::Executor,
-};
 pub(crate) use git::Git;
 use git::Repository;
 use request::Request;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use simplestchat_ci::{
+    command::{Command, Program},
+    process::Executor,
+};
 use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
@@ -276,7 +276,7 @@ async fn check_objects<E: Executor, C: Clock>(
 }
 
 pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
-    use crate::ci::process::Native;
+    use simplestchat_ci::process::Native;
     use simplestchat_toolkit::owned_process::Signals;
     let mut signals = Signals::new()?;
     let clock = NativeClock;

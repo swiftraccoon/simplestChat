@@ -18,11 +18,11 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
     worker,
 };
-use crate::ci::{
+use serde_json::{Value, json};
+use simplestchat_ci::{
     command::Command,
     process::{Executor, Native},
 };
-use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest,
     assembly::{EvidenceSources, prepare_artifact},

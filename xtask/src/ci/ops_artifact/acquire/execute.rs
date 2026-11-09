@@ -10,7 +10,7 @@ use super::{
     request::Request,
     tools::Tools,
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program},
     process::{Executor, Native},
 };
@@ -144,7 +144,7 @@ async fn call<E: Executor>(
             let mut command = Command::capture(Program::OpsGh, &[]);
             command.capture = None;
             command.separate_logs = pending.logs.take();
-            let _ = crate::ci::process::settle_unforwarded(command).await;
+            let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
     };
@@ -152,7 +152,7 @@ async fn call<E: Executor>(
     let allowance = match budget.reserve_with_limit(16, 48) {
         Ok(allowance) => allowance,
         Err(error) => {
-            let _ = crate::ci::process::settle_unforwarded(command).await;
+            let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
     };
@@ -168,7 +168,7 @@ async fn call<E: Executor>(
     }
     .await;
     if let Err(error) = admitted {
-        let _ = crate::ci::process::settle_unforwarded(command).await;
+        let _ = simplestchat_ci::process::settle_unforwarded(command).await;
         return Err(error);
     }
     let result = executor.run(command).await;

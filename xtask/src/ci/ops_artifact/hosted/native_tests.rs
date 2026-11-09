@@ -7,7 +7,7 @@ use super::{
     fixture, plan,
     tools::{InvocationSpec, Role, Tools},
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, ReleaseRole},
     process::{Executor, Native},
 };

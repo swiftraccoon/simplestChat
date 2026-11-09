@@ -3,12 +3,12 @@
 
 use super::super::namespace::{self, Budget, Held, OwnedRun, Permit};
 use super::failure;
-use crate::ci::{
+use rustix::fs::{AtFlags, Mode, OFlags};
+use sha2::{Digest, Sha256};
+use simplestchat_ci::{
     bounded_log::{Captures, Log, Seal},
     command::SeparateLogs,
 };
-use rustix::fs::{AtFlags, Mode, OFlags};
-use sha2::{Digest, Sha256};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},

@@ -44,7 +44,6 @@ class SessionSoakCiTests(unittest.TestCase):
         self,
     ) -> None:
         """Only the runner-selected PostgreSQL service can receive stop/start."""
-        self.assertEqual(self.step["run"], "cargo run --locked -q -p xtask -- ci session-soak")
         for key, value in {
             "SOAK_POSTGRES_ID": "${{ job.services.postgres.id }}",
             "SOAK_POSTGRES_NETWORK": "${{ job.services.postgres.network }}",

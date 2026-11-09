@@ -37,7 +37,7 @@ class DatabaseCheckWorkflowTests(unittest.TestCase):
             self.assertEqual(step["if"], "steps.verified.outputs.cache-hit != 'true'")
             self.assertEqual(
                 string(step, "run"),
-                f"cargo run --locked -q -p xtask -- ci database-check {check}",
+                f"cargo run --locked -q -p simplestchat-ci -- database-check {check}",
             )
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("timeout-minutes", step)
@@ -47,5 +47,5 @@ class DatabaseCheckWorkflowTests(unittest.TestCase):
             )
             selected.append(steps.index(step))
         self.assertEqual(selected, sorted(selected))
-        commands = [step for step in steps if "ci database-check" in string(step.get("run", ""))]
+        commands = [step for step in steps if "database-check" in string(step.get("run", ""))]
         self.assertEqual(len(commands), 3)

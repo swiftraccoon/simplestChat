@@ -35,7 +35,7 @@ pub(super) struct Window {
     pub end: Instant,
 }
 
-pub(super) async fn observe_acquired<E: crate::ci::process::Executor>(
+pub(super) async fn observe_acquired<E: simplestchat_ci::process::Executor>(
     path: std::path::PathBuf,
     selected: String,
     caller: std::path::PathBuf,

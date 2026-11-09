@@ -705,7 +705,6 @@ class Harness:
             result = self.commands.run(
                 [
                     str(selected),
-                    "ci",
                     "release-http-policy",
                     "--fixture-token",
                     self.token,

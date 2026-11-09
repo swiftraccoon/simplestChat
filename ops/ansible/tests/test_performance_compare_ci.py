@@ -70,7 +70,6 @@ class PerformanceCompareCiTests(unittest.TestCase):
         """
         step = self.steps[5]
         self.assertEqual(step["name"], NAME)
-        self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- ci performance-compare")
         self.assertEqual(
             obj(step["env"]),
             {

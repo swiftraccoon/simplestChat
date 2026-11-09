@@ -116,19 +116,23 @@ including its port when using Vite or a second instance.
 
 ## Workspace layout
 
-The Cargo workspace has five crates. The root package `simplestchat` (`src/`) is
+The Cargo workspace has six crates. The root package `simplestchat` (`src/`) is
 the server library and the `simplestChat` binary. `simplestchat-load-test`
 (`load_tests/`) is the `load_test` generator. `simplestchat-ops` (`ops/`) holds
 the bounded host and guest operations and the Ops artifact tools. `xtask`
 (`xtask/`) is the repository automation run as `cargo run -p xtask -- <command>`:
-developer gates, CI steps and the release controller. `simplestchat-toolkit`
-(`crates/toolkit/`) holds what those tools share: child commands with an explicit
-environment, the pinned native build settings, owned process groups and signals,
-retained executable identities, the reserved output-replay child, the owned
-disposable PostgreSQL and loopback server test environment behind `test-env`,
-and the default route's media address behind `media-ip`. A binary
-that hosts the CI command runner routes that child's single argument,
-`__replay`, before parsing anything else. New crates go under `crates/`.
+developer gates and, until it has its own crate, the release controller.
+`simplestchat-ci` (`crates/ci/`) runs the hosted CI steps, local CI and cache
+retention as `cargo run --locked -q -p simplestchat-ci -- <command>`; its
+library also holds the bounded command runner the release controller drives.
+`simplestchat-toolkit` (`crates/toolkit/`) holds what those tools share: child
+commands with an explicit environment, the pinned native build settings, owned
+process groups and signals, retained executable identities, the reserved
+output-replay child, the owned disposable PostgreSQL and loopback server test
+environment behind `test-env`, and the default route's media address behind
+`media-ip`. A binary that hosts the CI command runner routes that child's
+single argument, `__replay`, before parsing anything else. New crates go under
+`crates/`.
 
 ## Native and web build
 

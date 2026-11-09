@@ -12,7 +12,7 @@ use super::{
     tools::Tools,
     worker::{self, Checkpoint},
 };
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program},
     process::{self, Executor, Native},
 };

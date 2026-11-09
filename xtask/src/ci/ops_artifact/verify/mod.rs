@@ -45,7 +45,7 @@ impl std::fmt::Debug for RetainedObservation {
     }
 }
 
-pub(super) async fn observe_retained<E: crate::ci::process::Executor>(
+pub(super) async fn observe_retained<E: simplestchat_ci::process::Executor>(
     path: std::path::PathBuf,
     selected: String,
     caller: std::path::PathBuf,

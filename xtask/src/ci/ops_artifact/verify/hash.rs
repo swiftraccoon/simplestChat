@@ -1,7 +1,7 @@
 //! One awaited filesystem worker; cancellation requests abort, never detaches it.
 
 use super::{failure, plan::Context};
-use crate::ci::process::Executor;
+use simplestchat_ci::process::Executor;
 use simplestchat_toolkit::tooling::Result;
 use std::{
     sync::{

@@ -1,11 +1,11 @@
 //! Complete inert unsigned/signature-output graph. No cryptography or network runs.
 
 use super::*;
-use crate::ci::{
+use serde_json::{Value, json};
+use simplestchat_ci::{
     command::{Command, ReleaseRole},
     process::Executor,
 };
-use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest, Selection,
     assembly::{EvidenceSources, prepare_artifact},
@@ -297,11 +297,12 @@ impl Executor for Fake {
             .map_err(|_| failure(1));
         let closed = nix::unistd::close(writer).map_err(|_| failure(1));
         let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
-            sha256: value.sha256,
-            bytes: value.bytes,
-            metadata: value.metadata,
-        };
+        let seal =
+            |value: simplestchat_ci::bounded_log::Finished| simplestchat_ci::bounded_log::Seal {
+                sha256: value.sha256,
+                bytes: value.bytes,
+                metadata: value.metadata,
+            };
         let captures = match (stdout, stderr) {
             (Ok(stdout), Ok(stderr)) if stdout.complete && stderr.complete => {
                 Some(tools::Captures {

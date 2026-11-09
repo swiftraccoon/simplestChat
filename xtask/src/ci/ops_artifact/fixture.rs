@@ -2,7 +2,7 @@
 //! process; its Cargo role writes inert ELF data and never runs a candidate.
 
 use super::*;
-use crate::ci::{command::Command, process::Executor};
+use simplestchat_ci::{command::Command, process::Executor};
 use std::{
     cell::Cell,
     fs,

@@ -3445,6 +3445,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplestchat-ci"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "flate2",
+ "futures-util",
+ "nix",
+ "rawzip",
+ "regex",
+ "reqwest",
+ "rustix",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+ "simplestchat-ops",
+ "simplestchat-toolkit",
+ "tar",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "simplestchat-load-test"
 version = "0.1.0"
 dependencies = [
@@ -4854,24 +4880,22 @@ dependencies = [
  "anyhow",
  "chrono",
  "flate2",
- "futures-util",
  "nix",
  "object",
  "rawzip",
  "regex",
- "reqwest",
  "rustix",
  "ryu-js",
  "serde",
  "serde-saphyr",
  "serde_json",
  "sha2 0.11.0",
+ "simplestchat-ci",
  "simplestchat-ops",
  "simplestchat-toolkit",
  "syn 3.0.6",
  "tar",
  "tokio",
- "tokio-tungstenite 0.30.0",
  "toml",
  "url",
 ]

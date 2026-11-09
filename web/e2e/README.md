@@ -414,7 +414,7 @@ stages, numeric error counts and interface counts are retained; raw logs,
 addresses and host names are discarded. These mDNS diagnostics change no OS or
 browser settings.
 
-The two mDNS workflow steps now use `cargo run --locked -q -p xtask -- ci mdns
+The two mDNS workflow steps now use `cargo run --locked -q -p simplestchat-ci -- mdns
 preflight|snapshot --artifact-only`. Both modes are one owned Rust transaction;
 the original `build/test-mdns.mjs` and native C probe remain byte-retained
 references. Existing opt-in, assigned-address, private artifact names, ordering

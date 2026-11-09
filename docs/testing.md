@@ -26,9 +26,10 @@ run the relevant crate without the server's native test graph:
 
 ```sh
 cargo test --locked -p xtask -- --test-threads=1
+cargo test --locked -p simplestchat-ci -- --test-threads=1
 cargo test --locked -p simplestchat-ops
 cargo test --locked -p xtask ci::ops_artifact -- --test-threads=1
-cargo test --locked -p xtask --features public-smoke ci::public_smoke -- --test-threads=1
+cargo test --locked -p simplestchat-ci --features public-smoke public_smoke -- --test-threads=1
 ```
 
 The [local Ops producer](../ops/README.md#controlled-local-unsigned-producer) has
@@ -140,12 +141,12 @@ The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
 exercise lease-stream EOF, quiet-child cancellation, release ordering and the
 first interrupt surviving a later signal during joined cleanup. The source
-inventory CLI also runs with 197 selected files and a child-only 96-descriptor
+inventory CLI also runs with 198 selected files and a child-only 96-descriptor
 limit. These checks do not execute a remote capacity workload. A signed musl
 binary, Debian kernel/process behavior and a measured host run need their own
 evidence.
 
-The host tests are compiled only on Linux; `ci-local` runs the Linux workflow.
+The host tests are compiled only on Linux; `simplestchat-ci local` runs the Linux workflow.
 The ignored inert child used by the real process regression,
 `capacity_vps::process::tests::inert_child_signal_mask`, runs its body only when
 its exact parent test launches it.
@@ -347,7 +348,7 @@ runs the ignored authentication case.
 ### Python automation
 
 The automation job checks the actual branch-tip subject, including a pull
-request's head commit, with `cargo run --locked -q -p xtask -- ci commit-subject`.
+request's head commit, with `cargo run --locked -q -p simplestchat-ci -- commit-subject`.
 It accepts only a complete 40-hex `COMMIT_REVISION` and captures the fixed
 `git log -1 --format=%B REVISION` command privately, with a 30-second deadline,
 1 MiB output limit and 64 KiB first-line limit. The first LF ends the subject;
@@ -358,10 +359,12 @@ bound failures return 1, and invalid invocation/revision returns 2. Owned
 command cleanup covers descendants remaining in its group.
 
 The same pinned compiler step now precedes this check, before automation cache
-lookup. Rejected CI subjects therefore pay toolchain setup and any cold xtask
-compilation first. The subject step took 50.6 and 59.4 seconds in hosted runs
-`40243312977` and `40248975462`; these include cold bootstrap rather than only
-grammar validation. Local Git commits continue using the bootstrap-free POSIX
+lookup. Rejected CI subjects therefore pay toolchain setup and any cold
+simplestchat-ci compilation first. In hosted runs `40243312977` and
+`40248975462` the subject step, which then compiled and ran xtask, took 50.6 and
+59.4 seconds; those times include xtask's cold bootstrap rather than only
+grammar validation, and the step has not been timed with simplestchat-ci.
+Local Git commits continue using the bootstrap-free POSIX
 hook. Byte-oracle and inert Git-process fixtures check these boundaries without
 installing tools or contacting a host.
 
@@ -372,11 +375,13 @@ python3 -m venv ops/ansible/.venv
 ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
 cargo run --locked -q -p xtask -- check --python
 PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
-  cargo run --locked -q -p xtask -- ci automation --checks
+  cargo run --locked -q -p simplestchat-ci -- automation --checks
 ```
 
-The shared `ci automation --checks` command runs its steps in a fixed order and
-stops at the first failure with that step's exit status: `check --python`,
+The shared `automation --checks` command runs its steps in a fixed order and
+stops at the first failure with that step's exit status: xtask's
+`check --python` (through the pinned toolchain, as
+`rustup run <channel> cargo run --locked -q -p xtask -- check --python`),
 strict offline ansible-lint over `ops/ansible` and `security/vm/stage.yml`, the
 syntax check of each listed playbook, shellcheck over `ops/ansible/files/*.sh`,
 the standalone Ops library and CLI tests, and one
@@ -415,7 +420,7 @@ recorded by editing its row by hand.
 The source gate runs Ruff's complete stable rule set, its formatter, and
 basedpyright's `all` mode over every maintained Python file and type stub,
 including tests. It rejects a new source directory until explicitly included.
-The offline release-HTTP oracle package under `xtask/src/ci/release_http_policy`
+The offline release-HTTP oracle package under `crates/ci/src/release_http_policy`
 is a maintained checked root; its exact historical `reference/` copies retain
 the existing reference exclusion and are checked by byte pins and oracle tests.
 Third-party `vendor/` sources and ignored private operator scripts are outside
@@ -622,8 +627,8 @@ On an explicitly selected Mac, `MDNS_DIAGNOSTIC_E2E=1`, `TEST_ANNOUNCE_IP`
 (an assigned IPv4 address) and a private `E2E_ARTIFACTS` directory enable:
 
 ```sh
-cargo run --locked -q -p xtask -- ci mdns preflight --artifact-only
-cargo run --locked -q -p xtask -- ci mdns snapshot --artifact-only
+cargo run --locked -q -p simplestchat-ci -- mdns preflight --artifact-only
+cargo run --locked -q -p simplestchat-ci -- mdns snapshot --artifact-only
 ```
 
 The complete controller retains the original C registration probe and JavaScript
@@ -704,9 +709,9 @@ deployment keeps the defaults in [configuration](configuration.md).
 CI's three controller database steps use a fixed typed selection:
 
 ```sh
-cargo run --locked -q -p xtask -- ci database-check monitoring
-RESTORE_CONTAINER_E2E=1 cargo run --locked -q -p xtask -- ci database-check restore
-cargo run --locked -q -p xtask -- ci database-check migration
+cargo run --locked -q -p simplestchat-ci -- database-check monitoring
+RESTORE_CONTAINER_E2E=1 cargo run --locked -q -p simplestchat-ci -- database-check restore
+cargo run --locked -q -p simplestchat-ci -- database-check migration
 ```
 
 These retain the existing Python test patterns. The restore step first pulls the
@@ -846,10 +851,12 @@ processes outside the owned group. Cold compilation and hosted route/runtime
 behavior have not been measured by the inert regression fixtures.
 
 The five two-browser CI steps use
-`cargo run --locked -q -p xtask -- ci browser-suite SUITE`, where `SUITE` is
+`cargo run --locked -q -p simplestchat-ci -- browser-suite SUITE`, where `SUITE` is
 `auth-lifecycle`, `auth-cross-tab`, `room-control-confirmation`, `media-continuity`
-or `presentation`. This runs Chromium then Firefox through the existing owned
-`test-server` harness, stopping at the first failure and preserving its status.
+or `presentation`. This runs Chromium then Firefox through xtask's owned
+`test-server` harness, launched with the pinned toolchain as
+`rustup run <channel> cargo run --locked -q -p xtask -- test-server node <script>`,
+stopping at the first failure and preserving its status.
 Use the same explicit suite opt-in, installed browser tooling, built application
 and disposable database required by the individual suite. `RUNNER_TEMP` must name
 an existing absolute directory; each browser retains the workflow's existing
@@ -956,7 +963,7 @@ PASSKEY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/passkey-management.cjs
 ```
 
-Run `cargo run --locked -q -p xtask -- ci native-dtls` after configuring the pinned OpenSSL installation
+Run `cargo run --locked -q -p simplestchat-ci -- native-dtls` after configuring the pinned OpenSSL installation
 to exercise the worker's DTLS closure reasons, media warning context and native
 bandwidth constraint handling. It builds
 a separate temporary worker test target, leaving Cargo's production archive untouched. Paired native
@@ -1004,7 +1011,7 @@ return 0. No process owner claims detached/session/privileged descendants.
 
 CI keeps its lookup-only `native-dtls-v2` namespace and existing 12-minute check
 and 25-minute job budgets. The expanded key includes vendored/reference/install
-inputs plus xtask/shared providers, workspace manifests, Cargo.lock, compiler
+inputs plus the xtask and crates/ tool providers, workspace manifests, Cargo.lock, compiler
 configuration and the workflow itself. Unchanged UI bytes do not invalidate it.
 A cache miss installs the existing pinned Rust 1.99.0 toolchain and runs the
 controller with `--record-success`; ordinary local invocation never publishes a
@@ -1182,7 +1189,7 @@ its path.
 ## Container and CI checks
 
 Hosted Ubuntu 24.04 CI prepares its existing APT mirror list through the fixed,
-no-argument `xtask ci apt-mirror` entry before browser or KVM dependencies. The
+no-argument `simplestchat-ci apt-mirror` entry before browser or KVM dependencies. The
 root operation requires Linux/X64, the hosted GitHub context and the actual
 Ubuntu/Noble release; ACT is excluded. The workflows invoke the already compiled
 absolute binary through narrowly scoped sudo environment preservation. Local
@@ -1203,7 +1210,7 @@ With Docker available:
 
 ```sh
 docker build --target production -t simplestchat-ci:production .
-cargo run --locked -q -p xtask -- container-smoke
+cargo run --locked -q -p simplestchat-ci -- container-smoke --local
 ```
 
 The smoke creates its own disposable containers, applies every source migration
@@ -1211,9 +1218,9 @@ and checks health, HTML, all four public PWA files' MIME types and bytes, empty
 rooms, one account write and restart of the same app container/image. HTTP is
 published only on a random loopback port; PostgreSQL and the app share a fresh
 network namespace and temporary data. Set `PRODUCTION_IMAGE` to another built
-image. The local facade defaults to `simplestchat-ci:production`; CI uses
-`cargo run --locked -q -p xtask -- ci container-smoke`, requiring an immutable
-image ID and the explicit hosted/disposable Linux context.
+image. The `--local` facade defaults to `simplestchat-ci:production`; CI uses
+`cargo run --locked -q -p simplestchat-ci -- container-smoke` without `--local`, requiring an
+immutable image ID and the explicit hosted/disposable Linux context.
 
 The captured Docker selection must resolve to a local Unix endpoint. An explicit
 `DOCKER_CONTEXT` retains Docker's precedence over `DOCKER_HOST`; unsupported
@@ -1263,7 +1270,7 @@ ignore the old failed `[[ ]]` port check; Rust always refuses non-loopback ports
 The manually dispatched `load-generator-image.yml` keeps its Linux/amd64
 `loadtest` target, fixed tag, restore-only layer cache, 45-minute job and two
 uploaded filenames. After the pinned Rust 1.99 bootstrap it runs
-`cargo run --locked -q -p xtask -- ci load-generator-image`. Bootstrap and cold
+`cargo run --locked -q -p simplestchat-ci -- load-generator-image`. Bootstrap and cold
 compile timing have not been measured; they consume the same external job
 budget. This command requires an explicit hosted GitHub Linux runner or an
 ACT runner marked `LOCAL_CI_DISPOSABLE=1`. It captures one environment and signal
@@ -1334,8 +1341,8 @@ compression, engine or image workloads.
 
 ### Offline configuration validators
 
-CI uses `cargo run --locked -q -p xtask -- ci validate-config promtool` and
-`ci validate-config caddy` in the existing automation and deployment steps. Both
+CI uses `cargo run --locked -q -p simplestchat-ci -- validate-config promtool` and
+`validate-config caddy` in the existing automation and deployment steps. Both
 require the captured hosted or explicitly disposable Linux context and
 `RUNNER_TEMP`. Caddy also requires the workflow's exact `CADDY_IMAGE` and literal
 CI-only proxy secret. Image pins, guest argv, mounts, network isolation, capabilities,
@@ -1402,8 +1409,8 @@ hosted trial above does not establish guest execution or success.
 The workflow's 20-minute release step runs an explicitly prebuilt feature binary:
 
 ```sh
-"$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \
-  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"
+"$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci" release-checks \
+  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci"
 ```
 
 The existing Compose validation step first installs `libssl-dev` and `pkg-config`,
@@ -1411,7 +1418,7 @@ then builds with `--features release-http-policy` into that separate target dire
 It unsets the workflow's pinned OpenSSL/AWS-LC build-prefix variables for this host
 client build. Later default-feature Cargo commands cannot overwrite the selected
 binary. Compilation and package provisioning are outside the runtime step; the
-95-minute job allowance covers them. Default xtask commands remain TLS-free.
+95-minute job allowance covers them. Default simplestchat-ci commands remain TLS-free.
 
 In an explicit hosted or disposable Linux CI context, the wrapper resolves the
 first executable Node in its captured `PATH` and runs the literal pinned
@@ -1428,7 +1435,8 @@ The Python coordinator retains its parallel scanner-download and release-fixture
 policy, original image/output inputs, private output and status. Both caller forms
 require `--http-policy-binary ABSOLUTE_FEATURE_BINARY`; there is no Python checker
 fallback, implicit unfeatured binary or runtime Cargo build. For manual use, build
-`cargo build --locked -p xtask --features release-http-policy --bin xtask`, then
+`cargo build --locked -p simplestchat-ci --features release-http-policy --bin simplestchat-ci`,
+then
 pass the resulting absolute path to `build/test-release-container.py` alongside
 its existing required flags. A caller retains and rechecks the original checker
 file/path before and after its child settles, with explicit all-attempt close.
@@ -1444,7 +1452,7 @@ awaited child finalizers. Cleanup commands reserve their own body/TERM/reap insi
 one original 100-second monotonic deadline; known failures survive late clocks.
 These are scheduling allowances, not OS/reaping or cold-build guarantees.
 
-The opt-in `xtask ci release-http-policy` owns the complete original passive
+The opt-in `simplestchat-ci release-http-policy` owns the complete original passive
 response check. It requires Linux/root and only the original five flags:
 `--fixture-token`, `--caddy-id`, `--app-id`, `--ca` and `--ca-sha256`. There is no
 origin or arbitrary path option. Four fixed `/usr/bin/docker --host
@@ -1622,8 +1630,8 @@ features (including the full load generator). Their Rust-only `browser-backend`
 success cache retains the server, load generator and both dependency files. Its
 fresh namespace binds product/native source, manifests and lockfile, compiler and
 runner identity, build environment, workflow build prefix and the current
-key/save/verify implementation. Unrelated Ops implementation and xtask modules
-do not invalidate these two artifacts; workspace and tool manifests remain
+key/save/verify implementation. Unrelated Ops implementation, xtask and CI step
+modules do not invalidate these two artifacts; workspace and tool manifests remain
 conservatively bound. A restored receipt must pass all four hashes and the
 role-specific dependency-file checks before either executable is installed.
 Unexpected tracked or generated dependencies fail closed. The older `backend`
@@ -1640,7 +1648,7 @@ process, error and explicit-finalization contracts retain their prior scope.
 
 The restart owner, the complete test graph (with no skips) and the backend
 workflow projection are pinned against the current `.github/workflows/ci.yml` by
-`xtask/src/ci/automation/workflow_contract_tests.rs` and
+`crates/ci/src/automation/workflow_contract_tests.rs` and
 `workflow_projection_tests.rs`. These source contracts read the workflow; they
 run no browser, build or test.
 
@@ -1655,8 +1663,8 @@ key whenever its build inputs change. BuildKit validates fallback layers against
 the current inputs. The native image policy commands are:
 
 ```sh
-cargo run --locked -q -p xtask -- ci production-image build
-cargo run --locked -q -p xtask -- ci production-image verify
+cargo run --locked -q -p simplestchat-ci -- production-image build
+cargo run --locked -q -p simplestchat-ci -- production-image verify
 ```
 
 They require Linux and either a GitHub-hosted runner or explicit
@@ -1684,8 +1692,8 @@ container-build parity. The release fixture's controller preparation overlaps
 the image build through two commands:
 
 ```sh
-cargo run --locked -q -p xtask -- ci release-controller start
-cargo run --locked -q -p xtask -- ci release-controller wait
+cargo run --locked -q -p simplestchat-ci -- release-controller start
+cargo run --locked -q -p simplestchat-ci -- release-controller wait
 ```
 
 The launcher creates an origin-bound private namespace and hands off to a
@@ -1722,7 +1730,7 @@ CLI-group claim; a missing terminal record is unproven preparation. If later
 steps skip collection, the worker watchdog and runner disposal remain separate
 boundaries. Owned inert-command tests exercise the protocol without installing
 packages or claiming hosted-runner cancellation parity.
-The initial cold `xtask` compilation precedes the overlap; no hosted Linux
+The initial cold `simplestchat-ci` compilation precedes the overlap; no hosted Linux
 startup cost or installer timing has been measured for this port.
 
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
@@ -1732,7 +1740,7 @@ The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
 manual Firefox/Linux and WebKit/macOS runs.
 
 The preceding Compose installation uses
-`cargo run --locked -q -p xtask -- ci install-compose` in the same explicit
+`cargo run --locked -q -p simplestchat-ci -- install-compose` in the same explicit
 hosted/disposable Linux contexts. It authenticates the existing Compose 5.6.0
 AMD64/ARM64 digests before either fixed `sudo install` command. Curl retains its
 HTTPS/TLS policy, 10-second connection and 60-second transfer bounds, plus a
@@ -1754,12 +1762,12 @@ namespace stays descriptor-bound through the final exclusive 0600 report write;
 received command text and paths never enter that evidence. An interrupted
 privileged install can already have changed the plugin; cleanup retires staging
 and does not undo that installation. The step keeps its three-minute budget,
-including its first cold xtask compile; hosted cold-start timing remains
+including its first cold simplestchat-ci compile; hosted cold-start timing remains
 unmeasured. Owned fake commands verify policy and cleanup, without downloading,
 installing or contacting an engine.
 
 The npm setup steps keep `node build/install-npm.mjs` as the authenticated
-installer, followed by `cargo run --locked -q -p xtask -- ci npm-path` to
+installer, followed by `cargo run --locked -q -p simplestchat-ci -- npm-path` to
 publish its fixed 12.2.0 `bin` directory. Publication requires an existing
 absolute `GITHUB_PATH` regular file and owned runner/prefix/bin directories
 that are not writable by other users. It refuses final symlinks, special files,
@@ -1771,7 +1779,7 @@ toolchain before this step. Filesystem fixtures cover the publication boundary;
 the Node installer's existing tests remain the reference for installation.
 
 The automation controller's apt, venv and pip commands also remain direct. After
-successful installation, `cargo run --locked -q -p xtask -- ci controller-path`
+successful installation, `cargo run --locked -q -p simplestchat-ci -- controller-path`
 publishes only `RUNNER_TEMP/ansible-controller/bin` through the same protected
 PATH-file writer. It accepts no alternate prefix, starts no installer and cannot
 substitute npm's directory. The existing compiler setup precedes controller
@@ -1781,7 +1789,7 @@ cannot report success. This verifies publication policy, not controller-package
 authenticity or immunity to later changes by the same filesystem owner.
 
 The unconditional Rust dependency audit uses
-`cargo run --locked -q -p xtask -- ci audit-rust` in the same explicit
+`cargo run --locked -q -p simplestchat-ci -- audit-rust` in the same explicit
 hosted/disposable Linux contexts. It retains the reference
 `python3 build/security_tools.py install --tools cargo-audit --directory PATH`
 and `path cargo-audit --directory PATH` commands. That installer authenticates
@@ -1818,7 +1826,7 @@ Commit the candidate locally, then run the complete required workflow without a
 push or pull request:
 
 ```sh
-cargo run --locked -q -p xtask -- ci-local all
+cargo run --locked -q -p simplestchat-ci -- local all
 ```
 
 The launcher uses [act](https://github.com/nektos/act) to execute
@@ -1851,7 +1859,7 @@ inside a dedicated disposable VM and identify its local socket explicitly:
 
 ```sh
 DOCKER_HOST=unix:///path/to/disposable/docker.sock \
-  cargo run --locked -q -p xtask -- ci-local all --disposable-engine
+  cargo run --locked -q -p simplestchat-ci -- local all --disposable-engine
 ```
 
 AMD64 Linux uses the pinned Ubuntu 24.04 AMD64 runner and provides the same ISA
@@ -1900,8 +1908,8 @@ The full gate requires a clean committed checkout and checks its identity again
 after execution. Completion receipts bind every required matrix entry and the
 successful aggregate to the current run and revision; dry runs or filtered
 matrices cannot report a complete local gate. Workflow jobs publish those records
-with `cargo run --locked -q -p xtask -- ci-evidence record --id CHECK`; the final
-local aggregate runs `ci-evidence complete`. The Rust producer preserves the
+with `cargo run --locked -q -p simplestchat-ci -- evidence record --id CHECK`; the final
+local aggregate runs `evidence complete`. The Rust producer preserves the
 Python reference's JSON schema and bytes, reads the real workflow matrices, and
 needs no Python YAML environment. YAML parsing accepts aliases and merge keys
 with explicit document, depth and replay limits; includes and custom tags are
@@ -1921,7 +1929,7 @@ and cleans recursively. Existing authenticated bundles can be moved from
 `target/codeql-tools` to `.cache/codeql-tools` while no local CI run is active;
 the same receipts and analyzer/query checks apply at the new location.
 
-The shared `cargo run --locked -q -p xtask -- ci required` policy reads
+The shared `cargo run --locked -q -p simplestchat-ci -- required` policy reads
 `GATE_RESULTS` once and requires successful results from exactly the ten canonical
 workflow jobs. It rejects missing, skipped, cancelled or failed jobs, duplicate
 job/result fields, malformed JSON and input above 64 KiB. Other job metadata and
@@ -1930,9 +1938,9 @@ aggregate jobs install pinned Rust before this policy; hosted CodeQL health and
 local execution evidence still run afterward. The added hosted compilation cost
 has not been measured on GitHub.
 
-Local diagnostic preservation uses `ci copy-evidence image-database`,
-`ci copy-evidence release-container` and `ci copy-evidence release-checks` through
-the same xtask entry point. These commands read the owned `RUNNER_TEMP` and
+Local diagnostic preservation uses `copy-evidence image-database`,
+`copy-evidence release-container` and `copy-evidence release-checks` through
+the same `simplestchat-ci` entry point. These commands read the owned `RUNNER_TEMP` and
 `LOCAL_CI_EVIDENCE` roots and copy only the workflow's fixed report/log allowlists.
 An absent, non-directory or symlink source succeeds without requiring an evidence
 root; a valid source creates a new directory even when optional files are absent.
@@ -2017,11 +2025,11 @@ lookup. A database hit still skips fresh extraction and dependency-output reuse;
 it now requires the small tooling build as well as the compiler bootstrap.
 
 The key command is
-`cargo run --locked -q -p xtask -- ci codeql-cache key --language rust --source-root /absolute/source`.
+`cargo run --locked -q -p simplestchat-ci -- codeql-cache key --language rust --source-root /absolute/source`.
 It requires the same declared hosted image or pinned local runner identity as
-`ci key`; run it inside that runner environment.
+`key`; run it inside that runner environment.
 The same entrypoint offers `validate-bundle`, `validate-source`, `save` and
-`restore`; use `ci codeql-cache --help` for their explicit paths and arguments.
+`restore`; use `codeql-cache --help` for their explicit paths and arguments.
 Keys reuse the CI source inventory and bind the analyzer/query pin, source path,
 suite, trust/platform namespace, and native package/compiler/OpenSSL identities
 where applicable. The Python module remains the scanner driver's import API and
@@ -2050,7 +2058,7 @@ from known families. It verifies the triggering run and current main revision,
 protects the newest cache in each trust/platform namespace and every cache
 created or accessed within two hours, and targets eight GiB of total storage.
 Unknown cache families and other refs remain untouched. Run
-`cargo run --locked -q -p xtask -- ci-retention` for a read-only plan; applying it requires
+`cargo run --locked -q -p simplestchat-ci -- retention` for a read-only plan; applying it requires
 `--apply --run-id <successful-CI-run> --revision <current-main-SHA>`. Deletions
 are limited to cache IDs, with refreshed inventory before each deletion and
 limits of 100 deletions and 240 seconds.
@@ -2083,7 +2091,7 @@ not CI success receipts and do not add a native-analysis prerequisite to the
 required graph. Every selected local runtime suite still executes against its
 bound executable; compilation and runtime evidence remain separate.
 
-CI fingerprints and success receipts run through `xtask ci key|save|verify`.
+CI fingerprints and success receipts run through `simplestchat-ci key|save|verify`.
 The pinned toolchain is available before a cache lookup. Keys retain the existing
 SHA-256 framing, scope/trust/runner identities and receipt schema; the tracked
 compiled tool and its Cargo/toolchain inputs are included in every source closure.
@@ -2093,24 +2101,24 @@ directory. Python remains the parity reference and supplies the current security
 helpers' source-closure API; scanner drivers retain their existing implementation.
 
 The four standard workflow fingerprint steps use
-`cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output`.
+`cargo run --locked -q -p simplestchat-ci -- key --scope "$CI_CACHE_SCOPE" --github-output`.
 This computes the same scoped key and appends exactly one `key=...` line to the
 runner-provided `GITHUB_OUTPUT`, without printing the key on stdout. The file must
 already exist at an absolute path and be regular; the command appends without
 creating, truncating or following its final symlink. Missing output configuration,
 unsafe/open failures, failed fingerprints and write/close errors fail the step
-with fixed labels. The flag applies only to `key`; ordinary `ci key` still prints
+with fixed labels. The flag applies only to `key`; an ordinary `key` still prints
 its key for local use. Cache namespaces, restore/save guards and success receipts
 retain their existing policy. Database-byte selectors use the separate image-cache
 publisher described below.
 
-`cargo run --locked -q -p xtask -- ci automation` runs the installed Python
+`cargo run --locked -q -p simplestchat-ci -- automation` runs xtask's installed Python
 quality gate first, then offline Ansible lint, every maintained controller
 playbook's syntax check, ShellCheck and operations unit tests. Each command's
 arguments are explicit and the first failure stops the gate. It installs no
 tools and applies no playbook to a host.
 
-Hosted and local CI run that complete plan through `ci automation --checks`,
+Hosted and local CI run that complete plan through `automation --checks`,
 which selects the same steps as the bare command: quality, syntax, ordinary
 Ops/CLI tests and full Python test discovery, under the job's ten-minute ceiling.
 The ordinary Ops gate also runs `release_backup_cli`.
@@ -2127,8 +2135,8 @@ failure to complete, not a pass. Download reuse reduces repeated network work; a
 cold cache remains dependent on the package service and does not establish a
 runtime guarantee. Job and workload limits are unchanged.
 
-The existing automation receipt proves the checks job, with workflow/xtask
-changes invalidating prior keys. Tracked workflow, `xtask` and native changes
+The existing automation receipt proves the checks job, with workflow and tool
+changes invalidating prior keys. Tracked workflow, `xtask`, `crates/` and native changes
 invalidate the existing checks/Rust-test keys; no cache namespace or fingerprint
 selection policy is broadened.
 
@@ -2142,7 +2150,7 @@ bootstrap was still active are unknown. The ordering change prevents this
 bootstrap's package work from overlapping validation; it changes no command,
 retry, deadline, required gate or cleanup policy and is not a proven cause fix.
 
-`cargo run --locked -q -p xtask -- ci native-security` verifies the native
+`cargo run --locked -q -p simplestchat-ci -- native-security` verifies the native
 dependency versions, source pins and overlay hashes used by the Rust test job,
 then scans the built server for the required and forbidden OpenSSL versions and
 checks Linux linkage with `ldd`. It reads local inputs and runs the fixed Cargo
@@ -2154,7 +2162,7 @@ checking both executable and compiler dependency-file hashes. Browser backend
 keys bind the app/full-load packages and their product/native source trees, Cargo
 manifests/configuration, the fixed native-toolchain action/installers, current
 Rust key/save/verify policy, compiler environment overrides and runner/trust
-identities. Unrelated Ops implementation and other xtask modules are outside
+identities. Unrelated Ops implementation, xtask and other CI step modules are outside
 this artifact role. The CI workflow's global configuration and browser job
 through backend publication are bound;
 independent image-job, operations-test and documentation edits do not rebuild
@@ -2191,7 +2199,7 @@ bounded file inventory and checked hashes; a malformed cache fails validation.
 No image scan verdict is cached. Local image checks can use the same path with
 `--image-database-cache <absolute-directory>`.
 
-The two CI jobs use `ci image-cache hint` to publish the same Python reference's
+The two CI jobs use `image-cache hint` to publish the same Python reference's
 prefix and optional metadata hint. Prefix failure remains fatal. A failed hint
 falls back to that exact prefix with the existing warning only after its owned
 CLI group is proven stopped/reaped; cancellation or uncertain cleanup fails.
@@ -2201,7 +2209,7 @@ current main/pull-request boundary, and every scanner/generation digest must be
 Python online updater and scanner remain unchanged.
 
 After successful preparation or production scanning, respectively,
-`ci image-cache status preparation` and `ci image-cache status production`
+`image-cache status preparation` and `image-cache status production`
 resolve only the fixed status paths beneath `RUNNER_TEMP`, using the unchanged
 Python `--status` reference. Both key and prefix are validated before one fixed
 record is appended to the runner's existing absolute regular `GITHUB_OUTPUT`
@@ -2228,9 +2236,9 @@ accepts a new directory. A single-job run is available for focused fixes and
 always reports that it is partial:
 
 ```sh
-cargo run --locked -q -p xtask -- ci-local web
-cargo run --locked -q -p xtask -- ci-local rust-lint
-cargo run --locked -q -p xtask -- ci-local browser --matrix group:accounts
+cargo run --locked -q -p simplestchat-ci -- local web
+cargo run --locked -q -p simplestchat-ci -- local rust-lint
+cargo run --locked -q -p simplestchat-ci -- local browser --matrix group:accounts
 ```
 
 #### Recover inconsistent ARM CPU features
@@ -2258,7 +2266,7 @@ podman machine start simplestchat-ci
 
 [Fedora CoreOS documents kernel-argument changes through rpm-ostree](https://docs.fedoraproject.org/en-US/fedora-coreos/kernel-args/#_modifying_kernel_arguments_on_existing_systems).
 The launcher never changes kernel arguments or restarts an already running VM
-to repair this condition. Rerun `cargo run --locked -q -p xtask -- ci-local all` after reboot; its preflight
+to repair this condition. Rerun `cargo run --locked -q -p simplestchat-ci -- local all` after reboot; its preflight
 checks the resulting feature flags, and the unchanged dependencies and lint rules
 must pass normally. These commands apply only to `simplestchat-ci`, not another
 project's VM or a shared engine.
@@ -2275,7 +2283,7 @@ for the budgets and their limits, and
 for the Podman capacity runs and the local impairment helpers.
 
 The hosted Linux comparison uses
-`cargo run --locked -q -p xtask -- ci performance-compare`. It captures the
+`cargo run --locked -q -p simplestchat-ci -- performance-compare`. It captures the
 environment once, resolves the baseline before recording worktree creation
 intent, and preserves the baseline Cargo working directory, inherited native
 toolchain settings and shared candidate `target`. The saved baseline binary is
@@ -2352,7 +2360,7 @@ default CI or a substitute for physical-device checks. See
 
 ### Session soak with a database interruption
 
-The scheduled performance job uses `cargo run --locked -q -p xtask -- ci
+The scheduled performance job uses `cargo run --locked -q -p simplestchat-ci --
 session-soak` for the fixed full twenty-minute profile. The workflow passes its
 PostgreSQL service ID, network and published port through the documented
 [Actions job context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context).
@@ -2457,12 +2465,12 @@ manual checklist on real browsers and devices before a release.
 From a checkout with the pinned Rust toolchain, the opt-in client is:
 
 ```sh
-cargo run --locked -q -p xtask --features public-smoke -- public-smoke --origin https://chat.example.com --room lobby
+cargo run --locked -q -p simplestchat-ci --features public-smoke -- public-smoke --origin https://chat.example.com --room lobby
 ```
 
 The explicit `public-smoke` Cargo feature enables the native TLS client. It needs
 the platform's native TLS development prerequisites (the pinned OpenSSL prefix
-on Linux). Default `xtask` builds omit that client so CI setup and input keys can
+on Linux). Default `simplestchat-ci` builds omit that client so CI setup and input keys can
 run before native-library installation. CI tests and Rust quality checks enable
 all features, including the inert client tests.
 
@@ -2544,8 +2552,8 @@ controller. These source tests make no claim of a real deployment/TLS/browser ru
 
 ## Standalone private container benchmark
 
-The source-level Rust owner provides `xtask container-benchmark run` and
-`xtask container-benchmark cleanup` (also through `xtask ci container-benchmark`).
+The source-level Rust owner provides `simplestchat-ci container-benchmark run` and
+`simplestchat-ci container-benchmark cleanup`.
 It requires an explicitly authorized root/Linux host, root-owned installed
 Docker/nsenter/curl tools, cgroup v2, and a trusted rootful Docker daemon on the
 **same Linux host** through a frozen local Unix endpoint. A Unix socket does not

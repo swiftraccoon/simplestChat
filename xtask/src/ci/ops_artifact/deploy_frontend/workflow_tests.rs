@@ -4,7 +4,7 @@
 
 use super::super::lifecycle::Completed;
 use super::*;
-use crate::ci::{
+use simplestchat_ci::{
     bounded_log::{Captures, Seal},
     command::ReleaseRole,
 };
@@ -415,7 +415,7 @@ impl Executor for Fake {
         let error = logs.stderr.writer()?;
         nix::unistd::close(error).map_err(|_| failure(1))?;
         let (out, err) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
-        let seal = |done: crate::ci::bounded_log::Finished| {
+        let seal = |done: simplestchat_ci::bounded_log::Finished| {
             assert!(done.complete);
             Seal {
                 sha256: done.sha256,

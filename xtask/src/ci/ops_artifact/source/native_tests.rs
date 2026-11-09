@@ -1,7 +1,7 @@
 //! Inert process and isolated tiny local Git fixtures.
 
 use super::*;
-use crate::ci::{command::ReleaseRole, process::Native};
+use simplestchat_ci::{command::ReleaseRole, process::Native};
 use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,

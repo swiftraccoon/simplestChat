@@ -36,7 +36,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Install source-check prerequisites
         run: |
@@ -61,7 +61,7 @@ jobs:
           fi
       - name: Record successful local source checks
         if: ${{ env.ACT }}
-        run: cargo run --locked -q -p xtask -- ci-evidence record --id security-fast
+        run: cargo run --locked -q -p simplestchat-ci -- evidence record --id security-fast
       - name: Preserve the redacted check summary
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -100,7 +100,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Prepare the locked source dependency cache
         run: |
@@ -125,7 +125,7 @@ jobs:
           done
       - name: Record the successful local mutation tier
         if: ${{ env.ACT }}
-        run: cargo run --locked -q -p xtask -- ci-evidence record --id security-mutation
+        run: cargo run --locked -q -p simplestchat-ci -- evidence record --id security-mutation
       - name: Preserve compact test-quality evidence
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

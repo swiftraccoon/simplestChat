@@ -1,7 +1,7 @@
 //! Tiny owned inputs and inert bootstrap tools. No component or candidate runs.
 
 use super::plan;
-use crate::ci::{command::Command, process::Executor};
+use simplestchat_ci::{command::Command, process::Executor};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     fs,

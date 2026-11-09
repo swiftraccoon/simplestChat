@@ -490,7 +490,7 @@ that requirement.
 The exact `RUSTSEC-2026-0459` record for `libsqlite3-sys@0.37.0` expires on
 2026-11-29 with the other dependency reviews. The hosted "Audit Rust
 dependencies" step does not read this ledger and applies the same exception
-through its fixed `--ignore` list in `xtask/src/ci/audit_rust/plan.rs`. The
+through its fixed `--ignore` list in `crates/ci/src/audit_rust/plan.rs`. The
 required test `libsqlite3_sys_stays_outside_the_linux_build_graph` in the same
 module runs `cargo tree --locked --offline --workspace --all-features --target
 x86_64-unknown-linux-gnu --target x86_64-unknown-linux-musl -e all -i

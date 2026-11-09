@@ -14,7 +14,7 @@ use super::{
     transport,
     worker::{self, Checkpoint},
 };
-use crate::ci::process::{Executor, Native};
+use simplestchat_ci::process::{Executor, Native};
 use simplestchat_ops::capacity_vps::protocol::{
     Action, Members, Mode, Outcome, Pin, Response, ResultData, RetirementPhase, Source, Unit,
     UnitState, Workload,

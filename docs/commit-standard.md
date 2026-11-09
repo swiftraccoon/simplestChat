@@ -113,7 +113,7 @@ git config --local core.hooksPath .githooks
 ```
 
 The [.githooks/commit-msg](../.githooks/commit-msg) hook checks the first line.
-CI's `xtask ci commit-subject` checks the selected branch tip, using the actual
+CI's `simplestchat-ci commit-subject` checks the selected branch tip, using the actual
 PR head instead of GitHub's generated merge message. Both validate subject
 syntax only. They do not establish that a description is imperative, that a
 scope fits, that a commit is coherent, or that its body, breaking footer and

@@ -16,11 +16,11 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const repository = fileURLToPath(new URL("../../", import.meta.url));
-execFileSync("cargo", ["build", "--locked", "-q", "-p", "xtask"], {
+execFileSync("cargo", ["build", "--locked", "-q", "-p", "simplestchat-ci"], {
   cwd: repository,
   stdio: "inherit",
 });
-const binary = path.join(repository, "target/debug/xtask");
+const binary = path.join(repository, "target/debug/simplestchat-ci");
 const gates = [
   "automation",
   "rust-lint",
@@ -78,7 +78,7 @@ function fixture(t) {
   return {
     evidence,
     run: (args, overrides = {}) =>
-      spawnSync(binary, ["ci-evidence", ...args, "--root", root], {
+      spawnSync(binary, ["evidence", ...args, "--root", root], {
         cwd: repository,
         encoding: "utf8",
         env: { ...env, ...overrides },
@@ -157,10 +157,10 @@ test("local evidence workflow calls the compiled producer with no Python YAML bo
     );
     assert.match(
       source,
-      /cargo run --locked -q -p xtask -- ci-evidence record --id/,
+      /cargo run --locked -q -p simplestchat-ci -- evidence record --id/,
     );
   }
-  assert.match(ci, /cargo run --locked -q -p xtask -- ci-evidence complete/);
+  assert.match(ci, /cargo run --locked -q -p simplestchat-ci -- evidence complete/);
   assert.match(
     ci.slice(ci.indexOf("\n  required:")),
     /Install the pinned Rust toolchain for required workflow policy\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,

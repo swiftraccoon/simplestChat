@@ -1,10 +1,10 @@
 //! Owned unsigned graph and synthetic successful-verifier observations.
 use super::*;
-use crate::ci::{
+use serde_json::{Value, json};
+use simplestchat_ci::{
     command::{Command, ReleaseRole},
     process::Executor,
 };
-use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest, Selection,
     assembly::{EvidenceSources, prepare_artifact},
@@ -251,12 +251,13 @@ impl Executor for Fake {
         writer.write_all(&self.outputs[index]).unwrap();
         nix::unistd::close(writer).unwrap();
         let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
-        let seal = |finished: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
-            sha256: finished.sha256,
-            bytes: finished.bytes,
-            metadata: finished.metadata,
-        };
-        proof.observed_io(Some(crate::ci::bounded_log::Captures {
+        let seal =
+            |finished: simplestchat_ci::bounded_log::Finished| simplestchat_ci::bounded_log::Seal {
+                sha256: finished.sha256,
+                bytes: finished.bytes,
+                metadata: finished.metadata,
+            };
+        proof.observed_io(Some(simplestchat_ci::bounded_log::Captures {
             stdout: seal(stdout?),
             stderr: seal(stderr?),
         }));

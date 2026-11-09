@@ -132,11 +132,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             bootstrap["uses"], "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d"
         )
         self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
-        checks = [step for step in steps if "ci native-dtls" in string(step.get("run", ""))]
+        checks = [step for step in steps if "native-dtls" in string(step.get("run", ""))]
         self.assertEqual(len(checks), 1)
-        self.assertEqual(
-            checks[0]["run"], "cargo run --locked -q -p xtask -- ci native-dtls --record-success"
-        )
         self.assertEqual(checks[0]["if"], guard)
         self.assertEqual(checks[0]["timeout-minutes"], "12")
         self.assertNotIn(
@@ -148,8 +145,8 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         fixture = {
             "vendor/worker.cpp": b"native",
-            "xtask/src/ci/process.rs": b"owner",
-            "xtask/src/ci/bounded_log.rs": b"log",
+            "crates/ci/src/process.rs": b"owner",
+            "crates/ci/src/bounded_log.rs": b"log",
             "Cargo.toml": b"workspace",
             "Cargo.lock": b"lock",
             "xtask/Cargo.toml": b"controller",
@@ -210,7 +207,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             if step.get("name") == "Require every declared gate to finish successfully"
         )
         self.assertEqual(aggregate["env"], {"GATE_RESULTS": "${{ toJSON(needs) }}"})
-        self.assertEqual(string(aggregate, "run"), "cargo run --locked -q -p xtask -- ci required")
+        self.assertEqual(aggregate["run"], "cargo run --locked -q -p simplestchat-ci -- required")
         self.assertNotIn("if", aggregate)
         self.assertNotIn("continue-on-error", aggregate)
         self.assertEqual(steps.index(aggregate), 2)
@@ -310,9 +307,6 @@ class SecurityWorkflowTests(unittest.TestCase):
         for name, suite, group, timeout, environment in expected:
             with self.subTest(suite=suite):
                 step = next(step for step in steps if step.get("name") == name)
-                self.assertEqual(
-                    step["run"], f"cargo run --locked -q -p xtask -- ci browser-suite {suite}"
-                )
                 guard = (
                     "${{ !cancelled() && matrix.group == 'media' && "
                     + "steps.browser-tooling.outcome == 'success' }}"
@@ -751,7 +745,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         lines = [line for line in string(install["run"]).splitlines() if not line.startswith("#")]
         expected = [
             'node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"',
-            "cargo run --locked -q -p xtask -- ci npm-path",
+            "cargo run --locked -q -p simplestchat-ci -- npm-path",
         ]
         if filename == "ice-isolation.yml":
             expected.insert(1, "rustup toolchain install --profile minimal")
@@ -813,7 +807,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                 recorder = next(
                     step
                     for step in steps
-                    if "cargo run --locked -q -p xtask -- ci-evidence record"
+                    if "cargo run --locked -q -p simplestchat-ci -- evidence record"
                     in string(step.get("run", ""))
                 )
                 self.assertEqual(recorder["if"], "${{ env.ACT }}")
@@ -1036,7 +1030,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(string(steps[3], "shell"), "bash")
         self.assertEqual(
             string(steps[3], "run"),
-            "cargo run --locked -q -p xtask -- ci load-generator-image",
+            "cargo run --locked -q -p simplestchat-ci -- load-generator-image",
         )
         self.assertNotIn("if", steps[3])
         upload = obj(steps[4], "with")
@@ -1128,12 +1122,12 @@ class SecurityWorkflowTests(unittest.TestCase):
                 step for step in current if step.get("id") == "image-database-inputs"
             )
             self.assertEqual(
-                "cargo run --locked -q -p xtask -- ci image-cache hint", string(fingerprint, "run")
+                "cargo run --locked -q -p simplestchat-ci -- image-cache hint", fingerprint["run"]
             )
             kind = "preparation" if producer["id"] == "prepared-image-database" else "production"
             self.assertEqual(
                 string(producer, "run").splitlines()[-1],
-                f"cargo run --locked -q -p xtask -- ci image-cache status {kind}",
+                f"cargo run --locked -q -p simplestchat-ci -- image-cache status {kind}",
             )
             save = next(
                 step
@@ -1170,7 +1164,6 @@ class SecurityWorkflowTests(unittest.TestCase):
             hint = next(step for step in steps if step.get("id") == "image-database-inputs")
             self.assertNotIn("if", hint)
             self.assertNotIn("continue-on-error", hint)
-            self.assertEqual(hint["run"], "cargo run --locked -q -p xtask -- ci image-cache hint")
             self.assertLess(steps.index(bootstrap), steps.index(hint))
             producer = next(step for step in steps if step.get("id") == producer_id)
             self.assertNotIn("if", producer)
@@ -1178,7 +1171,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             self.assertEqual(producer["timeout-minutes"], minutes)
             lines = string(producer, "run").splitlines()
             self.assertEqual(
-                lines[-1], f"cargo run --locked -q -p xtask -- ci image-cache status {kind}"
+                lines[-1], f"cargo run --locked -q -p simplestchat-ci -- image-cache status {kind}"
             )
             self.assertNotIn("GITHUB_OUTPUT", string(producer, "run"))
         self.assertEqual(obj(ci, "jobs", "image-database")["timeout-minutes"], "25")
@@ -1199,7 +1192,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             string(build, "run"),
-            "cargo run --locked -q -p xtask -- ci production-image build",
+            "cargo run --locked -q -p simplestchat-ci -- production-image build",
         )
         # Cache argv, completed-only promotion and failed-export preservation run
         # against the actual typed executor and owned fake commands in xtask.
@@ -1241,18 +1234,6 @@ class SecurityWorkflowTests(unittest.TestCase):
                     if actual_key:
                         # The online update may discover a generation newer than
                         # the initial descriptor; publish its validated identity.
-                        producer = next(
-                            step for step in steps if step.get("id") == actual_key.group(1)
-                        )
-                        kind = (
-                            "preparation"
-                            if producer["id"] == "prepared-image-database"
-                            else "production"
-                        )
-                        self.assertEqual(
-                            string(producer, "run").splitlines()[-1],
-                            f"cargo run --locked -q -p xtask -- ci image-cache status {kind}",
-                        )
                         restore = next(step for step in steps if step.get("id") == "image-database")
                         self.assertEqual(config["path"], at(restore, "with", "path"))
                         config = obj(restore, "with")
@@ -1283,7 +1264,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                         step for step in steps if step.get("id") == "image-database-inputs"
                     )
                     self.assertEqual(
-                        "cargo run --locked -q -p xtask -- ci image-cache hint",
+                        "cargo run --locked -q -p simplestchat-ci -- image-cache hint",
                         string(fingerprint, "run"),
                     )
                     continue

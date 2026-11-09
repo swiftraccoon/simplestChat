@@ -37,12 +37,12 @@ jobs:
         with:
           toolchain: 1.99.0
       - name: Build cache maintenance without credentials
-        run: cargo build --locked -q -p xtask
+        run: cargo build --locked -q -p simplestchat-ci
       - name: Retain current caches and prune obsolete allowed families
         env:
           GH_TOKEN: ${{ github.token }}
           MAINTENANCE_RUN: ${{ github.event.workflow_run.id }}
           MAINTENANCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          target/debug/xtask ci-retention --apply \
+          target/debug/simplestchat-ci retention --apply \
             --run-id "$MAINTENANCE_RUN" --revision "$MAINTENANCE_SHA"

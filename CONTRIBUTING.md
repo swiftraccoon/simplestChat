@@ -9,8 +9,9 @@ Start with [development setup](docs/development.md), then the
 README a quick introduction; put detailed explanations alongside the system
 they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 The [workspace layout](docs/development.md#workspace-layout) names each crate:
-new crates go under `crates/`, and helpers several tools share belong in
-`simplestchat-toolkit` rather than in `xtask`.
+new crates go under `crates/`, hosted CI steps belong in `simplestchat-ci`,
+and helpers several tools share belong in `simplestchat-toolkit` rather than in
+`xtask`.
 
 ## Standards for new work
 
@@ -35,7 +36,7 @@ The complete [local CI workflow](docs/testing.md#run-ci-locally) is available on
 the clean committed tree when full verification is needed:
 
 ```sh
-cargo run --locked -q -p xtask -- ci-local all --base origin/main
+cargo run --locked -q -p simplestchat-ci -- local all --base origin/main
 ```
 
 The local runner executes the same correctness and security workflows in an

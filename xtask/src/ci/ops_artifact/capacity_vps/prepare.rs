@@ -2,7 +2,7 @@
 //! signal owner while it owns the lease and Ansible groups simultaneously.
 
 use super::{Result, failure, tools::Invocation};
-use crate::ci::{command::Command, process::Preparation};
+use simplestchat_ci::{command::Command, process::Preparation};
 use simplestchat_ops::capacity_vps::protocol::{Action, Header, Response, ResultData};
 use std::sync::{
     Arc, Mutex,

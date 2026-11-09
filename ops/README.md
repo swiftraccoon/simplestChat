@@ -625,7 +625,7 @@ observation. The library separates `collect_inputs(source_root)` from the pure
 toolchain resolved, registry accessed, artifact generated or candidate run.
 
 The `workspace-ops-capacity-v2` inventory selects original bytes of `Cargo.toml`,
-`Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the Ops/load-test/xtask/toolkit
+`Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the Ops/load-test/xtask/toolkit/CI
 manifests, the two current mediasoup path-patch manifests, and every regular
 `*.rs` under `ops/src`, the load-test library entry and capacity dispatcher, and
 Rust files under its `capacity`, `capacity_run` and `owned_process` directories.

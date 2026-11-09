@@ -79,7 +79,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Configure native dependencies and media address
         run: |
@@ -101,7 +101,7 @@ jobs:
       - name: Check test helpers
         # TLS fixtures need the authenticated OpenSSL CLI, not macOS LibreSSL.
         run: |
-          cargo build --locked -q -p xtask
+          cargo build --locked -q -p xtask -p simplestchat-ci
           node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
 
       - name: Build server with both authenticated crypto libraries

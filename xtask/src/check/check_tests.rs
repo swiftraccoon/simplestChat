@@ -10,15 +10,17 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 #[test]
 fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selected() {
+    // Both tool binaries compile before the pinned native libraries exist;
+    // only the CI crate's optional HTTPS clients may add native TLS.
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let graph = |features: &[&str]| {
+    let graph = |package: &str, features: &[&str]| {
         let output = std::process::Command::new(env!("CARGO"))
             .args([
                 "tree",
                 "--locked",
                 "--offline",
                 "-p",
-                "xtask",
+                package,
                 "--target",
                 "x86_64-unknown-linux-gnu",
                 "--edges",
@@ -37,15 +39,17 @@ fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selecte
         );
         String::from_utf8(output.stdout).unwrap()
     };
-    let bootstrap = graph(&[]);
-    for dependency in ["native-tls v", "openssl v", "openssl-sys v", "aws-lc-sys v"] {
-        assert!(
-            !bootstrap.lines().any(|line| line.starts_with(dependency)),
-            "bootstrap unexpectedly requires {dependency}"
-        );
+    for package in ["xtask", "simplestchat-ci"] {
+        let bootstrap = graph(package, &[]);
+        for dependency in ["native-tls v", "openssl v", "openssl-sys v", "aws-lc-sys v"] {
+            assert!(
+                !bootstrap.lines().any(|line| line.starts_with(dependency)),
+                "{package} bootstrap unexpectedly requires {dependency}"
+            );
+        }
     }
     for feature in ["public-smoke", "release-http-policy"] {
-        let client = graph(&["--features", feature]);
+        let client = graph("simplestchat-ci", &["--features", feature]);
         assert!(client.lines().any(|line| line.starts_with("openssl-sys v")));
     }
 }
@@ -73,8 +77,8 @@ const SOURCES: &[&str] = &[
     "ops/ansible/filter_plugins/filter.py",
     "ops/ansible/tests/test_new\ncase.py",
     "typings/fixture/nested.pyi",
-    "xtask/src/ci/release_http_policy/oracle.py",
-    "xtask/src/ci/release_http_policy/__init__.py",
+    "crates/ci/src/release_http_policy/oracle.py",
+    "crates/ci/src/release_http_policy/__init__.py",
 ];
 const DISPATCH: &str = r#"
 {
@@ -203,7 +207,7 @@ impl Fixture {
             "results/generated.py",
             "vendor/upstream.py",
             "reference/example.py",
-            "xtask/src/ci/release_http_policy/reference/build/release_http_policy.py",
+            "crates/ci/src/release_http_policy/reference/build/release_http_policy.py",
         ]) {
             fixture.write(name, "# inert source\n");
         }
@@ -648,7 +652,7 @@ fn helper_test_filenames_with_spaces_stay_one_argument() {
 }
 
 #[test]
-fn shared_xtask_inventory_tracks_the_actual_cargo_consumers() {
+fn shared_executable_inventory_tracks_the_actual_cargo_consumers() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     // This is a conservative maintained-source policy, not a JavaScript parser.
     // Inspect literal Cargo commands independently of their imported API name,
@@ -664,7 +668,8 @@ fn shared_xtask_inventory_tracks_the_actual_cargo_consumers() {
         ])
         .filter(|path| {
             let source = fs::read_to_string(path).unwrap();
-            cargo.is_match(&source) && source.contains("xtask")
+            cargo.is_match(&source)
+                && (source.contains("xtask") || source.contains("simplestchat-ci"))
         })
         .map(|path| {
             path.strip_prefix(root)
@@ -675,13 +680,13 @@ fn shared_xtask_inventory_tracks_the_actual_cargo_consumers() {
         })
         .collect::<Vec<_>>();
     consumers.sort();
-    assert_eq!(consumers, SHARED_XTASK_TESTS);
+    assert_eq!(consumers, SHARED_EXECUTABLE_TESTS);
 }
 
 #[test]
 fn helper_pools_preserve_each_test_once_and_stop_at_the_first_failed_pool() {
     let fixture = Fixture::new();
-    for path in SHARED_XTASK_TESTS {
+    for path in SHARED_EXECUTABLE_TESTS {
         fixture.write(path, "never execute this fixture\n");
     }
     fixture.run(&["--helpers"], &[]).unwrap();
@@ -705,7 +710,7 @@ fn helper_pools_preserve_each_test_once_and_stop_at_the_first_failed_pool() {
         nodes[1].arguments,
         ["--test", "--test-concurrency=1"]
             .into_iter()
-            .chain(SHARED_XTASK_TESTS.iter().copied())
+            .chain(SHARED_EXECUTABLE_TESTS.iter().copied())
             .collect::<Vec<_>>()
     );
     for (phase, count, code) in [("helper-tests", 1, 37), ("serial-helper-tests", 2, 41)] {
@@ -809,7 +814,7 @@ fs.writeFileSync('target/debug/xtask', '#!/bin/sh\nprintf "fixture-cli\\n"\n', {
     )
     .unwrap();
     fs::set_permissions(fixture.bin.join("cargo"), fs::Permissions::from_mode(0o755)).unwrap();
-    for path in SHARED_XTASK_TESTS {
+    for path in SHARED_EXECUTABLE_TESTS {
         fixture.write(
             path,
             r#"
@@ -864,7 +869,7 @@ test('the independent helper pool admits both barrier workers', async () => {{
     }
     fixture.run(&["--helpers"], &[]).unwrap();
     assert!(!fixture.root.join(".shared-cli-lease").exists());
-    for path in SHARED_XTASK_TESTS {
+    for path in SHARED_EXECUTABLE_TESTS {
         assert_eq!(
             fs::read(fixture.root.join(format!(
                 "ran-{}",
@@ -1162,8 +1167,9 @@ fn python_rejects_new_source_roots_before_any_checker() {
         "new-owned-root/module.py",
         "build/unapproved.pyi",
         "typings/unapproved.py",
-        "xtask/src/ci/other/module.py",
-        "xtask/src/ci/release_http_policy_unapproved/module.py",
+        "crates/ci/src/other/module.py",
+        "crates/ci/src/release_http_policy_unapproved/module.py",
+        "xtask/src/ci/release_http_policy/module.py",
     ] {
         let fixture = Fixture::new();
         fixture.write(source, "# policy must be explicit\n");

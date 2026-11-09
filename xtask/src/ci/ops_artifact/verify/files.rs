@@ -2,9 +2,9 @@
 
 use super::super::namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun};
 use super::{BUNDLE, SMALL, failure, hash::Checkpoint, io, request::Request};
-use crate::ci::{bounded_log::Log, command::SeparateLogs};
 use rustix::fs::{Mode, OFlags};
 use sha2::{Digest, Sha256};
+use simplestchat_ci::{bounded_log::Log, command::SeparateLogs};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -651,7 +651,7 @@ impl Output {
     pub fn capture_read(
         &mut self,
         names: &[String; 2],
-        seals: &crate::ci::bounded_log::Captures,
+        seals: &simplestchat_ci::bounded_log::Captures,
         checkpoint: &Checkpoint,
     ) -> Result<Vec<u8>> {
         let mut stdout = None;

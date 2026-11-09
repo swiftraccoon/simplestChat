@@ -77,7 +77,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       # The candidate server starts from this checkout and refuses to start without
       # the bundle; load_test bench local copies it into a baseline that has none.
@@ -93,7 +93,7 @@ jobs:
           BASELINE_REF: ${{ inputs.baseline || 'HEAD~1' }}
           CLIENTS: ${{ inputs.clients || '10' }}
           WORKERS: ${{ inputs.workers || '1' }}
-        run: cargo run --locked -q -p xtask -- ci performance-compare
+        run: cargo run --locked -q -p simplestchat-ci -- performance-compare
 
       - name: Evaluate the regression budget
         if: ${{ !cancelled() }}
@@ -139,7 +139,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Build the server and the generator
         run: |
@@ -242,7 +242,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Build server and load generator
         run: cargo build --locked --workspace --bins
@@ -274,7 +274,7 @@ jobs:
           SOAK_POSTGRES_ID: ${{ job.services.postgres.id }}
           SOAK_POSTGRES_NETWORK: ${{ job.services.postgres.network }}
           SOAK_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
-        run: cargo run --locked -q -p xtask -- ci session-soak
+        run: cargo run --locked -q -p simplestchat-ci -- session-soak
 
       - name: Preserve soak diagnostics
         if: ${{ !cancelled() }}
@@ -331,7 +331,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          cargo run --locked -q -p xtask -- ci npm-path
+          cargo run --locked -q -p simplestchat-ci -- npm-path
 
       - name: Build the exact server and authenticated generator
         run: cargo build --locked --release --workspace --bins

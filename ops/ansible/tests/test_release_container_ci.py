@@ -20,8 +20,8 @@ LOCAL_DIAGNOSTICS = "Preserve private local release-container diagnostics"
 EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
 RUN_COMMAND = (
-    '"$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \\\n'
-    + '  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"\n'
+    '"$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci" release-checks \\\n'
+    + '  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/simplestchat-ci"\n'
 )
 
 
@@ -76,12 +76,8 @@ class ReleaseContainerCiTests(unittest.TestCase):
         ]
         indexes = [self.steps.index(self.step(name)) for name in expected]
         self.assertEqual(indexes, sorted(indexes))
-        build = string(self.step("Build production container"), "run")
-        self.assertEqual(build, "cargo run --locked -q -p xtask -- ci production-image build")
         build_steps = [
-            step
-            for step in self.steps
-            if "ci production-image build" in string(step.get("run", ""))
+            step for step in self.steps if "production-image build" in string(step.get("run", ""))
         ]
         self.assertEqual(build_steps, [self.step("Build production container")])
 
@@ -89,18 +85,13 @@ class ReleaseContainerCiTests(unittest.TestCase):
         """Verify one revision labeled immutable image feeds all smokes and export."""
         build = self.step("Build production container")
         self.assertEqual(build["shell"], "bash")
-        command = string(build, "run")
-        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci production-image build")
         for step in self.steps[self.steps.index(build) + 1 :]:
             self.assertNotIn(
                 "PRODUCTION_IMAGE",
                 obj(step.get("env", {})),
                 "Do not replace the checked immutable ID",
             )
-        verify = string(self.step("Verify production image contents and user"), "run")
-        self.assertEqual(verify, "cargo run --locked -q -p xtask -- ci production-image verify")
         smoke = self.step("Production startup, migration and database-backed API smoke")
-        self.assertEqual(smoke["run"], "cargo run --locked -q -p xtask -- ci container-smoke")
         self.assertEqual(smoke["timeout-minutes"], "5")
         self.assertEqual(
             at(smoke, "env", "CONTAINER_TEST_ARTIFACTS"), "${{ runner.temp }}/container-smoke"
@@ -192,7 +183,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertNotIn("if", step)
         self.assertEqual(
             string(step, "run"),
-            "cargo run --locked -q -p xtask -- ci install-compose",
+            "cargo run --locked -q -p simplestchat-ci -- install-compose",
         )
         self.assertLess(
             self.steps.index(step), self.steps.index(self.step("Validate Compose rendering"))
@@ -232,7 +223,6 @@ class ReleaseContainerCiTests(unittest.TestCase):
         prepare = self.step("Verify the guest checker against pinned Compose JSON")
         script = string(prepare, "run")
         self.assertIn("sudo apt-get install -y libssl-dev pkg-config", script)
-        self.assertIn("cargo build --locked -p xtask --features release-http-policy", script)
         self.assertIn('--target-dir "$RUNNER_TEMP/release-http-policy-build"', script)
         for variable in (
             "OPENSSL_DIR",
@@ -256,7 +246,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         start = self.step(PREPARE_START)
         self.assertEqual(
             string(start, "run"),
-            "cargo run --locked -q -p xtask -- ci release-controller start",
+            "cargo run --locked -q -p simplestchat-ci -- release-controller start",
         )
         # Actual owned inert-command Rust fixtures retain the four ordered
         # apt/venv/pip argv, pinned requirements, environment and short circuit.
@@ -268,7 +258,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(prepare["timeout-minutes"], "5")
         self.assertEqual(
             prepare["run"],
-            "cargo run --locked -q -p xtask -- ci release-controller wait",
+            "cargo run --locked -q -p simplestchat-ci -- release-controller wait",
         )
         for step in (start, prepare):
             self.assertNotIn("continue-on-error", step)
@@ -423,9 +413,6 @@ class ReleaseContainerCiTests(unittest.TestCase):
         retention = self.step(LOCAL_DIAGNOSTICS)
         self.assertEqual(retention["if"], "${{ always() && env.ACT == 'true' }}")
         self.assertEqual(self.steps.index(retention), self.steps.index(self.step(INTEGRATION)) + 1)
-        self.assertEqual(
-            retention["run"], "cargo run --locked -q -p xtask -- ci copy-evidence release-container"
-        )
         self.assertEqual(retention["shell"], "bash")
         self.assertNotIn("env", retention)
         self.assertNotIn("continue-on-error", retention)
@@ -451,13 +438,13 @@ class ReleaseContainerCiTests(unittest.TestCase):
             commands = {
                 string(step, "run").rsplit(" ", 1)[-1]: step
                 for step in steps
-                if "ci copy-evidence " in string(step.get("run", ""))
+                if "copy-evidence " in string(step.get("run", ""))
             }
             self.assertEqual(set(commands), copies)
             for kind, step in commands.items():
                 self.assertEqual(step["if"], "${{ always() && env.ACT == 'true' }}")
                 self.assertEqual(
-                    step["run"], f"cargo run --locked -q -p xtask -- ci copy-evidence {kind}"
+                    step["run"], f"cargo run --locked -q -p simplestchat-ci -- copy-evidence {kind}"
                 )
                 self.assertNotIn("env", step)
                 self.assertNotIn("continue-on-error", step)

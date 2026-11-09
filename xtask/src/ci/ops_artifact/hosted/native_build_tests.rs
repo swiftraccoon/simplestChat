@@ -2,10 +2,10 @@
 use super::{
     archive::Graph, files::Tree, fixture, kit, native_build as native, plan, tools::Tools,
 };
-use crate::ci::{
+use crate::ci::ops_artifact::namespace::Budget;
+use simplestchat_ci::{
     bounded_log::{Captures, Seal},
     command::{Command, ReleaseRole, SeparateLogs},
-    ops_artifact::namespace::Budget,
     process::Executor,
 };
 use simplestchat_toolkit::tooling::{Environment, Failure, Result};

@@ -1,7 +1,7 @@
 //! Inert selected-tool supervision regressions.
 
 use super::{fixture::*, namespace::*, *};
-use crate::ci::{
+use simplestchat_ci::{
     command::{Command, Program},
     process::{Executor, Native},
 };

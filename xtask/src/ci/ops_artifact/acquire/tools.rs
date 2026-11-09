@@ -2,7 +2,7 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, plan, request::Request};
-use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+use simplestchat_ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use simplestchat_toolkit::{
     executable::{self, Executable},
     tooling::{Environment, Result},
@@ -17,7 +17,7 @@ use std::{
     time::Instant,
 };
 
-pub(in crate::ci) use crate::ci::bounded_log::Captures;
+pub(in crate::ci) use simplestchat_ci::bounded_log::Captures;
 
 struct Context {
     directory: PathBuf,

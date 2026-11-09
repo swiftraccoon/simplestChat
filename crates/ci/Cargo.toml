@@ -1,0 +1,53 @@
+[package]
+name = "simplestchat-ci"
+description = "Hosted CI steps and the bounded command runner they share with the release control plane"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "simplestchat-ci"
+path = "src/main.rs"
+
+[features]
+# CI keys and setup commands must compile before the pinned native libraries exist.
+public-smoke = ["dep:futures-util", "dep:reqwest", "dep:tokio-tungstenite"]
+release-http-policy = ["dep:reqwest"]
+# Lets a dependent's tests read a bounded log's original pipe descriptors.
+# Dependents enable it only from `[dev-dependencies]`, so their normal and
+# release builds leave it off; `--all-features` builds compile `Log::pipe_fds`,
+# which only tests call.
+test-hooks = []
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+futures-util = { version = "0.3.34", optional = true }
+nix = { version = "0.31.3", default-features = false }
+rawzip = "=0.5.2"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"], optional = true }
+rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
+serde_json = { version = "1.0.151", features = ["raw_value"] }
+sha2 = "0.11.0"
+simplestchat-ops = { path = "../../ops", default-features = false }
+simplestchat-toolkit = { path = "../toolkit" }
+tokio = { version = "1.53.3", features = ["full"] }
+tokio-tungstenite = { version = "0.30.0", features = ["native-tls"], optional = true }
+url = "2.5.8"
+
+[dev-dependencies]
+# Tests inject signal receivers; this crate's own normal and release builds leave the hooks off.
+simplestchat-toolkit = { path = "../toolkit", features = ["test-hooks"] }
+tar = { version = "=0.4.46", default-features = false }
+toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }

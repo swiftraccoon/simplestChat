@@ -2,9 +2,9 @@
 
 use super::super::namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun, Permit};
 use super::{archive, failure, hash::Checkpoint, io, tools::Captures};
-use crate::ci::{bounded_log::Log, command::SeparateLogs};
 use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 use sha2::{Digest, Sha256};
+use simplestchat_ci::{bounded_log::Log, command::SeparateLogs};
 use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},

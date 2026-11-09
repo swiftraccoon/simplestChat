@@ -2,11 +2,11 @@
 //! cryptography, VM, candidate or installer is executed by these fixtures.
 
 use super::{plan, receipt, sources};
-use crate::ci::{
+use serde_json::{Value, json};
+use simplestchat_ci::{
     command::{Command, Program, ReleaseRole},
     process::Executor,
 };
-use serde_json::{Value, json};
 use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     collections::BTreeMap,
@@ -278,7 +278,7 @@ impl Executor for Fake {
             Ok(())
         })();
         if let Err(error) = admitted {
-            let _ = crate::ci::process::settle_unforwarded(command).await;
+            let _ = simplestchat_ci::process::settle_unforwarded(command).await;
             return Err(error);
         }
         let output = match command.program {
@@ -302,11 +302,12 @@ impl Executor for Fake {
         });
         let (written, stdout, stderr) =
             tokio::join!(writer, logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
-            sha256: value.sha256,
-            bytes: value.bytes,
-            metadata: value.metadata,
-        };
+        let seal =
+            |value: simplestchat_ci::bounded_log::Finished| simplestchat_ci::bounded_log::Seal {
+                sha256: value.sha256,
+                bytes: value.bytes,
+                metadata: value.metadata,
+            };
         let captures = match (stdout, stderr) {
             (Ok(stdout), Ok(stderr)) if stdout.complete && stderr.complete => {
                 Some(super::tools::Captures {

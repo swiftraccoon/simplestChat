@@ -170,6 +170,39 @@ pub fn pinned_toolchain(root: &Path) -> Result<String> {
         .ok_or_else(|| Failure::new(2, "Cannot read the pinned Rust toolchain."))
 }
 
+/// The program and arguments that run one xtask developer gate from another
+/// tool through the pinned toolchain:
+/// `rustup run <channel> cargo run --locked -q -p xtask -- <command>`.
+pub fn xtask_command<I, S>(channel: &str, command: I) -> (OsString, Vec<OsString>)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut arguments: Vec<OsString> = [
+        "run", channel, "cargo", "run", "--locked", "-q", "-p", "xtask", "--",
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect();
+    arguments.extend(
+        command
+            .into_iter()
+            .map(|argument| argument.as_ref().to_owned()),
+    );
+    ("rustup".into(), arguments)
+}
+
+/// Run [`xtask_command`] in `root` with exactly `environment`.
+pub fn run_xtask(
+    root: &Path,
+    environment: &Environment,
+    channel: &str,
+    command: &[&str],
+) -> Result<()> {
+    let (program, arguments) = xtask_command(channel, command);
+    run(root, environment, program, arguments)
+}
+
 /// Pin compiler paths and put their directory before incompatible system tools.
 pub fn pin_compilers(root: &Path, environment: &mut Environment, channel: &str) -> Result<()> {
     for (name, executable) in [("RUSTC", "rustc"), ("RUSTDOC", "rustdoc")] {

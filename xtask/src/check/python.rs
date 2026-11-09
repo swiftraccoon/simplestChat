@@ -50,7 +50,7 @@ pub(super) fn run(root: &Path, environment: &Environment) -> tooling::Result<()>
     {
         if source.starts_with(b"vendor/")
             || source.starts_with(b"reference/")
-            || source.starts_with(b"xtask/src/ci/release_http_policy/reference/")
+            || source.starts_with(b"crates/ci/src/release_http_policy/reference/")
         {
             continue;
         }
@@ -61,7 +61,7 @@ pub(super) fn run(root: &Path, environment: &Environment) -> tooling::Result<()>
                 b"ops/ansible/callback_plugins/",
                 b"ops/ansible/filter_plugins/",
                 b"ops/ansible/tests/",
-                b"xtask/src/ci/release_http_policy/",
+                b"crates/ci/src/release_http_policy/",
             ]
             .iter()
             .any(|prefix| source.starts_with(prefix)))
