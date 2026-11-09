@@ -1,8 +1,10 @@
 //! Bounded native commands reuse the browser supervisor's reserved group guard.
 
-use super::command::{Command, Program, SeparateLogs};
+use super::bounded_log::{Captures, Seal};
+use super::command::{Command, Program, ReleaseRole, SeparateLogs};
 use crate::ci::browser_suite::process::{Group, Signals, exited};
 use rustix::process::Signal;
+use simplestchat_toolkit::replay::{Finalize, Finalizer, replay_output};
 use simplestchat_toolkit::tooling::Environment;
 use simplestchat_toolkit::tooling::{self, Failure, Result};
 use std::fs::File;
@@ -20,9 +22,9 @@ pub(super) trait Executor {
     async fn ready(&mut self) -> Result<()>;
     /// Hold the exact preparation lease until the owned Ansible group and both
     /// of its streams settle. The native owner borrows its existing signals.
-    async fn vps_prepare(
+    async fn vps_prepare<P: Preparation>(
         &mut self,
-        invocation: super::ops_artifact::capacity_vps::prepare::PrepareInvocation,
+        invocation: P,
         _: std::time::Instant,
     ) -> Result<()> {
         vps_prepare::refuse(invocation).await
@@ -36,6 +38,21 @@ pub(super) trait Executor {
     fn cleanup_passed(&self) -> bool {
         true
     }
+}
+
+/// One paired private-VPS preparation: the lease and Ansible commands, and
+/// the checks the native owner makes while it holds both groups.
+pub(super) trait Preparation {
+    /// Both commands, once.
+    fn take_commands(&mut self) -> Result<(Command, Command)>;
+    /// Recheck both proofs' original inputs and deadlines.
+    fn check(&self) -> Result<()>;
+    /// The lease's ready record, once its accepted stdout prefix holds one.
+    fn ready_bytes(&self, progress: (u64, &str)) -> Result<Option<Vec<u8>>>;
+    /// Accept that ready record, once.
+    fn ready(&self, bytes: &[u8]) -> Result<()>;
+    /// The final admission, after every command and stream has retired.
+    fn finish(&self) -> Result<()>;
 }
 
 pub(super) struct Native<'a> {
@@ -78,29 +95,8 @@ impl<'a> Native<'a> {
     ) -> Result<Vec<u8>> {
         let mdns = request.mdns.clone();
         let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
-        let retained_ops = request.retained_ops.clone();
-        let ops_acquire = request.ops_acquire.clone();
-        let hosted_ops = request.hosted_ops.clone();
-        let ops_runtime = request.ops_runtime.clone();
-        let ops_vps = request.ops_vps.clone();
-        let frontend = request.frontend.clone();
-        let frontend_admission = frontend
-            .as_ref()
-            .map(|proof| proof.begin(&request))
-            .transpose();
-        let vps_admission = ops_vps
-            .as_ref()
-            .map(|proof| proof.begin(&request))
-            .transpose();
-        let runtime_admission = ops_runtime
-            .as_ref()
-            .map(|proof| proof.begin(&request))
-            .transpose();
-        let hosted_admission = hosted_ops
-            .as_ref()
-            .map(|proof| proof.begin(&request))
-            .transpose();
-        let acquire_admission = ops_acquire
+        let release = request.release.clone();
+        let release_admission = release
             .as_ref()
             .map(|proof| proof.begin(&request))
             .transpose();
@@ -109,7 +105,6 @@ impl<'a> Native<'a> {
             .as_ref()
             .map(|p| p.begin(&request))
             .transpose();
-        let retained_admission = retained_ops.as_ref().map(|v| v.begin()).transpose();
         let benchmark = request.benchmark.clone();
         #[cfg(feature = "release-http-policy")]
         let release_http = request.release_http.clone();
@@ -132,12 +127,7 @@ impl<'a> Native<'a> {
         let cleanup = request.cleanup;
         let result = match admission
             .and(mdns_admission.map(|_| ()))
-            .and(retained_admission.map(|_| ()))
-            .and(acquire_admission.map(|_| ()))
-            .and(hosted_admission.map(|_| ()))
-            .and(runtime_admission.map(|_| ()))
-            .and(vps_admission.map(|_| ()))
-            .and(frontend_admission.map(|_| ()))
+            .and(release_admission.map(|_| ()))
             .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
             .and({
@@ -160,22 +150,7 @@ impl<'a> Native<'a> {
         if let Some(proof) = release_http {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
-        if let Some(proof) = retained_ops {
-            proof.observed_io(closed.as_ref().ok().cloned().flatten());
-        }
-        if let Some(proof) = ops_acquire {
-            proof.observed_io(closed.as_ref().ok().cloned().flatten());
-        }
-        if let Some(proof) = hosted_ops {
-            proof.observed_io(closed.as_ref().ok().cloned().flatten());
-        }
-        if let Some(proof) = ops_runtime {
-            proof.observed_io(closed.as_ref().ok().cloned().flatten());
-        }
-        if let Some(proof) = ops_vps {
-            proof.observed_io(closed.as_ref().ok().cloned().flatten());
-        }
-        if let Some(proof) = &frontend {
+        if let Some(proof) = &release {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(mdns) = mdns {
@@ -186,7 +161,7 @@ impl<'a> Native<'a> {
         if owned_io && !cleanup {
             self.ready().await?;
         }
-        if let Some(proof) = frontend {
+        if let Some(proof) = release {
             proof.completed()?;
         }
         Ok(output)
@@ -216,11 +191,10 @@ impl<'a> Native<'a> {
             ));
         }
         if request.ops_stage_dispatch.is_some()
-            && !match request.program {
-                Program::OpsGit => request.source_git.is_some(),
-                Program::OpsCargo | Program::OpsRustc => request.ops.is_some(),
-                _ => false,
-            }
+            && !request
+                .release
+                .as_ref()
+                .is_some_and(|proof| proof.role().bounds_dispatch(request.program))
         {
             return Err(Failure::new(
                 1,
@@ -229,27 +203,20 @@ impl<'a> Native<'a> {
         }
         let (root, environment) = if let Some(proof) = &request.benchmark {
             proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.retained_ops {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.ops_acquire {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.hosted_ops {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.ops_runtime {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.ops_vps {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.frontend {
-            proof.context(request.program, &request.arguments)?
-        } else if let Some(proof) = &request.source_git {
-            proof.context()?.unwrap_or((self.root, self.environment))
-        } else if let Some(proof) = &request.ops {
-            let role = match request.program {
-                Program::OpsCargo => super::ops_artifact::recipe::Role::Cargo,
-                Program::OpsRustc => super::ops_artifact::recipe::Role::Rustc,
-                _ => return Err(Failure::new(1, "CI Ops producer role invalid.")),
-            };
-            proof.context(role)?
+        } else if let Some(proof) = &request.release {
+            // A producer derives its compiler role from the program. Only a
+            // source Git proof without its own context runs in the runner's
+            // checkout and environment; any other role must supply its own.
+            match proof.context(request.program, &request.arguments)? {
+                Some(context) => context,
+                None if proof.role() == ReleaseRole::SourceGit => (self.root, self.environment),
+                None => {
+                    return Err(Failure::new(
+                        1,
+                        "CI execution requires its validated executable role.",
+                    ));
+                }
+            }
         } else {
             match request.comparison.as_ref() {
                 Some(invocation) => invocation.context(
@@ -302,31 +269,25 @@ impl<'a> Native<'a> {
         } else {
             command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
         }
-        if let Some(proof) = &request.retained_ops {
-            if !request.cleanup {
-                self.ready().await?;
+        if let Some(proof) = &request.release {
+            match proof.role() {
+                // Their only recheck is the executable selection above.
+                ReleaseRole::Producer | ReleaseRole::SourceGit => {}
+                ReleaseRole::Retained => {
+                    if !request.cleanup {
+                        self.ready().await?;
+                    }
+                    proof.validate(request.program, &request.arguments)?;
+                }
+                ReleaseRole::Acquire
+                | ReleaseRole::Hosted
+                | ReleaseRole::Runtime
+                | ReleaseRole::Vps
+                | ReleaseRole::Frontend => {
+                    self.ready().await?;
+                    proof.validate(request.program, &request.arguments)?;
+                }
             }
-            proof.validate(request.program, &request.arguments)?;
-        }
-        if let Some(proof) = &request.ops_acquire {
-            self.ready().await?;
-            proof.validate(request.program, &request.arguments)?;
-        }
-        if let Some(proof) = &request.hosted_ops {
-            self.ready().await?;
-            proof.validate(request.program, &request.arguments)?;
-        }
-        if let Some(proof) = &request.ops_runtime {
-            self.ready().await?;
-            proof.validate(request.program, &request.arguments)?;
-        }
-        if let Some(proof) = &request.ops_vps {
-            self.ready().await?;
-            proof.validate(request.program, &request.arguments)?;
-        }
-        if let Some(proof) = &request.frontend {
-            self.ready().await?;
-            proof.validate(request.program, &request.arguments)?;
         }
         if let Some(proof) = &request.benchmark {
             if !request.cleanup {
@@ -469,18 +430,7 @@ impl<'a> Native<'a> {
             let _ = tokio::time::timeout(request.grace, exited(pid)).await;
         }
         let (cleaned, reaped) = finalizer.finish(&mut group).await;
-        if let Some(proof) = &request.ops_vps {
-            use std::os::unix::process::ExitStatusExt;
-            proof.observed_exit(
-                reaped.as_ref().ok().and_then(|status| {
-                    status
-                        .code()
-                        .or_else(|| status.signal().map(|signal| -signal))
-                }),
-                cleaned && reaped.is_ok(),
-            );
-        }
-        if let Some(proof) = &request.frontend {
+        if let Some(proof) = &request.release {
             use std::os::unix::process::ExitStatusExt;
             proof.observed_exit(
                 reaped.as_ref().ok().and_then(|status| {
@@ -562,13 +512,13 @@ impl OwnedIo {
         )
     }
 
-    async fn finish(self) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
+    async fn finish(self) -> Result<Option<Captures>> {
         self.finish_benchmark(None).await
     }
     async fn finish_benchmark(
         self,
         benchmark: Option<&super::container_benchmark::tools::Invocation>,
-    ) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
+    ) -> Result<Option<Captures>> {
         let input_closed = self
             .input
             .map(|file| {
@@ -604,16 +554,13 @@ fn owner<T>(value: Option<std::sync::Arc<T>>, message: &str) -> (Option<T>, Resu
     }
 }
 
-async fn finish_log(
-    log: Option<super::bounded_log::Log>,
-    message: &str,
-) -> Result<Option<super::ops_artifact::verify::tools::Seal>> {
+async fn finish_log(log: Option<super::bounded_log::Log>, message: &str) -> Result<Option<Seal>> {
     if let Some(log) = log {
         let value = log.finish().await?;
         if !value.complete {
             return Err(Failure::new(1, message));
         }
-        return Ok(Some(super::ops_artifact::verify::tools::Seal {
+        return Ok(Some(Seal {
             sha256: value.sha256,
             bytes: value.bytes,
             metadata: value.metadata,
@@ -622,9 +569,7 @@ async fn finish_log(
     Ok(None)
 }
 
-async fn finish_separate(
-    logs: Option<SeparateLogs>,
-) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
+async fn finish_separate(logs: Option<SeparateLogs>) -> Result<Option<Captures>> {
     if let Some(logs) = logs {
         let message = "CI separate log completion is unproven.";
         let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
@@ -639,7 +584,6 @@ async fn finish_separate(
         };
         let stdout = completed(stdout)?;
         let stderr = completed(stderr)?;
-        use super::ops_artifact::verify::tools::{Captures, Seal};
         let seal = |value: super::bounded_log::Finished| Seal {
             sha256: value.sha256,
             bytes: value.bytes,
@@ -690,18 +634,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.executable.is_some(),
         request.node.is_some(),
         request.dtls.is_some(),
-        request.ops.is_some(),
-        request.source_git.is_some(),
         request.comparison.is_some(),
         request.zstd.is_some(),
         request.load_image.is_some(),
         request.mdns.is_some(),
-        request.retained_ops.is_some(),
-        request.ops_acquire.is_some(),
-        request.hosted_ops.is_some(),
-        request.ops_runtime.is_some(),
-        request.ops_vps.is_some(),
-        request.frontend.is_some(),
+        request.release.is_some(),
         request.benchmark.is_some(),
         request.release_checks.is_some(),
         #[cfg(feature = "release-http-policy")]
@@ -710,45 +647,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
     .into_iter()
     .filter(|present| *present)
     .count();
-    let selected = matches!(
-        request.program,
-        Program::CargoAudit
-            | Program::Node
-            | Program::DtlsPython
-            | Program::DtlsWorker
-            | Program::OpsCargo
-            | Program::OpsRustc
-            | Program::OpsGit
-            | Program::OpsGh
-            | Program::OpsMaterialCurl
-            | Program::OpsDpkgDeb
-            | Program::OpsHostCc
-            | Program::OpsKitShell
-            | Program::OpsKitPerl
-            | Program::OpsKitMake
-            | Program::OpsRuntimeGit
-            | Program::OpsRuntimePython
-            | Program::OpsVpsGit
-            | Program::OpsVpsSsh
-            | Program::OpsVpsAnsible
-            | Program::FrontendGit
-            | Program::FrontendGh
-            | Program::FrontendInventory
-            | Program::FrontendAnsible
-            | Program::FrontendCurl
-            | Program::ComparisonGit
-            | Program::ComparisonCargo
-            | Program::ComparisonBenchmark
-            | Program::Zstd
-            | Program::MdnsInterfaces
-            | Program::MdnsPlist
-            | Program::MdnsLaunch
-            | Program::MdnsLogs
-            | Program::MdnsCompiler
-            | Program::MdnsProbe
-            | Program::BenchmarkCurl
-    );
-    if proofs == 0 && !selected {
+    if proofs == 0 && !selected(request.program) {
         return Ok(std::ffi::OsStr::new(request.program.name()));
     }
     if proofs != 1 {
@@ -762,22 +661,24 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .validate(request.program, &request.arguments)
             .map(|p| p.as_os_str());
     }
-    if let Some(proof) = &request.hosted_ops {
-        return proof
-            .validate(request.program, &request.arguments)
-            .map(|path| path.as_os_str());
-    }
-    if let Some(proof) = &request.ops_runtime {
-        return proof
-            .validate(request.program, &request.arguments)
-            .map(|path| path.as_os_str());
-    }
-    if let Some(proof) = &request.ops_vps {
-        return proof
-            .validate(request.program, &request.arguments)
-            .map(|path| path.as_os_str());
-    }
-    if let Some(proof) = &request.frontend {
+    if let Some(proof) = &request.release {
+        let admitted = match proof.role() {
+            // These proofs check the program and arguments themselves.
+            ReleaseRole::Hosted
+            | ReleaseRole::Runtime
+            | ReleaseRole::Vps
+            | ReleaseRole::Frontend => true,
+            role @ (ReleaseRole::Producer
+            | ReleaseRole::SourceGit
+            | ReleaseRole::Retained
+            | ReleaseRole::Acquire) => role.admits(request.program),
+        };
+        if !admitted {
+            return Err(Failure::new(
+                1,
+                "CI execution requires its validated executable role.",
+            ));
+        }
         return proof
             .validate(request.program, &request.arguments)
             .map(|path| path.as_os_str());
@@ -817,25 +718,6 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .map(|value| value.validate(request.program)),
         Program::DtlsPython => request.dtls.as_ref().map(|value| value.validate(false)),
         Program::DtlsWorker => request.dtls.as_ref().map(|value| value.validate(true)),
-        Program::OpsCargo => request
-            .ops
-            .as_ref()
-            .map(|value| value.validate(super::ops_artifact::recipe::Role::Cargo)),
-        Program::OpsRustc => request
-            .ops
-            .as_ref()
-            .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
-        Program::OpsGit => request.source_git.as_ref().map(|value| value.validate()),
-        Program::OpsGh => {
-            if let Some(proof) = &request.retained_ops {
-                Some(proof.validate(request.program, &request.arguments))
-            } else {
-                request
-                    .ops_acquire
-                    .as_ref()
-                    .map(|proof| proof.validate(request.program, &request.arguments))
-            }
-        }
         Program::ComparisonGit | Program::ComparisonCargo | Program::ComparisonBenchmark => {
             request.comparison.as_ref().map(|value| {
                 value.validate(comparison_role(request.program).expect("comparison role"))
@@ -847,6 +729,31 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
     Ok(path.as_os_str())
 }
 
+/// Programs that run only through their validated proof; without one, any
+/// other program runs from PATH. The release programs are those a role admits.
+fn selected(program: Program) -> bool {
+    matches!(
+        program,
+        Program::CargoAudit
+            | Program::Node
+            | Program::DtlsPython
+            | Program::DtlsWorker
+            | Program::ComparisonGit
+            | Program::ComparisonCargo
+            | Program::ComparisonBenchmark
+            | Program::Zstd
+            | Program::MdnsInterfaces
+            | Program::MdnsPlist
+            | Program::MdnsLaunch
+            | Program::MdnsLogs
+            | Program::MdnsCompiler
+            | Program::MdnsProbe
+            | Program::BenchmarkCurl
+    ) || ReleaseRole::ALL
+        .into_iter()
+        .any(|role| role.admits(program))
+}
+
 fn comparison_role(
     program: super::command::Program,
 ) -> Option<super::performance_compare::files::Role> {
@@ -856,26 +763,6 @@ fn comparison_role(
         Program::ComparisonCargo => Some(Role::Cargo),
         Program::ComparisonBenchmark => Some(Role::Benchmark),
         _ => None,
-    }
-}
-
-pub(super) trait Finalizer {
-    async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>);
-}
-pub(super) struct Finalize;
-impl Finalizer for Finalize {
-    async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>) {
-        let pid = group.pid();
-        let cleaned = simplestchat_toolkit::owned_process::finish(pid).await;
-        // NOWAIT keeps the identity reserved through the final group signal.
-        // Never block in reap unless terminal observation has succeeded.
-        let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
-        let reaped = if matches!(terminal, Ok(Ok(()))) {
-            group.reap().await
-        } else {
-            Err(Failure::new(1, "Production image command reap failed."))
-        };
-        (cleaned, reaped)
     }
 }
 
@@ -904,96 +791,10 @@ async fn read(reader: impl tokio::io::AsyncRead + Unpin, maximum: u64) -> Result
     Ok(bytes)
 }
 
-/// Same retained executable proof and existing replay owner for all callers.
-/// The caller keeps its original Signals registration through final fences.
-pub(super) struct ReplayOutcome {
-    pub result: Result<()>,
-    admitted: bool,
-    settled: bool,
-}
-pub(super) async fn replay_output(
-    root: &Path,
-    environment: &Environment,
-    signals: &mut Signals,
-    bytes: &[u8],
-    stderr: bool,
-    deadline: std::time::Instant,
-) -> ReplayOutcome {
-    let executable = std::env::current_exe();
-    match executable {
-        Ok(executable) => {
-            replay_selected(
-                root,
-                environment,
-                signals,
-                bytes,
-                stderr,
-                deadline,
-                &executable,
-            )
-            .await
-        }
-        Err(_) => ReplayOutcome {
-            admitted: false,
-            settled: false,
-            result: Err(Failure::new(1, "CI output replay executable unavailable.")),
-        },
-    }
-}
-async fn replay_selected(
-    root: &Path,
-    environment: &Environment,
-    signals: &mut Signals,
-    bytes: &[u8],
-    stderr: bool,
-    deadline: std::time::Instant,
-    executable: &Path,
-) -> ReplayOutcome {
-    let mut admitted = false;
-    let mut settled = false;
-    let result = async {
-        let proof = super::release_checks::files::Executable::open(executable)?;
-        let selected = match proof.validate() {
-            Ok(path) => path.to_owned(),
-            Err(error) => {
-                let _ = proof.close();
-                return Err(error);
-            }
-        };
-        let mut command = tooling::command(
-            root,
-            environment,
-            selected,
-            ["ci", "release-controller", "__replay"],
-        );
-        if stderr {
-            command.stdout(std::io::stderr());
-        } else {
-            command.stdout(Stdio::inherit());
-        }
-        command.stderr(Stdio::null());
-        // Preserve Native's existing sticky-proof boundary, including refusal
-        // inside the replay owner before its own dispatch.
-        admitted = true;
-        let replay =
-            super::release_controller::replay::run(command, bytes, signals, deadline).await;
-        settled = replay.is_ok();
-        let validated = proof.validate().map(|_| ());
-        let closed = proof.close();
-        replay.and(validated).and(closed)
-    }
-    .await;
-    ReplayOutcome {
-        result,
-        admitted,
-        settled,
-    }
-}
-
 impl Executor for Native<'_> {
-    async fn vps_prepare(
+    async fn vps_prepare<P: Preparation>(
         &mut self,
-        invocation: super::ops_artifact::capacity_vps::prepare::PrepareInvocation,
+        invocation: P,
         end: std::time::Instant,
     ) -> Result<()> {
         vps_prepare::run(self, invocation, end).await

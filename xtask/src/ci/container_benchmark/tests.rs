@@ -1,8 +1,8 @@
 //! Inert complete-controller transactions and owned filesystem fault boundaries.
 use super::*;
 use crate::ci::{
+    bounded_log::{Captures, Seal},
     command::{Command, Program},
-    ops_artifact::verify::tools::{Captures, Seal},
     process::{self, Executor},
 };
 use serde_json::{Value, json};

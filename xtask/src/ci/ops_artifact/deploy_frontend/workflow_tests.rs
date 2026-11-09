@@ -4,7 +4,10 @@
 
 use super::super::lifecycle::Completed;
 use super::*;
-use crate::ci::ops_artifact::verify::tools::{Captures, Seal};
+use crate::ci::{
+    bounded_log::{Captures, Seal},
+    command::ReleaseRole,
+};
 use std::{
     fs,
     io::Write,
@@ -383,9 +386,13 @@ impl Fake {
 }
 impl Executor for Fake {
     async fn run(&mut self, mut command: Command) -> Result<Vec<u8>> {
-        let proof = command.frontend.clone().expect("production invocation");
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Frontend)
+            .expect("production invocation");
         proof.begin(&command)?;
-        let (_, environment) = proof.context(command.program, &command.arguments)?;
+        let (_, environment) = proof.context(command.program, &command.arguments)?.unwrap();
         let credentials = matches!(
             command.program,
             Program::FrontendGh | Program::FrontendAnsible

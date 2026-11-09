@@ -6,11 +6,10 @@ use super::{
 };
 use crate::ci::{
     audit_rust::files::remove_contents_bounded,
-    release_checks::files as selected,
     release_controller::files::{Directory, NamespaceBinding},
 };
 use rustix::fs::{AtFlags, Mode, OFlags};
-use simplestchat_toolkit::tooling::Result;
+use simplestchat_toolkit::{executable as selected, tooling::Result};
 use std::{
     cell::RefCell,
     collections::BTreeMap,

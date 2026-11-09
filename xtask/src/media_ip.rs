@@ -8,6 +8,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use simplestchat_toolkit::{
     owned_process::Signals,
+    replay,
     tooling::{self, Environment, Failure},
 };
 use std::net::Ipv4Addr;
@@ -262,14 +263,18 @@ async fn execute_with(
             target.append(address)?;
         } else {
             admission(deadline, REPLAY_SLOT + FINAL_FENCE)?;
-            crate::ci::replay_media_ip(
+            // Emit only the selected address through the reserved replay child;
+            // this detector's signal registration stays with its caller.
+            replay::replay_output(
                 root,
                 environment,
                 signals,
-                address,
+                format!("{address}\n").as_bytes(),
+                false,
                 Instant::now() + Duration::from_secs(25),
             )
-            .await?;
+            .await
+            .result?;
         }
         Ok(())
     }

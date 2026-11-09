@@ -2,7 +2,6 @@
 //! one-use completed paired captures. No child inherits GitHub credentials.
 
 use super::super::namespace::{self, Budget, Permit};
-pub(in crate::ci) use super::super::verify::tools::Captures;
 use super::{
     failure,
     files::Output,
@@ -10,11 +9,12 @@ use super::{
     sources::{self, Sources},
     worker::Checkpoint,
 };
-use crate::ci::{
-    command::{Command, Program},
-    release_checks::files::{self, Executable},
+pub(in crate::ci) use crate::ci::bounded_log::Captures;
+use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Result},
 };
-use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::{OsStr, OsString},
     fs::Metadata,
@@ -91,9 +91,9 @@ impl Invocation {
                 logs.stdout.maximum() == super::CAPTURE && logs.stderr.maximum() == super::CAPTURE
             })
             && command
-                .ops_runtime
+                .release
                 .as_ref()
-                .is_some_and(|proof| std::ptr::eq(&**proof, self));
+                .is_some_and(|proof| std::ptr::addr_eq(Arc::as_ptr(proof), self));
         let input = match (&self.input, &command.stdin) {
             (None, None) => self.program == Program::OpsRuntimeGit,
             (Some(expected), Some(file)) => {
@@ -193,6 +193,27 @@ impl Invocation {
         result
     }
 }
+impl ReleaseProof for Invocation {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Runtime
+    }
+    fn begin(&self, command: &Command) -> Result<()> {
+        Invocation::begin(self, command)
+    }
+    fn context(
+        &self,
+        program: Program,
+        args: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Invocation::context(self, program, args).map(Some)
+    }
+    fn validate(&self, program: Program, args: &[OsString]) -> Result<&Path> {
+        Invocation::validate(self, program, args)
+    }
+    fn observed_io(&self, value: Option<Captures>) {
+        Invocation::observed_io(self, value)
+    }
+}
 
 pub(super) struct Tools {
     git: Option<Arc<Executable>>,
@@ -212,8 +233,8 @@ impl Tools {
         checkpoint: &Checkpoint,
     ) -> Result<Self> {
         let permits = budget.reserve(4)?;
-        let git = files::select(caller, environment, OsStr::new("git"))?;
-        let python = match files::select(caller, environment, OsStr::new("python3")) {
+        let git = executable::select(caller, environment, OsStr::new("git"))?;
+        let python = match executable::select(caller, environment, OsStr::new("python3")) {
             Ok(value) => value,
             Err(error) => {
                 let _ = git.close();

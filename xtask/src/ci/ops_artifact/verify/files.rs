@@ -1,7 +1,7 @@
 //! Original file/namespace witnesses and fresh readback-bound private output.
 
 use super::super::namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun};
-use super::{BUNDLE, SMALL, failure, hash::Checkpoint, io, request::Request, tools};
+use super::{BUNDLE, SMALL, failure, hash::Checkpoint, io, request::Request};
 use crate::ci::{bounded_log::Log, command::SeparateLogs};
 use rustix::fs::{Mode, OFlags};
 use sha2::{Digest, Sha256};
@@ -651,7 +651,7 @@ impl Output {
     pub fn capture_read(
         &mut self,
         names: &[String; 2],
-        seals: &tools::Captures,
+        seals: &crate::ci::bounded_log::Captures,
         checkpoint: &Checkpoint,
     ) -> Result<Vec<u8>> {
         let mut stdout = None;

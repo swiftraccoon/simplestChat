@@ -14,15 +14,18 @@ pub(super) const PREFIX: &str = "release-container-controller";
 pub(super) const LOG: &str = "release-container-controller.log";
 pub(super) const STATUS: &str = "release-container-controller.status";
 pub(super) const SPOOL: &str = "release-controller-control";
-pub(super) const MAX_LOG: u64 = 64 * 1024 * 1024;
+// The collector replays its whole retained log through the reserved child, so
+// the log bound, the deadline reserve and the termination grace are the
+// child's: raising one cannot make the replay refuse a log the worker admitted.
+pub(super) const MAX_LOG: u64 = simplestchat_toolkit::replay::MAX_BYTES;
 // The ordinary Linux debug controller measured 275,234,152 bytes after the
 // capacity dependency was added. Both self-verification paths share this cap.
 pub(super) const MAX_EXECUTABLE_BYTES: u64 = 320 * 1024 * 1024;
 pub(super) const STARTUP: Duration = Duration::from_secs(10);
 pub(super) const WORKER: Duration = Duration::from_secs(90 * 60);
 pub(super) const WAIT: Duration = Duration::from_secs(300);
-pub(super) const RESERVE: Duration = Duration::from_secs(20);
-pub(super) const GRACE: Duration = Duration::from_secs(5);
+pub(super) const RESERVE: Duration = simplestchat_toolkit::replay::RESERVE;
+pub(super) const GRACE: Duration = simplestchat_toolkit::replay::GRACE;
 
 pub(super) fn failure() -> Failure {
     Failure::new(1, "Release controller preparation failed.")

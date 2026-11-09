@@ -3,11 +3,9 @@ use super::{
     archive::Graph, files::Tree, fixture, kit, native_build as native, plan, tools::Tools,
 };
 use crate::ci::{
-    command::{Command, SeparateLogs},
-    ops_artifact::{
-        namespace::Budget,
-        verify::tools::{Captures, Seal},
-    },
+    bounded_log::{Captures, Seal},
+    command::{Command, ReleaseRole, SeparateLogs},
+    ops_artifact::namespace::Budget,
     process::Executor,
 };
 use simplestchat_toolkit::tooling::{Environment, Failure, Result};
@@ -625,7 +623,11 @@ impl Executor for FailedBuild {
     }
     async fn run(&mut self, mut command: Command) -> Result<Vec<u8>> {
         self.calls += 1;
-        let proof = command.hosted_ops.as_ref().unwrap().clone();
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Hosted)
+            .unwrap();
         proof.begin(&command)?;
         let SeparateLogs { stdout, stderr } =
             Arc::try_unwrap(command.separate_logs.take().unwrap()).unwrap();

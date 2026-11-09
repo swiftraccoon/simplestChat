@@ -1,7 +1,7 @@
 //! Fixed browser discovery and the unchanged isolated release coordinator.
 
 mod execute;
-pub(super) mod files;
+mod files;
 pub(super) mod invocation;
 mod plan;
 #[cfg(test)]

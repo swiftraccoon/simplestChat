@@ -18,7 +18,7 @@ async fn reference(cases: &[Value]) -> Result<Value> {
     reference_pins::check()?;
     let f = Fixture::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let python = crate::ci::release_checks::files::select(
+    let python = simplestchat_toolkit::executable::select(
         root,
         &simplestchat_toolkit::tooling::inherited_env(),
         std::ffi::OsStr::new("python3"),

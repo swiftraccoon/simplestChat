@@ -163,7 +163,7 @@ impl Fixture {
             stdout: output("stdout", proof.spec.maximum),
             stderr: output("stderr", STDERR),
         }));
-        command.frontend = Some(proof.clone());
+        command.release = Some(proof.clone());
         command
     }
 }
@@ -281,7 +281,7 @@ async fn changed_role_arguments_and_capture_contracts_refuse_before_child_effect
             3 => command.grace += Duration::from_secs(1),
             4 => command.cleanup = true,
             5 => command.capture = Some(1),
-            6 => command.frontend = None,
+            6 => command.release = None,
             _ => {
                 let logs = Arc::try_unwrap(command.separate_logs.take().unwrap()).unwrap();
                 let (a, b) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());

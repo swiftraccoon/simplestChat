@@ -1,17 +1,20 @@
 //! Rust owns its CLI groups; Python retains ownership of isolated fixture work.
 
 use super::{
-    files::{self, Executable},
+    files,
     plan::{self, Context},
 };
 use crate::ci::process::Executor;
-use simplestchat_toolkit::tooling::Result;
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::Result,
+};
 use std::{sync::Arc, time::Instant};
 
 pub(super) async fn execute(context: &Context, runner: &mut impl Executor) -> Result<()> {
     let deadline = Instant::now() + plan::BUDGET;
     runner.ready().await?;
-    let http_policy = files::Executable::open(&context.http_policy)?;
+    let http_policy = Executable::open(&context.http_policy)?;
     let node = match files::node(&context.root, &context.environment) {
         Ok(node) => Arc::new(node),
         Err(error) => {
@@ -30,7 +33,7 @@ pub(super) async fn execute(context: &Context, runner: &mut impl Executor) -> Re
         http_policy.validate()?;
         runner.ready().await?;
         chromium = Some(files::chromium(&bytes)?);
-        python = Some(Arc::new(files::select(
+        python = Some(Arc::new(executable::select(
             &context.root,
             &context.environment,
             std::ffi::OsStr::new("python3"),

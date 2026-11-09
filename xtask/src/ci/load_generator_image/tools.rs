@@ -1,11 +1,11 @@
 //! Selected caller-trusted executable bindings; no toolchain authentication claim.
 
 use super::plan;
-use crate::ci::{
-    command::Program,
-    release_checks::files::{self, Executable},
+use crate::ci::command::Program;
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Failure, Result},
 };
-use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{ffi::OsStr, path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,9 +42,9 @@ pub(in crate::ci) struct Tools {
 }
 impl Tools {
     pub fn select(root: &Path, environment: &Environment) -> Result<Self> {
-        let git = files::select(root, environment, OsStr::new("git"))
+        let git = executable::select(root, environment, OsStr::new("git"))
             .map_err(|error| Failure::new(error.code, "Load image tool selection failed."))?;
-        let docker = match files::select(root, environment, OsStr::new("docker")) {
+        let docker = match executable::select(root, environment, OsStr::new("docker")) {
             Ok(value) => value,
             Err(error) => {
                 let _ = git.close();
@@ -54,7 +54,7 @@ impl Tools {
                 ));
             }
         };
-        let zstd = match files::select(root, environment, OsStr::new("zstd")) {
+        let zstd = match executable::select(root, environment, OsStr::new("zstd")) {
             Ok(value) => value,
             Err(error) => {
                 let _ = git.close();

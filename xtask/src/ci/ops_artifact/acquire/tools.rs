@@ -2,11 +2,11 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, plan, request::Request};
-use crate::ci::{
-    command::{Command, Program},
-    release_checks::files::Executable,
+use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Result},
 };
-use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -17,7 +17,7 @@ use std::{
     time::Instant,
 };
 
-pub(in crate::ci) use super::super::verify::tools::Captures;
+pub(in crate::ci) use crate::ci::bounded_log::Captures;
 
 struct Context {
     directory: PathBuf,
@@ -84,9 +84,9 @@ impl Invocation {
                     && logs.stderr.maximum() == super::SMALL
             })
             && command
-                .ops_acquire
+                .release
                 .as_ref()
-                .is_some_and(|proof| std::ptr::eq(&**proof, self));
+                .is_some_and(|proof| std::ptr::addr_eq(Arc::as_ptr(proof), self));
         if !valid {
             self.invalid.store(true, Ordering::SeqCst);
             return Err(failure(1));
@@ -163,6 +163,27 @@ impl Invocation {
             last: start,
         });
         Ok(())
+    }
+}
+impl ReleaseProof for Invocation {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Acquire
+    }
+    fn begin(&self, command: &Command) -> Result<()> {
+        Invocation::begin(self, command)
+    }
+    fn context(
+        &self,
+        program: Program,
+        args: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Invocation::context(self, program, args).map(Some)
+    }
+    fn validate(&self, program: Program, args: &[OsString]) -> Result<&Path> {
+        Invocation::validate(self, program, args)
+    }
+    fn observed_io(&self, value: Option<Captures>) {
+        Invocation::observed_io(self, value)
     }
 }
 
@@ -253,8 +274,7 @@ impl Tools {
         };
         let permits = budget.reserve(2)?;
         let executable =
-            crate::ci::release_checks::files::select(caller, captured, OsStr::new("gh"))
-                .map_err(|_| failure(1))?;
+            executable::select(caller, captured, OsStr::new("gh")).map_err(|_| failure(1))?;
         Ok(Self {
             executable: Arc::new(executable),
             context: Arc::new(context),

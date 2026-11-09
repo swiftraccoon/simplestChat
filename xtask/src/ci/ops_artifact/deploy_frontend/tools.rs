@@ -1,12 +1,12 @@
 //! Closed routine-deployment roles over the existing process and log owners.
 //! Paths and environments stay private. Snapshots are not descriptor execution
 //! or exclusion of a same-user writer; the outer owner supplies source custody.
-pub(in crate::ci) use crate::ci::ops_artifact::verify::tools::Captures;
-use crate::ci::{
-    command::{Command, Program},
-    release_checks::files::{self, Executable},
+pub(in crate::ci) use crate::ci::bounded_log::Captures;
+use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Failure, Result},
 };
-use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::{OsStr, OsString},
     os::unix::fs::MetadataExt,
@@ -126,9 +126,9 @@ impl Invocation {
                 logs.stdout.maximum() == self.spec.maximum && logs.stderr.maximum() == STDERR
             })
             && command
-                .frontend
+                .release
                 .as_ref()
-                .is_some_and(|proof| std::ptr::eq(&**proof, self));
+                .is_some_and(|proof| std::ptr::addr_eq(Arc::as_ptr(proof), self));
         if !valid {
             self.invalid.store(true, Ordering::SeqCst);
             return Err(failure(1));
@@ -195,7 +195,7 @@ impl Invocation {
             .ok_or_else(|| failure(1))
     }
     pub(in crate::ci) fn observed_io(&self, captures: Option<Captures>) {
-        let regular = |seal: &crate::ci::ops_artifact::verify::tools::Seal| {
+        let regular = |seal: &crate::ci::bounded_log::Seal| {
             seal.bytes == seal.metadata.len()
                 && seal.metadata.is_file()
                 && seal.metadata.nlink() == 1
@@ -247,6 +247,33 @@ impl Invocation {
         self.originals()?;
         self.custody()?;
         self.time(false)
+    }
+}
+impl ReleaseProof for Invocation {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Frontend
+    }
+    fn begin(&self, command: &Command) -> Result<()> {
+        Invocation::begin(self, command)
+    }
+    fn context(
+        &self,
+        program: Program,
+        arguments: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Invocation::context(self, program, arguments).map(Some)
+    }
+    fn validate(&self, program: Program, arguments: &[OsString]) -> Result<&Path> {
+        Invocation::validate(self, program, arguments)
+    }
+    fn observed_io(&self, captures: Option<Captures>) {
+        Invocation::observed_io(self, captures)
+    }
+    fn observed_exit(&self, status: Option<i32>, settled: bool, completed: bool) {
+        Invocation::observed_exit(self, status, settled, completed)
+    }
+    fn completed(&self) -> Result<()> {
+        Invocation::completed(self)
     }
 }
 
@@ -378,7 +405,7 @@ impl Tools {
             ] {
                 let executable = match explicit {
                     Some(path) => Executable::open(path)?,
-                    None => files::select(root, environment, OsStr::new(name))?,
+                    None => executable::select(root, environment, OsStr::new(name))?,
                 };
                 opened.push(Arc::new(executable));
             }

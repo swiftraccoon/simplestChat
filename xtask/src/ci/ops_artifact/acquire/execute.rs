@@ -135,7 +135,7 @@ async fn call<E: Executor>(
         command.capture = None;
         command.timeout = timeout;
         command.grace = plan::GRACE;
-        command.ops_acquire = Some(invocation.clone());
+        command.release = Some(invocation.clone());
         Ok((command, invocation))
     })();
     let (mut command, invocation) = match prepared {

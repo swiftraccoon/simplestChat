@@ -308,7 +308,7 @@ fn retained_tool_identity_rejects_mutation_replacement_and_retargeted_symlinks()
         let f = Fixture::new();
         let selected = f.root.join("selected");
         symlink(&f.node, &selected).unwrap();
-        let proof = files::Executable::open(&selected).unwrap();
+        let proof = simplestchat_toolkit::executable::Executable::open(&selected).unwrap();
         match mode {
             "mutation" => fs::write(&f.node, b"changed").unwrap(),
             "replacement" => {
@@ -325,10 +325,10 @@ fn retained_tool_identity_rejects_mutation_replacement_and_retargeted_symlinks()
     }
     let f = Fixture::new();
     fs::set_permissions(&f.chromium, fs::Permissions::from_mode(0o600)).unwrap();
-    assert!(files::Executable::open(&f.chromium).is_err());
+    assert!(simplestchat_toolkit::executable::Executable::open(&f.chromium).is_err());
     executable(&f.chromium, b"empty");
     fs::write(&f.chromium, []).unwrap();
-    assert!(files::Executable::open(&f.chromium).is_err());
+    assert!(simplestchat_toolkit::executable::Executable::open(&f.chromium).is_err());
 }
 
 #[test]

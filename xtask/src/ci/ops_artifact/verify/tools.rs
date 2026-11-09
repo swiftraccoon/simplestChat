@@ -2,12 +2,17 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, request::Request};
-use crate::ci::{command::Program, release_checks::files::Executable};
+use crate::ci::{
+    bounded_log::Captures,
+    command::{Command, Program, ReleaseProof, ReleaseRole},
+};
 use simplestchat_ops::distribution::manifest::Selection;
-use simplestchat_toolkit::tooling::{Environment, Result};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Result},
+};
 use std::{
     ffi::OsString,
-    fs::Metadata,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -20,18 +25,6 @@ const SUBJECT: &str = "ops-preparation.json";
 const PREDICATE: &str = "https://github.com/swiftraccoon/simplestChat/attestations/ops-artifact/v1";
 const SAN: &str =
     "https://github.com/swiftraccoon/simplestChat/.github/workflows/ci.yml@refs/heads/main";
-
-#[derive(Clone)]
-pub(in crate::ci) struct Seal {
-    pub sha256: String,
-    pub bytes: u64,
-    pub metadata: Metadata,
-}
-#[derive(Clone)]
-pub(in crate::ci) struct Captures {
-    pub stdout: Seal,
-    pub stderr: Seal,
-}
 
 struct Context {
     directory: PathBuf,
@@ -126,6 +119,28 @@ impl Invocation {
             latest,
         });
         Ok(())
+    }
+}
+impl ReleaseProof for Invocation {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Retained
+    }
+    /// The retained verifier admits its invocation without the command.
+    fn begin(&self, _: &Command) -> Result<()> {
+        Invocation::begin(self)
+    }
+    fn context(
+        &self,
+        program: Program,
+        args: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Invocation::context(self, program, args).map(Some)
+    }
+    fn validate(&self, program: Program, args: &[OsString]) -> Result<&Path> {
+        Invocation::validate(self, program, args)
+    }
+    fn observed_io(&self, value: Option<Captures>) {
+        Invocation::observed_io(self, value)
     }
 }
 
@@ -241,9 +256,8 @@ impl Tools {
             arguments: arguments(&request.output, &request.selection)?,
         };
         let permits = budget.reserve(2)?;
-        let executable =
-            crate::ci::release_checks::files::select(caller, captured, std::ffi::OsStr::new("gh"))
-                .map_err(|_| failure(1))?;
+        let executable = executable::select(caller, captured, std::ffi::OsStr::new("gh"))
+            .map_err(|_| failure(1))?;
         Ok(Self {
             executable: Arc::new(executable),
             context: Arc::new(context),

@@ -5,8 +5,9 @@ use super::{
     HOST, TARGET, failure, io,
     namespace::{self, Budget, Chain, Held, OwnedRun},
 };
+use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use rustix::fs::{AtFlags, OFlags};
-use simplestchat_toolkit::tooling::{Environment, Result};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::{OsStr, OsString},
     fs::Metadata,
@@ -122,6 +123,29 @@ impl Tool {
     pub(in crate::ci) fn context(&self, role: Role) -> Result<(&Path, &Environment)> {
         self.validate(role)?;
         Ok((&self.root.directory, &self.root.environment))
+    }
+}
+impl ReleaseProof for Tool {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Producer
+    }
+    /// A producer tool has no per-command admission.
+    fn begin(&self, _: &Command) -> Result<()> {
+        Ok(())
+    }
+    fn context(&self, program: Program, _: &[OsString]) -> Result<Option<(&Path, &Environment)>> {
+        Tool::context(self, producer(program)?).map(Some)
+    }
+    fn validate(&self, program: Program, _: &[OsString]) -> Result<&Path> {
+        Tool::validate(self, producer(program)?)
+    }
+}
+/// The compiler role a producer program names; no other program has one.
+fn producer(program: Program) -> Result<Role> {
+    match program {
+        Program::OpsCargo => Ok(Role::Cargo),
+        Program::OpsRustc => Ok(Role::Rustc),
+        _ => Err(Failure::new(1, "CI Ops producer role invalid.")),
     }
 }
 pub(super) struct Tools {

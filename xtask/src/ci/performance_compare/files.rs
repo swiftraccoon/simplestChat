@@ -2,10 +2,13 @@
 //! These are optimistic bindings, not FD-exec or locks against same-UID writes.
 
 use super::plan::{self, Plan};
-use crate::ci::{release_checks::files as selected, release_controller::files::Directory};
+use crate::ci::release_controller::files::Directory;
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
-use simplestchat_toolkit::tooling::{Environment, Result};
+use simplestchat_toolkit::{
+    executable as selected,
+    tooling::{Environment, Result},
+};
 use std::{
     collections::BTreeMap,
     ffi::OsStr,

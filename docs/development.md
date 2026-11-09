@@ -123,8 +123,10 @@ the bounded host and guest operations and the Ops artifact tools. `xtask`
 (`xtask/`) is the repository automation run as `cargo run -p xtask -- <command>`:
 developer gates, CI steps and the release controller. `simplestchat-toolkit`
 (`crates/toolkit/`) holds what those tools share: child commands with an explicit
-environment, the pinned native build settings, and owned process groups and
-signals. New crates go under `crates/`.
+environment, the pinned native build settings, owned process groups and signals,
+retained executable identities, and the reserved output-replay child. A binary
+that hosts the CI command runner routes that child's single argument,
+`__replay`, before parsing anything else. New crates go under `crates/`.
 
 ## Native and web build
 

@@ -1,8 +1,11 @@
 //! The fixed coordinator retains its original phase-tail dispatch fence.
 
-use super::{files::Executable, plan::Context};
+use super::plan::Context;
 use crate::ci::command::{Command, Program};
-use simplestchat_toolkit::tooling::{Environment, Failure, Result};
+use simplestchat_toolkit::{
+    executable::Executable,
+    tooling::{Environment, Failure, Result},
+};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},

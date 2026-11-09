@@ -134,17 +134,11 @@ fn conflicting(command: &Command) -> bool {
     command.executable.is_some()
         || command.node.is_some()
         || command.dtls.is_some()
-        || command.ops.is_some()
-        || command.source_git.is_some()
         || command.comparison.is_some()
         || command.zstd.is_some()
         || command.load_image.is_some()
         || command.mdns.is_some()
-        || command.retained_ops.is_some()
-        || command.ops_acquire.is_some()
-        || command.hosted_ops.is_some()
-        || command.ops_runtime.is_some()
-        || command.ops_vps.is_some()
+        || command.release.is_some()
         || command.ops_stage_dispatch.is_some()
 }
 impl<E: Executor> Executor for Adapter<'_, E> {

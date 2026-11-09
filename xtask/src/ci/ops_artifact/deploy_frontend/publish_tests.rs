@@ -197,8 +197,7 @@ impl Executor for BlockedReplay {
             .stdout(std::process::Stdio::from(self.writer.take().unwrap()))
             .stderr(std::process::Stdio::null());
         let replay =
-            crate::ci::release_controller::replay::run(command, bytes, &mut self.signals, end)
-                .await;
+            simplestchat_toolkit::replay::run(command, bytes, &mut self.signals, end).await;
         let closed = nix::unistd::close(self.reader.take().unwrap()).map_err(|_| failure(1));
         replay.and(closed)
     }

@@ -160,7 +160,7 @@ async fn one(
     command.timeout = plan::CAPS[index];
     command.grace = plan::GRACE;
     command.separate_logs = pending.logs.take();
-    command.ops_acquire = Some(proof.clone());
+    command.release = Some(proof.clone());
     if armed {
         proof.schedule(&context()).unwrap();
     }

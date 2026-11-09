@@ -1,7 +1,7 @@
 //! Inert process and isolated tiny local Git fixtures.
 
 use super::*;
-use crate::ci::process::Native;
+use crate::ci::{command::ReleaseRole, process::Native};
 use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,
@@ -185,8 +185,12 @@ struct Fake {
 impl Executor for Fake {
     async fn run(&mut self, command: Command) -> Result<Vec<u8>> {
         assert_eq!(command.program, Program::OpsGit);
-        assert!(command.source_git.is_some());
-        command.source_git.as_ref().unwrap().validate()?;
+        let proof = command.release.as_ref();
+        let proof = proof.filter(|proof| proof.role() == ReleaseRole::SourceGit);
+        assert!(proof.is_some());
+        proof
+            .unwrap()
+            .validate(command.program, &command.arguments)?;
         let args = command
             .arguments
             .iter()
@@ -534,7 +538,7 @@ async fn retained_git_stamp_and_closed_role_cannot_be_replaced_or_reused() {
     let (_tx, signals) = make_signals();
     let mut native = Native::new(&setup.run.path, &setup.environment, signals);
     let mut wrong = Command::capture(Program::Git, &["--version"]);
-    wrong.source_git = Some(git.clone());
+    wrong.release = Some(git.clone());
     assert_eq!(native.run(wrong).await.unwrap_err().code, 1);
     assert!(native.cleanup_passed());
     drop(native);

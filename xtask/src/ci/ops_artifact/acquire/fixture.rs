@@ -1,7 +1,10 @@
 //! Complete inert unsigned/signature-output graph. No cryptography or network runs.
 
 use super::*;
-use crate::ci::{command::Command, process::Executor};
+use crate::ci::{
+    command::{Command, ReleaseRole},
+    process::Executor,
+};
 use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest, Selection,
@@ -253,15 +256,22 @@ impl Executor for Fake {
     async fn run(&mut self, mut command: Command) -> Result<Vec<u8>> {
         let index = self.calls;
         self.calls += 1;
-        let acquire = command.ops_acquire.clone();
-        let retained = command.retained_ops.clone();
+        let slot = |role| command.release.clone().filter(|proof| proof.role() == role);
+        let acquire = slot(ReleaseRole::Acquire);
+        let retained = slot(ReleaseRole::Retained);
         let environment = if let Some(proof) = &acquire {
             proof.begin(&command)?;
-            proof.context(command.program, &command.arguments)?.1
+            proof
+                .context(command.program, &command.arguments)?
+                .unwrap()
+                .1
         } else {
             let proof = retained.as_ref().unwrap();
-            proof.begin()?;
-            proof.context(command.program, &command.arguments)?.1
+            proof.begin(&command)?;
+            proof
+                .context(command.program, &command.arguments)?
+                .unwrap()
+                .1
         };
         assert_eq!(
             environment[std::ffi::OsStr::new("GH_TOKEN")],
@@ -287,7 +297,7 @@ impl Executor for Fake {
             .map_err(|_| failure(1));
         let closed = nix::unistd::close(writer).map_err(|_| failure(1));
         let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| super::super::verify::tools::Seal {
+        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
             sha256: value.sha256,
             bytes: value.bytes,
             metadata: value.metadata,

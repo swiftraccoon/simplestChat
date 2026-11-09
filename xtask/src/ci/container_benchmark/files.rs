@@ -1028,7 +1028,7 @@ impl Reader {
     fn bytes(
         mut self,
         maximum: u64,
-        seal: Option<&crate::ci::ops_artifact::verify::tools::Seal>,
+        seal: Option<&crate::ci::bounded_log::Seal>,
     ) -> Result<Vec<u8>> {
         let read = (|| {
             let seal = seal.ok_or_else(|| failure(1))?;
@@ -1073,7 +1073,7 @@ pub(super) fn read_sealed_test(
     initial: Metadata,
     permit: Permit,
     maximum: u64,
-    seal: &crate::ci::ops_artifact::verify::tools::Seal,
+    seal: &crate::ci::bounded_log::Seal,
 ) -> Result<Vec<u8>> {
     Reader {
         file,

@@ -74,7 +74,7 @@ fn original_complete_source_and_seven_tests_are_exact_80_bytes() {
 async fn reference(cases: &[Value], cli: bool) -> Result<Value> {
     let signals = Signals::new()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let node = crate::ci::release_checks::files::select(
+    let node = simplestchat_toolkit::executable::select(
         root,
         &simplestchat_toolkit::tooling::inherited_env(),
         std::ffi::OsStr::new("node"),

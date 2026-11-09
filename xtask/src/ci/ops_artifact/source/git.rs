@@ -2,6 +2,7 @@
 //! Git/runtime/object database authority is caller-owned, not upstream authentication.
 
 use super::*;
+use crate::ci::command::{ReleaseProof, ReleaseRole};
 use rustix::fs::{Mode, OFlags};
 use std::{
     fs::{File, Metadata},
@@ -145,6 +146,25 @@ impl Git {
         checked.and(leaf).and(parent)
     }
 }
+impl ReleaseProof for Git {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::SourceGit
+    }
+    /// The source Git proof has no per-command admission.
+    fn begin(&self, _: &Command) -> Result<()> {
+        Ok(())
+    }
+    fn context(
+        &self,
+        _: Program,
+        _: &[std::ffi::OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Git::context(self)
+    }
+    fn validate(&self, _: Program, _: &[std::ffi::OsString]) -> Result<&Path> {
+        Git::validate(self)
+    }
+}
 
 pub(super) struct Repository {
     root: Chain,
@@ -240,6 +260,6 @@ pub(super) fn command(git: &Arc<Git>, args: &[&str], maximum: u64) -> Command {
         .arguments
         .extend(args.iter().map(std::ffi::OsString::from));
     command.capture = Some(maximum);
-    command.source_git = Some(git.clone());
+    command.release = Some(git.clone());
     command
 }

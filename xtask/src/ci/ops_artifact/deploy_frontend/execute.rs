@@ -237,7 +237,7 @@ async fn call<E: Executor>(
             return Err(error);
         }
     };
-    command.frontend = Some(invocation.clone());
+    command.release = Some(invocation.clone());
     let result = executor.run(command).await;
     if program == Program::FrontendAnsible {
         lock(state)?.ansible_exit = invocation.exit().ok();

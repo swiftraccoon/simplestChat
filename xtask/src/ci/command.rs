@@ -1,6 +1,8 @@
 //! Closed command vocabulary for bounded CI subprocesses. No shell execution.
 
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::ffi::OsString;
+use std::path::Path;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +97,97 @@ impl Program {
     }
 }
 
+/// The closed set of release proof roles. A role names the programs its
+/// proofs may execute and selects the runner's rules for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReleaseRole {
+    Producer,
+    SourceGit,
+    Retained,
+    Acquire,
+    Hosted,
+    Runtime,
+    Vps,
+    Frontend,
+}
+impl ReleaseRole {
+    pub(super) const ALL: [Self; 8] = [
+        Self::Producer,
+        Self::SourceGit,
+        Self::Retained,
+        Self::Acquire,
+        Self::Hosted,
+        Self::Runtime,
+        Self::Vps,
+        Self::Frontend,
+    ];
+    /// Whether this role's proofs may execute `program`. Retained and Acquire
+    /// share `gh`; every other release program belongs to exactly one role.
+    pub(super) fn admits(self, program: Program) -> bool {
+        match self {
+            Self::Producer => matches!(program, Program::OpsCargo | Program::OpsRustc),
+            Self::SourceGit => program == Program::OpsGit,
+            Self::Retained | Self::Acquire => program == Program::OpsGh,
+            Self::Hosted => matches!(
+                program,
+                Program::OpsMaterialCurl
+                    | Program::OpsDpkgDeb
+                    | Program::OpsHostCc
+                    | Program::OpsKitShell
+                    | Program::OpsKitPerl
+                    | Program::OpsKitMake
+            ),
+            Self::Runtime => matches!(program, Program::OpsRuntimeGit | Program::OpsRuntimePython),
+            Self::Vps => matches!(
+                program,
+                Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible
+            ),
+            Self::Frontend => matches!(
+                program,
+                Program::FrontendGit
+                    | Program::FrontendGh
+                    | Program::FrontendInventory
+                    | Program::FrontendAnsible
+                    | Program::FrontendCurl
+            ),
+        }
+    }
+    /// Only an embedded source Git or producer compiler command may carry an
+    /// original stage dispatch bound, and only for a program its role admits.
+    pub(super) fn bounds_dispatch(self, program: Program) -> bool {
+        matches!(self, Self::Producer | Self::SourceGit) && self.admits(program)
+    }
+}
+
+/// A release proof carried in [`Command::release`]. Its role selects which
+/// of these the runner calls, and where; see `process.rs`. `Any` lets the
+/// release plane recover its own concrete proof from a command it did not
+/// build; the runner never names one.
+pub(super) trait ReleaseProof: std::any::Any + std::fmt::Debug + Send + Sync {
+    fn role(&self) -> ReleaseRole;
+    /// Admit the exact command once, before its owned streams are taken.
+    fn begin(&self, command: &Command) -> Result<()>;
+    /// The working directory and environment to run in. `None` selects the
+    /// runner's own, which the runner allows only for a source Git proof.
+    fn context(
+        &self,
+        program: Program,
+        arguments: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>>;
+    /// Recheck the retained executable; returns the path to execute.
+    fn validate(&self, program: Program, arguments: &[OsString]) -> Result<&Path>;
+    /// The settled paired captures, or `None` when they are unproven.
+    fn observed_io(&self, _: Option<super::bounded_log::Captures>) {}
+    /// The reaped status (a negative signal number for a signalled exit),
+    /// whether the group settled, and whether the command body completed
+    /// within its window.
+    fn observed_exit(&self, _status: Option<i32>, _settled: bool, _completed: bool) {}
+    /// The final check after a successful command and its settled streams.
+    fn completed(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 /// Independently bounded stdout bytes and private stderr. Native takes the one
 /// owner and attempts both finalizers after retiring the command's group.
 /// Callers retain distinct-file namespace, stamp and readback authority.
@@ -123,24 +216,18 @@ pub(super) struct Command {
     /// which exposes no checked close result for that transferred descriptor.
     pub stdin: Option<std::sync::Arc<std::fs::File>>,
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
-    pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
+    pub node: Option<std::sync::Arc<simplestchat_toolkit::executable::Executable>>,
     pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
-    pub ops: Option<std::sync::Arc<super::ops_artifact::recipe::Tool>>,
-    pub source_git: Option<std::sync::Arc<super::ops_artifact::source::Git>>,
     pub comparison: Option<std::sync::Arc<super::performance_compare::files::Invocation>>,
-    pub zstd: Option<std::sync::Arc<super::release_checks::files::Executable>>,
+    pub zstd: Option<std::sync::Arc<simplestchat_toolkit::executable::Executable>>,
     /// Matching manual-owner Git/Docker role. Legacy bare requests stay valid;
     /// that owner's capture boundary must attach its selected proof every time.
     pub load_image: Option<std::sync::Arc<super::load_generator_image::tools::Invocation>>,
     pub mdns: Option<std::sync::Arc<super::mdns::tools::Invocation>>,
     pub benchmark_output: Option<std::sync::Arc<super::container_benchmark::tools::CaptureReceipt>>,
     pub benchmark: Option<std::sync::Arc<super::container_benchmark::tools::Invocation>>,
-    pub retained_ops: Option<std::sync::Arc<super::ops_artifact::verify::tools::Invocation>>,
-    pub ops_acquire: Option<std::sync::Arc<super::ops_artifact::acquire::tools::Invocation>>,
-    pub hosted_ops: Option<std::sync::Arc<super::ops_artifact::hosted::tools::Invocation>>,
-    pub ops_runtime: Option<std::sync::Arc<super::ops_artifact::runtime::tools::Invocation>>,
-    pub ops_vps: Option<std::sync::Arc<super::ops_artifact::capacity_vps::tools::Invocation>>,
-    pub frontend: Option<std::sync::Arc<super::ops_artifact::deploy_frontend::tools::Invocation>>,
+    /// The one release proof, whatever its role.
+    pub release: Option<std::sync::Arc<dyn ReleaseProof>>,
     /// Original latest dispatch time for an embedded source/build command.
     /// This can only narrow a selected Ops Git/compiler invocation.
     pub ops_stage_dispatch: Option<std::time::Instant>,
@@ -164,18 +251,11 @@ impl Command {
             executable: None,
             node: None,
             dtls: None,
-            ops: None,
-            source_git: None,
             comparison: None,
             zstd: None,
             load_image: None,
             mdns: None,
-            retained_ops: None,
-            ops_acquire: None,
-            hosted_ops: None,
-            ops_runtime: None,
-            ops_vps: None,
-            frontend: None,
+            release: None,
             ops_stage_dispatch: None,
             benchmark: None,
             benchmark_output: None,

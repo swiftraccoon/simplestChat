@@ -14,7 +14,7 @@ mod process;
 #[path = "release_controller_protocol.rs"]
 mod protocol;
 #[path = "release_controller_replay.rs"]
-pub(super) mod replay;
+mod replay;
 #[path = "release_controller_source.rs"]
 mod source;
 #[cfg(test)]
@@ -49,26 +49,15 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
         println!("{USAGE}");
         return Ok(ExitCode::SUCCESS);
     }
-    if arguments.len() != 1
-        || !matches!(
-            arguments[0].as_str(),
-            "start" | "wait" | "__worker" | "__replay"
-        )
-    {
+    if arguments.len() != 1 || !matches!(arguments[0].as_str(), "start" | "wait" | "__worker") {
         eprintln!("{USAGE}");
         return Ok(ExitCode::from(2));
     }
-    // This fixed byte copier may block on runner stdout. Keep default signals
-    // in the isolated child; its parent owns interruption and group retirement.
-    let result = if arguments[0] == "__replay" {
-        replay::child()
-    } else {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|_| plan::failure())
-            .and_then(|runtime| runtime.block_on(execute(root, &arguments[0])))
-    };
+    let result = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| plan::failure())
+        .and_then(|runtime| runtime.block_on(execute(root, &arguments[0])));
     match result {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(error) => {

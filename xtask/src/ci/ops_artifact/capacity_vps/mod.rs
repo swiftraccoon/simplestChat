@@ -15,7 +15,7 @@ mod projection;
 mod report;
 mod sources;
 #[cfg(test)]
-pub(in crate::ci) mod tests;
+pub(super) mod tests;
 pub(in crate::ci) mod tools;
 mod transport;
 mod worker;

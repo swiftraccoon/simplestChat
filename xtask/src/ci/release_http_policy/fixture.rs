@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::ci::{
+    bounded_log::{Captures, Seal},
     command::Command,
-    ops_artifact::verify::tools::{Captures, Seal},
     process::Executor,
 };
 use sha2::{Digest, Sha256};

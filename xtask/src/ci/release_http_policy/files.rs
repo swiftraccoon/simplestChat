@@ -6,9 +6,8 @@ mod tests;
 
 use super::{Result, fail};
 use crate::ci::{
-    bounded_log::Log,
+    bounded_log::{Captures, Log, Seal},
     command::{Command, SeparateLogs},
-    ops_artifact::verify::tools::{Captures, Seal},
     release_controller::files::Directory,
 };
 use rustix::fs::{AtFlags, Mode, OFlags};

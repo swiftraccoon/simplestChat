@@ -1,8 +1,9 @@
 //! Actual owned pipe/group checks with inert executables, never SSH or Ansible.
 
-use super::*;
 use crate::ci::ops_artifact::capacity_vps::tests::PreparationFixture;
+use crate::ci::process::{Executor, Native};
 use simplestchat_toolkit::owned_process::Signals;
+use std::time::Duration;
 
 const LEASE: &str = r#"
 def exact(n):

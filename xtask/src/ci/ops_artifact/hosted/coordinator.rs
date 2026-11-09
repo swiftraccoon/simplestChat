@@ -251,7 +251,7 @@ async fn probes<E: Executor>(
         command.arguments = args;
         command.capture = None;
         command.separate_logs = Some(logs);
-        command.hosted_ops = Some(proof.clone());
+        command.release = Some(proof.clone());
         command.timeout = body;
         command.grace = Duration::from_secs(5);
         let ran = executor.run(command).await;

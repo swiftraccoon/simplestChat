@@ -5,8 +5,8 @@
 use super::super::{archive_tests, fixture, native_build_tests, signing_tests};
 use super::*;
 use crate::ci::{
-    command::{Program, SeparateLogs},
-    ops_artifact::verify::tools::{Captures, Seal},
+    bounded_log::{Captures, Seal},
+    command::{Program, ReleaseRole, SeparateLogs},
 };
 use serde_json::json;
 use std::{
@@ -520,11 +520,12 @@ async fn finish_logs(
 impl Executor for FakeCli {
     async fn run(&mut self, mut command: Command) -> Result<Vec<u8>> {
         let proof = command
-            .hosted_ops
+            .release
             .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Hosted)
             .expect("only fixed material/probe roles");
         proof.begin(&command)?;
-        let (directory, environment) = proof.context(command.program, &command.arguments)?;
+        let (directory, environment) = proof.context(command.program, &command.arguments)?.unwrap();
         let mut stderr = Vec::new();
         let (kind, stdout) = match command.program {
             Program::OpsMaterialCurl => {

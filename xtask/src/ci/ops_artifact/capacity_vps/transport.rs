@@ -359,7 +359,7 @@ async fn call<E: Executor>(
     command.arguments = args;
     command.timeout = body;
     command.grace = grace;
-    command.ops_vps = Some(proof.clone());
+    command.release = Some(proof.clone());
     command.separate_logs = pending.logs.take();
     command.stdin = stdin;
     let mut prepared = Prepared {
@@ -728,7 +728,7 @@ pub(super) async fn preparation<E: Executor>(
     lease.capture = None;
     lease.timeout = lease_body;
     lease.grace = Duration::from_secs(5);
-    lease.ops_vps = Some(lease_proof.clone());
+    lease.release = Some(lease_proof.clone());
     lease.separate_logs = lease_pending.logs.take();
     lease.stdin = Some(input);
     let mut command = Command::capture(Program::OpsVpsAnsible, &[]);
@@ -736,7 +736,7 @@ pub(super) async fn preparation<E: Executor>(
     command.capture = None;
     command.timeout = ansible_body;
     command.grace = Duration::from_secs(5);
-    command.ops_vps = Some(ansible_proof.clone());
+    command.release = Some(ansible_proof.clone());
     command.separate_logs = ansible_pending.logs.take();
     let prepared = PrepareInvocation::new(
         lease,

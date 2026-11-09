@@ -13,9 +13,11 @@ use super::{
 use crate::ci::{
     command::{Command, Program},
     process::Executor,
-    release_checks::files::Executable,
 };
-use simplestchat_toolkit::tooling::{Failure, Result};
+use simplestchat_toolkit::{
+    executable::Executable,
+    tooling::{Failure, Result},
+};
 use std::{
     fs::Metadata,
     sync::Arc,

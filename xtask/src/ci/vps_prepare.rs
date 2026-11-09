@@ -2,14 +2,12 @@
 //! The existing Native registration observes signals; cleanup futures are joined
 //! even after an error. A pipe prefix is liveness data, never final completion.
 
-use super::{Executor, Finalize, Finalizer, Native, OwnedIo, executable, owner};
-use crate::ci::{
-    command::{Command, Program},
-    ops_artifact::capacity_vps::{prepare::PrepareInvocation, tools::Invocation},
-};
+use super::{Executor, Native, OwnedIo, Preparation, executable, owner};
+use crate::ci::command::{Command, Program, ReleaseProof, ReleaseRole};
 use rustix::process::Signal;
 use simplestchat_toolkit::{
     owned_process::{Group, exited, exited_now},
+    replay::{Finalize, Finalizer},
     tooling::{self, Failure, Result},
 };
 use std::{
@@ -28,10 +26,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::net::unix::pipe::Sender;
-
-#[cfg(test)]
-#[path = "vps_prepare_tests.rs"]
-mod tests;
 
 const TAIL: Duration = Duration::from_secs(30);
 const RELEASE: Duration = Duration::from_secs(30);
@@ -54,7 +48,7 @@ fn signed(status: std::process::ExitStatus) -> Option<i32> {
 }
 struct Role {
     command: Command,
-    proof: Option<Arc<Invocation>>,
+    proof: Option<Arc<dyn ReleaseProof>>,
     io: Option<OwnedIo>,
     extra: Option<File>,
     group: Option<Group>,
@@ -66,7 +60,10 @@ struct Role {
 }
 impl Role {
     fn take(mut command: Command) -> (Self, Result<()>) {
-        let proof = command.ops_vps.clone();
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Vps);
         let admitted = proof
             .as_ref()
             .ok_or_else(|| failure(1))
@@ -129,7 +126,9 @@ impl Role {
     }
     fn spawn(&mut self, native: &mut Native<'_>, interactive: bool) -> Result<()> {
         let proof = self.proof.as_ref().ok_or_else(|| failure(1))?;
-        let (root, environment) = proof.context(self.command.program, &self.command.arguments)?;
+        let (root, environment) = proof
+            .context(self.command.program, &self.command.arguments)?
+            .ok_or_else(|| failure(1))?;
         let logs = self.logs()?;
         let mut command = tooling::command(
             root,
@@ -181,7 +180,14 @@ impl Role {
         // it remains negative and is not a checked-close claim.
         Sender::from_file(file).map_err(|_| failure(1))
     }
-    async fn finish_group(&mut self, terminate: bool, signal: Signal) -> Result<()> {
+    /// `completed` is whether this owner observed the leader's exit within
+    /// its window, as the runner reports a command body's completion.
+    async fn finish_group(
+        &mut self,
+        terminate: bool,
+        signal: Signal,
+        completed: bool,
+    ) -> Result<()> {
         if !self.group_done {
             self.group_done = true;
             let mut stdin_closed = Ok(());
@@ -201,7 +207,7 @@ impl Role {
                 self.group_clean = true;
             }
             if let Some(proof) = &self.proof {
-                proof.observed_exit(self.status, self.group_clean);
+                proof.observed_exit(self.status, self.group_clean, completed);
             }
             stdin_closed?;
         }
@@ -239,7 +245,7 @@ impl Role {
 }
 async fn observe(
     native: &mut Native<'_>,
-    invocation: &PrepareInvocation,
+    invocation: &impl Preparation,
     end: Instant,
 ) -> Result<()> {
     native.ready().await?;
@@ -252,7 +258,7 @@ async fn observe(
 }
 async fn watched<T>(
     native: &mut Native<'_>,
-    invocation: &PrepareInvocation,
+    invocation: &impl Preparation,
     lease: &Role,
     prefix: Option<&(u64, String)>,
     held: bool,
@@ -286,7 +292,7 @@ async fn watched<T>(
 /// Observe a finalizer without cancelling or dropping it when the lease fails.
 async fn settled<T>(
     native: &mut Native<'_>,
-    invocation: &PrepareInvocation,
+    invocation: &impl Preparation,
     lease: &Role,
     prefix: Option<&(u64, String)>,
     end: Instant,
@@ -373,12 +379,12 @@ fn close_sender(sender: Sender) -> Result<()> {
         .and_then(|fd| nix::unistd::close(fd).map_err(|_| failure(1)))
 }
 
-pub(super) async fn refuse(mut invocation: PrepareInvocation) -> Result<()> {
+pub(super) async fn refuse(mut invocation: impl Preparation) -> Result<()> {
     if let Ok((lease, ansible)) = invocation.take_commands() {
         let (mut lease, _) = Role::take(lease);
         let (mut ansible, _) = Role::take(ansible);
-        let _ = lease.finish_group(false, Signal::TERM).await;
-        let _ = ansible.finish_group(false, Signal::TERM).await;
+        let _ = lease.finish_group(false, Signal::TERM, false).await;
+        let _ = ansible.finish_group(false, Signal::TERM, false).await;
         let _ = tokio::join!(lease.finish_io(), ansible.finish_io());
     }
     let _ = invocation.finish();
@@ -387,7 +393,7 @@ pub(super) async fn refuse(mut invocation: PrepareInvocation) -> Result<()> {
 
 pub(super) async fn run(
     native: &mut Native<'_>,
-    mut invocation: PrepareInvocation,
+    mut invocation: impl Preparation,
     end: Instant,
 ) -> Result<()> {
     let entered = Instant::now();
@@ -404,6 +410,8 @@ pub(super) async fn run(
     let mut sender = None;
     let mut prefix = None;
     let mut primary = None;
+    let mut ansible_completed = false;
+    let mut lease_completed = false;
     let lease_window = entered
         .checked_add(lease.command.timeout)
         .and_then(|selected| end.checked_sub(TAIL).map(|limit| selected.min(limit)))
@@ -495,7 +503,10 @@ pub(super) async fn run(
                         return Err(failure(1));
                     }
                     tokio::select! {
-                        result=exited(pid)=>return result,
+                        result=exited(pid)=>{
+                            ansible_completed=result.is_ok();
+                            return result;
+                        },
                         _=tokio::time::sleep(Duration::from_millis(10))=>{},
                     }
                 }
@@ -518,7 +529,7 @@ pub(super) async fn run(
         prefix.as_ref(),
         end,
         &mut primary,
-        ansible.finish_group(terminate, signal),
+        ansible.finish_group(terminate, signal, ansible_completed),
     )
     .await;
     keep(&mut primary, result);
@@ -564,7 +575,11 @@ pub(super) async fn run(
                     prefix.as_ref(),
                     false,
                     lease_end,
-                    exited(pid),
+                    async {
+                        let observed = exited(pid).await;
+                        lease_completed = observed.is_ok();
+                        observed
+                    },
                 )
                 .await
             }
@@ -578,7 +593,10 @@ pub(super) async fn run(
     } else {
         Signal::TERM
     };
-    keep(&mut primary, lease.finish_group(terminate, signal).await);
+    keep(
+        &mut primary,
+        lease.finish_group(terminate, signal, lease_completed).await,
+    );
     keep(&mut primary, lease.finish_io().await);
     native.cleanup_passed = prior && lease.group_clean && ansible.group_clean;
     keep(&mut primary, invocation.finish());

@@ -2,7 +2,7 @@
 //! signal owner while it owns the lease and Ansible groups simultaneously.
 
 use super::{Result, failure, tools::Invocation};
-use crate::ci::command::Command;
+use crate::ci::{command::Command, process::Preparation};
 use simplestchat_ops::capacity_vps::protocol::{Action, Header, Response, ResultData};
 use std::sync::{
     Arc, Mutex,
@@ -126,9 +126,30 @@ impl PrepareInvocation {
         Ok(())
     }
 }
+impl Preparation for PrepareInvocation {
+    fn take_commands(&mut self) -> Result<(Command, Command)> {
+        PrepareInvocation::take_commands(self)
+    }
+    fn check(&self) -> Result<()> {
+        PrepareInvocation::check(self)
+    }
+    fn ready_bytes(&self, progress: (u64, &str)) -> Result<Option<Vec<u8>>> {
+        PrepareInvocation::ready_bytes(self, progress)
+    }
+    fn ready(&self, bytes: &[u8]) -> Result<()> {
+        PrepareInvocation::ready(self, bytes)
+    }
+    fn finish(&self) -> Result<()> {
+        PrepareInvocation::finish(self)
+    }
+}
 pub(super) struct Completion(Arc<AtomicBool>);
 impl Completion {
     pub fn passed(&self) -> bool {
         self.0.load(Ordering::SeqCst)
     }
 }
+
+#[cfg(test)]
+#[path = "prepare_tests.rs"]
+mod tests;

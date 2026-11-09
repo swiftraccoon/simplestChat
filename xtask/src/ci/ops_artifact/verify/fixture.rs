@@ -1,6 +1,9 @@
 //! Owned unsigned graph and synthetic successful-verifier observations.
 use super::*;
-use crate::ci::{command::Command, process::Executor};
+use crate::ci::{
+    command::{Command, ReleaseRole},
+    process::Executor,
+};
 use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest, Selection,
@@ -222,10 +225,14 @@ impl Executor for Fake {
     async fn run(&mut self, mut command: Command) -> Result<Vec<u8>> {
         let index = self.calls;
         self.calls += 1;
-        let proof = command.retained_ops.take().unwrap();
-        proof.begin()?;
+        let proof = command
+            .release
+            .take()
+            .filter(|proof| proof.role() == ReleaseRole::Retained)
+            .unwrap();
+        proof.begin(&command)?;
         proof.validate(command.program, &command.arguments)?;
-        let (_, environment) = proof.context(command.program, &command.arguments)?;
+        let (_, environment) = proof.context(command.program, &command.arguments)?.unwrap();
         assert_eq!(
             environment.get(std::ffi::OsStr::new("GH_TOKEN")).unwrap(),
             "PRIVATE-TOKEN"
@@ -244,12 +251,12 @@ impl Executor for Fake {
         writer.write_all(&self.outputs[index]).unwrap();
         nix::unistd::close(writer).unwrap();
         let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
-        let seal = |finished: crate::ci::bounded_log::Finished| tools::Seal {
+        let seal = |finished: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
             sha256: finished.sha256,
             bytes: finished.bytes,
             metadata: finished.metadata,
         };
-        proof.observed_io(Some(tools::Captures {
+        proof.observed_io(Some(crate::ci::bounded_log::Captures {
             stdout: seal(stdout?),
             stderr: seal(stderr?),
         }));

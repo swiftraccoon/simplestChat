@@ -12,9 +12,8 @@ use super::{
 use crate::ci::{
     command::{Command, Program},
     process::{Executor, Native},
-    release_checks::files::Executable,
 };
-use simplestchat_toolkit::owned_process::Signals;
+use simplestchat_toolkit::{executable::Executable, owned_process::Signals};
 use std::{
     fs,
     os::fd::AsRawFd,
@@ -70,7 +69,7 @@ async fn native_runtime_roles_require_the_exact_single_capsule_and_settle_both_p
         command.timeout = Duration::from_secs(5);
         command.grace = Duration::from_secs(5);
         command.separate_logs = pending.logs.take();
-        command.ops_runtime = Some(proof.clone());
+        command.release = Some(proof.clone());
         let mut second = None;
         let mut input_descriptor = None;
         let second_permits = budget.reserve(2).unwrap();
@@ -82,7 +81,7 @@ async fn native_runtime_roles_require_the_exact_single_capsule_and_settle_both_p
             4 => command.grace += Duration::from_secs(1),
             5 => command.cleanup = true,
             6 => command.capture = Some(1),
-            7 => command.ops_runtime = None,
+            7 => command.release = None,
             8 => clock.advance(Duration::from_secs(121)),
             9 => fs::write(
                 fixture.caller.join("build/security_vm_ops.py"),
@@ -97,7 +96,7 @@ async fn native_runtime_roles_require_the_exact_single_capsule_and_settle_both_p
             _ => {
                 if changed == 12 {
                     command.program = Program::OpsRuntimePython;
-                    command.ops_runtime = None;
+                    command.release = None;
                 }
                 let input = fs::File::open(&fixture.request).unwrap();
                 assert!(fs::metadata(format!("/dev/fd/{}", input.as_raw_fd())).is_ok());

@@ -1015,14 +1015,35 @@ fn shared_crates_are_keyed_wherever_xtask_is() {
             );
         }
     }
-    // The key-computing CI modules compile against these toolkit sources.
+    // The key-computing modules compile against the whole toolkit crate:
+    // main.rs routes its replay child and github_output.rs takes its Environment.
     for name in [
         "crates/toolkit/Cargo.toml",
         "crates/toolkit/src/lib.rs",
+        "crates/toolkit/src/executable.rs",
         "crates/toolkit/src/owned_process.rs",
+        "crates/toolkit/src/replay.rs",
         "crates/toolkit/src/tooling.rs",
     ] {
         assert!(inputs::selected(Scope::BrowserBackend, name), "{name}");
+    }
+    // Every source the crate holds, so a new toolkit module cannot miss the key.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut pending = vec![root.join("crates/toolkit/src")];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            let name = path.strip_prefix(root).unwrap().to_str().unwrap();
+            assert_eq!(
+                inputs::selected(Scope::BrowserBackend, name),
+                name.ends_with(".rs"),
+                "{name}"
+            );
+        }
     }
     assert!(!inputs::selected(
         Scope::BrowserBackend,
@@ -1119,6 +1140,95 @@ fn only_dev_dependencies_enable_the_toolkit_test_hooks() {
     }
     assert!(dependents > 0, "xtask depends on the toolkit");
     assert_eq!(toolkit_manifests, 1, "the toolkit is one workspace member");
+}
+
+#[test]
+fn release_proof_implementors_are_the_eight_proofs_and_two_test_doubles() {
+    // The role vocabulary is closed but the trait is open. Pin every
+    // implementor in xtask: its file, its type and the role it reports.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let header = regex::Regex::new(
+        r"impl(?:<[^>]*>)?\s+(?:[A-Za-z_][\w:]*::)?ReleaseProof\s+for\s+([A-Za-z_][\w:]*)",
+    )
+    .unwrap();
+    let role = regex::Regex::new(
+        r"fn\s+role\(&self\)\s*->\s*(?:[A-Za-z_][\w:]*::)?ReleaseRole\s*\{\s*([^{}]*?)\s*\}",
+    )
+    .unwrap();
+    let mut found = std::collections::BTreeSet::new();
+    let mut pending = vec![root.join("xtask/src")];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|extension| extension != "rs") {
+                continue;
+            }
+            let text = fs::read_to_string(&path).unwrap();
+            let headers: Vec<_> = header.captures_iter(&text).collect();
+            for (index, implementor) in headers.iter().enumerate() {
+                let start = implementor.get(0).unwrap().end();
+                let end = headers
+                    .get(index + 1)
+                    .map_or(text.len(), |next| next.get(0).unwrap().start());
+                let reported = role
+                    .captures(&text[start..end])
+                    .map(|body| body[1].to_owned());
+                let relative = path.strip_prefix(root).unwrap().to_str().unwrap();
+                found.insert((relative.to_owned(), implementor[1].to_owned(), reported));
+            }
+        }
+    }
+    let expected = [
+        // The benchmark adapter test's double reports each role in turn, and
+        // so does the runner test's double that supplies no context.
+        ("container_benchmark/tools.rs", "Carried", "self.0"),
+        ("process_tests.rs", "Uncontexted", "self.role"),
+        ("ops_artifact/recipe.rs", "Tool", "ReleaseRole::Producer"),
+        (
+            "ops_artifact/source/git.rs",
+            "Git",
+            "ReleaseRole::SourceGit",
+        ),
+        (
+            "ops_artifact/verify/tools.rs",
+            "Invocation",
+            "ReleaseRole::Retained",
+        ),
+        (
+            "ops_artifact/acquire/tools.rs",
+            "Invocation",
+            "ReleaseRole::Acquire",
+        ),
+        (
+            "ops_artifact/hosted/tools.rs",
+            "Invocation",
+            "ReleaseRole::Hosted",
+        ),
+        (
+            "ops_artifact/runtime/tools.rs",
+            "Invocation",
+            "ReleaseRole::Runtime",
+        ),
+        (
+            "ops_artifact/capacity_vps/tools.rs",
+            "Invocation",
+            "ReleaseRole::Vps",
+        ),
+        (
+            "ops_artifact/deploy_frontend/tools.rs",
+            "Invocation",
+            "ReleaseRole::Frontend",
+        ),
+    ]
+    .map(|(path, name, role)| {
+        let path = format!("xtask/src/ci/{path}");
+        (path, name.to_owned(), Some(role.to_owned()))
+    });
+    assert_eq!(found, std::collections::BTreeSet::from(expected));
 }
 
 #[path = "browser_backend_tests.rs"]

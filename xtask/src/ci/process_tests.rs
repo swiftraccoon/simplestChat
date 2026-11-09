@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::ci::{bounded_log::Log, command::Program};
+use simplestchat_toolkit::replay::replay_selected;
 use std::{
     fs::{self, File, OpenOptions},
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
@@ -140,7 +141,7 @@ async fn selected_zstd_keeps_binary_stdout_separate_and_consumes_current_input_c
         "os.write(2,b'PRIVATE_STDERR\\x00\\xff')"
     ));
     let proof = Arc::new(
-        crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker")).unwrap(),
+        simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker")).unwrap(),
     );
     let payload: Vec<u8> = (0..=255).collect();
     let source = [b"skip".as_slice(), &payload].concat();
@@ -481,7 +482,7 @@ async fn zstd_proof_is_disjoint_and_parent_stdio_clone_closes_before_body_settle
         "os.write(1,sys.stdin.buffer.read())"
     ));
     let proof = Arc::new(
-        crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker")).unwrap(),
+        simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker")).unwrap(),
     );
     let (mut command, mut descriptors) = fixture.separate(128, 128);
     let (input, input_fd) = fixture.input(b"bound input", 0);
@@ -511,7 +512,7 @@ async fn zstd_proof_is_disjoint_and_parent_stdio_clone_closes_before_body_settle
     for role in [Program::Zstd, Program::Node] {
         let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
         let proof = Arc::new(
-            crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker"))
+            simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker"))
                 .unwrap(),
         );
         let (mut command, descriptors) = fixture.separate(128, 128);
@@ -936,7 +937,7 @@ async fn replay_known_interrupt_and_timeout_survive_unproven_finalization() {
             }
         };
         let (result, ()) = tokio::join!(
-            crate::ci::release_controller::replay::run_with_finalizer(
+            simplestchat_toolkit::replay::run_with_finalizer(
                 command,
                 b"owned bytes",
                 &mut signals,
@@ -965,7 +966,7 @@ async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precede
             sender.send(code).unwrap();
         }
         let mut signals = Signals::injected(receiver);
-        let result = crate::ci::release_controller::replay::run(
+        let result = simplestchat_toolkit::replay::run(
             command,
             b"owned bytes",
             &mut signals,
@@ -981,7 +982,7 @@ async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precede
 async fn factored_replay_keeps_literal_role_bytes_and_selected_executable_proof() {
     for changed in [false, true] {
         let body = concat!(
-            "assert sys.argv[1:]==['ci','release-controller','__replay']\n",
+            "assert sys.argv[1:]==['__replay']\n",
             "(root/'replayed').write_bytes(sys.stdin.buffer.read())\n"
         );
         let fixture = Fixture::new(&format!(
@@ -1136,7 +1137,7 @@ async fn mdns_proofs_refuse_extra_capsules_reuse_and_changed_selected_binding() 
         command.mdns = Some(proof.invocation.clone());
         let extra = if mode == "extra" {
             Some(Arc::new(
-                crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker"))
+                simplestchat_toolkit::executable::Executable::open(&fixture.path.join("docker"))
                     .unwrap(),
             ))
         } else {
@@ -1198,5 +1199,218 @@ async fn mdns_actual_interruption_stays_distinct_after_group_and_pipe_settlement
         assert!(evidence.settled && evidence.group_closed && evidence.io_closed);
         closed(&descriptors);
         proof.finish().unwrap();
+    }
+}
+
+/// Every program, in declaration order; the declaration scan below pins it.
+const PROGRAMS: [Program; 41] = [
+    Program::Git,
+    Program::Docker,
+    Program::Curl,
+    Program::Sudo,
+    Program::Python,
+    Program::CargoAudit,
+    Program::Node,
+    Program::PgConfig,
+    Program::DtlsPython,
+    Program::DtlsWorker,
+    Program::OpsCargo,
+    Program::OpsRustc,
+    Program::OpsGit,
+    Program::OpsGh,
+    Program::OpsMaterialCurl,
+    Program::OpsDpkgDeb,
+    Program::OpsHostCc,
+    Program::OpsKitShell,
+    Program::OpsKitPerl,
+    Program::OpsKitMake,
+    Program::OpsRuntimeGit,
+    Program::OpsRuntimePython,
+    Program::OpsVpsGit,
+    Program::OpsVpsSsh,
+    Program::OpsVpsAnsible,
+    Program::FrontendGit,
+    Program::FrontendGh,
+    Program::FrontendInventory,
+    Program::FrontendAnsible,
+    Program::FrontendCurl,
+    Program::ComparisonGit,
+    Program::ComparisonCargo,
+    Program::ComparisonBenchmark,
+    Program::Zstd,
+    Program::MdnsInterfaces,
+    Program::MdnsPlist,
+    Program::MdnsLaunch,
+    Program::MdnsLogs,
+    Program::MdnsCompiler,
+    Program::MdnsProbe,
+    Program::BenchmarkCurl,
+];
+
+#[test]
+fn release_roles_partition_exactly_the_runner_selected_programs() {
+    use crate::ci::command::ReleaseRole::{self, *};
+    // Classified here independently of the runner and the roles; a new program
+    // fails this exhaustive match until it has a row.
+    fn expected(program: Program) -> (bool, &'static [ReleaseRole]) {
+        match program {
+            Program::Git
+            | Program::Docker
+            | Program::Curl
+            | Program::Sudo
+            | Program::Python
+            | Program::PgConfig => (false, &[]),
+            Program::CargoAudit
+            | Program::Node
+            | Program::DtlsPython
+            | Program::DtlsWorker
+            | Program::ComparisonGit
+            | Program::ComparisonCargo
+            | Program::ComparisonBenchmark
+            | Program::Zstd
+            | Program::MdnsInterfaces
+            | Program::MdnsPlist
+            | Program::MdnsLaunch
+            | Program::MdnsLogs
+            | Program::MdnsCompiler
+            | Program::MdnsProbe
+            | Program::BenchmarkCurl => (true, &[]),
+            Program::OpsCargo | Program::OpsRustc => (true, &[Producer]),
+            Program::OpsGit => (true, &[SourceGit]),
+            Program::OpsGh => (true, &[Retained, Acquire]),
+            Program::OpsMaterialCurl
+            | Program::OpsDpkgDeb
+            | Program::OpsHostCc
+            | Program::OpsKitShell
+            | Program::OpsKitPerl
+            | Program::OpsKitMake => (true, &[Hosted]),
+            Program::OpsRuntimeGit | Program::OpsRuntimePython => (true, &[Runtime]),
+            Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible => (true, &[Vps]),
+            Program::FrontendGit
+            | Program::FrontendGh
+            | Program::FrontendInventory
+            | Program::FrontendAnsible
+            | Program::FrontendCurl => (true, &[Frontend]),
+        }
+    }
+    let mut release = 0;
+    for program in PROGRAMS {
+        let (runner, roles) = expected(program);
+        let admitted: Vec<ReleaseRole> = ReleaseRole::ALL
+            .into_iter()
+            .filter(|role| role.admits(program))
+            .collect();
+        assert_eq!(admitted, roles, "{program:?}");
+        // Only Retained and Acquire share a program; no release program can
+        // fall back to PATH, and the runner selects no other program.
+        assert_eq!(super::selected(program), runner, "{program:?}");
+        release += usize::from(!admitted.is_empty());
+    }
+    assert_eq!(release, 20);
+    let bounded: Vec<(ReleaseRole, Program)> = ReleaseRole::ALL
+        .into_iter()
+        .flat_map(|role| PROGRAMS.map(|program| (role, program)))
+        .filter(|(role, program)| role.bounds_dispatch(*program))
+        .collect();
+    assert_eq!(
+        bounded,
+        [
+            (Producer, Program::OpsCargo),
+            (Producer, Program::OpsRustc),
+            (SourceGit, Program::OpsGit),
+        ]
+    );
+}
+
+#[test]
+fn release_role_and_program_lists_name_every_declared_variant_in_order() {
+    // Read the declarations themselves: an appended, removed or reordered
+    // variant fails here whatever match arms exist elsewhere.
+    fn names<T: std::fmt::Debug>(values: &[T]) -> Vec<String> {
+        values.iter().map(|value| format!("{value:?}")).collect()
+    }
+    let source =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ci/command.rs"))
+            .unwrap();
+    let variant = regex::Regex::new(r"^([A-Z][A-Za-z0-9]*),$").unwrap();
+    let declared = |name: &str| -> Vec<String> {
+        let header = format!("pub(super) enum {name} {{\n");
+        assert_eq!(source.matches(&header).count(), 1, "{name}");
+        let start = source.find(&header).unwrap() + header.len();
+        let end = start + source[start..].find("\n}\n").unwrap();
+        source[start..end]
+            .lines()
+            .map(|line| {
+                let line = line.trim();
+                // Only bare unit variants: anything else must change this scan.
+                let found = variant.captures(line);
+                found.unwrap_or_else(|| panic!("{name}: {line}"))[1].to_owned()
+            })
+            .collect()
+    };
+    assert_eq!(
+        declared("ReleaseRole"),
+        names(&crate::ci::command::ReleaseRole::ALL)
+    );
+    assert_eq!(declared("Program"), names(&PROGRAMS));
+}
+
+/// A proof that supplies no context of its own and validates any program.
+#[derive(Debug)]
+struct Uncontexted {
+    role: crate::ci::command::ReleaseRole,
+    executable: PathBuf,
+}
+impl crate::ci::command::ReleaseProof for Uncontexted {
+    fn role(&self) -> crate::ci::command::ReleaseRole {
+        self.role
+    }
+    fn begin(&self, _: &Command) -> Result<()> {
+        Ok(())
+    }
+    fn context(
+        &self,
+        _: Program,
+        _: &[std::ffi::OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Ok(None)
+    }
+    fn validate(&self, _: Program, _: &[std::ffi::OsString]) -> Result<&Path> {
+        Ok(&self.executable)
+    }
+}
+
+#[tokio::test]
+async fn only_a_source_git_proof_without_context_runs_in_the_runner_checkout() {
+    use crate::ci::command::ReleaseRole::{self, *};
+    for role in ReleaseRole::ALL {
+        let fixture = Fixture::new("(root/'dispatched').write_text('ran')");
+        let program = match role {
+            Producer => Program::OpsCargo,
+            SourceGit => Program::OpsGit,
+            Retained | Acquire => Program::OpsGh,
+            Hosted => Program::OpsMaterialCurl,
+            Runtime => Program::OpsRuntimeGit,
+            Vps => Program::OpsVpsGit,
+            Frontend => Program::FrontendGit,
+        };
+        assert!(role.admits(program), "{role:?}");
+        let mut command = Command::capture(program, &[]);
+        command.release = Some(Arc::new(Uncontexted {
+            role,
+            executable: fixture.path.join("docker"),
+        }));
+        let mut native = fixture.native(signals());
+        let result = native.run(command).await;
+        if role == SourceGit {
+            result.unwrap();
+            assert!(fixture.path.join("dispatched").exists());
+        } else {
+            // Any other role would otherwise run in the runner's checkout
+            // with the runner's unscrubbed environment.
+            assert_eq!(result.unwrap_err().code, 1, "{role:?}");
+            assert!(!fixture.path.join("dispatched").exists(), "{role:?}");
+        }
+        assert!(native.cleanup_passed(), "{role:?}");
     }
 }

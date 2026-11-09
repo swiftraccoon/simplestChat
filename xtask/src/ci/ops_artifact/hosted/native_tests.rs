@@ -8,7 +8,7 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
 };
 use crate::ci::{
-    command::Command,
+    command::{Command, ReleaseRole},
     process::{Executor, Native},
 };
 use simplestchat_toolkit::{
@@ -174,7 +174,7 @@ async fn actual_failed_http_child_seals_are_admitted_for_complete_tree_settlemen
     command.timeout = Duration::from_secs(5);
     command.grace = Duration::from_secs(5);
     command.separate_logs = Some(logs);
-    command.hosted_ops = Some(proof.clone());
+    command.release = Some(proof.clone());
     let env = Environment::new();
     let mut native = Native::new(&fixture.root, &env, Signals::new().unwrap());
     let error = native.run(command).await.unwrap_err();
@@ -217,11 +217,15 @@ struct AfterCurl<'a> {
 }
 impl Executor for AfterCurl<'_> {
     async fn run(&mut self, command: Command) -> Result<Vec<u8>> {
-        let proof = command.hosted_ops.as_ref().unwrap().clone();
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Hosted)
+            .unwrap();
         let program = command.program;
         let arguments = command.arguments.clone();
         let ran = self.native.run(command).await;
-        let directory = proof.context(program, &arguments)?.0.to_owned();
+        let directory = proof.context(program, &arguments)?.unwrap().0.to_owned();
         match self.fault {
             "missing-seal" => proof.observed_io(None),
             "changed-seal" => {
@@ -478,7 +482,7 @@ async fn capsule_freezes_role_argv_body_caps_clock_and_retained_input_cursor() {
         command.timeout = body;
         command.grace = Duration::from_secs(5);
         command.separate_logs = Some(logs);
-        command.hosted_ops = Some(proof.clone());
+        command.release = Some(proof.clone());
         let input_permit = if with_input {
             let (input, permit) = tree.input("input").unwrap();
             if case == "cursor" {
@@ -569,7 +573,7 @@ async fn original_finished_seal_refuses_same_length_mutation_before_first_read()
     command.timeout = Duration::from_secs(5);
     command.grace = Duration::from_secs(5);
     command.separate_logs = Some(logs);
-    command.hosted_ops = Some(proof.clone());
+    command.release = Some(proof.clone());
     let env = Environment::new();
     let mut native = Native::new(&fixture.root, &env, Signals::new().unwrap());
     native.run(command).await.unwrap();

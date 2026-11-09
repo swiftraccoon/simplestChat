@@ -394,7 +394,7 @@ fn blocked_replay_output_has_a_deadline_without_changing_shared_stdout_flags() {
             .stdout(Stdio::from(write))
             .stderr(Stdio::null());
         let started = Instant::now();
-        let error = replay::run(
+        let error = simplestchat_toolkit::replay::run(
             command,
             &vec![b'x'; 1024 * 1024],
             &mut Signals::new().unwrap(),
@@ -417,7 +417,7 @@ fn replay_copies_raw_bytes_and_queued_cancellation_acquires_no_child() {
         let mut command = Command::new("/bin/cat");
         command.stdout(Stdio::from(fs::File::create(&destination).unwrap()));
         let bytes = b"raw\0\xff\ncombined";
-        replay::run(
+        simplestchat_toolkit::replay::run(
             command,
             bytes,
             &mut Signals::new().unwrap(),
@@ -431,10 +431,15 @@ fn replay_copies_raw_bytes_and_queued_cancellation_acquires_no_child() {
         let mut signals = Signals::injected(receiver);
         let command = Command::new("/unavailable-inert-program");
         assert_eq!(
-            replay::run(command, bytes, &mut signals, Instant::now() + plan::WAIT)
-                .await
-                .unwrap_err()
-                .code,
+            simplestchat_toolkit::replay::run(
+                command,
+                bytes,
+                &mut signals,
+                Instant::now() + plan::WAIT
+            )
+            .await
+            .unwrap_err()
+            .code,
             130
         );
     });
@@ -740,7 +745,7 @@ fn pipe_original_descriptors_are_cloexec_in_executed_inert_child() {
             .env("CHECK_WRITE", write.to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        replay::run(
+        simplestchat_toolkit::replay::run(
             command,
             b"",
             &mut Signals::new().unwrap(),

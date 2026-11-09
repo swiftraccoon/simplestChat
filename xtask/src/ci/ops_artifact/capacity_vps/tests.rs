@@ -600,7 +600,7 @@ impl PreparationFixture {
         lease.arguments = lease_args;
         lease.timeout = lease_body;
         lease.grace = grace;
-        lease.ops_vps = Some(lease_proof.clone());
+        lease.release = Some(lease_proof.clone());
         lease.separate_logs = lease_pending.logs.take();
         lease.stdin = Some(Arc::new(frame.clone_input(&checkpoint).unwrap()));
         let mut ansible = Command::capture(Program::OpsVpsAnsible, &[]);
@@ -608,7 +608,7 @@ impl PreparationFixture {
         ansible.arguments = ansible_args;
         ansible.timeout = body;
         ansible.grace = grace;
-        ansible.ops_vps = Some(ansible_proof.clone());
+        ansible.release = Some(ansible_proof.clone());
         ansible.separate_logs = ansible_pending.logs.take();
         let prepared = super::prepare::PrepareInvocation::new(
             lease,

@@ -24,6 +24,19 @@ pub(super) struct Finished {
     pub complete: bool,
     pub metadata: Metadata,
 }
+/// One complete finished capture: its digest, length and final metadata.
+#[derive(Clone)]
+pub(super) struct Seal {
+    pub sha256: String,
+    pub bytes: u64,
+    pub metadata: Metadata,
+}
+/// The seals of one command's independently bounded stdout and stderr.
+#[derive(Clone)]
+pub(super) struct Captures {
+    pub stdout: Seal,
+    pub stderr: Seal,
+}
 pub(super) struct Log {
     maximum: u64,
     #[cfg(test)]

@@ -214,7 +214,7 @@ async fn call<E: Executor>(
             return Err(error);
         }
     };
-    command.ops_runtime = Some(proof.clone());
+    command.release = Some(proof.clone());
     let result = executor.run(command).await;
     let settled = proof.settled();
     let captures = proof.captures();

@@ -117,7 +117,7 @@ impl Drop for Fixture {
 
 struct Dispatched {
     result: Result<Vec<u8>>,
-    captures: Result<tools::Captures>,
+    captures: Result<crate::ci::bounded_log::Captures>,
     names: [String; 2],
 }
 fn invocation(tools: &tools::Tools, index: usize) -> Arc<tools::Invocation> {
@@ -145,7 +145,7 @@ async fn dispatch(
     command.grace = Duration::from_millis(20);
     command.capture = None;
     command.separate_logs = Some(logs);
-    command.retained_ops = Some(proof.clone());
+    command.release = Some(proof.clone());
     let result = native.run(command).await;
     let captures = proof.captures();
     // Native returned only after attempting both sink owners. Their retained
@@ -423,7 +423,7 @@ async fn unarmed_or_expired_after_capture_dispatch_guards_finish_both_logs_witho
         command.arguments = tools.arguments(0).unwrap();
         command.capture = None;
         command.separate_logs = Some(logs);
-        command.retained_ops = Some(proof.clone());
+        command.release = Some(proof.clone());
         let mut native = Native::new(&fixture.root, &fixture.environment, Signals::new().unwrap());
         let result = native.run(command).await;
         let captured = proof.captures();

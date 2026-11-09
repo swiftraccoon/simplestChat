@@ -4,14 +4,14 @@
 
 use super::{failure, plan};
 use crate::ci::{
-    command::{Command, Program},
-    ops_artifact::{
-        namespace::{Budget, Permit},
-        verify::tools::Captures,
-    },
-    release_checks::files::{self, Executable},
+    bounded_log::Captures,
+    command::{Command, Program, ReleaseProof, ReleaseRole},
+    ops_artifact::namespace::{Budget, Permit},
 };
-use simplestchat_toolkit::tooling::{Environment, Result};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Result},
+};
 use std::{
     ffi::{OsStr, OsString},
     io::Seek,
@@ -167,6 +167,27 @@ impl Invocation {
             .ok_or_else(|| failure(1))
     }
 }
+impl ReleaseProof for Invocation {
+    fn role(&self) -> ReleaseRole {
+        ReleaseRole::Hosted
+    }
+    fn begin(&self, request: &Command) -> Result<()> {
+        Invocation::begin(self, request)
+    }
+    fn context(
+        &self,
+        program: Program,
+        args: &[OsString],
+    ) -> Result<Option<(&Path, &Environment)>> {
+        Invocation::context(self, program, args).map(Some)
+    }
+    fn validate(&self, program: Program, args: &[OsString]) -> Result<&Path> {
+        Invocation::validate(self, program, args)
+    }
+    fn observed_io(&self, value: Option<Captures>) {
+        Invocation::observed_io(self, value)
+    }
+}
 
 pub(super) struct InvocationSpec {
     pub role: Role,
@@ -205,15 +226,15 @@ impl Tools {
         };
         let selected: Result<()> = (|| {
             value.git = Some(Arc::new(
-                files::select(caller, environment, OsStr::new("git"))
+                executable::select(caller, environment, OsStr::new("git"))
                     .map_err(|e| failure(e.code))?,
             ));
             value.curl = Some(Arc::new(
-                files::select(caller, environment, OsStr::new("curl"))
+                executable::select(caller, environment, OsStr::new("curl"))
                     .map_err(|e| failure(e.code))?,
             ));
             value.dpkg = Some(Arc::new(
-                files::select(caller, environment, OsStr::new("dpkg-deb"))
+                executable::select(caller, environment, OsStr::new("dpkg-deb"))
                     .map_err(|e| failure(e.code))?,
             ));
             Ok(())

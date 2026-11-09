@@ -1,7 +1,7 @@
 //! Complete early ownership/failure paths; no hosted component is acquired.
 
 use super::*;
-use crate::ci::command::Program;
+use crate::ci::command::{Program, ReleaseRole};
 use std::{fs, os::unix::fs::PermissionsExt};
 
 fn context(root: &Path) -> Context {
@@ -67,7 +67,14 @@ impl Executor for FirstFailure {
     async fn run(&mut self, request: Command) -> Result<Vec<u8>> {
         self.calls += 1;
         assert_eq!(request.program, Program::OpsGit);
-        assert!(request.source_git.as_ref().unwrap().context()?.is_some());
+        let proof = request.release.as_ref();
+        let proof = proof.filter(|proof| proof.role() == ReleaseRole::SourceGit);
+        assert!(
+            proof
+                .unwrap()
+                .context(request.program, &request.arguments)?
+                .is_some()
+        );
         Err(failure(42))
     }
     async fn ready(&mut self) -> Result<()> {

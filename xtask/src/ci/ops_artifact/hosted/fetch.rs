@@ -8,7 +8,7 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
     worker,
 };
-use crate::ci::{command::Command, ops_artifact::verify::tools::Captures, process::Executor};
+use crate::ci::{bounded_log::Captures, command::Command, process::Executor};
 use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsString,
@@ -269,7 +269,7 @@ pub(super) async fn run<E: Executor>(
         command.grace = Duration::from_secs(5);
         command.capture = None;
         command.separate_logs = Some(logs);
-        command.hosted_ops = Some(proof.clone());
+        command.release = Some(proof.clone());
         let ran = executor.run(command).await;
         drop(permits);
         let seals = proof.captures();
@@ -375,7 +375,7 @@ pub(super) async fn decoded_deb<E: Executor>(
         command.grace = Duration::from_secs(5);
         command.capture = None;
         command.separate_logs = Some(logs);
-        command.hosted_ops = Some(proof.clone());
+        command.release = Some(proof.clone());
         let (input, input_permit) = match tree.input(input_name) {
             Ok(v) => v,
             Err(error) => {

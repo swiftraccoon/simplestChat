@@ -89,7 +89,7 @@ async fn reference(cases: &[Value]) -> Result<Value> {
     let signals = Signals::new()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let captured = simplestchat_toolkit::tooling::inherited_env();
-    let node = Arc::new(crate::ci::release_checks::files::select(
+    let node = Arc::new(simplestchat_toolkit::executable::select(
         root,
         &captured,
         std::ffi::OsStr::new("node"),

@@ -3507,6 +3507,7 @@ dependencies = [
 name = "simplestchat-toolkit"
 version = "0.1.0"
 dependencies = [
+ "nix",
  "rustix",
  "simplestchat-ops",
  "tokio",

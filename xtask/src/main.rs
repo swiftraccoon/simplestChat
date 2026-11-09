@@ -150,6 +150,11 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
 
 fn main() -> ExitCode {
     let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
+    // The runner's reserved replay child, before any other parsing or signal
+    // registration: it only copies stdin to stdout.
+    if let Some(code) = simplestchat_toolkit::replay::route(&arguments) {
+        return code;
+    }
     if arguments.len() >= 2 && arguments[0] == "release" && arguments[1] == "verify" {
         // The Ops entry owns its runtime and original completion signals.
         // Forward native path arguments before the existing UTF-8 router.

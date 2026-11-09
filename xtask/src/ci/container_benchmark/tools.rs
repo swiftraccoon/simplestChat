@@ -7,10 +7,12 @@ use super::{
 };
 use crate::ci::{
     command::{Command, Program},
-    release_checks::files::{self, Executable},
     release_controller::files::Directory,
 };
-use simplestchat_toolkit::tooling::{Environment, Result};
+use simplestchat_toolkit::{
+    executable::{self, Executable},
+    tooling::{Environment, Result},
+};
 use std::{
     ffi::{OsStr, OsString},
     fs::{File, Metadata},
@@ -43,7 +45,7 @@ struct Tool {
 }
 impl Tool {
     fn select(caller: &Path, env: &Environment, name: &str, uid: u32) -> Result<Self> {
-        let proof = files::select(caller, env, OsStr::new(name)).map_err(|_| failure(1))?;
+        let proof = executable::select(caller, env, OsStr::new(name)).map_err(|_| failure(1))?;
         let admitted = (|| {
             let path = proof.validate().map_err(|_| failure(1))?;
             let file = rustix::fs::open(
@@ -129,8 +131,8 @@ enum Role {
 }
 #[derive(Clone)]
 pub(in crate::ci) struct IoSeals {
-    pub paired: Option<crate::ci::ops_artifact::verify::tools::Captures>,
-    pub combined: Option<crate::ci::ops_artifact::verify::tools::Seal>,
+    pub paired: Option<crate::ci::bounded_log::Captures>,
+    pub combined: Option<crate::ci::bounded_log::Seal>,
 }
 enum Received {
     Fresh,
@@ -913,14 +915,13 @@ esac
         let logs = Arc::try_unwrap(first.separate_logs.take().unwrap()).unwrap();
         let stdout = logs.stdout.finish().await.unwrap();
         let stderr = logs.stderr.finish().await.unwrap();
-        let seal =
-            |v: crate::ci::bounded_log::Finished| crate::ci::ops_artifact::verify::tools::Seal {
-                sha256: v.sha256,
-                bytes: v.bytes,
-                metadata: v.metadata,
-            };
+        let seal = |v: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
+            sha256: v.sha256,
+            bytes: v.bytes,
+            metadata: v.metadata,
+        };
         first_proof.observed_io(Some(IoSeals {
-            paired: Some(crate::ci::ops_artifact::verify::tools::Captures {
+            paired: Some(crate::ci::bounded_log::Captures {
                 stdout: seal(stdout),
                 stderr: seal(stderr),
             }),
@@ -1188,6 +1189,51 @@ esac
                 group_settled: true,
             };
             assert_eq!(outcome.retryable(error), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn container_benchmark_refuses_a_command_that_carries_a_release_proof() {
+        use crate::ci::command::{ReleaseProof, ReleaseRole};
+        /// Reports one role and records any call: the adapter must refuse the
+        /// command before Native consults the proof, whatever its role.
+        #[derive(Debug)]
+        struct Carried(ReleaseRole, AtomicBool);
+        impl ReleaseProof for Carried {
+            fn role(&self) -> ReleaseRole {
+                self.0
+            }
+            fn begin(&self, _: &Command) -> Result<()> {
+                self.1.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            fn context(&self, _: Program, _: &[OsString]) -> Result<Option<(&Path, &Environment)>> {
+                self.1.store(true, Ordering::SeqCst);
+                Ok(None)
+            }
+            fn validate(&self, _: Program, _: &[OsString]) -> Result<&Path> {
+                self.1.store(true, Ordering::SeqCst);
+                Err(failure(1))
+            }
+        }
+        for role in ReleaseRole::ALL {
+            let (tree, tools, budget) = setup(b"#!/bin/sh\nprintf ran > inert-dispatched\n");
+            let proof = Arc::new(Carried(role, AtomicBool::new(false)));
+            let mut request = command(&tree, false, "release");
+            request.release = Some(proof.clone());
+            let environment = Environment::new();
+            let mut native = Native::new(&tree.path, &environment, Signals::new().unwrap());
+            let error = Adapter::new(&mut native, &tools)
+                .run(request)
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, 1, "{role:?}");
+            assert!(native.cleanup_passed(), "{role:?}");
+            drop(native);
+            assert!(!proof.1.load(Ordering::SeqCst), "{role:?}");
+            assert!(!tree.path.join("inert-dispatched").exists(), "{role:?}");
+            tools.finish().unwrap();
+            assert_eq!(budget.count(), 0);
         }
     }
 }

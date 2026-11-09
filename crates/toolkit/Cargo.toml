@@ -1,6 +1,6 @@
 [package]
 name = "simplestchat-toolkit"
-description = "Shared child-command, native build environment and owned process helpers"
+description = "Shared child-command, native build environment, owned process, retained executable and output replay helpers"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,6 +19,9 @@ path = "src/lib.rs"
 test-hooks = []
 
 [dependencies]
-rustix = { version = "1.1.5", default-features = false, features = ["process"] }
+nix = { version = "0.31.3", default-features = false }
+rustix = { version = "1.1.5", default-features = false, features = ["fs", "process", "std"] }
 simplestchat-ops = { path = "../../ops", default-features = false }
-tokio = { version = "1.53.3", default-features = false, features = ["macros", "rt", "sync", "time"] }
+tokio = { version = "1.53.3", default-features = false, features = [
+    "io-util", "macros", "process", "rt", "sync", "time",
+] }

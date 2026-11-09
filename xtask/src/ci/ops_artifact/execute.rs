@@ -69,7 +69,7 @@ fn selected(tools: &Tools, rustc: bool, args: &[&str]) -> Command {
         },
         args,
     );
-    value.ops = Some(if rustc {
+    value.release = Some(if rustc {
         tools.rustc.clone()
     } else {
         tools.cargo.clone()

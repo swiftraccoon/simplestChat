@@ -10,7 +10,7 @@ use super::{
     sources,
 };
 use crate::ci::{
-    command::{Command, Program},
+    command::{Command, Program, ReleaseRole},
     process::Executor,
 };
 use simplestchat_ops::capacity_vps::protocol::{
@@ -522,7 +522,11 @@ impl Executor for Remote {
         if command.program == Program::OpsGh {
             return self.acquirer.run(command).await;
         }
-        let proof = command.ops_vps.clone().unwrap();
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Vps)
+            .unwrap();
         if command.program == Program::OpsVpsSsh
             && self.actions.last() == Some(&Action::Start)
             && let Some(name) = self.mutate_before_status.take()
@@ -578,7 +582,7 @@ impl Executor for Remote {
             out_closed.and(err_closed).map_err(|_| super::failure(1))
         });
         let (written, out, err) = tokio::join!(writer, logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| super::super::verify::tools::Seal {
+        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
             sha256: value.sha256,
             bytes: value.bytes,
             metadata: value.metadata,
@@ -596,7 +600,7 @@ impl Executor for Remote {
             proof.observed_io(captures);
         }
         if !self.missing_exit || !remote {
-            proof.observed_exit(Some(status), !self.unsettled_exit || !remote);
+            proof.observed_exit(Some(status), !self.unsettled_exit || !remote, true);
         }
         written.map_err(|_| super::failure(1))??;
         if !complete {
@@ -605,7 +609,11 @@ impl Executor for Remote {
         if status != 0 {
             return Err(super::failure(u8::try_from(status).unwrap_or(1)));
         }
-        proof.settled()?;
+        let invocation: &dyn std::any::Any = &*proof;
+        invocation
+            .downcast_ref::<super::tools::Invocation>()
+            .unwrap()
+            .settled()?;
         Ok(Vec::new())
     }
     async fn ready(&mut self) -> Result<()> {

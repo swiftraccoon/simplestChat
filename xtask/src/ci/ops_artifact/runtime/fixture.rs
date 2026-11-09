@@ -3,7 +3,7 @@
 
 use super::{plan, receipt, sources};
 use crate::ci::{
-    command::{Command, Program},
+    command::{Command, Program, ReleaseRole},
     process::Executor,
 };
 use serde_json::{Value, json};
@@ -255,10 +255,15 @@ impl Executor for Fake {
         }
         let index = self.runtime_calls;
         self.runtime_calls += 1;
-        let proof = command.ops_runtime.clone().unwrap();
+        let proof = command
+            .release
+            .clone()
+            .filter(|proof| proof.role() == ReleaseRole::Runtime)
+            .unwrap();
         let admitted = (|| {
             proof.begin(&command)?;
-            let (directory, environment) = proof.context(command.program, &command.arguments)?;
+            let (directory, environment) =
+                proof.context(command.program, &command.arguments)?.unwrap();
             self.runtime_directories.push(directory.into());
             for key in [
                 "GH_TOKEN",
@@ -297,7 +302,7 @@ impl Executor for Fake {
         });
         let (written, stdout, stderr) =
             tokio::join!(writer, logs.stdout.finish(), logs.stderr.finish());
-        let seal = |value: crate::ci::bounded_log::Finished| super::super::verify::tools::Seal {
+        let seal = |value: crate::ci::bounded_log::Finished| crate::ci::bounded_log::Seal {
             sha256: value.sha256,
             bytes: value.bytes,
             metadata: value.metadata,
