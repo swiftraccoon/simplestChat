@@ -430,20 +430,27 @@ cargo test --locked -p xtask --bin xtask \
 ```
 
 The Python group of `check`, run by default and by `--python`, starts with the
-Python line ratchet, `cargo run -q -p xtask -- python-lines`. It needs only Git
-and Cargo, so it runs before the Python environment is required. It counts the
-lines of every tracked `*.py` outside `vendor/`
-(`git ls-files -z -- '*.py' ':!vendor/'`; an unterminated last line counts as
-one) and compares each file with its row in `xtask/python-allowance.txt`, which
-must list exactly the tracked files. It fails, listing the offending paths,
-when a tracked file has no row, a row names a file that is no longer tracked, a
-file has more lines than its row, or the total exceeds the allowance's `total`
-line; a missing allowance is an error. New code is written in Rust, so tracked
-Python may shrink but never grow. A commit that deletes or shrinks Python runs
-`cargo run -q -p xtask -- python-lines --update`, which only removes rows and
-lowers counts: it refuses, changing nothing, while any file is unlisted or grew
-or the total would rise. A renamed Python file is recorded by editing its row
-by hand.
+Python line ratchet, `cargo run -q -p xtask -- python-lines`, which `check` runs
+as `rustup run <channel> cargo run --locked -q -p xtask -- python-lines` with
+the channel pinned in `rust-toolchain.toml`. The step needs Git and that pinned
+toolchain through rustup, nothing from the Python environment, so it runs
+before the Python environment is required. It counts the lines of every tracked
+`*.py` and `*.pyi` outside `vendor/`
+(`git ls-files -z -- '*.py' '*.pyi' ':!vendor/'`; an unterminated last line
+counts as one) and compares each file with its row in
+`xtask/python-allowance.txt`, which must list exactly the tracked files: a
+`total <lines>` line, then one `<lines>`, tab, `<path>` row per file, unique
+and sorted by path in byte order, with LF endings. A malformed line, including
+a CRLF ending, an unsorted row or a repeated path, is refused by its line
+number in both modes, leaving the file unchanged. The check fails, listing the
+offending paths, when a tracked file has no row, a row names a file that is no
+longer tracked, a file has more lines than its row, or the total exceeds the
+allowance's `total` line; a missing allowance is an error. New code is written
+in Rust, so tracked Python may shrink but never grow. A commit that deletes or
+shrinks Python runs `cargo run -q -p xtask -- python-lines --update`, which
+only removes rows and lowers counts: it refuses, changing nothing, while any
+file is unlisted or grew or the total would rise. A renamed Python file is
+recorded by editing its row by hand.
 
 The source gate runs Ruff's complete stable rule set, its formatter, and
 basedpyright's `all` mode over every maintained Python file and type stub,

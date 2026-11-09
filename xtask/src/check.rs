@@ -63,17 +63,7 @@ fn run_with_env(
         rust(root, &mut environment)?;
     }
     if group == "all" || group == "python" {
-        // The line ratchet needs only Git and Cargo, so it runs before the
-        // Python environment is required.
-        let channel = tooling::pinned_toolchain(root)?;
-        let ratchet = ["run", "--locked", "-q", "-p", "xtask", "--", "python-lines"];
-        tooling::run(
-            root,
-            &environment,
-            "rustup",
-            ["run", &channel, "cargo"].into_iter().chain(ratchet),
-        )?;
-        python::run(root, &environment)?;
+        python_group(root, &environment)?;
     }
     if group == "all" || group == "helpers" {
         helpers(root, &environment)?;
@@ -117,27 +107,6 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
             "-D",
             "warnings",
         ],
-        vec!["run", "--locked", "-q", "-p", "xtask", "--", "line-length"],
-        vec![
-            "run",
-            "--locked",
-            "-q",
-            "-p",
-            "xtask",
-            "--",
-            "protocol-ts",
-            "--check",
-        ],
-        vec![
-            "run",
-            "--locked",
-            "-q",
-            "-p",
-            "xtask",
-            "--",
-            "http-policy",
-            "--check",
-        ],
     ] {
         tooling::run(
             root,
@@ -145,6 +114,13 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
             "rustup",
             ["run", &channel, "cargo"].into_iter().chain(arguments),
         )?;
+    }
+    for command in [
+        &["line-length"][..],
+        &["protocol-ts", "--check"],
+        &["http-policy", "--check"],
+    ] {
+        run_xtask(root, environment, &channel, command)?;
     }
     let mut flags = environment
         .get(OsStr::new("RUSTDOCFLAGS"))
@@ -167,6 +143,32 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
             "--no-deps",
             "--document-private-items",
         ],
+    )
+}
+
+/// The line ratchet needs only Git and the pinned toolchain through rustup, so
+/// it runs before the Python environment is required.
+fn python_group(root: &Path, environment: &Environment) -> tooling::Result<()> {
+    let channel = tooling::pinned_toolchain(root)?;
+    run_xtask(root, environment, &channel, &["python-lines"])?;
+    python::run(root, environment)
+}
+
+/// `rustup run <channel> cargo run --locked -q -p xtask -- <command>`.
+fn run_xtask(
+    root: &Path,
+    environment: &Environment,
+    channel: &str,
+    command: &[&str],
+) -> tooling::Result<()> {
+    let cargo = [
+        "run", channel, "cargo", "run", "--locked", "-q", "-p", "xtask", "--",
+    ];
+    tooling::run(
+        root,
+        environment,
+        "rustup",
+        cargo.into_iter().chain(command.iter().copied()),
     )
 }
 

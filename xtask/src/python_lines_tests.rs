@@ -2,6 +2,7 @@
 
 use super::*;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -30,18 +31,35 @@ impl Repository {
     }
 
     fn git(&self, arguments: &[&str]) {
-        let output = Command::new("git")
+        self.git_output(arguments, "");
+    }
+
+    /// Run Git with `input` on stdin and return its stdout.
+    fn git_output(&self, arguments: &[&str], input: &str) -> Vec<u8> {
+        let mut child = Command::new("git")
             .args(arguments)
             .current_dir(&self.0)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .output()
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .unwrap();
+        // Close stdin after the input so Git sees its end.
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
         assert!(
             output.status.success(),
             "git {arguments:?}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        output.stdout
     }
 
     fn write(&self, path: &str, contents: &str) {
@@ -79,7 +97,6 @@ fn passes_when_every_tracked_python_file_is_listed_and_the_total_is_within_the_a
     let repository = Repository::new();
     repository.track("build/tool.py", "import os\nprint(os.name)\n");
     repository.track("ops/files/helper.py", "VALUE = 1\n");
-    repository.track("typings/stub.pyi", "def name() -> str: ...\n");
     repository.write(
         ALLOWANCE_FILE,
         "total 3\n2\tbuild/tool.py\n1\tops/files/helper.py\n",
@@ -104,10 +121,10 @@ fn fails_naming_a_tracked_python_file_absent_from_the_allowance() {
     repository.write(ALLOWANCE_FILE, "total 10\n1\tbuild/tool.py\n");
     let (result, diagnostics) = repository.check(&[]);
     let error = result.unwrap_err().to_string();
-    assert_eq!(diagnostics, "a/b/c.py: 1 lines, not in the allowance\n");
+    assert_eq!(diagnostics, "a/b/c.py: 1 line, not in the allowance\n");
     assert!(
         error.starts_with(
-            "2 lines in 2 tracked Python files, 1 offending paths; the allowance is 10."
+            "2 lines in 2 tracked Python files, 1 offending path; the allowance is 10."
         ),
         "{error}"
     );
@@ -131,7 +148,7 @@ fn fails_when_a_file_grows_even_if_the_total_is_within_the_allowance() {
     assert_eq!(diagnostics, "build/grown.py: 3 lines, 2 recorded\n");
     assert!(
         error.starts_with(
-            "4 lines in 2 tracked Python files, 1 offending paths; the allowance is 4."
+            "4 lines in 2 tracked Python files, 1 offending path; the allowance is 4."
         ),
         "{error}"
     );
@@ -173,9 +190,7 @@ fn fails_when_a_listed_file_is_no_longer_tracked() {
     let error = result.unwrap_err().to_string();
     assert_eq!(diagnostics, "build/removed.py: listed but not tracked\n");
     assert!(
-        error.starts_with(
-            "1 lines in 1 tracked Python files, 1 offending paths; the allowance is 3."
-        ),
+        error.starts_with("1 line in 1 tracked Python file, 1 offending path; the allowance is 3."),
         "{error}"
     );
     // `--update` removes the stale row, and the check passes again.
@@ -235,7 +250,7 @@ fn update_lowers_the_allowance_and_refuses_to_raise_it() {
     assert_eq!(diagnostics, "");
     assert!(
         error.starts_with(
-            "3 lines in 1 tracked Python files, 0 offending paths; the allowance is 2,"
+            "3 lines in 1 tracked Python file, 0 offending paths; the allowance is 2,"
         ),
         "{error}"
     );
@@ -256,11 +271,11 @@ fn update_refuses_an_unlisted_path_and_a_grown_file_even_when_the_total_falls() 
     let error = result.unwrap_err().to_string();
     assert_eq!(
         diagnostics,
-        "build/added.py: 1 lines, not in the allowance\n"
+        "build/added.py: 1 line, not in the allowance\n"
     );
     assert!(
         error.starts_with(
-            "3 lines in 2 tracked Python files, 1 offending paths; the allowance is 12,"
+            "3 lines in 2 tracked Python files, 1 offending path; the allowance is 12,"
         ),
         "{error}"
     );
@@ -273,7 +288,7 @@ fn update_refuses_an_unlisted_path_and_a_grown_file_even_when_the_total_falls() 
     assert_eq!(diagnostics, "build/small.py: 3 lines, 2 recorded\n");
     assert!(
         error.starts_with(
-            "3 lines in 1 tracked Python files, 1 offending paths; the allowance is 12,"
+            "3 lines in 1 tracked Python file, 1 offending path; the allowance is 12,"
         ),
         "{error}"
     );
@@ -314,4 +329,138 @@ fn counts_an_unterminated_last_line_and_crlf_files_by_lines() {
         "total 8\n2\tbuild/blank.py\n1\tbuild/carriage.py\n3\tbuild/crlf.py\n\
          0\tbuild/empty.py\n2\tbuild/unterminated.py\n"
     );
+}
+
+#[test]
+fn malformed_allowance_rows_are_refused_and_left_unchanged() {
+    let repository = Repository::new();
+    repository.track("build/first.py", "A = 1\n");
+    repository.track("build/second.py", "B = 2\n");
+    let row = "expected `<lines>\\t<path>`";
+    let order = "rows must be unique and sorted by path";
+    // Each allowance with the line its error names and the cause it gives.
+    let cases = [
+        (
+            "total 2\r\n1\tbuild/first.py\r\n1\tbuild/second.py\r\n",
+            1,
+            "LF line endings",
+        ),
+        (
+            "total 2\n1\tbuild/first.py\r\n1\tbuild/second.py\n",
+            2,
+            "LF line endings",
+        ),
+        (
+            "total two\n1\tbuild/first.py\n1\tbuild/second.py\n",
+            1,
+            "`total <lines>`",
+        ),
+        ("total 2\n1\tbuild/first.py\n\n1\tbuild/second.py\n", 3, row),
+        ("total 2\none\tbuild/first.py\n1\tbuild/second.py\n", 2, row),
+        ("total 2\n1 build/first.py\n1\tbuild/second.py\n", 2, row),
+        ("total 2\n1\tbuild/second.py\n1\tbuild/first.py\n", 3, order),
+        (
+            "total 3\n1\tbuild/first.py\n1\tbuild/first.py\n1\tbuild/second.py\n",
+            3,
+            order,
+        ),
+    ];
+    let modes: [&[&str]; 2] = [&[], &["--update"]];
+    for (allowance, line, cause) in cases {
+        for arguments in modes {
+            repository.write(ALLOWANCE_FILE, allowance);
+            let (result, diagnostics) = repository.check(arguments);
+            let error = result.unwrap_err().to_string();
+            let context = format!("{allowance:?} {arguments:?}: {error}");
+            assert!(
+                error.contains(&format!("{ALLOWANCE_FILE}:{line}: ")),
+                "{context}"
+            );
+            assert!(error.contains(cause), "{context}");
+            assert_eq!(diagnostics, "", "{context}");
+            assert_eq!(repository.allowance(), allowance, "{context}");
+        }
+    }
+}
+
+#[test]
+fn rejects_unknown_arguments() {
+    let repository = Repository::new();
+    repository.track("build/tool.py", "VALUE = 1\n");
+    let recorded = "total 1\n1\tbuild/tool.py\n";
+    repository.write(ALLOWANCE_FILE, recorded);
+    let refused: [&[&str]; 5] = [
+        &["--check"],
+        &["update"],
+        &["--UPDATE"],
+        &["--update", "--update"],
+        &["--update", "build/tool.py"],
+    ];
+    for arguments in refused {
+        let (result, diagnostics) = repository.check(arguments);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "python-lines takes no argument other than --update",
+            "{arguments:?}"
+        );
+        assert_eq!(diagnostics, "", "{arguments:?}");
+        assert_eq!(repository.allowance(), recorded, "{arguments:?}");
+    }
+    // Arguments are refused before the allowance is read.
+    fs::remove_file(repository.0.join(ALLOWANCE_FILE)).unwrap();
+    assert_eq!(
+        repository.check(&["--check"]).0.unwrap_err().to_string(),
+        "python-lines takes no argument other than --update"
+    );
+}
+
+#[test]
+fn records_a_path_with_spaces_and_a_stub() {
+    let repository = Repository::new();
+    repository.track("build/new helper.py", "A = 1\nB = 2\n");
+    repository.track("typings/ansible/stub.pyi", "def name() -> str: ...\n");
+    repository.write(
+        ALLOWANCE_FILE,
+        "total 9\n5\tbuild/new helper.py\n4\ttypings/ansible/stub.pyi\n",
+    );
+    let (result, diagnostics) = repository.check(&[]);
+    result.unwrap();
+    assert_eq!(diagnostics, "");
+    repository.check(&["--update"]).0.unwrap();
+    assert_eq!(
+        repository.allowance(),
+        "total 3\n2\tbuild/new helper.py\n1\ttypings/ansible/stub.pyi\n"
+    );
+    // A stub is counted like a module, so an unlisted one fails.
+    repository.track("typings/ansible/other.pyi", "VALUE: int\n");
+    let (result, diagnostics) = repository.check(&[]);
+    result.unwrap_err();
+    assert_eq!(
+        diagnostics,
+        "typings/ansible/other.pyi: 1 line, not in the allowance\n"
+    );
+}
+
+#[test]
+fn counts_an_unmerged_path_once_across_its_three_stages() {
+    let repository = Repository::new();
+    repository.write("build/conflict.py", "A = 1\nB = 2\n");
+    let blob = repository.git_output(&["hash-object", "-w", "--", "build/conflict.py"], "");
+    let blob = String::from_utf8(blob).unwrap();
+    // Stages 1 to 3 of one path, as a conflicted merge leaves them.
+    let entries = (1..=3)
+        .map(|stage| format!("100644 {} {stage}\tbuild/conflict.py\n", blob.trim_end()))
+        .collect::<String>();
+    repository.git_output(&["update-index", "--index-info"], &entries);
+    assert_eq!(
+        repository.git_output(&["ls-files", "-z", "--", "*.py"], ""),
+        b"build/conflict.py\0".repeat(3)
+    );
+    let recorded = "total 2\n2\tbuild/conflict.py\n";
+    repository.write(ALLOWANCE_FILE, recorded);
+    let (result, diagnostics) = repository.check(&[]);
+    result.unwrap();
+    assert_eq!(diagnostics, "");
+    repository.check(&["--update"]).0.unwrap();
+    assert_eq!(repository.allowance(), recorded);
 }

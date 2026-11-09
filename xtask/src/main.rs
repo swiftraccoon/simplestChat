@@ -81,7 +81,7 @@ Commands:
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
-  python-lines  Fail unless xtask/python-allowance.txt lists exactly the tracked *.py
+  python-lines  Fail unless xtask/python-allowance.txt lists exactly the tracked *.py/*.pyi
                 outside vendor/, no file exceeds its row and the total stays within;
                 `--update` only removes rows and lowers counts (edit a renamed file's row).
   protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;

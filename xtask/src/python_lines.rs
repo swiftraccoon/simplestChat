@@ -2,13 +2,14 @@
 //!
 //! New code is written in Rust and the remaining Python is being translated,
 //! so tracked Python may shrink but never grow. The allowance is the exact
-//! inventory of tracked `*.py` outside `vendor/`, one line count per file. The
-//! check fails on a tracked file without a row, a row whose file is no longer
-//! tracked, a file above its row, or a total above the recorded one.
+//! inventory of tracked `*.py` and `*.pyi` outside `vendor/`, one line count
+//! per file, its rows unique and sorted by path in byte order with LF endings.
+//! The check fails on a tracked file without a row, a row whose file is no
+//! longer tracked, a file above its row, or a total above the recorded one.
 //! `--update` only removes rows and lowers counts; a renamed file's row is
 //! edited by hand.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -49,13 +50,15 @@ fn ratchet(root: &Path, arguments: &[String], diagnostics: &mut impl Write) -> R
             fs::write(&allowance_path, text)
                 .with_context(|| format!("writing {}", allowance_path.display()))?;
             println!(
-                "python-lines: allowance set to {total} lines in {} files",
-                counted.len()
+                "python-lines: allowance set to {} in {}",
+                plural(total, "line"),
+                plural(counted.len(), "file")
             );
         } else {
             println!(
-                "python-lines: {total} lines in {} tracked Python files within the allowance of {}",
-                counted.len(),
+                "python-lines: {} in {} within the allowance of {}",
+                plural(total, "line"),
+                plural(counted.len(), "tracked Python file"),
                 allowance.total
             );
         }
@@ -65,9 +68,10 @@ fn ratchet(root: &Path, arguments: &[String], diagnostics: &mut impl Write) -> R
         writeln!(diagnostics, "{offender}")?;
     }
     let summary = format!(
-        "{total} lines in {} tracked Python files, {} offending paths; the allowance is {}",
-        counted.len(),
-        offenders.len(),
+        "{} in {}, {}; the allowance is {}",
+        plural(total, "line"),
+        plural(counted.len(), "tracked Python file"),
+        plural(offenders.len(), "offending path"),
         allowance.total
     );
     if update {
@@ -82,10 +86,10 @@ fn ratchet(root: &Path, arguments: &[String], diagnostics: &mut impl Write) -> R
     );
 }
 
-/// Every tracked `*.py` outside `vendor/`, with its line count.
+/// Every tracked `*.py` and `*.pyi` outside `vendor/`, with its line count.
 fn tracked(root: &Path) -> Result<BTreeMap<String, usize>> {
     let output = Command::new("git")
-        .args(["ls-files", "-z", "--", "*.py", ":!vendor/"])
+        .args(["ls-files", "-z", "--", "*.py", "*.pyi", ":!vendor/"])
         .current_dir(root)
         .output()
         .context("running git ls-files")?;
@@ -120,29 +124,36 @@ fn line_count(bytes: &[u8]) -> usize {
 }
 
 /// The parsed allowance. A missing file is an error in both modes: the
-/// committed allowance is the only starting point.
+/// committed allowance is the only starting point. Lines are read in order and
+/// the first malformed one is refused by its number.
 fn read_allowance(path: &Path) -> Result<Allowance> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    let mut rows = text.split_terminator('\n');
-    let total = rows
-        .next()
-        .and_then(|row| row.strip_prefix("total "))
-        .and_then(|total| total.parse().ok())
-        .with_context(|| format!("{} must start with `total <lines>`", path.display()))?;
+    let refuse = |line: usize, cause: &str| anyhow!("{}:{line}: {cause}", path.display());
+    let mut total = None;
     let mut files = BTreeMap::new();
-    for (index, row) in rows.enumerate() {
+    let mut previous: Option<&str> = None;
+    for (row, line) in text.split_terminator('\n').zip(1..) {
+        if row.ends_with('\r') {
+            return Err(refuse(line, "expected LF line endings, found CRLF"));
+        }
+        if line == 1 {
+            let recorded = row
+                .strip_prefix("total ")
+                .and_then(|total| total.parse().ok());
+            total = Some(recorded.ok_or_else(|| refuse(line, "expected `total <lines>`"))?);
+            continue;
+        }
         let (count, file) = row
             .split_once('\t')
             .and_then(|(count, file)| Some((count.parse().ok()?, file)))
-            .with_context(|| {
-                format!(
-                    "{}:{}: expected `<lines>\\t<path>`",
-                    path.display(),
-                    index + 2
-                )
-            })?;
+            .ok_or_else(|| refuse(line, "expected `<lines>\\t<path>`"))?;
+        if previous.is_some_and(|previous| previous >= file) {
+            return Err(refuse(line, "rows must be unique and sorted by path"));
+        }
+        previous = Some(file);
         files.insert(file.to_owned(), count);
     }
+    let total = total.ok_or_else(|| refuse(1, "expected `total <lines>`"))?;
     Ok(Allowance { total, files })
 }
 
@@ -151,11 +162,15 @@ fn read_allowance(path: &Path) -> Result<Allowance> {
 fn offenders(counted: &BTreeMap<String, usize>, allowance: &Allowance, stale: bool) -> Vec<String> {
     let mut offenders: Vec<String> = counted
         .iter()
-        .filter_map(|(path, lines)| match allowance.files.get(path) {
-            None => Some(format!("{path}: {lines} lines, not in the allowance")),
-            Some(recorded) if lines > recorded => {
-                Some(format!("{path}: {lines} lines, {recorded} recorded"))
-            }
+        .filter_map(|(path, &lines)| match allowance.files.get(path) {
+            None => Some(format!(
+                "{path}: {}, not in the allowance",
+                plural(lines, "line")
+            )),
+            Some(&recorded) if lines > recorded => Some(format!(
+                "{path}: {}, {recorded} recorded",
+                plural(lines, "line")
+            )),
             Some(_) => None,
         })
         .collect();
@@ -167,6 +182,15 @@ fn offenders(counted: &BTreeMap<String, usize>, allowance: &Allowance, stale: bo
         offenders.extend(untracked.map(|path| format!("{path}: listed but not tracked")));
     }
     offenders
+}
+
+/// `count` followed by `noun`, which takes an `s` unless the count is one.
+fn plural(count: usize, noun: &str) -> String {
+    if count == 1 {
+        format!("1 {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
 }
 
 #[cfg(test)]

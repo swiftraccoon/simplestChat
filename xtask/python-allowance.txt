@@ -1,4 +1,4 @@
-total 143580
+total 143628
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -268,6 +268,10 @@ total 143580
 693	ops/ansible/tests/test_vps_capacity_controller.py
 855	ops/ansible/tests/test_vps_capacity_remote.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py
+6	typings/ansible/parsing/dataloader.pyi
+22	typings/ansible/plugins/callback/__init__.pyi
+3	typings/ansible/plugins/loader.pyi
+17	typings/ansible/template/__init__.pyi
 1	xtask/src/ci/release_http_policy/__init__.py
 318	xtask/src/ci/release_http_policy/oracle.py
 268	xtask/src/ci/release_http_policy/reference/build/release_container_fixture.py
