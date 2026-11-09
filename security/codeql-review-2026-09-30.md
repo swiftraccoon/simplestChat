@@ -1328,3 +1328,58 @@ identities it contains, with no mismatch. `sourceProvenanceRevision` records
 rationale, scope and the 2026-11-29 expiry are unchanged. No query, path or
 test is excluded and no remote alert state changed; the next hosted analysis
 must match this identity independently.
+
+## Local finding: retained release-HTTP fixture copy at the CI crate path (2026-11-09)
+
+`c53e4d75` moved the offline release-HTTP oracle, with its retained reference
+tree, from `xtask/src/ci/release_http_policy/` to
+`crates/ci/src/release_http_policy/` by `git mv`, keeping every byte. The exact
+review of the retained configuration renderer copy binds its path, so the
+finding's identity changed. The complete source SHA256
+(`072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8`), the query,
+CodeQL `2.27.1`, the primary range `171:175:19:6` and the rendered message
+(`messageSha256`
+`67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694`) are
+unchanged. Fresh local CodeQL `2.27.1` security analysis of
+`c53e4d75d1181b56f8a0f972263087ce5d228e22` (`build/security_codeql_local.py
+--language python`, 50 queries, 12 results) reports the copy at its new path
+as its only blocked result; the other eleven results are waived at their
+reviewed identities. The flagged lines still read:
+
+```text
+    environment = Environment(
+        undefined=StrictUndefined,
+        keep_trailing_newline=True,
+        autoescape=False,  # noqa: S701
+    )
+```
+
+| Record | Range | Complete source SHA256 | Finding fingerprint |
+|---|---|---|---|
+| Retained copy (before) | `xtask/src/ci/release_http_policy/reference/build/release_container_fixture.py:171:175:19:6` | `072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8` | `codeql:3fad85717ecdd86d5b8475b348bdb96215d5584abadcc9044fef03685698d844` |
+| Retained copy (now) | `crates/ci/src/release_http_policy/reference/build/release_container_fixture.py:171:175:19:6` | `072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8` | `codeql:853c6b9737565e363c2ace3efe30754d17aaad6789c17ce93393dbd41aa13ab0` |
+
+The copy still keeps the bytes reviewed as alert 27 from `198f6f93` until
+`21770b4f`, pinned by `crates/ci/src/release_http_policy/reference_pins.rs`,
+and its oracle still replaces `jinja2.Environment` with a fail-on-use sentinel,
+so the recorded rationale stands. Its exception in `security/exceptions.json`
+takes the new fingerprint and scope, the two paths in its rationale follow the
+move, and its reachability names the analysis above. The record has no review
+JSON twin because no GitHub alert carries it. Owner `swiftraccoon`, the
+reasoning and the `2026-11-29` expiry are unchanged.
+
+Alert 32 stays retired in place. `c53e4d75` also deletes the `"ci",` argument
+at old line 708 of `build/release_container_harness.py`, but the analysis
+reports no `py/overly-permissive-file` finding, as on 2026-11-07, so there is
+no current identity to bind. Its record keeps its last reviewed bytes (source
+SHA256 `109b4d8ffce824671ca6992b942fe77d1034a22f479ef963d95869ae784f8d47`, the
+file at `2d825018`), waives nothing and lapses with its exception on
+2026-11-29.
+
+`rebind.py plan` lists no rebind; its seven unmapped records (alerts 32, 59–62,
+64 and 65) stay retired in place. `rebind.py validate` against the local policy
+report matches all ten reviewed identities it contains, with no mismatch.
+Replaying that SARIF with `build/security_codeql_triage.py sarif` against the
+updated ledger waives all twelve findings and blocks none. No query, path or
+test is excluded and no remote alert state changed; hosted ingestion remains a
+separate required check.
