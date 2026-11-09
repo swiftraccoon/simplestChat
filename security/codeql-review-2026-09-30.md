@@ -1290,3 +1290,41 @@ local analysis still waives it.
 
 Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged for
 every other record. Hosted ingestion remains a separate required check.
+
+## Source re-review: release playbook test after the legacy-route removal (2026-11-09)
+
+Hosted CI run `42565613383` at `5f09613cda55c134915692ad76a3ee9821dfd24e`
+blocked at "Enforce exact reviews for High and Critical findings" (CodeQL
+Python): alert 31, the reviewed `py/jinja2/autoescape-false` finding at
+`ops/ansible/tests/test_release_playbook.py:78:78:23:79`, no longer matched its
+exact review. The review binds the complete file's SHA256, and `5f09613c`
+removed the three legacy-routed `ReleasePlaybookTests` methods (old lines
+239–352) and the `MaintenancePlaybookTests` class (old lines 546–635) from that
+file. Line 78 is unchanged, and so are the query, CodeQL `2.27.1`, the primary
+range and the rendered message (`messageSha256`
+`67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694`). The line
+still reads:
+
+```text
+        environment = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - configuration.
+```
+
+The `StrictUndefined` environment still compiles tracked Ansible assertion
+expressions to booleans with fixture values; the removal adds no template, no
+HTML and no browser output sink, so the recorded rationale stands. The record
+was rebound with the line-mapping tool from `3bb9e6e8`, which introduced the
+reviewed bytes, unchanged until `5f09613c`, to `5f09613c`; both removed hunks
+lie after line 78.
+
+| Alert | Range | Complete source SHA256 | Finding fingerprint |
+|---|---|---|---|
+| 31 (before) | `ops/ansible/tests/test_release_playbook.py:78:78:23:79` | `da212cc2a423f6b5c8026f76ce52dc5057434c1bc0af989fdb1a458166799272` | `codeql:18f0e41dbcd270ad728f67f86570f03da11e214c61639f1166fc1663e1341529` |
+| 31 (now) | `ops/ansible/tests/test_release_playbook.py:78:78:23:79` | `df4f5e0e8ef2fa7049b9a737a7e67a4f1b2e98b5cdff08fb2309f3bb834a3a21` | `codeql:878c62f85f5c8b56bd8acf9df037b4035cdfbad9f39e202e6de70b29a0ca319c` |
+
+The new identity is the blocked record in that run's `codeql-policy-python`
+evidence, and `rebind.py validate` against that report matches all ten reviewed
+identities it contains, with no mismatch. `sourceProvenanceRevision` records
+`5f09613c`; the review JSON and the exception change together. Owner,
+rationale, scope and the 2026-11-29 expiry are unchanged. No query, path or
+test is excluded and no remote alert state changed; the next hosted analysis
+must match this identity independently.

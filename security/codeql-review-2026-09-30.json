@@ -699,9 +699,9 @@
         "end_column": 79
       },
       "messageSha256": "67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694",
-      "sourceSha256": "da212cc2a423f6b5c8026f76ce52dc5057434c1bc0af989fdb1a458166799272",
+      "sourceSha256": "df4f5e0e8ef2fa7049b9a737a7e67a4f1b2e98b5cdff08fb2309f3bb834a3a21",
       "scope": "ops/ansible/tests/test_release_playbook.py:78:78:23:79",
-      "fingerprint": "codeql:18f0e41dbcd270ad728f67f86570f03da11e214c61639f1166fc1663e1341529",
+      "fingerprint": "codeql:878c62f85f5c8b56bd8acf9df037b4035cdfbad9f39e202e6de70b29a0ca319c",
       "number": 31,
       "severity": "high",
       "state": "open",
@@ -709,8 +709,8 @@
       "rationale": "The unchanged StrictUndefined Jinja Environment compiles tracked Ansible assertion expressions to booleans with bounded fixture values. Added proxy receipt, ownership and upgrade-argv assertions introduce no HTML or browser output sink. HTML autoescaping is inappropriate for these configuration expressions. Re-reviewed against fresh local CodeQL 2.27.1 security analysis of 27d3f03044fd041fa9f58a66d0a162942a0c48c1 (all 50 Python queries), retaining the original scope and expiry.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/31",
-      "sourceProvenanceRevision": "27d3f03044fd041fa9f58a66d0a162942a0c48c1",
-      "sourceReviewBaseRevision": "e7660f928412ceb57bbdad992c26ab2ccc24a47a",
+      "sourceProvenanceRevision": "5f09613cda55c134915692ad76a3ee9821dfd24e",
+      "sourceReviewBaseRevision": "3bb9e6e8e30ce8035917c6045b425d866d494b10",
       "sourceReviewBlob": "122484f3a066b6365f270d7be1ec3255b92a7ecf"
     },
     {
