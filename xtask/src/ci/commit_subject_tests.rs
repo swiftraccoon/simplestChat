@@ -264,7 +264,7 @@ async fn cancellation_retires_only_the_owned_fake_git_group() {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    let unrelated = crate::owned_process::Group::new(command.spawn().unwrap());
+    let unrelated = simplestchat_toolkit::owned_process::Group::new(command.spawn().unwrap());
     drop(command);
     let fixture = Fixture::new();
     fixture.git(
@@ -296,5 +296,5 @@ while True:time.sleep(.01)
     assert_eq!(result.unwrap_err().code, 143);
     assert!(native.cleanup_passed());
     assert!(fixture.0.join("term").is_file());
-    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert!(!simplestchat_toolkit::owned_process::exited_now(unrelated.pid()).unwrap());
 }

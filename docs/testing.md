@@ -140,7 +140,7 @@ The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
 exercise lease-stream EOF, quiet-child cancellation, release ordering and the
 first interrupt surviving a later signal during joined cleanup. The source
-inventory CLI also runs with 196 selected files and a child-only 96-descriptor
+inventory CLI also runs with 197 selected files and a child-only 96-descriptor
 limit. These checks do not execute a remote capacity workload. A signed musl
 binary, Debian kernel/process behavior and a measured host run need their own
 evidence.

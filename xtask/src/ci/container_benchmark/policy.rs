@@ -1,11 +1,11 @@
 //! Closed selected evidence from the unchanged container benchmark predicates.
 //! Unknown values stay raw/ignored; no private producer object becomes output.
-use crate::tooling::Result;
 use serde::{
     Deserialize, Serialize,
     de::{IgnoredAny, MapAccess, Visitor},
 };
 use serde_json::{Value, value::RawValue};
+use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeMap, fmt};
 
 const SUMMARY_BYTES: usize = 8 * 1024 * 1024;

@@ -5,17 +5,15 @@
 //! what the selected suite may do. The first failed or interrupted harness stops
 //! the plan; this command never records verification or expands the CI matrix.
 
-use crate::tooling::{self, Environment, Failure};
 use anyhow::Result;
 use process::Signals;
+use simplestchat_toolkit::tooling::{self, Environment, Failure};
 use std::ffi::{OsStr, OsString};
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-#[path = "browser_suite_cleanup.rs"]
-pub(super) mod cleanup;
 #[path = "browser_suite_process.rs"]
 pub(super) mod process;
 

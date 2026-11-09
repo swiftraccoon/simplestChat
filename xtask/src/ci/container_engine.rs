@@ -1,14 +1,12 @@
 //! Frozen local Docker transport, daemon observations and exact resource retirement.
 //! These are optimistic caller-trusted engine observations, not authentication.
 
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
 use serde::Deserialize;
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     collections::BTreeMap,
     ffi::OsStr,

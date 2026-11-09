@@ -1,12 +1,10 @@
 //! Fixed recipe and conservative same-clock dispatch scheduling.
 use super::{failure, io::Role};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        container_engine,
-    },
-    tooling::Result,
+use crate::ci::{
+    command::{Command, Program},
+    container_engine,
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{
     ffi::OsString,
     sync::{

@@ -3,15 +3,15 @@
 //! even after an error. A pipe prefix is liveness data, never final completion.
 
 use super::{Executor, Finalize, Finalizer, Native, OwnedIo, executable, owner};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        ops_artifact::capacity_vps::{prepare::PrepareInvocation, tools::Invocation},
-    },
+use crate::ci::{
+    command::{Command, Program},
+    ops_artifact::capacity_vps::{prepare::PrepareInvocation, tools::Invocation},
+};
+use rustix::process::Signal;
+use simplestchat_toolkit::{
     owned_process::{Group, exited, exited_now},
     tooling::{self, Failure, Result},
 };
-use rustix::process::Signal;
 use std::{
     fs::{File, Metadata},
     future::Future,

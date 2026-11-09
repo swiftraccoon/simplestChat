@@ -14,12 +14,12 @@ mod process;
 mod server;
 mod service;
 
-use crate::{
+use anyhow::Result;
+pub(crate) use companion::{Companion, NoCompanion};
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{self, Environment},
 };
-use anyhow::Result;
-pub(crate) use companion::{Companion, NoCompanion};
 use std::path::Path;
 use std::process::ExitCode;
 

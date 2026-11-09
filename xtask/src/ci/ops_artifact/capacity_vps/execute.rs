@@ -14,15 +14,12 @@ use super::{
     transport,
     worker::{self, Checkpoint},
 };
-use crate::{
-    ci::process::{Executor, Native},
-    owned_process::Signals,
-    tooling::Environment,
-};
+use crate::ci::process::{Executor, Native};
 use simplestchat_ops::capacity_vps::protocol::{
     Action, Members, Mode, Outcome, Pin, Response, ResultData, RetirementPhase, Source, Unit,
     UnitState, Workload,
 };
+use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
 use std::{
     ffi::OsString,
     fs::File,
@@ -943,7 +940,7 @@ pub(super) async fn native(arguments: &[String]) -> Result<()> {
     let caller = std::env::current_dir()
         .and_then(|p| p.canonicalize())
         .map_err(|_| failure(1))?;
-    let environment = crate::tooling::inherited_env();
+    let environment = simplestchat_toolkit::tooling::inherited_env();
     let home = environment
         .get(std::ffi::OsStr::new("HOME"))
         .map(PathBuf::from)

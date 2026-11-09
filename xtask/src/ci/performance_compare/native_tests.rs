@@ -2,12 +2,12 @@
 //! handshakes establish readiness/finalization; no benchmark or compiler runs.
 
 use super::{files, plan};
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
+use crate::ci::{
+    bounded_log::Log,
+    command::{Command, Program},
+    process::{Executor, Native},
+};
+use simplestchat_toolkit::{
     owned_process::{Group, Signals},
     tooling::Environment,
 };
@@ -199,7 +199,7 @@ while True:time.sleep(.01)
         fs::read(fixture.path.join("finalized")).unwrap(),
         b"after-descendant-and-output"
     );
-    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert!(!simplestchat_toolkit::owned_process::exited_now(unrelated.pid()).unwrap());
     drop(unrelated);
     files::close_tool(tool).unwrap();
     files::finish(scope, false).unwrap();

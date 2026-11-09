@@ -1,10 +1,8 @@
 //! Actual inert selected executables and reserved Native groups; no engine/TLS.
 
 use super::{fixture::*, *};
-use crate::{
-    ci::process::{Executor, Native},
-    owned_process::Signals,
-};
+use crate::ci::process::{Executor, Native};
+use simplestchat_toolkit::owned_process::Signals;
 use std::{fs, os::unix::fs::PermissionsExt, sync::Arc, time::Duration};
 
 fn script(f: &Fixture, body: &str) {
@@ -26,7 +24,7 @@ async fn native_keeps_actual_failure_status_and_both_finished_capture_seals() {
         let mut capture = scratch.capture().await.unwrap();
         let (mut command, proof) = tools.command(&f.config.caddy, &time, 0).unwrap();
         capture.attach(&mut command).unwrap();
-        let env = crate::tooling::Environment::new();
+        let env = simplestchat_toolkit::tooling::Environment::new();
         let mut native = Native::new(&f.root, &env, signals());
         let result = native.run(command).await;
         let clean = native.cleanup_passed();
@@ -79,7 +77,7 @@ async fn overflow_spawn_failure_and_wrong_recipe_retire_logs_without_a_positive_
             "cleanup" => command.cleanup = true,
             _ => {}
         }
-        let env = crate::tooling::Environment::new();
+        let env = simplestchat_toolkit::tooling::Environment::new();
         let mut native = Native::new(&f.root, &env, signals());
         let result = native.run(command).await;
         let clean = native.cleanup_passed();
@@ -118,7 +116,7 @@ async fn signals_and_the_actual_five_second_timeout_keep_the_same_group_until_re
         let (mut command, proof) = tools.command(&f.config.caddy, &time, 0).unwrap();
         capture.attach(&mut command).unwrap();
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let env = crate::tooling::Environment::new();
+        let env = simplestchat_toolkit::tooling::Environment::new();
         let mut native = Native::new(&f.root, &env, Signals::injected(rx));
         let cancel = async {
             tokio::time::timeout(Duration::from_secs(3), async {

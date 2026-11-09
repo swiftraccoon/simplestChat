@@ -1,7 +1,7 @@
 //! Whole-operation scheduling and descriptor reservations, not OS guarantees.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     sync::Arc,

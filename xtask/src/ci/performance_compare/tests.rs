@@ -1,13 +1,11 @@
 //! Fixed profiles and owned fake command/filesystem integration; no builds run.
 
 use super::*;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::Environment,
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     fs,
     io::Write,

@@ -3,7 +3,7 @@
 //! actual filesystem identities. Parsing starts no I/O, process or network work.
 
 use super::{failure, policy::REPOSITORY};
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Component, Path, PathBuf},

@@ -3,9 +3,9 @@
 //! borrows the same File; no descriptor or untrusted path is transferred here.
 
 use super::{failure, io};
-use crate::tooling::Result;
 use rawzip::{CompressionMethod, ReaderAt, ZipArchive, ZipArchiveEntryWayfinder};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeSet,
     fs::{File, Metadata},

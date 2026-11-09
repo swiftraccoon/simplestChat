@@ -5,8 +5,8 @@ use super::{
     context::{ArtifactKind, Context},
     fixture, plan,
 };
-use crate::tooling::Environment;
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::Environment;
 use std::{ffi::OsString, sync::Arc, time::Duration};
 
 fn environment(root: &std::path::Path) -> Environment {

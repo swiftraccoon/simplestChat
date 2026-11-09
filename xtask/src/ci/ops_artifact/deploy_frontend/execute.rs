@@ -12,15 +12,15 @@ use super::{
     tools::{Spec, Tools},
     worker::{self, Checkpoint},
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
+};
+use serde_json::{Value, json};
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Result},
 };
-use serde_json::{Value, json};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},

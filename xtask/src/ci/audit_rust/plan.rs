@@ -1,13 +1,11 @@
 //! Keep the reference installer and exact advisory policy; bound the whole plan.
 
-use crate::{
-    ci::{
-        command::{Command, Program},
-        runner,
-        selected_executable::Executable,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    runner,
+    selected_executable::Executable,
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

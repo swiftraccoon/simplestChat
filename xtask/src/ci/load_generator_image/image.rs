@@ -4,8 +4,9 @@ use super::{
     engine::{self, Clock, Core},
     plan::{self, Context},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
 use serde::Deserialize;
+use simplestchat_toolkit::tooling::Result;
 use std::collections::BTreeMap;
 
 #[derive(Deserialize)]

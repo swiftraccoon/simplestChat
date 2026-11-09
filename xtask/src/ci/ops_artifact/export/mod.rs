@@ -14,7 +14,7 @@ mod request;
 mod tests;
 mod worker;
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 
 pub(super) const TRANSFER: u64 = 257 * 1024 * 1024;
 fn failure(code: u8) -> Failure {

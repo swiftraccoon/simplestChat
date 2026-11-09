@@ -8,10 +8,8 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
     worker,
 };
-use crate::{
-    ci::{command::Command, ops_artifact::verify::tools::Captures, process::Executor},
-    tooling::{Environment, Result},
-};
+use crate::ci::{command::Command, ops_artifact::verify::tools::Captures, process::Executor};
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsString,
     time::{Duration, Instant},
@@ -431,7 +429,7 @@ mod timeout_tests {
     use super::super::super::namespace::Budget;
     use super::super::fixture::Fixture;
     use super::*;
-    use crate::tooling::Failure;
+    use simplestchat_toolkit::tooling::Failure;
 
     const URL: &str = "https://git.musl-libc.org/cgit/musl/snapshot/archive.tar.gz";
     const TLS: &[u8] = b"curl: (28) SSL connection timeout\nOPS_HTTP_STATUS:200:000\n";

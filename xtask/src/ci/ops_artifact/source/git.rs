@@ -17,7 +17,7 @@ pub(crate) struct Git {
     stamp: Metadata,
     path: PathBuf,
     budget: Budget,
-    context: Option<(PathBuf, crate::tooling::Environment)>,
+    context: Option<(PathBuf, simplestchat_toolkit::tooling::Environment)>,
 }
 impl std::fmt::Debug for Git {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -103,12 +103,14 @@ impl Git {
     pub(super) fn in_context(
         mut self,
         directory: PathBuf,
-        environment: crate::tooling::Environment,
+        environment: simplestchat_toolkit::tooling::Environment,
     ) -> Self {
         self.context = Some((directory, environment));
         self
     }
-    pub(in crate::ci) fn context(&self) -> Result<Option<(&Path, &crate::tooling::Environment)>> {
+    pub(in crate::ci) fn context(
+        &self,
+    ) -> Result<Option<(&Path, &simplestchat_toolkit::tooling::Environment)>> {
         self.validate()?;
         Ok(self
             .context

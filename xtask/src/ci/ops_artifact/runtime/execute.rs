@@ -12,11 +12,11 @@ use super::{
     tools::Tools,
     worker::{self, Checkpoint},
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{self, Executor, Native},
-    },
+use crate::ci::{
+    command::{Command, Program},
+    process::{self, Executor, Native},
+};
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Failure, Result},
 };
@@ -611,7 +611,7 @@ pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
     }
     let signals = Signals::new()?;
     let caller = std::env::current_dir().map_err(|_| failure(1))?;
-    let environment = crate::tooling::inherited_env();
+    let environment = simplestchat_toolkit::tooling::inherited_env();
     let replay: Environment = [("PATH", "/usr/bin:/bin"), ("LANG", "C"), ("LC_ALL", "C")]
         .into_iter()
         .map(|(k, v)| (k.into(), v.into()))

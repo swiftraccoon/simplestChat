@@ -4,7 +4,7 @@ use crate::ci::{
     command::{Command, Program},
     runner,
 };
-use crate::tooling::{Environment, Failure, Result};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     path::{Path, PathBuf},
     time::Duration,

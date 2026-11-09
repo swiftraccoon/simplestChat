@@ -2,14 +2,12 @@
 //! cryptography, VM, candidate or installer is executed by these fixtures.
 
 use super::{plan, receipt, sources};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::{Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     collections::BTreeMap,
     fs,

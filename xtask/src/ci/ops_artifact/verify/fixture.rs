@@ -1,14 +1,12 @@
 //! Owned unsigned graph and synthetic successful-verifier observations.
 use super::*;
-use crate::{
-    ci::{command::Command, process::Executor},
-    tooling::Environment,
-};
+use crate::ci::{command::Command, process::Executor};
 use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest, Selection,
     assembly::{EvidenceSources, prepare_artifact},
 };
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     collections::BTreeMap,
     fs,
@@ -266,7 +264,7 @@ impl Executor for Fake {
         if let Some((at, code)) = self.fail
             && at == index
         {
-            return Err(crate::tooling::Failure::child_exit(code));
+            return Err(simplestchat_toolkit::tooling::Failure::child_exit(code));
         }
         Ok(Vec::new())
     }

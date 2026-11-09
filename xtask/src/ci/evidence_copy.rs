@@ -5,9 +5,9 @@
 //! an evidence root. An admitted source gets a new private destination, even
 //! when its optional files are absent. Existing output is never overwritten.
 
-use crate::tooling::Environment;
 use anyhow::{Result, ensure};
 use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags};
+use simplestchat_toolkit::tooling::Environment;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -268,7 +268,7 @@ pub(super) fn run(arguments: &[String]) -> Result<ExitCode> {
         eprintln!("{USAGE}");
         return Ok(ExitCode::from(2));
     };
-    match project(kind, &crate::tooling::inherited_env()) {
+    match project(kind, &simplestchat_toolkit::tooling::inherited_env()) {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(_) => {
             eprintln!("Local CI evidence could not be preserved.");

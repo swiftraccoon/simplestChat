@@ -1,8 +1,8 @@
 //! Fresh ownership intent, bounded immutable IDs and fixed runner file output.
 
 use super::options::{Context, digest};
-use crate::tooling::{Failure, Result};
 use rustix::fs::{Mode, OFlags};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::fs::{DirBuilder, File};
 use std::io::{Read, Write};
 use std::os::unix::fs::DirBuilderExt;

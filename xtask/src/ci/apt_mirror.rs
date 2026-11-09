@@ -5,7 +5,7 @@ mod policy;
 #[cfg(test)]
 mod tests;
 
-use crate::tooling;
+use simplestchat_toolkit::tooling;
 use std::process::ExitCode;
 
 const USAGE: &str = "usage: xtask ci apt-mirror";

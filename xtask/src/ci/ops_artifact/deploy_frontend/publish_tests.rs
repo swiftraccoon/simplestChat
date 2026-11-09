@@ -170,7 +170,7 @@ fn native_publication_environment_has_no_captured_credentials_or_configuration()
 }
 
 struct BlockedReplay {
-    signals: crate::owned_process::Signals,
+    signals: simplestchat_toolkit::owned_process::Signals,
     reader: Option<std::fs::File>,
     writer: Option<std::fs::File>,
     marker: std::path::PathBuf,
@@ -223,7 +223,7 @@ fn isolated_original_owner_covers_interrupted_blocked_publication() {
             |runtime, flags, _| {
                 let (reader, writer) = nix::unistd::pipe().unwrap();
                 let mut executor = BlockedReplay {
-                    signals: crate::owned_process::Signals::from_completion(flags),
+                    signals: simplestchat_toolkit::owned_process::Signals::from_completion(flags),
                     reader: Some(reader.into()),
                     writer: Some(writer.into()),
                     marker: marker.clone(),

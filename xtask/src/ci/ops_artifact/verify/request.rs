@@ -1,10 +1,10 @@
 //! Exact caller selection; none of these fields supplies verifier authority.
 
 use super::failure;
-use crate::tooling::{Environment, Result};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

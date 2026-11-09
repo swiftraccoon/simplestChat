@@ -6,10 +6,8 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    ci::{browser_suite::process::Signals, process::Native},
-    tooling,
-};
+use crate::ci::{browser_suite::process::Signals, process::Native};
+use simplestchat_toolkit::tooling;
 use std::{path::Path, process::ExitCode};
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci install-compose";
 

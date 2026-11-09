@@ -6,14 +6,11 @@ use super::{
     plan::{self, Context, failure},
     source,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::Result,
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
 };
+use simplestchat_toolkit::{owned_process::Signals, tooling::Result};
 use std::{
     path::Path,
     sync::Arc,

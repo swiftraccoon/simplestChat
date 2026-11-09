@@ -1,6 +1,6 @@
 //! Explicit privileged CI context, independent of a particular image/install plan.
 
-use crate::tooling::Environment;
+use simplestchat_toolkit::tooling::Environment;
 use std::ffi::OsStr;
 
 pub(super) fn text<'a>(environment: &'a Environment, key: &str) -> &'a str {

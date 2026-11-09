@@ -2,12 +2,10 @@
 
 use super::super::namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun, Permit};
 use super::{archive, failure, hash::Checkpoint, io, tools::Captures};
-use crate::{
-    ci::{bounded_log::Log, command::SeparateLogs},
-    tooling::Result,
-};
+use crate::ci::{bounded_log::Log, command::SeparateLogs};
 use rustix::fs::{AtFlags, FileType, Mode, OFlags};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
@@ -762,7 +760,7 @@ struct OriginalReader<'a> {
     checkpoint: &'a Checkpoint,
     hash: Sha256,
     count: u64,
-    primary: Option<crate::tooling::Failure>,
+    primary: Option<simplestchat_toolkit::tooling::Failure>,
 }
 impl Read for OriginalReader<'_> {
     fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {

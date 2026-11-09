@@ -6,8 +6,8 @@ use super::{
     plan::{self, Command, Program},
     process::Executor,
 };
-use crate::tooling::{self, Environment, Result};
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{self, Environment, Result};
 use std::{
     ffi::OsStr,
     fs,

@@ -1,7 +1,7 @@
 //! Owned inert CLIs exercise the same setup/readiness helper as real tools.
 
 use super::*;
-use crate::owned_process::Signals;
+use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,
     path::{Path, PathBuf},

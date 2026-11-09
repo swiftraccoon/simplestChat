@@ -1,7 +1,7 @@
 //! Fixed CI inputs; ordinary local invocations never select an ambient engine.
 
 use crate::ci::runner::{authorized, text};
-use crate::tooling::{Environment, Failure, Result};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]

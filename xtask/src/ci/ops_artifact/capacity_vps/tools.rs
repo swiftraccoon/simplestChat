@@ -4,13 +4,11 @@
 use super::super::namespace::{self, Budget, Permit};
 pub(in crate::ci) use super::super::verify::tools::Captures;
 use super::{Result, failure, inventory::Inventory, plan, sources::Sources, worker::Checkpoint};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        release_checks::files::{self, Executable},
-    },
-    tooling::Environment,
+use crate::ci::{
+    command::{Command, Program},
+    release_checks::files::{self, Executable},
 };
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     ffi::{OsStr, OsString},
     fs::Metadata,

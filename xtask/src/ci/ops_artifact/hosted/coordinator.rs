@@ -18,18 +18,18 @@ use super::{
     tools::{InvocationSpec, Role, Tools},
     worker,
 };
-use crate::{
-    ci::{
-        command::Command,
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::{Environment, Result},
+use crate::ci::{
+    command::Command,
+    process::{Executor, Native},
 };
 use serde_json::{Value, json};
 use simplestchat_ops::distribution::manifest::{
     ArtifactManifest,
     assembly::{EvidenceSources, prepare_artifact},
+};
+use simplestchat_toolkit::{
+    owned_process::Signals,
+    tooling::{Environment, Result},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -905,7 +905,7 @@ async fn completion<E: Executor>(
 }
 pub(super) async fn native(output: &Path) -> Result<()> {
     let signals = Signals::new()?;
-    let captured = crate::tooling::inherited_env();
+    let captured = simplestchat_toolkit::tooling::inherited_env();
     let context = Context::capture(&captured)?;
     let budget = Budget::default();
     let plan = Plan::new(Arc::new(plan::NativeClock));
@@ -930,7 +930,7 @@ pub(super) async fn native(output: &Path) -> Result<()> {
 }
 pub(super) async fn signing_native(directory: &Path, output: &Path) -> Result<()> {
     let signals = Signals::new()?;
-    let captured = crate::tooling::inherited_env();
+    let captured = simplestchat_toolkit::tooling::inherited_env();
     let context = Context::capture(&captured)?;
     if !disjoint(directory, output) {
         return Err(failure(1));

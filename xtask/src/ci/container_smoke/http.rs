@@ -4,7 +4,8 @@ use super::{
     engine::{self, Clock, Engine},
     plan::{self, Asset},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
+use simplestchat_toolkit::tooling::Result;
 
 pub(super) struct Origin(String);
 impl Origin {

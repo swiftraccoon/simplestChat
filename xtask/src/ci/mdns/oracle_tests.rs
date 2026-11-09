@@ -1,16 +1,13 @@
 //! The driver executes the actual unchanged JS and all nine retained tests.
 use super::tests::*;
 use super::*;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::Result,
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::{owned_process::Signals, tooling::Result};
 use std::{path::Path, sync::Arc, time::Duration};
 
 fn sha(bytes: &[u8]) -> String {
@@ -34,7 +31,7 @@ async fn reference(value: &Value, self_test: bool) -> Result<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let node = crate::ci::release_checks::files::select(
         root,
-        &crate::tooling::inherited_env(),
+        &simplestchat_toolkit::tooling::inherited_env(),
         std::ffi::OsStr::new("node"),
     )?;
     let node = Arc::new(node);

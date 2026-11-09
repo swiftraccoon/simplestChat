@@ -8,7 +8,7 @@
 //! descriptor or close ownership. Reporting grants no completion authority.
 
 use super::{fetch::Timeout, plan::Plan};
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::io::Write;
 
 pub(super) const MAX_BYTES: usize = 16 * 1024;

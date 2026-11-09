@@ -2,13 +2,11 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, plan, request::Request};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        release_checks::files::Executable,
-    },
-    tooling::{Environment, Result},
+use crate::ci::{
+    command::{Command, Program},
+    release_checks::files::Executable,
 };
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},

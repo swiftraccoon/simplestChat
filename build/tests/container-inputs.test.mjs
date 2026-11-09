@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { globSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -242,12 +242,44 @@ test('every Rust/browser source and migration in the repository reaches the buil
   // rules: the Rust CI jobs build from the checkout and pass while only the image build
   // sees the hole (CI runs 39295831051 and 39302090481).
   const sources = ['build.rs', 'ops/src/**/*.rs', 'src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
-    'web/src/**/*.ts', 'web/src/**/*.css']
+    'crates/*/src/**/*.rs', 'web/src/**/*.ts', 'web/src/**/*.css']
     .flatMap(pattern => globSync(pattern, { cwd: root }));
   assert.ok(sources.length > 100, 'the source globs must find the crate sources');
   for (const filename of sources) {
     assert.equal(excluded(filename.split(path.sep).join('/')), false,
       `${filename} must reach the build context: admit its directory in .dockerignore`);
+  }
+});
+
+test('the builder stage loads every workspace member before warming dependencies', () => {
+  // Cargo loads every member manifest, so a member the builder does not copy and stub
+  // fails only the hosted image build while every checkout-based Rust job passes.
+  const builder = dockerfile.split(/\bAS builder\s*\n/i)[1]?.split(/^FROM /m)[0];
+  assert.ok(builder, 'Dockerfile must retain its builder stage');
+  const warm = builder.indexOf('auditable build');
+  assert.ok(warm > 0, 'the builder warms dependencies with a stub build');
+  const workspace = read('Cargo.toml').split(/^\[/m).find(table => table.startsWith('workspace]'));
+  const list = workspace?.match(/^members\s*=\s*\[([^\]]*)\]/m)?.[1] ?? '';
+  const members = [...list.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  assert.ok(members.includes('crates/toolkit') && members.length >= 4, 'the member list must parse');
+  const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const mkdir = builder.match(/mkdir -p ((?:[\w./-]+ )*[\w./-]+)/);
+  assert.ok(mkdir && mkdir.index < warm, 'the builder creates the member source directories');
+  const created = mkdir[1].split(' ');
+  for (const member of ['', ...members]) {
+    const prefix = member ? `${member}/` : '';
+    const copy = member
+      ? new RegExp(`^COPY ${escape(prefix)}Cargo\\.toml ${escape(prefix)}Cargo\\.toml$`, 'm')
+      : /^COPY Cargo\.toml Cargo\.lock \.\/$/m;
+    const copied = builder.search(copy);
+    assert.ok(copied >= 0 && copied < warm, `${prefix}Cargo.toml must be copied before the dependency build`);
+    const targets = ['src/main.rs', 'src/lib.rs'].filter(target => existsSync(path.join(root, prefix + target)));
+    assert.ok(targets.length > 0, `${member || 'the root package'} must have a library or binary target`);
+    assert.ok(created.includes(`${prefix}src`), `${prefix}src must be created before its stubs`);
+    for (const target of targets) {
+      const stub = builder.search(new RegExp(`> ${escape(prefix + target)}(?=\\s|$)`));
+      assert.ok(stub > mkdir.index && stub < warm, `${prefix}${target} needs a stub before the dependency build`);
+    }
   }
 });
 
@@ -287,6 +319,14 @@ test('context excludes local-only descendants while retaining production inputs'
     '!ops/src/release/attestation/stage/reentry/',
     'ops/src/release/attestation/stage/reentry/**',
     '!ops/src/release/attestation/stage/reentry/*.rs',
+    '!crates/',
+    'crates/**',
+    '!crates/toolkit/',
+    'crates/toolkit/**',
+    '!crates/toolkit/Cargo.toml',
+    '!crates/toolkit/src/',
+    'crates/toolkit/src/**',
+    '!crates/toolkit/src/*.rs',
   ]) assert.ok(ignoreRules.includes(rule), 'the fixed Rust controller needs narrow traversal');
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
@@ -351,6 +391,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'load_tests/src/bench/restart_browser/reference/web/private.env',
     'load_tests/src/bench/restart_browser/reference/web/e2e/private.env',
     'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
+    'crates/notes.md', 'crates/private.env', 'crates/toolkit/private.env',
+    'crates/toolkit/src/private.env', 'crates/toolkit/src/CLAUDE.md',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'xtask/src/ci_local/private.env',
     'xtask/src/ci/apt_mirror/private.env',
@@ -438,6 +480,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/src/release/attestation/restore/process.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
+    'crates/toolkit/Cargo.toml', 'crates/toolkit/src/lib.rs',
+    'crates/toolkit/src/owned_process.rs', 'crates/toolkit/src/tooling.rs',
     'xtask/src/ci/apt_mirror.rs',
     'xtask/src/ci/apt_mirror/policy.rs',
     'xtask/src/ci/apt_mirror/files.rs',

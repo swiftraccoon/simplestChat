@@ -10,14 +10,12 @@ use super::{
     tools::Tools,
     transfer,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-        release_checks::files::Executable,
-    },
-    tooling::{Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
+    release_checks::files::Executable,
 };
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     fs::Metadata,
     sync::Arc,

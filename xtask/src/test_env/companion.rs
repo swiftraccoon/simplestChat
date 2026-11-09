@@ -1,7 +1,7 @@
 //! An in-process companion shares the test command's existing signal owner.
 //! Timer actions run while the workload group remains reserved; no task escapes.
 
-use crate::owned_process::Signals;
+use simplestchat_toolkit::owned_process::Signals;
 
 pub(crate) trait Companion {
     /// Wait only for an in-memory event/timer. Do not acquire a subprocess here.

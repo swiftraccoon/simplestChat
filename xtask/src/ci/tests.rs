@@ -987,5 +987,139 @@ fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_f
     assert!(!inputs::selected(Scope::CodeqlRust, workflow));
 }
 
+#[test]
+fn shared_crates_are_keyed_wherever_xtask_is() {
+    // The backend inputs and the compiled CI tool behind the native and CodeQL
+    // scopes bind every file under `crates/`, as they bind `xtask/`; the
+    // browser-backend role binds neither tree as a whole.
+    let scopes = inputs::REFERENCE_SCOPES
+        .iter()
+        .map(|name| Scope::parse(name).unwrap())
+        .chain([Scope::BrowserBackend]);
+    for scope in scopes {
+        for (shared, tool) in [
+            ("crates/toolkit/Cargo.toml", "xtask/Cargo.toml"),
+            ("crates/toolkit/src/owned_process.rs", "xtask/src/ci/mod.rs"),
+            ("crates/toolkit/README.md", "xtask/README.md"),
+        ] {
+            assert_eq!(
+                inputs::selected(scope, shared),
+                inputs::selected(scope, tool),
+                "{scope:?}: {shared}"
+            );
+        }
+        if scope != Scope::BrowserBackend {
+            assert!(
+                inputs::selected(scope, "crates/toolkit/README.md"),
+                "{scope:?}"
+            );
+        }
+    }
+    // The key-computing CI modules compile against these toolkit sources.
+    for name in [
+        "crates/toolkit/Cargo.toml",
+        "crates/toolkit/src/lib.rs",
+        "crates/toolkit/src/owned_process.rs",
+        "crates/toolkit/src/tooling.rs",
+    ] {
+        assert!(inputs::selected(Scope::BrowserBackend, name), "{name}");
+    }
+    assert!(!inputs::selected(
+        Scope::BrowserBackend,
+        "crates/toolkit/README.md"
+    ));
+}
+
+#[test]
+fn only_dev_dependencies_enable_the_toolkit_test_hooks() {
+    // A normal, build or target-specific dependency, or a feature forwarding the
+    // hook, would compile signal injection into the dependent's ordinary builds.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let read = |directory: &Path| -> toml::Value {
+        toml::from_str(&fs::read_to_string(directory.join("Cargo.toml")).unwrap()).unwrap()
+    };
+    let toolkit = |name: &str, entry: &toml::Value| {
+        name == "simplestchat-toolkit"
+            || entry.get("package").and_then(toml::Value::as_str) == Some("simplestchat-toolkit")
+    };
+    let members = read(root)["workspace"]["members"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let mut dependents = 0;
+    let mut toolkit_manifests = 0;
+    for directory in std::iter::once(root.to_path_buf()).chain(
+        members
+            .iter()
+            .map(|member| root.join(member.as_str().unwrap())),
+    ) {
+        let manifest = read(&directory);
+        let mut tables = vec![&manifest];
+        if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+            tables.extend(targets.values());
+        }
+        let mut keys = Vec::new();
+        for table in tables {
+            for kind in ["dependencies", "build-dependencies", "dev-dependencies"] {
+                let entries = table.get(kind).and_then(toml::Value::as_table);
+                for (name, entry) in entries.into_iter().flatten() {
+                    if !toolkit(name, entry) {
+                        continue;
+                    }
+                    keys.push(name.clone());
+                    if kind == "dev-dependencies" {
+                        continue;
+                    }
+                    dependents += 1;
+                    let features = entry.get("features").and_then(toml::Value::as_array);
+                    assert!(
+                        !features
+                            .into_iter()
+                            .flatten()
+                            .any(|feature| feature.as_str() == Some("test-hooks")),
+                        "{}: {kind} enables test-hooks",
+                        directory.display()
+                    );
+                }
+            }
+        }
+        let features = manifest.get("features").and_then(toml::Value::as_table);
+        for (feature, enables) in features.into_iter().flatten() {
+            for enable in enables.as_array().into_iter().flatten() {
+                let enable = enable.as_str().unwrap();
+                assert!(
+                    !keys.iter().any(|key| {
+                        [format!("{key}/test-hooks"), format!("{key}?/test-hooks")]
+                            .contains(&enable.to_owned())
+                    }),
+                    "{}: feature {feature} forwards test-hooks",
+                    directory.display()
+                );
+            }
+        }
+        // The toolkit itself may define the hook but must not turn it on by default
+        // or from any other feature.
+        let package = manifest
+            .get("package")
+            .and_then(|package| package.get("name"));
+        if package.and_then(toml::Value::as_str) == Some("simplestchat-toolkit") {
+            toolkit_manifests += 1;
+            for (feature, enables) in features.into_iter().flatten() {
+                let hooks = enables
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|enable| enable.as_str() == Some("test-hooks"));
+                assert!(
+                    feature == "test-hooks" || !hooks,
+                    "the toolkit's {feature} feature enables test-hooks"
+                );
+            }
+        }
+    }
+    assert!(dependents > 0, "xtask depends on the toolkit");
+    assert_eq!(toolkit_manifests, 1, "the toolkit is one workspace member");
+}
+
 #[path = "browser_backend_tests.rs"]
 mod browser_backend;

@@ -1,6 +1,6 @@
 //! The existing hosted comparison profile, captured before acquiring resources.
 
-use crate::tooling::{Environment, Failure, Result};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::OsStr,
     path::{Component, Path, PathBuf},

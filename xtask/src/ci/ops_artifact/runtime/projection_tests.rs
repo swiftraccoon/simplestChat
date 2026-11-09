@@ -17,7 +17,11 @@ use std::{
     time::Duration,
 };
 
-async fn run(fixture: &Fixture, fake: &mut Fake, budget: &Budget) -> crate::tooling::Result<()> {
+async fn run(
+    fixture: &Fixture,
+    fake: &mut Fake,
+    budget: &Budget,
+) -> simplestchat_toolkit::tooling::Result<()> {
     execute::transaction(
         execute::Inputs {
             path: fixture.request.clone(),

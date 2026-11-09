@@ -1,10 +1,10 @@
 //! A closed original-byte-pinned request. Paths and JSON never enter errors.
 
 use super::{digest, failure, namespace, sha};
-use crate::tooling::Result;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::Result;
 use std::path::{Path, PathBuf};
 
 pub(super) const MAX_REQUEST: u64 = 64 * 1024;

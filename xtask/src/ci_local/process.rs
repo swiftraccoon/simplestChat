@@ -1,7 +1,7 @@
 //! Owned, cancellable child commands. No process-global environment changes.
 
 use super::{evidence, io_failure};
-use crate::tooling::{self, Environment, Failure, Result};
+use simplestchat_toolkit::tooling::{self, Environment, Failure, Result};
 use std::ffi::OsStr;
 use std::io::Write;
 use std::os::fd::OwnedFd;

@@ -5,10 +5,8 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    ci::{browser_suite::process::Signals, process::Native},
-    tooling::{self, Failure, Result},
-};
+use crate::ci::{browser_suite::process::Signals, process::Native};
+use simplestchat_toolkit::tooling::{self, Failure, Result};
 use std::{path::Path, process::ExitCode};
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci image-cache \

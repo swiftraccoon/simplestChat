@@ -4,7 +4,8 @@ use super::{
     files::{self, Executable},
     plan::{self, Context},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
+use simplestchat_toolkit::tooling::Result;
 use std::{sync::Arc, time::Instant};
 
 pub(super) async fn execute(context: &Context, runner: &mut impl Executor) -> Result<()> {

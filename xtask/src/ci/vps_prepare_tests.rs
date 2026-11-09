@@ -1,7 +1,8 @@
 //! Actual owned pipe/group checks with inert executables, never SSH or Ansible.
 
 use super::*;
-use crate::{ci::ops_artifact::capacity_vps::tests::PreparationFixture, owned_process::Signals};
+use crate::ci::ops_artifact::capacity_vps::tests::PreparationFixture;
+use simplestchat_toolkit::owned_process::Signals;
 
 const LEASE: &str = r#"
 def exact(n):

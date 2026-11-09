@@ -6,10 +6,8 @@ use super::{
 };
 use std::io::Write;
 
-use crate::{
-    ci::{github_output::Target, process::Executor},
-    tooling::Result,
-};
+use crate::ci::{github_output::Target, process::Executor};
+use simplestchat_toolkit::tooling::Result;
 
 const WARNING: &str =
     "Database cache hint unavailable; the online updater will check current upstream data.";

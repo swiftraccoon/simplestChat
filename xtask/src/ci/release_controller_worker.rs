@@ -8,7 +8,7 @@ use super::{
     process::{self, Control},
     protocol::{Action, Intent, Ready, Request, Terminal},
 };
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::time::{Duration, Instant};
 
 pub(super) fn request(owned: &Owned, intent: &Intent, digest: &str, action: Action) -> Result<()> {
@@ -84,7 +84,7 @@ pub(super) async fn committed(
 }
 pub(super) async fn execute(
     context: &Context,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
 ) -> Result<u8> {
     let owned = Owned::open(context)?;
     let result = work(context, &owned, signals).await;
@@ -96,7 +96,7 @@ pub(super) async fn execute(
 async fn work(
     context: &Context,
     owned: &Owned,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
 ) -> Result<u8> {
     let (intent, digest) = owned.intent(context)?;
     context.validate()?;

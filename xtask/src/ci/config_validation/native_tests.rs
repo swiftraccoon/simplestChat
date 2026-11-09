@@ -1,7 +1,8 @@
 //! The actual metadata adapter with owned inert CLI groups and pipes, never Docker.
 
 use super::*;
-use crate::{ci::process::Native, owned_process::Signals};
+use crate::ci::process::Native;
+use simplestchat_toolkit::owned_process::Signals;
 use std::{os::unix::process::CommandExt, path::Path};
 
 fn executable(fixture: &Fixture, body: &str) -> Environment {
@@ -63,7 +64,7 @@ os.write(1,b'{"metadata":"closed"}\n')
     let artifacts = files::Artifacts::new(&fixture.context).unwrap();
     let mut unrelated = std::process::Command::new("/bin/sleep");
     unrelated.arg("30").process_group(0);
-    let unrelated = crate::owned_process::Group::new(unrelated.spawn().unwrap());
+    let unrelated = simplestchat_toolkit::owned_process::Group::new(unrelated.spawn().unwrap());
     let mut native = Native::new(&fixture.root, &environment, signals());
     let bytes = capture::Capture {
         inner: &mut native,
@@ -75,7 +76,7 @@ os.write(1,b'{"metadata":"closed"}\n')
     .unwrap();
     assert_eq!(bytes, b"{\"metadata\":\"closed\"}\n");
     assert!(native.cleanup_passed());
-    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert!(!simplestchat_toolkit::owned_process::exited_now(unrelated.pid()).unwrap());
     let worker = fs::read_to_string(fixture.root.join("worker")).unwrap();
     let observed = std::process::Command::new("/bin/ps")
         .args(["-o", "stat=", "-p", worker.trim()])

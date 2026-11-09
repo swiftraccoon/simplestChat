@@ -1,6 +1,7 @@
 //! Private observations and fixed role identities; no general namespace runner.
-use crate::{ci::command::Command, tooling::Result};
+use crate::ci::command::Command;
 use serde_json::Value;
+use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeMap, fs::File, sync::Arc, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

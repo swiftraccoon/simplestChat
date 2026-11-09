@@ -7,9 +7,9 @@ use super::{
     command::{Command, Program},
     process::{Executor, Native},
 };
-use crate::{
+use crate::test_env;
+use simplestchat_toolkit::{
     owned_process::Signals,
-    test_env,
     tooling::{self, Environment, Failure},
 };
 use std::{

@@ -1,17 +1,17 @@
 //! Execute whole retained tests and actual untransformed Bash/JQ/AWK blocks.
 //! Neither original launcher is run: fixed host paths/namespace work stay held.
 use super::policy::{self, SummarySelection};
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::{Command, Program, SeparateLogs},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    bounded_log::Log,
+    command::{Command, Program, SeparateLogs},
+    process::{Executor, Native},
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::{
+    owned_process::Signals,
+    tooling::{Environment, Failure, Result},
+};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -88,7 +88,7 @@ fn complete_original_scripts_and_original_tests_are_exact_81_bytes() {
 async fn reference(cases: &[Value]) -> Result<Value> {
     let signals = Signals::new()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let captured = crate::tooling::inherited_env();
+    let captured = simplestchat_toolkit::tooling::inherited_env();
     let node = Arc::new(crate::ci::release_checks::files::select(
         root,
         &captured,

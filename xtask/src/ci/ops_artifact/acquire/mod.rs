@@ -21,11 +21,11 @@ mod retained;
 mod tests;
 pub(in crate::ci) mod tools;
 
-use crate::tooling::{Failure, Result};
 pub(super) use execute::AuthenticatedAcquisition;
 pub(super) use files::PairPins;
 pub(super) use hash::Checkpoint as AcquisitionCheckpoint;
 pub(super) use plan::Clock as AcquisitionClock;
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{sync::Arc, time::Instant};
 
 /// The caller owns the only clock, signal registration and process executor.
@@ -39,7 +39,7 @@ pub(super) async fn observe_acquired<E: crate::ci::process::Executor>(
     path: std::path::PathBuf,
     selected: String,
     caller: std::path::PathBuf,
-    environment: crate::tooling::Environment,
+    environment: simplestchat_toolkit::tooling::Environment,
     budget: super::namespace::Budget,
     window: Window,
     executor: &mut E,

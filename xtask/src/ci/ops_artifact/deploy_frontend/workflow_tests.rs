@@ -469,7 +469,7 @@ impl Executor for Fake {
         if status == 0 {
             Ok(Vec::new())
         } else {
-            Err(crate::tooling::Failure::child_exit(status))
+            Err(simplestchat_toolkit::tooling::Failure::child_exit(status))
         }
     }
     async fn ready(&mut self) -> Result<()> {

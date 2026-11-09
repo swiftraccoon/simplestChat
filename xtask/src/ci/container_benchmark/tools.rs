@@ -5,14 +5,12 @@ use super::{
     namespace::{self, Lease},
     plan,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        release_checks::files::{self, Executable},
-        release_controller::files::Directory,
-    },
-    tooling::{Environment, Result},
+use crate::ci::{
+    command::{Command, Program},
+    release_checks::files::{self, Executable},
+    release_controller::files::Directory,
 };
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::{OsStr, OsString},
     fs::{File, Metadata},
@@ -626,10 +624,8 @@ mod tests {
     use super::super::{namespace::fixture::Tree, native::Adapter};
     use super::*;
     use crate::ci::process::{self, Executor, Native};
-    use crate::{
-        ci::{bounded_log::Log, command::SeparateLogs},
-        owned_process::Signals,
-    };
+    use crate::ci::{bounded_log::Log, command::SeparateLogs};
+    use simplestchat_toolkit::owned_process::Signals;
     use std::{
         fs,
         os::unix::fs::{DirBuilderExt, PermissionsExt},

@@ -1,8 +1,8 @@
 //! Fixed runner-file append. The captured file is a caller-owned exclusive
 //! boundary; retained identity checks are optimistic, not locks or atomic CAS.
 
-use crate::tooling::{Environment, Failure, Result};
 use rustix::fs::{Mode, OFlags};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     fs::{self, File, Metadata},
     io::{Read, Seek, SeekFrom, Write},

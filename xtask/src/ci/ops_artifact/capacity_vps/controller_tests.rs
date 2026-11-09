@@ -9,18 +9,16 @@ use super::{
     plan::{self, Clock, Plan},
     sources,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::Result,
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
 use simplestchat_ops::capacity_vps::protocol::{
     Action, Build, Collect, Envelope, Header, Inspection, Lifecycle, Lookup, Mode, Preflight,
     Recovery, Residual, Residuals, Response, ResultData, Retirement, RetirementPhase, Start, Unit,
     UnitState,
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{
     fs,
     io::{Cursor, Read, Seek, SeekFrom, Write},

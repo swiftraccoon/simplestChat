@@ -4,8 +4,8 @@
 //! no Git, compiler, candidate, server or workload is executed by these tests.
 
 use super::plan::Plan;
-use crate::tooling::Environment;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     fs,
     os::unix::fs::{DirBuilderExt, PermissionsExt},

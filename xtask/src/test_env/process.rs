@@ -13,15 +13,21 @@ use std::time::Duration;
 pub(crate) async fn run_test_child(
     command: std::process::Command,
     grace: Duration,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
 ) -> anyhow::Result<i32> {
-    run_test_child_with_cleanup(command, grace, signals, crate::owned_process::finish).await
+    run_test_child_with_cleanup(
+        command,
+        grace,
+        signals,
+        simplestchat_toolkit::owned_process::finish,
+    )
+    .await
 }
 
 async fn run_test_child_with_cleanup<F>(
     command: std::process::Command,
     grace: Duration,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
     finish: impl FnOnce(rustix::process::Pid) -> F,
 ) -> anyhow::Result<i32>
 where
@@ -33,14 +39,14 @@ where
 pub(crate) async fn run_test_child_with_companion(
     command: std::process::Command,
     grace: Duration,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
     companion: &mut impl super::Companion,
 ) -> anyhow::Result<i32> {
     run_child(
         command,
         grace,
         signals,
-        crate::owned_process::finish,
+        simplestchat_toolkit::owned_process::finish,
         companion,
     )
     .await
@@ -49,14 +55,14 @@ pub(crate) async fn run_test_child_with_companion(
 async fn run_child<F>(
     mut command: std::process::Command,
     grace: Duration,
-    signals: &mut crate::owned_process::Signals,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
     finish: impl FnOnce(rustix::process::Pid) -> F,
     companion: &mut impl super::Companion,
 ) -> anyhow::Result<i32>
 where
     F: std::future::Future<Output = bool>,
 {
-    use crate::owned_process::{Group, exited};
+    use simplestchat_toolkit::owned_process::{Group, exited};
     use std::os::unix::process::CommandExt;
 
     if let Some(code) = signals.pending().await {

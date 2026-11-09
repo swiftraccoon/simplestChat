@@ -7,8 +7,9 @@ use super::{
     options::Context,
     plan::{self, Asset, Role},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
 use serde::Serialize;
+use simplestchat_toolkit::tooling::Result;
 use std::path::PathBuf;
 
 #[derive(Default, Serialize)]
@@ -335,7 +336,7 @@ pub(super) async fn run<E: Executor, C: Clock>(
     let closed = artifacts.finish();
     let final_pending = engine.runner.ready().await;
     let final_deadline = if engine.clock.elapsed() >= plan::WATCHDOG {
-        Err(crate::tooling::Failure::new(
+        Err(simplestchat_toolkit::tooling::Failure::new(
             124,
             "Container smoke watchdog expired.",
         ))

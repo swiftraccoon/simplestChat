@@ -184,7 +184,7 @@ async fn separate_mode_retires_descendants_before_finishing_both_pipe_eofs() {
     let mut native = fixture.native(signals());
     assert!(native.run(command).await.unwrap().is_empty());
     assert!(native.cleanup_passed());
-    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert!(!simplestchat_toolkit::owned_process::exited_now(unrelated.pid()).unwrap());
     assert_eq!(
         fs::read(fixture.path.join("stdout.bin")).unwrap(),
         b"binary\x00\xff"
@@ -683,7 +683,7 @@ os.write(1,b'leader completed\n')
     native.run(fixture.request(128)).await.unwrap();
     assert!(native.cleanup_passed());
     assert_eq!(fixture.bytes(), b"leader completed\n");
-    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert!(!simplestchat_toolkit::owned_process::exited_now(unrelated.pid()).unwrap());
     // Darwin can retain dead orphan zombies; live worker states are refused.
     let worker = fs::read_to_string(fixture.path.join("worker")).unwrap();
     let observed = std::process::Command::new("/bin/ps")

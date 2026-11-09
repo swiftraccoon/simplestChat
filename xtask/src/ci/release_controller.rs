@@ -25,7 +25,7 @@ mod wait;
 #[path = "release_controller_worker.rs"]
 mod worker;
 
-use crate::tooling;
+use simplestchat_toolkit::tooling;
 use std::{io::Write, path::Path, process::ExitCode};
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci release-controller start|wait";
 
@@ -81,7 +81,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
 async fn execute(root: &Path, operation: &str) -> tooling::Result<()> {
     // Register before source/namespace admission; the collector already has a
     // live worker from an earlier step. One signal owner survives final closes.
-    let mut signals = crate::owned_process::Signals::new()?;
+    let mut signals = simplestchat_toolkit::owned_process::Signals::new()?;
     let deadline = std::time::Instant::now() + plan::WAIT;
     let admitted = plan::Context::new(
         root,

@@ -1,8 +1,9 @@
 //! Anchored private files and a two-file artifact directory publication.
 
 use super::plan::{self, Context, failure};
-use crate::{ci::release_controller::files::Directory, tooling::Result};
+use crate::ci::release_controller::files::Directory;
 use rustix::fs::{AtFlags, Mode, OFlags};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     fs::{File, Metadata},
@@ -18,7 +19,7 @@ const READ: OFlags = OFlags::RDONLY
 pub(super) fn close(file: File) -> Result<()> {
     nix::unistd::close(file).map_err(|_| failure())
 }
-fn mapped<T>(value: crate::tooling::Result<T>) -> Result<T> {
+fn mapped<T>(value: simplestchat_toolkit::tooling::Result<T>) -> Result<T> {
     value.map_err(|_| failure())
 }
 fn binding(a: &Metadata, b: &Metadata) -> bool {
@@ -157,8 +158,8 @@ impl Owned {
     }
     pub fn environment(
         &self,
-        environment: &crate::tooling::Environment,
-    ) -> crate::tooling::Environment {
+        environment: &simplestchat_toolkit::tooling::Environment,
+    ) -> simplestchat_toolkit::tooling::Environment {
         let mut environment = super::engine::frozen_environment(environment);
         environment.retain(|key, _| !key.as_encoded_bytes().starts_with(b"GIT_"));
         for key in ["DOCKER_CONFIG", "BUILDX_CONFIG", "WSL_DISTRO_NAME"] {

@@ -1,16 +1,14 @@
 //! An owned fake engine and HTTP responses; no daemon, socket or service exists.
 
 use super::*;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
 use engine::Clock;
 use plan::Asset;
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     collections::BTreeMap,
     fs,

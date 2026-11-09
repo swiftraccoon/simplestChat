@@ -2,13 +2,11 @@
 //! Paths and environments stay private. Snapshots are not descriptor execution
 //! or exclusion of a same-user writer; the outer owner supplies source custody.
 pub(in crate::ci) use crate::ci::ops_artifact::verify::tools::Captures;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        release_checks::files::{self, Executable},
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    release_checks::files::{self, Executable},
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::{OsStr, OsString},
     os::unix::fs::MetadataExt,

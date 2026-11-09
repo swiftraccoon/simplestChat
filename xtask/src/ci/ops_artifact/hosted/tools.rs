@@ -3,17 +3,15 @@
 //! catalog authenticates component content, not the host's curl/dpkg runtime.
 
 use super::{failure, plan};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        ops_artifact::{
-            namespace::{Budget, Permit},
-            verify::tools::Captures,
-        },
-        release_checks::files::{self, Executable},
+use crate::ci::{
+    command::{Command, Program},
+    ops_artifact::{
+        namespace::{Budget, Permit},
+        verify::tools::Captures,
     },
-    tooling::{Environment, Result},
+    release_checks::files::{self, Executable},
 };
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::{OsStr, OsString},
     io::Seek,

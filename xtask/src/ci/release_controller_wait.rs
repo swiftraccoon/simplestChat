@@ -6,8 +6,8 @@ use super::{
     protocol::{Action, Terminal},
     replay, worker,
 };
-use crate::{
-    ci::release_checks::files::Executable,
+use crate::ci::release_checks::files::Executable;
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Failure, Result},
 };

@@ -1,8 +1,8 @@
 //! Fresh private scanner storage and bounded descriptor-relative retirement.
 
 use super::plan::Context;
-use crate::tooling::{Failure, Result};
 use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     fs::{File, Metadata},
     io::{Read, Write},

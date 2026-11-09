@@ -1,11 +1,9 @@
 //! Retained source, temporary captures and shared private artifact namespace.
 use super::{config::Config, failure, policy::LIMIT};
-use crate::{
-    ci::{bounded_log::Log, command::SeparateLogs, release_controller::files::Directory},
-    tooling::Result,
-};
+use crate::ci::{bounded_log::Log, command::SeparateLogs, release_controller::files::Directory};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeMap,
     fs::{File, Metadata},

@@ -6,13 +6,11 @@ use super::{
     plan, sampling,
     tools::Tools,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{self, Executor},
-    },
-    tooling::Result,
+use crate::ci::{
+    command::{Command, Program},
+    process::{self, Executor},
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeMap,
     fs::File,

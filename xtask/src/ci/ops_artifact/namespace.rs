@@ -2,8 +2,8 @@
 //! acquired File owners attempt explicit closes on success and failure paths.
 
 use super::{failure, io};
-use crate::tooling::Result;
 use rustix::fs::{AtFlags, Mode, OFlags};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::{File, Metadata},
     io::{Read, Seek, SeekFrom, Write},

@@ -10,7 +10,8 @@ mod policy;
 #[path = "session_soak_tests.rs"]
 mod tests;
 
-use crate::{owned_process::Signals, test_env, tooling};
+use crate::test_env;
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{path::Path, process::ExitCode};
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci session-soak";
 

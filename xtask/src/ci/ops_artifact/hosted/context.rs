@@ -2,9 +2,9 @@
 //! select a repository, workflow, ref, event, target or signer authority.
 
 use super::failure;
-use crate::tooling::{Environment, Result};
 use serde::Serialize;
 use simplestchat_ops::distribution::manifest::{Selection, verification};
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::path::{Path, PathBuf};
 
 pub(super) const TARGET: &str = "x86_64-unknown-linux-musl";

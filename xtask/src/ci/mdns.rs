@@ -10,7 +10,7 @@ mod tests;
 pub(super) mod tools;
 
 use super::process::Native;
-use crate::{
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{self, Failure},
 };

@@ -1,13 +1,11 @@
 //! One fixed discovery expression and the reference coordinator's exact inputs.
 
 use super::files::Executable;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        runner,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    runner,
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

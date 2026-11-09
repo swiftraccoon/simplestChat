@@ -4,9 +4,9 @@
 //! API review: C-VALIDATE/C-CUSTOM-TYPE keep checked identities distinct;
 //! C-SERDE/C-GOOD-ERR reject selected-field coercions without reporting inputs.
 
-use crate::tooling::{Failure, Result};
 use serde::Deserialize;
 use serde_json::value::RawValue;
+use simplestchat_toolkit::tooling::{Failure, Result};
 
 pub(super) const REPOSITORY: &str = "swiftraccoon/simplestChat";
 const REPOSITORY_ID: u64 = 1_155_881_649;

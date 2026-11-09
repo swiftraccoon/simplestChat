@@ -6,11 +6,11 @@ use super::{
     plan::{self, Context, Stage},
     protocol::{Action, Intent, Request},
 };
-use crate::{
+use rustix::process::Signal;
+use simplestchat_toolkit::{
     owned_process::{self, Group, Signals},
     tooling::{self, Result},
 };
-use rustix::process::Signal;
 use std::{
     os::unix::process::CommandExt,
     process::Stdio,
@@ -100,7 +100,7 @@ impl Invocation<'_> {
             .stdout(Stdio::from(log.writer()?))
             .stderr(Stdio::from(log.writer()?));
         let child = command.spawn().map_err(|error| {
-            crate::tooling::Failure::new(
+            simplestchat_toolkit::tooling::Failure::new(
                 match error.kind() {
                     std::io::ErrorKind::NotFound => 127,
                     std::io::ErrorKind::PermissionDenied => 126,

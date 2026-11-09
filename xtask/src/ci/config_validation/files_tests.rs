@@ -114,10 +114,8 @@ fn current_owner_private_directory_and_log_count_bounds_gate_payload_admission()
 
 #[test]
 fn fixed_adapter_failure_keeps_original_role_status_and_no_private_payload() {
-    use crate::{
-        ci::command::{Command, Program},
-        tooling::Failure,
-    };
+    use crate::ci::command::{Command, Program};
+    use simplestchat_toolkit::tooling::Failure;
     let fixture = Fixture::new(Kind::Caddy);
     let artifacts = Artifacts::new(&fixture.context).unwrap();
     let request = Command::capture(
@@ -157,10 +155,8 @@ fn fixed_adapter_failure_keeps_original_role_status_and_no_private_payload() {
 
 #[test]
 fn actual_child_status_is_optional_and_unknown_roles_never_echo_arguments() {
-    use crate::{
-        ci::command::{Command, Program},
-        tooling::Failure,
-    };
+    use crate::ci::command::{Command, Program};
+    use simplestchat_toolkit::tooling::Failure;
     let fixture = Fixture::new(Kind::Caddy);
     let artifacts = Artifacts::new(&fixture.context).unwrap();
     let request = Command::capture(Program::Docker, &["PRIVATE_ROLE", "PRIVATE_CONFIG"]);

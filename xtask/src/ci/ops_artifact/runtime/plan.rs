@@ -1,7 +1,7 @@
 //! A single monotonic entry, with complete remaining phase and retirement slots.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     sync::Arc,

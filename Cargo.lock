@@ -3504,6 +3504,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplestchat-toolkit"
+version = "0.1.0"
+dependencies = [
+ "rustix",
+ "simplestchat-ops",
+ "tokio",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4854,6 +4863,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "simplestchat-ops",
+ "simplestchat-toolkit",
  "syn 3.0.6",
  "tar",
  "tokio",

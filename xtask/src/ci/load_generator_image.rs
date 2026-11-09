@@ -13,7 +13,7 @@ pub(super) mod tools;
 mod transfer;
 
 use super::{container_engine as engine, process::Native};
-use crate::{owned_process::Signals, tooling};
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{path::Path, process::ExitCode, time::Instant};
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {

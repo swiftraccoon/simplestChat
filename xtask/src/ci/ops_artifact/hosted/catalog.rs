@@ -2,8 +2,8 @@
 //! versions, complete archive digests, exact sizes or component identities.
 
 use super::{context, failure};
-use crate::tooling::Result;
 use serde::{Deserialize, Serialize};
+use simplestchat_toolkit::tooling::Result;
 use std::collections::BTreeSet;
 
 const ORIGINAL: &[u8] = include_bytes!(concat!(

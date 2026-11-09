@@ -4,8 +4,9 @@
 //! retains the ordinary Python venv/pip installer. This module owns directory
 //! admission and the one-line runner-file append, not installed package trust.
 
-use crate::{ci::runner, tooling};
+use crate::ci::runner;
 use rustix::fs::{Mode, OFlags};
+use simplestchat_toolkit::tooling;
 use std::{fs::File, io::Write, os::unix::fs::MetadataExt, path::Path, process::ExitCode};
 
 const PREFIX: &str = "simplestchat-npm-12.2.0";

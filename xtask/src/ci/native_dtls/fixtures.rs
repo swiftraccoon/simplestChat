@@ -1,7 +1,7 @@
 //! Tiny owned source/tool trees; no compiler, package installer or native test.
 
 use super::plan::Context;
-use crate::tooling::Environment;
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     fs,
     os::unix::fs::PermissionsExt,

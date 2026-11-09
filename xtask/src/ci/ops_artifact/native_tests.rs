@@ -1,13 +1,11 @@
 //! Inert selected-tool supervision regressions.
 
 use super::{fixture::*, namespace::*, *};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
 };
+use simplestchat_toolkit::owned_process::Signals;
 use std::{ffi::OsString, fs, os::unix::fs::PermissionsExt};
 
 struct Runner<'a> {

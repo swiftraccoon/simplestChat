@@ -4,14 +4,12 @@ use super::{
     files::{Area, Owned, Record},
     plan,
 };
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::{Command, SeparateLogs},
-        process,
-    },
-    tooling::Result,
+use crate::ci::{
+    bounded_log::Log,
+    command::{Command, SeparateLogs},
+    process,
 };
+use simplestchat_toolkit::tooling::Result;
 use std::sync::Arc;
 
 pub(super) async fn output(

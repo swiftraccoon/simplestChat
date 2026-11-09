@@ -1,6 +1,6 @@
 //! NUL-delimited Git discovery and the maintained Python source policy.
 
-use crate::tooling::{self, Environment, Failure};
+use simplestchat_toolkit::tooling::{self, Environment, Failure};
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::PermissionsExt;

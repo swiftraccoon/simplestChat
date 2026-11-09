@@ -1,4 +1,4 @@
-//! Rust-only browser artifact policy; the nine reference scopes stay unchanged.
+//! Rust-only browser policy; reference closures add `crates/`, which the oracle omits deliberately.
 //! Inert binaries and depinfo test reuse without running an application or compiler.
 
 use super::*;

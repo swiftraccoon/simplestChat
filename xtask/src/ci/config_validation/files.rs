@@ -1,10 +1,11 @@
 //! Anchored private records and selected input observations, never a Cargo closure.
 
 use super::plan::{Context, failure};
-use crate::{ci::release_controller::files::Directory, tooling::Result};
+use crate::ci::release_controller::files::Directory;
 use rustix::fs::{Mode, OFlags};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     fs::{File, Metadata},

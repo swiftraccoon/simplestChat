@@ -2,8 +2,8 @@
 //! workflow selection. Opaque producer evidence alone never authorizes signing.
 
 use super::{catalog::Catalog, context::Context, failure};
-use crate::tooling::Result;
 use serde_json::Value;
+use simplestchat_toolkit::tooling::Result;
 use std::collections::BTreeMap;
 
 pub(super) const NAMES: [&str; 9] = [

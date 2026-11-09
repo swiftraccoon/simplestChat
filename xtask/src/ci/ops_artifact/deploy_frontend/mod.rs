@@ -14,7 +14,7 @@ mod policy;
 pub(in crate::ci) mod tools;
 mod worker;
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{path::Path, process::ExitCode};
 
 use options::USAGE;

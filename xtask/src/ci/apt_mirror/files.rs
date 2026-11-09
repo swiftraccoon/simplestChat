@@ -5,8 +5,9 @@
 //! it never reports success or rolls back over a later writer.
 
 use super::policy;
-use crate::{ci::release_controller::files::Directory, tooling};
+use crate::ci::release_controller::files::Directory;
 use rustix::fs::{AtFlags, Mode, OFlags};
+use simplestchat_toolkit::tooling;
 use std::{
     fs::{File, Metadata},
     io::{Read, Seek, SeekFrom, Write},

@@ -5,7 +5,7 @@
 //! File work is cooperative: blocked OS I/O and reaping are not hard wall bounds.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     sync::Arc,

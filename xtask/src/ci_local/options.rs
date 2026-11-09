@@ -1,6 +1,6 @@
 //! Local workflow selection, with full-gate coverage kept indivisible.
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::path::PathBuf;
 
 pub(super) const USAGE: &str = "\

@@ -1,13 +1,11 @@
 //! Fixed reference commands and scanner-pin/trust/generation framing.
 
 use super::{Selection, failure};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        runner,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    runner,
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::path::{Component, Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

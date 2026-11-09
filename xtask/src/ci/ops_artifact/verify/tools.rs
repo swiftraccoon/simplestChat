@@ -2,11 +2,9 @@
 
 use super::super::namespace::{Budget, Permit};
 use super::{failure, request::Request};
-use crate::{
-    ci::{command::Program, release_checks::files::Executable},
-    tooling::{Environment, Result},
-};
+use crate::ci::{command::Program, release_checks::files::Executable};
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsString,
     fs::Metadata,

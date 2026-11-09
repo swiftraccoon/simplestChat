@@ -3,7 +3,7 @@
 //! The hosted /bin/sh and dynamic loader remain explicit runtime trust inputs.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::path::Path;
 
 pub(super) const GCC: &str = "host-tools/sysroot/usr/bin/x86_64-linux-gnu-gcc-13";

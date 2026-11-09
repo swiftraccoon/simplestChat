@@ -4,11 +4,9 @@ use super::{
     files::{close, io, same},
     plan::failure,
 };
-use crate::{
-    ci::release_controller::files::{Directory, NamespaceBinding},
-    tooling::Result,
-};
+use crate::ci::release_controller::files::{Directory, NamespaceBinding};
 use rustix::fs::{AtFlags, Mode, OFlags};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::{File, Metadata},
     io::Write,

@@ -1,9 +1,7 @@
 //! Closed image/profile admission; repository definitions remain read-only.
 
-use crate::{
-    ci::runner,
-    tooling::{Environment, Failure, Result},
-};
+use crate::ci::runner;
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::ffi::OsStr;
 
 pub(super) const BEFORE: &[u8] = concat!(

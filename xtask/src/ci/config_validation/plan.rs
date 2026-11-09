@@ -1,9 +1,7 @@
 //! Two closed offline validation plans; identities occupy literal argv slots.
 
-use crate::{
-    ci::{command::Command, container_engine::Policy, runner},
-    tooling::{Environment, Failure, Result},
-};
+use crate::ci::{command::Command, container_engine::Policy, runner};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

@@ -4,9 +4,9 @@ use super::{
     plan::{self, Context},
     protocol::{Binding, Intent},
 };
-use crate::tooling::Result;
 use rustix::fs::{Mode, OFlags};
 use serde::{Serialize, de::DeserializeOwned};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     ffi::OsString,
     fs::{File, Metadata},

@@ -4,11 +4,9 @@ use super::{
     files::{self, Owned},
     plan::{self, Context},
 };
-use crate::{
-    ci::{process::Executor, selected_executable::Executable},
-    tooling::Result,
-};
+use crate::ci::{process::Executor, selected_executable::Executable};
 use serde::Serialize;
+use simplestchat_toolkit::tooling::Result;
 use std::{sync::Arc, time::Instant};
 
 #[derive(Serialize)]

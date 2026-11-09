@@ -1,6 +1,6 @@
 //! Owned inert executables only. No package manager, privilege, engine or host.
 use super::*;
-use crate::{owned_process::Signals, tooling::Environment};
+use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
 use std::{
     fs,
     os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, symlink},
@@ -154,7 +154,10 @@ fn final_signal_and_deadline_fences_preserve_existing_nonzero_primary() {
     for primary in [1, 100, 124, 127, 130, 143] {
         for signal in [None, Some(130), Some(143)] {
             let result = completion(
-                Err(crate::tooling::Failure::new(primary, "private primary")),
+                Err(simplestchat_toolkit::tooling::Failure::new(
+                    primary,
+                    "private primary",
+                )),
                 signal,
                 true,
             );
@@ -446,7 +449,7 @@ impl wait::Output for Captured {
         bytes: &[u8],
         _signals: &mut Signals,
         _deadline: Instant,
-    ) -> crate::tooling::Result<()> {
+    ) -> simplestchat_toolkit::tooling::Result<()> {
         self.0.extend(bytes);
         Ok(())
     }
@@ -570,7 +573,7 @@ fn precommit_failure_and_expired_ready_retire_acquired_child_without_handoff() {
                 },
                 |child| {
                     released.set(true);
-                    drop(crate::owned_process::Group::new(child));
+                    drop(simplestchat_toolkit::owned_process::Group::new(child));
                 },
                 |_, _, _| panic!("no commit before accepted startup"),
                 || {
@@ -600,7 +603,7 @@ fn precommit_failure_and_expired_ready_retire_acquired_child_without_handoff() {
                 Err(rustix::io::Errno::CHILD)
             ));
             assert!(unrelated.try_wait().unwrap().is_none());
-            drop(crate::owned_process::Group::new(unrelated));
+            drop(simplestchat_toolkit::owned_process::Group::new(unrelated));
         });
     }
 }
@@ -648,7 +651,7 @@ fn uncertain_visible_commit_never_restores_parent_signal_or_reap_authority() {
         assert_eq!(cancel.intent_sha256, digest);
         assert_eq!(cancel.capability, intent.capability);
         owned.finish().unwrap();
-        drop(crate::owned_process::Group::new(child));
+        drop(simplestchat_toolkit::owned_process::Group::new(child));
     });
 }
 #[test]
@@ -683,7 +686,7 @@ fn cancellation_after_disarm_before_commit_uses_only_capability_request() {
         assert_eq!(result.unwrap_err().code, 130);
         let mut child = detached.into_inner().unwrap();
         assert!(child.try_wait().unwrap().is_none());
-        drop(crate::owned_process::Group::new(child));
+        drop(simplestchat_toolkit::owned_process::Group::new(child));
     });
 }
 #[test]

@@ -1,9 +1,7 @@
 //! Explicit CI admission and the documented local already-built-image facade.
 
-use crate::{
-    ci::runner,
-    tooling::{Environment, Failure, Result},
-};
+use crate::ci::runner;
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::OsStr,
     path::{Component, Path, PathBuf},

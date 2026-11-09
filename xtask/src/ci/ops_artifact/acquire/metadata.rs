@@ -1,8 +1,8 @@
 //! Fresh fixed API identities bind transport bytes, independently of signing.
 
 use super::{failure, request::Request};
-use crate::tooling::Result;
 use serde::{Deserialize, Serialize};
+use simplestchat_toolkit::tooling::Result;
 
 const REPO: &str = "swiftraccoon/simplestChat";
 const REPO_ID: u64 = 1_155_881_649;

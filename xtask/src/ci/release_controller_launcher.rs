@@ -6,7 +6,7 @@ use super::{
     protocol::{Action, Intent, Ready},
     worker,
 };
-use crate::{
+use simplestchat_toolkit::{
     owned_process::{self, Group, Signals},
     tooling::{self, Failure, Result},
 };

@@ -5,7 +5,8 @@ use super::{
     plan,
     protocol::Intent,
 };
-use crate::{ci::bounded_log, tooling::Result};
+use crate::ci::bounded_log;
+use simplestchat_toolkit::tooling::Result;
 use std::{fs::File, os::unix::fs::MetadataExt};
 
 pub(super) struct Log(bounded_log::Log);

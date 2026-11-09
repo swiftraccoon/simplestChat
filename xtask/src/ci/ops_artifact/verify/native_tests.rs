@@ -2,15 +2,15 @@
 //! is an owned inert shell fixture: no GitHub, credential helper or verifier runs.
 
 use super::{files::Output, hash::Checkpoint, request::Request, tools};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
+};
+use serde_json::json;
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Result},
 };
-use serde_json::json;
 use std::{
     ffi::OsString,
     fs,

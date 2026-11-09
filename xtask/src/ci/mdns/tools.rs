@@ -1,9 +1,7 @@
 //! Caller-trusted fixed tool metadata, not executable-byte or SDK authentication.
 use super::failure;
-use crate::{
-    ci::{command::Program, release_checks::files::Executable},
-    tooling::Result,
-};
+use crate::ci::{command::Program, release_checks::files::Executable};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},

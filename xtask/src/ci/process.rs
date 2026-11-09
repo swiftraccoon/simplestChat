@@ -1,13 +1,10 @@
 //! Bounded native commands reuse the browser supervisor's reserved group guard.
 
 use super::command::{Command, Program, SeparateLogs};
-use crate::ci::browser_suite::{
-    cleanup,
-    process::{Group, Signals, exited},
-};
-use crate::tooling::Environment;
-use crate::tooling::{self, Failure, Result};
+use crate::ci::browser_suite::process::{Group, Signals, exited};
 use rustix::process::Signal;
+use simplestchat_toolkit::tooling::Environment;
+use simplestchat_toolkit::tooling::{self, Failure, Result};
 use std::fs::File;
 use std::io::Seek;
 use std::path::Path;
@@ -869,7 +866,7 @@ pub(super) struct Finalize;
 impl Finalizer for Finalize {
     async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>) {
         let pid = group.pid();
-        let cleaned = cleanup::finish(pid).await;
+        let cleaned = simplestchat_toolkit::owned_process::finish(pid).await;
         // NOWAIT keeps the identity reserved through the final group signal.
         // Never block in reap unless terminal observation has succeeded.
         let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;

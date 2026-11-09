@@ -4,14 +4,12 @@ use super::{
     files::Owned,
     plan::{self, Context},
 };
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::Command,
-        process::{self, Executor},
-    },
-    tooling::Result,
+use crate::ci::{
+    bounded_log::Log,
+    command::Command,
+    process::{self, Executor},
 };
+use simplestchat_toolkit::tooling::Result;
 use std::sync::Arc;
 
 pub(super) struct Capture<'a, E> {

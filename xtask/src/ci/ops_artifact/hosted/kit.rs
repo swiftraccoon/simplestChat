@@ -2,7 +2,7 @@
 //! relocatable merely because its archive was copied to a different prefix.
 
 use super::{archive::Graph, failure, files::Tree, native_build, shim};
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -256,8 +256,8 @@ pub(super) fn validate(index: usize, bytes: &[u8], tree: &Tree) -> Result<()> {
     tree.open(relative)?.finish()
 }
 
-pub(super) fn environment(root: &Path) -> Result<crate::tooling::Environment> {
-    let mut environment = crate::tooling::Environment::new();
+pub(super) fn environment(root: &Path) -> Result<simplestchat_toolkit::tooling::Environment> {
+    let mut environment = simplestchat_toolkit::tooling::Environment::new();
     environment.extend(
         shim::environment(root)?
             .into_iter()

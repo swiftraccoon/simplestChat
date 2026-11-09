@@ -18,7 +18,9 @@ impl Target {
         Self::open_value(context.env("GITHUB_OUTPUT"))
     }
 
-    pub(super) fn open_environment(environment: &crate::tooling::Environment) -> Result<Self> {
+    pub(super) fn open_environment(
+        environment: &simplestchat_toolkit::tooling::Environment,
+    ) -> Result<Self> {
         Self::open_value(super::runner::text(environment, "GITHUB_OUTPUT"))
     }
 

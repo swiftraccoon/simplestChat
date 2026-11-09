@@ -2,7 +2,7 @@
 //! about cold downloads, compiler I/O, OS stalls, filesystem close or reaping.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     sync::Arc,
     time::{Duration, Instant},

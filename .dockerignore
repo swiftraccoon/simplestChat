@@ -367,6 +367,14 @@ xtask/src/run_local/**
 !xtask/src/test_env/
 xtask/src/test_env/**
 !xtask/src/test_env/*.rs
+!crates/
+crates/**
+!crates/toolkit/
+crates/toolkit/**
+!crates/toolkit/Cargo.toml
+!crates/toolkit/src/
+crates/toolkit/src/**
+!crates/toolkit/src/*.rs
 !web/
 web/**
 !web/package.json

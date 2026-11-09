@@ -3,10 +3,10 @@
 //! authentication statement. The transport caller checks the host mount policy.
 
 use super::failure;
-use crate::tooling::Result;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, value::RawValue};
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::Result;
 use std::path::{Path, PathBuf};
 
 pub(super) const MAXIMUM: u64 = 16 * 1024;

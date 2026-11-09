@@ -34,7 +34,7 @@ mod worker;
 #[cfg(test)]
 mod worker_tests;
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{ffi::OsString, path::Path};
 
 pub(super) fn failure(code: u8) -> Failure {

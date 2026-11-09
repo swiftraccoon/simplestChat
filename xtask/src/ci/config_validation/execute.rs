@@ -6,11 +6,9 @@ use super::{
     files::{AdapterFailure, Artifacts, CommandObservation, Inputs, LOG_LIMIT},
     plan::{self, Context},
 };
-use crate::{
-    ci::process::Executor,
-    tooling::{Failure, Result},
-};
+use crate::ci::process::Executor;
 use serde::{Deserialize, Serialize};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     collections::BTreeSet,
     time::{Duration, Instant},

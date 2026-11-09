@@ -2,8 +2,8 @@
 //! credential, network, candidate execution or installed tool is involved.
 
 use super::archive::{self, Inventory, Member, Sink};
-use crate::tooling::Result;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},

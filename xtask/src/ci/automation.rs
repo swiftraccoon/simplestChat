@@ -1,7 +1,7 @@
 //! The workflow's installed controller checks, in the original failure order.
 
-use crate::tooling::{self, Environment, Failure};
 use anyhow::Result;
+use simplestchat_toolkit::tooling::{self, Environment, Failure};
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::ExitCode;

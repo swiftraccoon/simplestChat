@@ -9,8 +9,8 @@ mod plan;
 mod tests;
 
 use super::{container_engine as engine, process::Native};
-use crate::{owned_process::Signals, tooling};
 use plan::{Context, Kind};
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{path::Path, process::ExitCode, time::Instant};
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {

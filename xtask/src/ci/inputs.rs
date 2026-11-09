@@ -2,7 +2,7 @@
 
 use super::Scope;
 
-// These nine scopes retain byte-for-byte comparison with the frozen Python reference.
+// Matched against the frozen Python oracle, which deliberately omits the `crates/` Rust adds.
 pub(super) const REFERENCE_SCOPES: &[&str] = &[
     "automation",
     "rust-lint",
@@ -35,6 +35,10 @@ pub(super) const BROWSER_BACKEND_FILES: &[&str] = &[
     "rust-toolchain.toml",
     "ops/Cargo.toml",
     "xtask/Cargo.toml",
+    "crates/toolkit/Cargo.toml",
+    "crates/toolkit/src/lib.rs",
+    "crates/toolkit/src/owned_process.rs",
+    "crates/toolkit/src/tooling.rs",
     "xtask/src/main.rs",
     "xtask/src/ci/mod.rs",
     "xtask/src/ci/inputs.rs",
@@ -144,6 +148,7 @@ pub(super) const BACKEND_PREFIXES: &[&str] = &[
     "tests/",
     "load_tests/",
     "xtask/",
+    "crates/",
     "migrations/",
     "vendor/",
     ".cargo/",
@@ -215,6 +220,7 @@ pub(super) const BACKEND_ENVIRONMENT: &[&str] = &[
 
 fn ci_tool_input(name: &str) -> bool {
     name.starts_with("xtask/")
+        || name.starts_with("crates/")
         || name.starts_with(".cargo/")
         || [
             "Cargo.toml",

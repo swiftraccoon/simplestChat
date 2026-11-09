@@ -30,9 +30,9 @@ pub(crate) mod source;
 mod tests;
 pub(in crate::ci) mod verify;
 
-use crate::tooling::{Failure, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::time::{Duration, Instant};
 
 pub(super) fn run_release_frontend(

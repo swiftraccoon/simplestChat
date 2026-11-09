@@ -6,8 +6,8 @@ use super::super::{
     namespace::{self, Budget, Chain, ChainWitness, FLAGS, Held, OwnedRun},
 };
 use super::{failure, io, request, worker::Checkpoint};
-use crate::tooling::{Failure, Result};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,

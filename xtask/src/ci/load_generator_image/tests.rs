@@ -5,14 +5,12 @@ pub(super) mod fixture;
 #[path = "oracle_tests.rs"]
 mod oracle;
 use super::*;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::Failure,
+use crate::ci::{
+    command::{Command, Program},
+    process::Executor,
 };
 use fixture::{ENDPOINT, Fixture};
+use simplestchat_toolkit::tooling::Failure;
 use std::time::Duration;
 
 #[tokio::test]
@@ -185,10 +183,10 @@ async fn hash_worker_is_joined_and_closed_after_known_cancellation_and_keeps_pri
         entered: Arc<AtomicBool>,
     }
     impl Executor for Pending<'_> {
-        async fn run(&mut self, _: Command) -> crate::tooling::Result<Vec<u8>> {
+        async fn run(&mut self, _: Command) -> simplestchat_toolkit::tooling::Result<Vec<u8>> {
             unreachable!()
         }
-        async fn ready(&mut self) -> crate::tooling::Result<()> {
+        async fn ready(&mut self) -> simplestchat_toolkit::tooling::Result<()> {
             if self.entered.load(Ordering::SeqCst) {
                 Err(Failure::new(143, "fixed cancel"))
             } else {

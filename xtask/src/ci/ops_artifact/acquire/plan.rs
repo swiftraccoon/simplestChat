@@ -1,7 +1,7 @@
 //! One remaining-tail schedule through acquisition and retained verification.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     sync::Arc,

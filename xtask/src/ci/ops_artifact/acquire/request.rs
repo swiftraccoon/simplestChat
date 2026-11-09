@@ -1,10 +1,10 @@
 //! A closed original-byte selection; no caller URL or credential enters JSON.
 
 use super::failure;
-use crate::tooling::{Environment, Result};
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},

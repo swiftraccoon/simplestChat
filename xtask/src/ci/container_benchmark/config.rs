@@ -1,10 +1,8 @@
 //! Closed standalone inputs. No installed-path, UID or normal-cleanup bypass.
 use super::{failure, plan};
-use crate::{
-    ci::container_engine::{image_id, safe_path},
-    tooling::Result,
-};
+use crate::ci::container_engine::{image_id, safe_path};
 use serde::Serialize;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},

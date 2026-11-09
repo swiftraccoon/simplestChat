@@ -5,15 +5,13 @@ use super::{
     journal::{Journal, Owned},
     plan, policy,
 };
-use crate::{
-    ci::{
-        container_engine::{self, Clock, Core},
-        process::Executor,
-    },
-    tooling::{Failure, Result},
+use crate::ci::{
+    container_engine::{self, Clock, Core},
+    process::Executor,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::time::Duration;
 pub(super) fn first(slot: &mut Option<Failure>, result: Result<()>) {
     if slot.is_none()

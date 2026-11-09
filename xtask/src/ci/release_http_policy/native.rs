@@ -52,7 +52,7 @@ impl Native {
         Ok(Self { client })
     }
 }
-fn transport(_: reqwest::Error) -> crate::tooling::Failure {
+fn transport(_: reqwest::Error) -> simplestchat_toolkit::tooling::Failure {
     fail(1, "http_policy_failed")
 }
 // HTTP header values in http.client are ISO-8859-1 strings, not UTF-8 strings.

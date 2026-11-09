@@ -5,9 +5,9 @@
 //! when it has already exited and left descendants. Only then may it be reaped.
 
 use super::Invocation;
-pub(in crate::ci) use crate::owned_process::{Group, Signals, exited};
-use crate::tooling::{self, Failure, Result};
 use rustix::process::Signal as ProcessSignal;
+pub(in crate::ci) use simplestchat_toolkit::owned_process::{Group, Signals, exited};
+use simplestchat_toolkit::tooling::{self, Failure, Result};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Stdio;
@@ -60,7 +60,7 @@ pub(super) async fn run(
     };
     // The unreaped leader reserves the process-group identity, so this cannot
     // target a later process even if only a stray descendant remains alive.
-    let cleaned = super::cleanup::finish(pid).await;
+    let cleaned = simplestchat_toolkit::owned_process::finish(pid).await;
     // No group signals can follow this reap, including on an error path.
     let status = group.reap().await;
     result?;

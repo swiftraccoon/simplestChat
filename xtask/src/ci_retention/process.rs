@@ -3,9 +3,9 @@
 //! Keep the leader unreaped until pipe draining or cleanup finishes; its PID
 //! reserves the process-group identity while descendants are terminated.
 
-use crate::tooling::{self, Environment};
 use anyhow::{Result, bail};
 use rustix::process::{Pid, Signal as ProcessSignal, WaitId, WaitIdOptions};
+use simplestchat_toolkit::tooling::{self, Environment};
 use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};

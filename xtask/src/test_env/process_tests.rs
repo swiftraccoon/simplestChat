@@ -4,7 +4,7 @@
 mod companion_tests;
 
 use super::*;
-use crate::owned_process::{self, Group, Signals};
+use simplestchat_toolkit::owned_process::{self, Group, Signals};
 use std::process::Stdio;
 use std::{
     fs,

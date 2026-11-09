@@ -11,7 +11,11 @@ use super::{
 use serde_json::{Value, json};
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
-async fn run(fixture: &Fixture, fake: &mut Fake, budget: &Budget) -> crate::tooling::Result<()> {
+async fn run(
+    fixture: &Fixture,
+    fake: &mut Fake,
+    budget: &Budget,
+) -> simplestchat_toolkit::tooling::Result<()> {
     let plan = Plan::new(fake.clock());
     execute::transaction(
         execute::Inputs {
@@ -554,10 +558,8 @@ fn complete_phase_tail_and_keeper_dispatch_preserve_the_original_entry() {
 async fn cancelled_file_worker_joins_and_explicitly_closes_a_late_successful_owner() {
     use super::super::namespace::Held;
     use super::worker;
-    use crate::{
-        ci::{command::Command, process::Executor},
-        tooling::Result,
-    };
+    use crate::ci::{command::Command, process::Executor};
+    use simplestchat_toolkit::tooling::Result;
     use std::sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicU8, Ordering},

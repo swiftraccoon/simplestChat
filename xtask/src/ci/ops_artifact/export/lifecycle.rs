@@ -76,11 +76,8 @@ pub(super) fn run(started: Instant, path: &Path, selected: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ci::process::{Executor, Native},
-        owned_process::Signals,
-        tooling::Environment,
-    };
+    use crate::ci::process::{Executor, Native};
+    use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
     use std::process::Command;
 
     const CHILD: &str = "SIMPLESTCHAT_EXPORT_LIFECYCLE_CHILD";

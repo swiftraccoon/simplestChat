@@ -114,6 +114,18 @@ For passkeys, set `WEBAUTHN_RP_ID=localhost` and
 `WEBAUTHN_ORIGIN=http://localhost:3000`. The origin must match the page you open,
 including its port when using Vite or a second instance.
 
+## Workspace layout
+
+The Cargo workspace has five crates. The root package `simplestchat` (`src/`) is
+the server library and the `simplestChat` binary. `simplestchat-load-test`
+(`load_tests/`) is the `load_test` generator. `simplestchat-ops` (`ops/`) holds
+the bounded host and guest operations and the Ops artifact tools. `xtask`
+(`xtask/`) is the repository automation run as `cargo run -p xtask -- <command>`:
+developer gates, CI steps and the release controller. `simplestchat-toolkit`
+(`crates/toolkit/`) holds what those tools share: child commands with an explicit
+environment, the pinned native build settings, and owned process groups and
+signals. New crates go under `crates/`.
+
 ## Native and web build
 
 For release builds or direct Cargo commands, configure the native environment:

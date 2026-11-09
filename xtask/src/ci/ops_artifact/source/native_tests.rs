@@ -1,7 +1,8 @@
 //! Inert process and isolated tiny local Git fixtures.
 
 use super::*;
-use crate::{ci::process::Native, owned_process::Signals};
+use crate::ci::process::Native;
+use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,
     io::Write,

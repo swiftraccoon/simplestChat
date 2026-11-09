@@ -36,7 +36,7 @@ impl Clock for NativeClock {
         chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
     }
 }
-struct NativeSignals(crate::owned_process::Signals);
+struct NativeSignals(simplestchat_toolkit::owned_process::Signals);
 impl Cancellation for NativeSignals {
     async fn pending(&mut self) -> Option<u8> {
         self.0.pending().await
@@ -50,7 +50,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<ExitCode> {
         print!("{HELP}");
         return Ok(ExitCode::SUCCESS);
     }
-    let environment = crate::tooling::inherited_env();
+    let environment = simplestchat_toolkit::tooling::inherited_env();
     let result = (|| {
         let caller = std::env::current_dir().map_err(|_| io::fail(2, "invalid_output"))?;
         let id = files::uuid()?;
@@ -80,7 +80,7 @@ fn execute(cfg: &config::Config, id: String) -> anyhow::Result<ExitCode> {
     };
     let status = runtime.block_on(async {
         let clock = NativeClock(Instant::now());
-        let signals = crate::owned_process::Signals::new()
+        let signals = simplestchat_toolkit::owned_process::Signals::new()
             .map_err(|_| io::fail(1, "signal_registration_failed"))?;
         let mut signals = NativeSignals(signals);
         let wire = native::Native::new(&cfg.origin)?;

@@ -2,7 +2,7 @@
 //! These cooperative admission ceilings do not bound blocked OS calls or reaping.
 
 use super::failure;
-use crate::tooling::Result;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     cell::Cell,
     sync::Arc,

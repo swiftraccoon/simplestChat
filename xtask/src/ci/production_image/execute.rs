@@ -6,8 +6,8 @@ use super::{
     plan::{self, Command, Program},
     process::Executor,
 };
-use crate::tooling::{Failure, Result};
 use serde::Deserialize;
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::collections::BTreeMap;
 
 fn trimmed(bytes: &[u8]) -> Result<&str> {

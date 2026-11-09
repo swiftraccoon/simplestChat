@@ -1,13 +1,11 @@
 //! Fixed manual image recipe; all identities occupy literal argument slots.
 
-use crate::{
-    ci::{
-        command::{Command, Program},
-        container_engine::{Policy, Scope},
-        runner,
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    container_engine::{Policy, Scope},
+    runner,
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     cell::Cell,
     ffi::OsStr,

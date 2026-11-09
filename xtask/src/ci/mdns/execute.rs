@@ -6,14 +6,12 @@ use super::{
     policy::{self, Observation},
     tools::{Paths, Role, Tools},
 };
-use crate::{
-    ci::{
-        command::Command,
-        process::{Executor, settle_unforwarded},
-    },
-    tooling::{Failure, Result},
+use crate::ci::{
+    command::Command,
+    process::{Executor, settle_unforwarded},
 };
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     ffi::OsString,
     sync::Arc,

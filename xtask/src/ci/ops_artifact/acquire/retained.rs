@@ -4,7 +4,8 @@
 
 use super::super::namespace::{self, Budget, Chain, FLAGS, Held};
 use super::{failure, files::Output, hash::Checkpoint, io, keep, plan::Context};
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::Metadata,
     path::Path,

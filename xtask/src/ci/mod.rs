@@ -322,11 +322,11 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 /// child. The detector's same signal registration stays with its caller.
 pub(crate) async fn replay_media_ip(
     root: &Path,
-    environment: &crate::tooling::Environment,
-    signals: &mut crate::owned_process::Signals,
+    environment: &simplestchat_toolkit::tooling::Environment,
+    signals: &mut simplestchat_toolkit::owned_process::Signals,
     address: std::net::Ipv4Addr,
     deadline: std::time::Instant,
-) -> crate::tooling::Result<()> {
+) -> simplestchat_toolkit::tooling::Result<()> {
     process::replay_output(
         root,
         environment,

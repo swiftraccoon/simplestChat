@@ -8,6 +8,9 @@ Start with [development setup](docs/development.md), then the
 [browser](web/README.md) or [server](src/README.md) module guide. Keep the root
 README a quick introduction; put detailed explanations alongside the system
 they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
+The [workspace layout](docs/development.md#workspace-layout) names each crate:
+new crates go under `crates/`, and helpers several tools share belong in
+`simplestchat-toolkit` rather than in `xtask`.
 
 ## Standards for new work
 

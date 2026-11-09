@@ -5,14 +5,12 @@ use super::{
     files::{AdapterStage, Artifacts},
     plan::failure,
 };
-use crate::{
-    ci::{
-        bounded_log,
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::Result,
+use crate::ci::{
+    bounded_log,
+    command::{Command, Program},
+    process::Executor,
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{sync::Arc, time::Instant};
 
 /// One same-signal Native executor underneath this bounded file adapter. Mixed

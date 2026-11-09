@@ -3,13 +3,13 @@
 
 use super::super::namespace::{self, Budget, Chain, Held};
 use super::{catalog::Catalog, context::Context, failure, provenance};
-use crate::tooling::Result;
 use rustix::fs::{AtFlags, FileType};
 use sha2::{Digest, Sha256};
 use simplestchat_ops::distribution::manifest::{
     assembly::{EvidenceSources, prepare_artifact},
     verification::RetainedMetadata,
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,

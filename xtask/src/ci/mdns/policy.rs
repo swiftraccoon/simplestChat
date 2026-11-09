@@ -1,7 +1,7 @@
 //! Bounded observation projection. Raw host strings never enter a report/error.
 use super::failure;
-use crate::tooling::Result;
 use serde_json::{Map, Value, json};
+use simplestchat_toolkit::tooling::Result;
 use std::net::Ipv4Addr;
 const SAFE: i64 = 9_007_199_254_740_991;
 pub(super) const LIMIT: u64 = 512 * 1024;

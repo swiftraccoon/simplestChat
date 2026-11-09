@@ -11,8 +11,9 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
-use crate::{ci::process::Native, owned_process::Signals, tooling};
+use crate::ci::process::Native;
 use options::{Context, Mode};
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{path::Path, process::ExitCode, time::Instant};
 
 pub(super) fn run_ci(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {

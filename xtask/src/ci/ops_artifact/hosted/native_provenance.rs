@@ -4,8 +4,8 @@ use super::{
     catalog::{Catalog, Format, MUSL_COMMIT},
     context, failure, native_build, shim,
 };
-use crate::tooling::Result;
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::Result;
 use std::collections::BTreeSet;
 
 const MUSL_LIBS: [&str; 14] = [

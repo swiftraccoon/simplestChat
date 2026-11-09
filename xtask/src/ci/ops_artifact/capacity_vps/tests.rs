@@ -42,7 +42,7 @@ pub(super) fn args(extra: &[&str]) -> Vec<String> {
     .map(str::to_owned)
     .collect()
 }
-fn options(extra: &[&str]) -> crate::tooling::Result<Options> {
+fn options(extra: &[&str]) -> simplestchat_toolkit::tooling::Result<Options> {
     Options::decode(&args(extra), Path::new("/caller"), Path::new("/home/owner"))
 }
 #[test]
@@ -387,7 +387,7 @@ fn physical_tar_header_strings_keep_the_reference_strict_utf8_boundary() {
 pub(in crate::ci) struct PreparationFixture {
     pub root: PathBuf,
     pub caller: PathBuf,
-    pub environment: crate::tooling::Environment,
+    pub environment: simplestchat_toolkit::tooling::Environment,
     pub end: Instant,
     pub ready: Vec<u8>,
     pub frame_bytes: u64,
@@ -621,7 +621,7 @@ impl PreparationFixture {
         Self {
             root,
             caller,
-            environment: crate::tooling::Environment::new(),
+            environment: simplestchat_toolkit::tooling::Environment::new(),
             end,
             ready,
             frame_bytes,
@@ -655,7 +655,7 @@ impl PreparationFixture {
             .each_ref()
             .map(|proof| proof.exit().ok())
     }
-    pub fn finish(mut self) -> crate::tooling::Result<()> {
+    pub fn finish(mut self) -> simplestchat_toolkit::tooling::Result<()> {
         let proofs = self.proofs.take().unwrap();
         let mut result = Ok(());
         for (index, proof) in proofs.iter().enumerate() {

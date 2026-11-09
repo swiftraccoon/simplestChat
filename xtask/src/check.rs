@@ -10,8 +10,8 @@ mod python;
 #[path = "check/check_tests.rs"]
 mod tests;
 
-use crate::tooling::{self, Environment, Failure};
 use anyhow::Result;
+use simplestchat_toolkit::tooling::{self, Environment, Failure};
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::ExitCode;

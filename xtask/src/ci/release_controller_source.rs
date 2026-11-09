@@ -3,9 +3,9 @@ use super::{
     files::{self, Directory},
     plan,
 };
-use crate::tooling::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     fs::{File, Metadata},
     io::{Read, Write},

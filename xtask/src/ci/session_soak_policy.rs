@@ -4,8 +4,9 @@ use super::{
     engine::{Engine, Inspection, Operation, Request},
     plan::{self, Context},
 };
-use crate::{owned_process::Signals, test_env::Companion, tooling};
+use crate::test_env::Companion;
 use serde::Serialize;
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::time::{Duration, Instant};
 
 pub(super) trait Clock {

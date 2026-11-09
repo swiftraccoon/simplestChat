@@ -1,9 +1,9 @@
 //! Descriptor-bound private staging. Only the known owned entries are removed.
 
 use super::plan::{Context, MAX_BYTES, VERSION};
-use crate::tooling::{Failure, Result};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     fs::{File, Metadata},
     io::{Read, Seek, SeekFrom, Write},

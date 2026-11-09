@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 pub(crate) const MAX_WIDTH: usize = 100;
 const ALLOWANCE_FILE: &str = "xtask/line-length-allowance.txt";
 const ROOTS: [&str; 4] = ["src", "load_tests/src", "xtask/src", "ops/src"];
+/// Each crate under this directory contributes its `src` tree, like `ops/src`.
+const CRATES: &str = "crates";
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<()> {
     let update = match arguments {
@@ -24,6 +26,9 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<()> {
     let mut offenders = Vec::new();
     for directory in ROOTS {
         collect(&root.join(directory), root, &mut offenders)?;
+    }
+    for directory in crate_sources(root)? {
+        collect(&directory, root, &mut offenders)?;
     }
     offenders.sort();
     let count = offenders.len();
@@ -50,6 +55,21 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<()> {
     }
     println!("line-length: {count} over-length lines within the allowance of {allowance}");
     Ok(())
+}
+
+/// The `src` tree of every crate under `crates/`, in name order. A crate's
+/// tests, benches, examples and build script are not production code.
+fn crate_sources(root: &Path) -> Result<Vec<PathBuf>> {
+    let crates = root.join(CRATES);
+    let mut sources = Vec::new();
+    for entry in fs::read_dir(&crates).with_context(|| format!("reading {}", crates.display()))? {
+        let source = entry?.path().join("src");
+        if source.is_dir() {
+            sources.push(source);
+        }
+    }
+    sources.sort();
+    Ok(sources)
 }
 
 /// Production code only: test-only files (`*_tests.rs`) and inline `mod tests`
@@ -143,26 +163,39 @@ mod tests {
         assert_eq!(production_lines(text).len(), 3);
     }
 
-    #[test]
-    fn operations_sources_share_the_existing_production_width_ratchet() {
+    struct Fixture(PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    /// An owned checkout holding every ratchet root and a zero allowance.
+    fn fixture(label: &str) -> Fixture {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        struct Fixture(PathBuf);
-        impl Drop for Fixture {
-            fn drop(&mut self) {
-                fs::remove_dir_all(&self.0).unwrap();
-            }
-        }
         let fixture = Fixture(std::env::temp_dir().join(format!(
-            "operations width {} {}",
+            "{label} width {} {}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         )));
         fs::create_dir(&fixture.0).unwrap();
-        for directory in ["src", "load_tests/src", "xtask/src", "ops/src/release"] {
+        for directory in [
+            "src",
+            "load_tests/src",
+            "xtask/src",
+            "ops/src/release",
+            CRATES,
+        ] {
             fs::create_dir_all(fixture.0.join(directory)).unwrap();
         }
         fs::write(fixture.0.join(ALLOWANCE_FILE), "0\n").unwrap();
+        fixture
+    }
+
+    #[test]
+    fn operations_sources_share_the_existing_production_width_ratchet() {
+        let fixture = fixture("operations");
         let source = fixture.0.join("ops/src/release/manifest.rs");
         fs::write(&source, "x".repeat(MAX_WIDTH + 1)).unwrap();
         let error = run(&fixture.0, &[]).unwrap_err().to_string();
@@ -178,5 +211,28 @@ mod tests {
         )
         .unwrap();
         run(&fixture.0, &[]).unwrap();
+    }
+
+    #[test]
+    fn each_crate_contributes_only_its_src_tree() {
+        let fixture = fixture("crates");
+        let toolkit = fixture.0.join("crates/toolkit");
+        for directory in ["src", "tests", "benches", "examples"] {
+            fs::create_dir_all(toolkit.join(directory)).unwrap();
+        }
+        let long = "x".repeat(MAX_WIDTH + 1);
+        for path in [
+            "build.rs",
+            "tests/cli.rs",
+            "benches/speed.rs",
+            "examples/demo.rs",
+        ] {
+            fs::write(toolkit.join(path), &long).unwrap();
+        }
+        fs::write(fixture.0.join("crates/stray.rs"), &long).unwrap();
+        run(&fixture.0, &[]).unwrap();
+        fs::write(toolkit.join("src/lib.rs"), &long).unwrap();
+        let error = run(&fixture.0, &[]).unwrap_err().to_string();
+        assert!(error.contains("1 production lines"), "{error}");
     }
 }

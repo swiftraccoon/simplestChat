@@ -1,5 +1,5 @@
 use super::failure;
-use crate::tooling::{Environment, Result};
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     ffi::OsStr,
     path::{Component, Path, PathBuf},

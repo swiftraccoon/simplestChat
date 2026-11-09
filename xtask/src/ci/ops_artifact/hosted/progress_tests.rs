@@ -2,7 +2,7 @@
 //! output without bound. Whole coordinator traces cover actual close ordering.
 
 use super::*;
-use crate::tooling::Failure;
+use simplestchat_toolkit::tooling::Failure;
 use std::{
     sync::{
         Arc, Mutex,

@@ -1,14 +1,12 @@
 //! Inert selected tools, synthetic tar bytes and a bounded fake engine only.
 use super::*;
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{self, Executor},
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::{Command, Program},
+    process::{self, Executor},
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     fs,
     io::{Cursor, Read, Write},

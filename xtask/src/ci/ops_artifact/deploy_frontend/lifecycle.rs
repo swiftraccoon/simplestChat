@@ -5,8 +5,8 @@
 //! Published JSON precedes those final fences; only actual exit zero is success.
 
 use super::{failure, keep, options::Options, plan::Plan};
-use crate::tooling::{Environment, Result};
 use simplestchat_ops::owned_process::CompletionSignals;
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{ffi::OsStr, path::Path, sync::Arc, time::Instant};
 use tokio::runtime::Runtime;
 
@@ -98,7 +98,7 @@ pub(super) fn run(root: &Path, options: Options) -> Result<Completed> {
         options.wait_seconds,
         owner,
         |runtime, flags, plan| {
-            let mut environment: Environment = crate::tooling::inherited_env();
+            let mut environment: Environment = simplestchat_toolkit::tooling::inherited_env();
             if !environment.contains_key(OsStr::new("GH_TOKEN"))
                 && let Some(token) = environment.get(OsStr::new("GITHUB_TOKEN")).cloned()
             {

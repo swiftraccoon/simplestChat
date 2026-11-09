@@ -1,10 +1,10 @@
 //! Closed, byte-pinned selection. No host, executable or bootstrap path is input.
 
 use super::failure;
-use crate::tooling::Result;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::Result;
 use std::path::{Path, PathBuf};
 
 pub(super) const MAXIMUM: u64 = 16 * 1024;

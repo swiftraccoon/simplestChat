@@ -1,8 +1,8 @@
 //! Bounded Git registration observations and nofollow vendor timestamp updates.
 
 use super::{files, plan};
-use crate::tooling::Result;
 use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, Timespec, Timestamps};
+use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeSet, fs::File, path::Path};
 
 pub(super) fn revision(bytes: &[u8]) -> Result<String> {

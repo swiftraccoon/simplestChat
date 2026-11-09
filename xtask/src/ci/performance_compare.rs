@@ -12,7 +12,7 @@ mod plan;
 mod tests;
 mod worktree;
 
-use crate::{
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{self, Failure, Result},
 };

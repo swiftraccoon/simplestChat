@@ -9,14 +9,12 @@ use super::{
     tools::Tools,
     worker::Checkpoint,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-        release_checks::files::Executable,
-    },
-    owned_process::Signals,
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
+    release_checks::files::Executable,
 };
+use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,
     os::fd::AsRawFd,

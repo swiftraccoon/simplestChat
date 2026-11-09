@@ -3,12 +3,12 @@
 //! API review: C-SERDE/C-VALIDATE reject duplicate inventory keys and ambiguous
 //! destinations; C-COMMON-TRAITS deliberately redacts target Debug output.
 
-use crate::tooling::{Failure, Result};
 use serde::{
     Deserialize, Deserializer,
     de::{Error, MapAccess, SeqAccess, Visitor},
 };
 use serde_json::{Map, Number, Value};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,

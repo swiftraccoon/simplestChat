@@ -3,11 +3,9 @@
 //! own required HSTS value wherever the native case carries the policy file's.
 
 use super::{fixture::*, *};
-use crate::{
-    ci::process::{Executor, Native},
-    owned_process::Signals,
-};
+use crate::ci::process::{Executor, Native};
 use serde_json::{Value, json};
+use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
@@ -22,7 +20,7 @@ async fn reference(cases: &[Value]) -> Result<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let python = crate::ci::release_checks::files::select(
         root,
-        &crate::tooling::inherited_env(),
+        &simplestchat_toolkit::tooling::inherited_env(),
         std::ffi::OsStr::new("python3"),
     )?;
     let tools = tools::Tools::selected(python);
@@ -46,7 +44,7 @@ async fn reference(cases: &[Value]) -> Result<Value> {
     command.stdin = Some(Arc::new(file));
     capture.attach(&mut command)?;
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-    let environment = crate::tooling::Environment::new();
+    let environment = simplestchat_toolkit::tooling::Environment::new();
     let mut native = Native::new(root, &environment, Signals::injected(rx));
     let outcome = native.run(command).await;
     let clean = native.cleanup_passed();

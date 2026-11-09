@@ -6,11 +6,11 @@
 
 use super::super::namespace::{self, Budget, Chain, FLAGS, Held};
 use super::{failure, io, receipt::CASES};
-use crate::tooling::Result;
 use rustix::fs::{Mode, OFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 use simplestchat_ops::distribution::manifest::Selection;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     ffi::OsStr,
     fs::{File, Metadata},

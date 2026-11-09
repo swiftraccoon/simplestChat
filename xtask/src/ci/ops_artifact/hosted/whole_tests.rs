@@ -692,9 +692,9 @@ impl Executor for FakeCli {
         proof.observed_io(Some(seals));
         if self.fail == Some(kind) {
             Err(if kind == "curl-timeout" {
-                crate::tooling::Failure::child_exit(28)
+                simplestchat_toolkit::tooling::Failure::child_exit(28)
             } else if matches!(kind, "catalog-second" | "registry-first") {
-                crate::tooling::Failure::child_exit(23)
+                simplestchat_toolkit::tooling::Failure::child_exit(23)
             } else {
                 failure(42)
             })

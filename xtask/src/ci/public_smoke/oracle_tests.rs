@@ -1,15 +1,15 @@
 //! Whole unchanged JavaScript, its seven tests, and native-controller parity.
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::{Command, Program, SeparateLogs},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    bounded_log::Log,
+    command::{Command, Program, SeparateLogs},
+    process::{Executor, Native},
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::{
+    owned_process::Signals,
+    tooling::{Environment, Failure, Result},
+};
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -76,7 +76,7 @@ async fn reference(cases: &[Value], cli: bool) -> Result<Value> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let node = crate::ci::release_checks::files::select(
         root,
-        &crate::tooling::inherited_env(),
+        &simplestchat_toolkit::tooling::inherited_env(),
         std::ffi::OsStr::new("node"),
     )?;
     let node = Arc::new(node);

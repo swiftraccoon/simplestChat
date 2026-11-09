@@ -3,11 +3,9 @@ use super::{
     policy::{Observation, interfaces},
     tools::{Paths, Role},
 };
-use crate::{
-    ci::{command::Command, process::Executor},
-    tooling::{Environment, Result},
-};
+use crate::ci::{command::Command, process::Executor};
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{
     collections::BTreeMap,
     fs,
@@ -678,7 +676,7 @@ fn readable_fields_follow_actual_exit_zero_without_reinterpreting_timeout_facts(
 #[tokio::test]
 async fn captured_caller_directory_keeps_relative_paths_and_native_path_search() {
     use crate::ci::{command::Program, process::Native};
-    use crate::owned_process::Signals;
+    use simplestchat_toolkit::owned_process::Signals;
     let f = Fixture::new("snapshot");
     let caller = f.root.join("caller");
     for path in [

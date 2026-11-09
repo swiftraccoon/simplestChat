@@ -56,7 +56,7 @@ sys.exit(response.get('status',0))
 
 struct Fixture {
     root: PathBuf,
-    environment: crate::tooling::Environment,
+    environment: simplestchat_toolkit::tooling::Environment,
     python: PathBuf,
 }
 

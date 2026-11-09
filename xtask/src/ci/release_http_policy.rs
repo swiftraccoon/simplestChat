@@ -20,13 +20,11 @@ mod reference_pins;
 mod tests;
 pub(super) mod tools;
 
-use crate::{
-    ci::{
-        browser_suite::process::Signals,
-        process::{Executor, Native},
-    },
-    tooling,
+use crate::ci::{
+    browser_suite::process::Signals,
+    process::{Executor, Native},
 };
+use simplestchat_toolkit::tooling;
 use std::{path::Path, process::ExitCode, sync::Arc};
 type Result<T> = tooling::Result<T>;
 fn fail(status: u8, code: &'static str) -> tooling::Failure {

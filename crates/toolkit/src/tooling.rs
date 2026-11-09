@@ -10,12 +10,12 @@ use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
-pub(crate) type Environment = BTreeMap<OsString, OsString>;
-pub(crate) type Result<T> = std::result::Result<T, Failure>;
+pub type Environment = BTreeMap<OsString, OsString>;
+pub type Result<T> = std::result::Result<T, Failure>;
 
 /// An actionable refusal or child failure, with its original shell status.
 #[derive(Debug)]
-pub(crate) struct Failure {
+pub struct Failure {
     pub code: u8,
     pub message: String,
     kind: FailureKind,
@@ -28,7 +28,7 @@ enum FailureKind {
 }
 
 impl Failure {
-    pub(crate) fn new(code: u8, message: impl Into<String>) -> Self {
+    pub fn new(code: u8, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
@@ -38,7 +38,7 @@ impl Failure {
 
     /// A reaped child returned a nonzero shell status. This does not classify
     /// timeouts, interruption, launch errors or failed cleanup as child exits.
-    pub(crate) fn child_exit(code: u8) -> Self {
+    pub fn child_exit(code: u8) -> Self {
         Self {
             code,
             message: "Production image command failed.".into(),
@@ -46,7 +46,7 @@ impl Failure {
         }
     }
 
-    pub(crate) fn is_child_exit(&self) -> bool {
+    pub fn is_child_exit(&self) -> bool {
         self.kind == FailureKind::ChildExit
     }
 }
@@ -59,11 +59,11 @@ impl std::fmt::Display for Failure {
 
 impl std::error::Error for Failure {}
 
-pub(crate) fn inherited_env() -> Environment {
+pub fn inherited_env() -> Environment {
     std::env::vars_os().collect()
 }
 
-pub(crate) fn shell_status(status: ExitStatus) -> u8 {
+pub fn shell_status(status: ExitStatus) -> u8 {
     u8::try_from(
         status
             .code()
@@ -74,7 +74,7 @@ pub(crate) fn shell_status(status: ExitStatus) -> u8 {
 
 /// Construct a child in the checkout with the supplied environment. `PWD`
 /// follows the actual working directory, as it did after the shell's `cd`.
-pub(crate) fn command<I, S>(
+pub fn command<I, S>(
     root: &Path,
     environment: &Environment,
     program: impl AsRef<OsStr>,
@@ -103,7 +103,7 @@ fn launch_failure(program: &OsStr, error: io::Error) -> Failure {
     Failure::new(code, format!("{}: {error}", program.to_string_lossy()))
 }
 
-pub(crate) fn run<I, S>(
+pub fn run<I, S>(
     root: &Path,
     environment: &Environment,
     program: impl AsRef<OsStr>,
@@ -128,7 +128,7 @@ where
 }
 
 /// Capture only stdout; the child's diagnostics remain visible on stderr.
-pub(crate) fn output<I, S>(
+pub fn output<I, S>(
     root: &Path,
     environment: &Environment,
     program: impl AsRef<OsStr>,
@@ -153,7 +153,7 @@ where
     }
 }
 
-pub(crate) fn pinned_toolchain(root: &Path) -> Result<String> {
+pub fn pinned_toolchain(root: &Path) -> Result<String> {
     let text = std::fs::read_to_string(root.join("rust-toolchain.toml")).map_err(|error| {
         Failure::new(2, format!("Cannot read the pinned Rust toolchain: {error}"))
     })?;
@@ -171,11 +171,7 @@ pub(crate) fn pinned_toolchain(root: &Path) -> Result<String> {
 }
 
 /// Pin compiler paths and put their directory before incompatible system tools.
-pub(crate) fn pin_compilers(
-    root: &Path,
-    environment: &mut Environment,
-    channel: &str,
-) -> Result<()> {
+pub fn pin_compilers(root: &Path, environment: &mut Environment, channel: &str) -> Result<()> {
     for (name, executable) in [("RUSTC", "rustc"), ("RUSTDOC", "rustdoc")] {
         let path = output(
             root,
@@ -203,7 +199,7 @@ pub(crate) fn pin_compilers(
 }
 
 /// Native build inputs selected for a child; applying them never installs them.
-pub(crate) struct NativeInputs {
+pub struct NativeInputs {
     root: PathBuf,
     pub openssl_dir: PathBuf,
     pub aws_lc_dir: PathBuf,
@@ -212,7 +208,7 @@ pub(crate) struct NativeInputs {
 
 /// Apply the pinned static-library settings. Local launch forces repository
 /// prefixes; quality checks may honor explicitly supplied nonempty prefixes.
-pub(crate) fn native_env(
+pub fn native_env(
     root: &Path,
     environment: &mut Environment,
     respect_prefixes: bool,
@@ -258,7 +254,7 @@ pub(crate) fn native_env(
     inputs
 }
 
-pub(crate) fn require_native_archives(inputs: &NativeInputs) -> Result<()> {
+pub fn require_native_archives(inputs: &NativeInputs) -> Result<()> {
     let openssl = inputs.root.join(&inputs.openssl_dir);
     let aws_lc = inputs.root.join(&inputs.aws_lc_dir);
     if !openssl.join("lib/libssl.a").is_file() || !openssl.join("lib/libcrypto.a").is_file() {

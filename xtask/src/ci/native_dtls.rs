@@ -9,7 +9,7 @@ mod plan;
 mod snapshot;
 mod source;
 
-use crate::{owned_process::Signals, tooling};
+use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{path::Path, process::ExitCode};
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci native-dtls [--record-success]";
 

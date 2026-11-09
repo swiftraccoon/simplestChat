@@ -5,8 +5,9 @@ use super::{
     files::{Area, Owned},
     plan::{self, failure},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
 use serde::Deserialize;
+use simplestchat_toolkit::tooling::Result;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Deserialize)]
@@ -418,14 +419,12 @@ impl Builder {
         let definition = self.definition(core, true).await;
         let lookup = self.container_lookup(core, true).await;
         let volume = self.inspect_volume(core, true).await;
-        let first = definition
-            .as_ref()
-            .map(|_| ())
-            .map_err(|e| crate::tooling::Failure::new(e.code, "Load image retirement failed."));
-        let lookup_status = lookup
-            .as_ref()
-            .map(|_| ())
-            .map_err(|e| crate::tooling::Failure::new(e.code, "Load image retirement failed."));
+        let first = definition.as_ref().map(|_| ()).map_err(|e| {
+            simplestchat_toolkit::tooling::Failure::new(e.code, "Load image retirement failed.")
+        });
+        let lookup_status = lookup.as_ref().map(|_| ()).map_err(|e| {
+            simplestchat_toolkit::tooling::Failure::new(e.code, "Load image retirement failed.")
+        });
         let container = match &lookup {
             Ok(Some(id)) => self.inspect_container(core, id, true).await,
             Ok(None) if !self.bootstrap_attempted || self.id.is_some() => Ok(()),

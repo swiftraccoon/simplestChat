@@ -7,11 +7,11 @@ use super::{
     fixture, plan,
     tools::{InvocationSpec, Role, Tools},
 };
-use crate::{
-    ci::{
-        command::Command,
-        process::{Executor, Native},
-    },
+use crate::ci::{
+    command::Command,
+    process::{Executor, Native},
+};
+use simplestchat_toolkit::{
     owned_process::Signals,
     tooling::{Environment, Failure, Result},
 };

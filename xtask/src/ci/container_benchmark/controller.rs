@@ -9,15 +9,13 @@ use super::{
     plan::{self, Time},
     policy,
 };
-use crate::{
-    ci::{
-        command::Command,
-        container_engine::{self, Clock, Core, Policy, Scope},
-        process::Executor,
-    },
-    tooling::{Environment, Result},
+use crate::ci::{
+    command::Command,
+    container_engine::{self, Clock, Core, Policy, Scope},
+    process::Executor,
 };
 use serde_json::{Value, json};
+use simplestchat_toolkit::tooling::{Environment, Result};
 use std::{ffi::OsStr, time::Duration};
 pub(super) struct Context<'a, O: Observations> {
     pub obs: &'a O,
@@ -35,7 +33,7 @@ struct Work<'a, O: Observations> {
 }
 enum Probe {
     Bytes(Vec<u8>),
-    Unavailable(crate::tooling::Failure),
+    Unavailable(simplestchat_toolkit::tooling::Failure),
 }
 impl Probe {
     fn required(self) -> Result<Vec<u8>> {

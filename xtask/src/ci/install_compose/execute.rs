@@ -5,8 +5,8 @@ use super::{
     plan::{self, Context},
 };
 use crate::ci::process::Executor;
-use crate::tooling::Result;
 use serde::Serialize;
+use simplestchat_toolkit::tooling::Result;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

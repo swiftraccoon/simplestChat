@@ -20,7 +20,7 @@ pub(in crate::ci) mod tools;
 mod transport;
 mod worker;
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 
 const MAX_JSON: u64 = 8 * 1024 * 1024;
 const MAX_STATUS: u64 = 65536;

@@ -32,7 +32,11 @@ fn save(fixture: &Fixture, wire: &Value) -> (PathBuf, String) {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     (path, super::super::sha(&raw))
 }
-async fn run(fixture: &Fixture, wire: &Value, fake: &mut Fake) -> crate::tooling::Result<()> {
+async fn run(
+    fixture: &Fixture,
+    wire: &Value,
+    fake: &mut Fake,
+) -> simplestchat_toolkit::tooling::Result<()> {
     let (path, selected) = save(fixture, wire);
     let budget = Budget::default();
     let plan = plan::Plan::new(fake.clock.clone());

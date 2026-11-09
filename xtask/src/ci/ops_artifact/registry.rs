@@ -12,10 +12,11 @@ use super::{
     namespace::{self, Budget, Chain, Held, OwnedRun},
     sha,
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
 use request::Request;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeMap, ffi::OsStr, io::Read, os::unix::fs::MetadataExt, path::Path};
 
 const COMPRESSED: u64 = 128 * 1024 * 1024;
@@ -260,7 +261,8 @@ async fn hydrate<E: Executor, C: Clock>(
 }
 
 pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
-    use crate::{ci::process::Native, owned_process::Signals};
+    use crate::ci::process::Native;
+    use simplestchat_toolkit::owned_process::Signals;
     let mut signals = Signals::new()?;
     let clock = NativeClock;
     let deadline = Deadline::new(&clock);
@@ -274,7 +276,7 @@ pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
     let cwd = run.path.clone();
     // No child tools are dispatched. The existing supervisor only owns final
     // bounded forwarding of the fixed public observation under the same Signals.
-    let environment = crate::tooling::Environment::new();
+    let environment = simplestchat_toolkit::tooling::Environment::new();
     let mut executor = Native::new(&cwd, &environment, signals);
     let result = hydrate(&request, &cache, &run, &mut executor, &deadline).await;
     let cache_closed = cache.finish();

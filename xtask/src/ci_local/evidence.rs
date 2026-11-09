@@ -2,9 +2,9 @@
 
 use super::{Context, io_failure};
 use crate::ci_evidence::receipt::{Identity, successful};
-use crate::tooling::{Failure, Result};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::collections::BTreeSet;
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{Read, Write};

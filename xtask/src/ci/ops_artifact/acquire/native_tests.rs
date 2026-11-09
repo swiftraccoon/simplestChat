@@ -4,14 +4,11 @@ use super::{
     fixture::{Fixture, bytes},
     *,
 };
-use crate::{
-    ci::{
-        command::{Command, Program},
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
-    tooling::Environment,
+use crate::ci::{
+    command::{Command, Program},
+    process::{Executor, Native},
 };
+use simplestchat_toolkit::{owned_process::Signals, tooling::Environment};
 use std::{ffi::OsString, fs, os::unix::fs::PermissionsExt, sync::Arc};
 
 fn quote(value: &str) -> String {

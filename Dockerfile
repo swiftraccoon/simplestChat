@@ -128,6 +128,7 @@ ENV PIP_CONSTRAINT=/opt/simplestchat/pip-constraints.txt
 COPY Cargo.toml Cargo.lock ./
 COPY load_tests/Cargo.toml load_tests/Cargo.toml
 COPY xtask/Cargo.toml xtask/Cargo.toml
+COPY crates/toolkit/Cargo.toml crates/toolkit/Cargo.toml
 COPY ops/Cargo.toml ops/Cargo.toml
 COPY vendor ./vendor
 COPY build/security_vendor.py ./build/
@@ -139,12 +140,13 @@ RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /
 # so a source-only build compiles this crate alone instead of the whole graph.
 # The member stubs stay in place: Cargo loads every workspace manifest, and
 # the load-test stage copies the real sources over them.
-RUN mkdir -p src load_tests/src xtask/src ops/src \
+RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src ops/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
     && printf '' > load_tests/src/lib.rs \
     && printf 'fn main() {}\n' > xtask/src/main.rs \
+    && printf '' > crates/toolkit/src/lib.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
     && printf '' > ops/src/lib.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \

@@ -9,13 +9,10 @@ use super::{
     request::Request,
     resolution, sha,
 };
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::{Command, Program},
-        process::Executor,
-    },
-    tooling::Result,
+use crate::ci::{
+    bounded_log::Log,
+    command::{Command, Program},
+    process::Executor,
 };
 use rustix::fs::{Mode, OFlags};
 use serde::Serialize;
@@ -26,6 +23,7 @@ use simplestchat_ops::distribution::{
         assembly::{EvidenceSources, prepare_artifact},
     },
 };
+use simplestchat_toolkit::tooling::Result;
 use std::{collections::BTreeMap, fs::File, sync::Arc, time::Duration};
 
 fn encoded(value: &impl Serialize) -> Result<Vec<u8>> {
@@ -354,7 +352,8 @@ pub(super) async fn complete<E: Executor, C: Clock>(
     deadline.check(true)
 }
 pub(super) async fn native(path: &std::path::Path, selected: &str) -> Result<()> {
-    use crate::{ci::process::Native, owned_process::Signals};
+    use crate::ci::process::Native;
+    use simplestchat_toolkit::owned_process::Signals;
     let mut signals = Signals::new()?;
     let clock = super::NativeClock;
     let deadline = Deadline::new(&clock);

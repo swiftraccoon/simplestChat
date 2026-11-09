@@ -300,5 +300,24 @@ fn graph_contract_refuses_old_browser_role_incomplete_tests_and_guard_changes() 
     assert!(complete_graph(&jobs).is_err());
 }
 
+#[test]
+fn native_marker_and_production_layer_cache_hash_shared_crates_beside_xtask() {
+    // The CI tool compiles the shared toolkit, and the image context admits it.
+    let jobs = parsed().jobs;
+    for (job, name) in [
+        (
+            "native-dtls",
+            "Look up a passing verification of these native inputs",
+        ),
+        ("deployment", "Restore image layer cache"),
+    ] {
+        let steps = jobs[job]["steps"].as_array().unwrap();
+        let (_, step) = named(steps, name).unwrap();
+        let key = step["with"]["key"].as_str().unwrap();
+        let (_, files) = key.split_once("hashFiles(").unwrap();
+        assert!(files.contains("'xtask/**', 'crates/**'"), "{job}");
+    }
+}
+
 #[path = "workflow_projection_tests.rs"]
 mod projection;

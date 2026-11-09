@@ -1,7 +1,7 @@
 //! Fixed hosted soak selection. Caller-supplied service identity is not a
 //! discovery query or authority to delete a container owned by the runner.
 
-use crate::tooling::{Environment, Failure, Result};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{path::PathBuf, time::Duration};
 
 pub(super) const IMAGE: &str = "docker.io/library/postgres:18.6-bookworm@sha256:\

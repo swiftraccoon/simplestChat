@@ -109,7 +109,7 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         let signals = process::Signals::new()?;
         let mut client = client::Github::new(
             root.into(),
-            crate::tooling::inherited_env(),
+            simplestchat_toolkit::tooling::inherited_env(),
             options.apply,
             signals,
         );

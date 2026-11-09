@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::ci::container_smoke::options::Mode;
-use crate::tooling::Environment;
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     fs,
     os::unix::fs::{DirBuilderExt, PermissionsExt, symlink},

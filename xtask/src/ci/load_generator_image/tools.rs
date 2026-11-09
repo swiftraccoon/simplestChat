@@ -1,13 +1,11 @@
 //! Selected caller-trusted executable bindings; no toolchain authentication claim.
 
 use super::plan;
-use crate::{
-    ci::{
-        command::Program,
-        release_checks::files::{self, Executable},
-    },
-    tooling::{Environment, Failure, Result},
+use crate::ci::{
+    command::Program,
+    release_checks::files::{self, Executable},
 };
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{ffi::OsStr, path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

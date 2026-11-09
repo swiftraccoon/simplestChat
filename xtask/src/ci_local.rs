@@ -12,11 +12,11 @@ mod process;
 #[path = "ci_local/ci_local_tests.rs"]
 mod tests;
 
-use crate::tooling::{Environment, Failure};
 use anyhow::Result;
 use engine::text;
 use options::Options;
 use process::{Runner, Signals};
+use simplestchat_toolkit::tooling::{Environment, Failure};
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -41,12 +41,12 @@ struct OwnedDirectory {
 }
 
 impl OwnedDirectory {
-    fn open(path: PathBuf) -> crate::tooling::Result<Self> {
+    fn open(path: PathBuf) -> simplestchat_toolkit::tooling::Result<Self> {
         let handle = File::open(&path).map_err(io_failure)?;
         Ok(Self { path, handle })
     }
 
-    fn current(&self) -> crate::tooling::Result<()> {
+    fn current(&self) -> simplestchat_toolkit::tooling::Result<()> {
         let actual = fs::symlink_metadata(&self.path).map_err(io_failure)?;
         let owned = self.handle.metadata().map_err(io_failure)?;
         if actual.is_dir() && actual.dev() == owned.dev() && actual.ino() == owned.ino() {
@@ -68,7 +68,11 @@ fn io_failure(error: std::io::Error) -> Failure {
     Failure::new(1, error.to_string())
 }
 
-fn require_tool(root: &Path, environment: &Environment, name: &str) -> crate::tooling::Result<()> {
+fn require_tool(
+    root: &Path,
+    environment: &Environment,
+    name: &str,
+) -> simplestchat_toolkit::tooling::Result<()> {
     let installed = environment.get(OsStr::new("PATH")).is_some_and(|path| {
         std::env::split_paths(path).any(|directory| {
             root.join(directory)
@@ -94,7 +98,7 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         run_with_env(
             root,
             arguments,
-            crate::tooling::inherited_env(),
+            simplestchat_toolkit::tooling::inherited_env(),
             Signals::new()?,
         )
         .await
@@ -114,7 +118,7 @@ async fn run_with_env(
     arguments: &[String],
     environment: Environment,
     signals: Signals,
-) -> crate::tooling::Result<u8> {
+) -> simplestchat_toolkit::tooling::Result<u8> {
     let Some(options) = options::parse(arguments)? else {
         print!("{}", options::USAGE);
         return Ok(0);
@@ -271,7 +275,7 @@ async fn owned(
     options: &Options,
     state: &Path,
     output: &mut Option<OwnedDirectory>,
-) -> crate::tooling::Result<()> {
+) -> simplestchat_toolkit::tooling::Result<()> {
     *output = Some(OwnedDirectory::open(evidence::create_output(
         &context.root,
         options.output.as_deref(),

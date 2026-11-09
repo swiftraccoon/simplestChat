@@ -5,7 +5,8 @@ use super::{
     failure,
     plan::{self, Plan},
 };
-use crate::{ci::process::Executor, tooling::Result};
+use crate::ci::process::Executor;
+use simplestchat_toolkit::tooling::Result;
 use std::{
     sync::{
         Arc,

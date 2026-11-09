@@ -4,8 +4,8 @@
 //! path. Rechecks detect replacement or mutation; they are not FD-exec or a lock
 //! against a same-UID writer. No received path appears in diagnostics.
 
-use crate::tooling::{Environment, Failure, Result};
 use rustix::fs::{Access, Mode, OFlags};
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     fs::{File, Metadata},
     os::unix::fs::MetadataExt,

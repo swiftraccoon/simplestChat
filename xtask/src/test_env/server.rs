@@ -7,10 +7,10 @@ use super::postgres::{create_private_directory, find_on_path, parse_port, tail, 
 use super::process;
 use super::service::{Service, Termination};
 use super::{Stop, helper};
-use crate::owned_process::Signals;
-use crate::tooling::Environment;
 use anyhow::{Context, Result};
 use serde::Serialize;
+use simplestchat_toolkit::owned_process::Signals;
+use simplestchat_toolkit::tooling::Environment;
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
@@ -137,7 +137,9 @@ pub(crate) async fn run_with_companion(
             if let Some(stop) = error.downcast_ref::<Stop>() {
                 eprintln!("{}", stop.message);
                 i32::from(stop.code)
-            } else if let Some(failure) = error.downcast_ref::<crate::tooling::Failure>() {
+            } else if let Some(failure) =
+                error.downcast_ref::<simplestchat_toolkit::tooling::Failure>()
+            {
                 eprintln!("Owned test companion failed.");
                 i32::from(failure.code)
             } else {

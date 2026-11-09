@@ -10,7 +10,7 @@ mod process;
 #[cfg(test)]
 mod tests;
 
-use crate::tooling;
+use simplestchat_toolkit::tooling;
 use std::path::Path;
 use std::process::ExitCode;
 

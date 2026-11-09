@@ -4,8 +4,8 @@
 //! pipe and asynchronous reader. Finish after child-group retirement, then gate
 //! publication on complete EOF and successful explicit descriptor closes.
 
-use crate::tooling::{Failure, Result};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     fs::{File, Metadata},
     io::Write,

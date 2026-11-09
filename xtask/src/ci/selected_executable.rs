@@ -1,8 +1,8 @@
 //! A scanner path confined to an owned private namespace and retained by FD.
 //! This is an identity snapshot, not FD-exec or a lock against same-UID writers.
 
-use crate::tooling::{Failure, Result};
 use rustix::fs::{Mode, OFlags};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{
     fs::{File, Metadata},
     os::unix::fs::MetadataExt,

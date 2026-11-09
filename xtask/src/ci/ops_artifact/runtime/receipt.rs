@@ -3,10 +3,10 @@
 
 use super::super::acquire::PairPins;
 use super::{failure, request::Request};
-use crate::tooling::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 use simplestchat_ops::distribution::ExecutableIdentity;
+use simplestchat_toolkit::tooling::Result;
 use std::{ffi::OsString, path::Path};
 
 pub(super) const CASES: [(&str, u8); 33] = [

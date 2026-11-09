@@ -1,11 +1,9 @@
 //! Fixed controller commands and origin declarations. No received command text.
 
-use crate::{
-    ci::runner,
-    tooling::{self, Environment, Failure, Result},
-};
+use crate::ci::runner;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::{self, Environment, Failure, Result};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},

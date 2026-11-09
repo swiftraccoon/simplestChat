@@ -7,9 +7,9 @@ use super::{
     failure,
     files::{self, Tree},
 };
-use crate::tooling::Result;
 use flate2::bufread::GzDecoder;
 use sha2::{Digest, Sha256};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,

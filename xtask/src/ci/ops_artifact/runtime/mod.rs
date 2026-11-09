@@ -29,7 +29,7 @@ mod tests;
 pub(in crate::ci) mod tools;
 mod worker;
 
-use crate::tooling::{Failure, Result};
+use simplestchat_toolkit::tooling::{Failure, Result};
 
 pub(super) const SMALL: u64 = 64 * 1024;
 pub(super) const TRANSFER: u64 = 257 * 1024 * 1024;

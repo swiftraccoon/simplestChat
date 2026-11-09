@@ -16,17 +16,15 @@ mod sampling;
 mod tests;
 pub(super) mod tools;
 
-pub(super) fn failure(code: u8) -> crate::tooling::Failure {
-    crate::tooling::Failure::new(
+pub(super) fn failure(code: u8) -> simplestchat_toolkit::tooling::Failure {
+    simplestchat_toolkit::tooling::Failure::new(
         code,
         "Cannot complete the owned private container benchmark.",
     )
 }
 
-use crate::{
-    ci::process::{Executor, Native},
-    tooling::{self, Result},
-};
+use crate::ci::process::{Executor, Native};
+use simplestchat_toolkit::tooling::{self, Result};
 use std::{process::ExitCode, time::Instant};
 const HELP: &str = concat!(
     "Usage: xtask container-benchmark run --server-image sha256:HEX64 ",
@@ -89,7 +87,7 @@ async fn execute(
     let budget = io::Budget::default();
     let paths = files::Paths::fixed();
     let token = files::hex(&files::random::<32>(&budget)?);
-    let signals = crate::owned_process::Signals::new().map_err(|_| failure(1))?;
+    let signals = simplestchat_toolkit::owned_process::Signals::new().map_err(|_| failure(1))?;
     let mut native = Native::new(caller, env, signals);
     if recovery && !files::Guard::exists(&paths)? {
         native.ready().await?;

@@ -901,7 +901,10 @@ fn retained_catalog_covers_every_guest_controller_and_authenticated_producer_mod
     for name in [
         "ops/Cargo.toml",
         "xtask/Cargo.toml",
-        "xtask/src/tooling.rs",
+        "crates/toolkit/Cargo.toml",
+        "crates/toolkit/src/lib.rs",
+        "crates/toolkit/src/owned_process.rs",
+        "crates/toolkit/src/tooling.rs",
         "xtask/src/ci/mod.rs",
         "xtask/src/ci/runner.rs",
         "xtask/src/ci/apt_mirror.rs",

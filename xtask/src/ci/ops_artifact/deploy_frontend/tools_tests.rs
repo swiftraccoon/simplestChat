@@ -1,13 +1,11 @@
 //! Actual local inert children over the shared Native owner; no network/host work.
 use super::*;
-use crate::{
-    ci::{
-        bounded_log::Log,
-        command::SeparateLogs,
-        process::{Executor, Native},
-    },
-    owned_process::Signals,
+use crate::ci::{
+    bounded_log::Log,
+    command::SeparateLogs,
+    process::{Executor, Native},
 };
+use simplestchat_toolkit::owned_process::Signals;
 use std::{
     fs,
     fs::OpenOptions,

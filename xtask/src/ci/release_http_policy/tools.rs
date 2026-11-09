@@ -1,14 +1,12 @@
 //! Exact four Docker inspections, with one-use pre-spawn scheduling capabilities.
 
 use super::{Result, fail, plan::Time};
-use crate::{
-    ci::{
-        command::{Command, Program},
-        ops_artifact::verify::tools::Captures,
-        release_checks::files::Executable,
-    },
-    tooling::Environment,
+use crate::ci::{
+    command::{Command, Program},
+    ops_artifact::verify::tools::Captures,
+    release_checks::files::Executable,
 };
+use simplestchat_toolkit::tooling::Environment;
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},

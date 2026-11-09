@@ -20,10 +20,10 @@ pub(in crate::ci) mod tools;
 #[cfg(test)]
 mod worker_tests;
 
-use crate::tooling::{Failure, Result};
 pub(super) use files::OutputWitness as RetainedWitness;
 pub(super) use hash::Checkpoint as RetainedCheckpoint;
 pub(super) use plan::Clock as RetainedClock;
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::{sync::Arc, time::Instant};
 
 /// The acquisition owner supplies its existing monotonic clock and absolute
@@ -49,7 +49,7 @@ pub(super) async fn observe_retained<E: crate::ci::process::Executor>(
     path: std::path::PathBuf,
     selected: String,
     caller: std::path::PathBuf,
-    environment: crate::tooling::Environment,
+    environment: simplestchat_toolkit::tooling::Environment,
     budget: super::namespace::Budget,
     window: Window,
     executor: &mut E,

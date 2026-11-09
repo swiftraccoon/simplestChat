@@ -239,8 +239,8 @@ impl Error {
         }
     }
 }
-impl From<crate::tooling::Failure> for Error {
-    fn from(error: crate::tooling::Failure) -> Self {
+impl From<simplestchat_toolkit::tooling::Failure> for Error {
+    fn from(error: simplestchat_toolkit::tooling::Failure) -> Self {
         match error.code {
             124 => Self::Deadline,
             130 => Self::Interrupt,

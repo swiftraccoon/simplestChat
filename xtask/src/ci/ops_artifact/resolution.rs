@@ -7,8 +7,8 @@ use super::{
     namespace::{self, OwnedRun},
     sha,
 };
-use crate::tooling::Result;
 use serde::{Deserialize, Serialize};
+use simplestchat_toolkit::tooling::Result;
 use std::path::PathBuf;
 
 #[derive(Deserialize)]

@@ -1,9 +1,7 @@
 //! Fixed native regression commands and the reference's clean environment.
 
-use crate::{
-    ci::runner,
-    tooling::{Environment, Failure, Result},
-};
+use crate::ci::runner;
+use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},

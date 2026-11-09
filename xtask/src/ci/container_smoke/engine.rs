@@ -4,11 +4,9 @@ use super::{
     options::{self, Context},
     plan,
 };
-use crate::{
-    ci::{container_engine as shared, process::Executor},
-    tooling::{Failure, Result},
-};
+use crate::ci::{container_engine as shared, process::Executor};
 pub(super) use shared::{Clock, NativeClock};
+use simplestchat_toolkit::tooling::{Failure, Result};
 use std::ops::{Deref, DerefMut};
 pub(super) fn failure() -> Failure {
     shared::Scope::Smoke.failure()

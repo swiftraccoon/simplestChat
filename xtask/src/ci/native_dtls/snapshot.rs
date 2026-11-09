@@ -4,8 +4,8 @@ use super::{
     files::{close, io, same},
     plan::failure,
 };
-use crate::tooling::Result;
 use rustix::fs::{Dir, Mode, OFlags};
+use simplestchat_toolkit::tooling::Result;
 use std::{
     collections::BTreeMap,
     fs::File,

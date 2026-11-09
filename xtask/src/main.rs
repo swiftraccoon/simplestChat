@@ -17,13 +17,11 @@ mod ci_retention;
 mod http_policy;
 mod line_length;
 mod media_ip;
-mod owned_process;
 mod performance_thresholds;
 mod protocol_ts;
 mod python_lines;
 mod run_local;
 mod test_env;
-mod tooling;
 
 const USAGE: &str = "\
 Usage: cargo run -q -p xtask -- <command>

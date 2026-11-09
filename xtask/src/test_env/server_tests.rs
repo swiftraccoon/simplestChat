@@ -154,10 +154,13 @@ while not (root/'worker').exists():time.sleep(.01)
         i32::try_from(harness.server.as_ref().unwrap().pid()).unwrap(),
     )
     .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), crate::owned_process::exited(pid))
-        .await
-        .unwrap()
-        .unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        simplestchat_toolkit::owned_process::exited(pid),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(harness.cleanup(0).await, 0);
     let report = fixture.report("server-shutdown.json");
     assert_eq!(report["waitStatus"], 0);

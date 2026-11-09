@@ -81,7 +81,7 @@ impl<'de> Deserialize<'de> for Object<'de> {
         d.deserialize_map(Entries)
     }
 }
-fn invalid() -> crate::tooling::Failure {
+fn invalid() -> simplestchat_toolkit::tooling::Failure {
     fail(1, "http_policy_failed")
 }
 fn convert(raw: &RawValue, depth: usize) -> Result<Value> {
