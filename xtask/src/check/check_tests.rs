@@ -898,6 +898,7 @@ fn default_runs_all_groups_in_order() {
             "cargo-protocol-ts",
             "cargo-http-policy",
             "cargo-doc",
+            "cargo-python-lines",
             "python-lint",
             "python-format",
             "python-types",
@@ -923,14 +924,16 @@ fn missing_web_dependencies_stop_without_installing_anything() {
 fn missing_toolchain_pin_stops_before_rustup() {
     let fixture = Fixture::new();
     fixture.write("rust-toolchain.toml", "[toolchain]\n");
-    let error = fixture.run(&["--rust"], &[]).unwrap_err();
-    assert_eq!(error.code, 2);
-    assert!(
-        error
-            .message
-            .contains("Cannot read the pinned Rust toolchain")
-    );
-    assert!(fixture.events().is_empty());
+    for group in ["--rust", "--python"] {
+        let error = fixture.run(&[group], &[]).unwrap_err();
+        assert_eq!(error.code, 2);
+        assert!(
+            error
+                .message
+                .contains("Cannot read the pinned Rust toolchain")
+        );
+        assert!(fixture.events().is_empty());
+    }
 }
 
 #[test]
@@ -1005,6 +1008,7 @@ fn each_failed_phase_preserves_status_and_prevents_every_later_phase() {
         "cargo-protocol-ts",
         "cargo-http-policy",
         "cargo-doc",
+        "cargo-python-lines",
         "python-lint",
         "python-format",
         "python-types",
@@ -1049,9 +1053,30 @@ fn python_discovers_tracked_untracked_nested_stubs_and_newline_paths() {
     let events = fixture.events();
     assert_eq!(
         phases(&events),
-        ["python-lint", "python-format", "python-types"]
+        [
+            "cargo-python-lines",
+            "python-lint",
+            "python-format",
+            "python-types"
+        ]
     );
-    for (event, offset) in events.iter().zip([2, 3, 2]) {
+    assert_eq!(
+        events[0].arguments,
+        [
+            "run",
+            "9.88.7",
+            "cargo",
+            "run",
+            "--locked",
+            "-q",
+            "-p",
+            "xtask",
+            "--",
+            "python-lines"
+        ]
+    );
+    assert_eq!(Path::new(&events[0].cwd), fixture.root);
+    for (event, offset) in events[1..].iter().zip([2, 3, 2]) {
         let mut sources = event.arguments[offset..].to_vec();
         sources.sort();
         let mut expected = SOURCES
@@ -1062,10 +1087,10 @@ fn python_discovers_tracked_untracked_nested_stubs_and_newline_paths() {
         assert_eq!(sources, expected);
         assert_eq!(Path::new(&event.cwd), fixture.root);
     }
-    assert_eq!(&events[0].arguments[..2], ["check", "--"]);
-    assert_eq!(&events[1].arguments[..3], ["format", "--check", "--"]);
+    assert_eq!(&events[1].arguments[..2], ["check", "--"]);
+    assert_eq!(&events[2].arguments[..3], ["format", "--check", "--"]);
     assert_eq!(
-        &events[2].arguments[..2],
+        &events[3].arguments[..2],
         [
             "--pythonpath",
             fixture
@@ -1092,7 +1117,7 @@ fn python_explicit_environment_with_spaces_never_uses_default_tools() {
         )
         .unwrap();
     assert_eq!(
-        fixture.events()[2].arguments[1],
+        fixture.events()[3].arguments[1],
         selected.join("bin/python").to_str().unwrap()
     );
 }
@@ -1107,7 +1132,7 @@ fn python_relative_environment_is_resolved_from_checkout() {
         )
         .unwrap();
     assert_eq!(
-        fixture.events()[2].arguments[1],
+        fixture.events()[3].arguments[1],
         "ops/ansible/.venv/bin/python"
     );
 }
@@ -1128,7 +1153,7 @@ fn python_git_discovery_failure_stops_before_all_checkers() {
         )
         .unwrap_err();
     assert_eq!(error.code, 128);
-    assert!(fixture.events().is_empty());
+    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
 }
 
 #[test]
@@ -1150,7 +1175,7 @@ fn python_rejects_new_source_roots_before_any_checker() {
                 .contains("Python source outside the checked roots")
         );
         assert!(error.message.contains(source));
-        assert!(fixture.events().is_empty());
+        assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
     }
 }
 
@@ -1166,7 +1191,7 @@ fn python_checks_all_tools_are_executable_before_discovery() {
         let error = fixture.run(&["--python"], &[]).unwrap_err();
         assert_eq!(error.code, 1);
         assert!(error.message.contains(&format!("Missing {name}")));
-        assert!(fixture.events().is_empty());
+        assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
     }
 }
 
@@ -1187,7 +1212,7 @@ fn python_invalid_explicit_environment_does_not_fall_back() {
         .unwrap_err();
     assert_eq!(error.code, 1);
     assert!(error.message.contains("Missing python"));
-    assert!(fixture.events().is_empty());
+    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
 }
 
 #[test]
@@ -1206,5 +1231,5 @@ fn python_empty_owned_source_set_is_not_success() {
     let error = fixture.run(&["--python"], &[]).unwrap_err();
     assert_eq!(error.code, 1);
     assert!(error.message.contains("No maintained Python sources found"));
-    assert!(fixture.events().is_empty());
+    assert_eq!(phases(&fixture.events()), ["cargo-python-lines"]);
 }

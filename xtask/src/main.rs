@@ -20,6 +20,7 @@ mod media_ip;
 mod owned_process;
 mod performance_thresholds;
 mod protocol_ts;
+mod python_lines;
 mod run_local;
 mod test_env;
 mod tooling;
@@ -80,6 +81,9 @@ Commands:
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
+  python-lines  Fail unless xtask/python-allowance.txt lists exactly the tracked *.py
+                outside vendor/, no file exceeds its row and the total stays within;
+                `--update` only removes rows and lowers counts (edit a renamed file's row).
   protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;
                 `--check` fails when the committed file is stale.
   http-policy   Write security/http-policy.json from the server's security headers
@@ -130,6 +134,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "ci-local" => ci_local::run(&root, rest),
         "ci-retention" => ci_retention::run(&root, rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
+        "python-lines" => python_lines::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "media-ip" => media_ip::run(&root, rest),

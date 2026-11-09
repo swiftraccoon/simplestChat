@@ -21,7 +21,7 @@ Usage: cargo run --locked -q -p xtask -- check [--web | --rust | --python | --he
 Default: run all four groups. Requires the development prerequisites.
 Web: typed lint, formatting, unit tests, type checking and production build.
 Rust: formatting, workspace Clippy, the over-length line ratchet and checked documentation.
-Python: pinned Ruff lint/format and strict basedpyright over maintained sources and stubs.
+Python: per-file line ratchet, pinned Ruff lint/format, strict basedpyright over sources/stubs.
 Helpers: shell syntax and helper/benchmark regression tests.
 Database, native Rust tests and browser integration remain separate; see docs/testing.md.
 ";
@@ -63,6 +63,16 @@ fn run_with_env(
         rust(root, &mut environment)?;
     }
     if group == "all" || group == "python" {
+        // The line ratchet needs only Git and Cargo, so it runs before the
+        // Python environment is required.
+        let channel = tooling::pinned_toolchain(root)?;
+        let ratchet = ["run", "--locked", "-q", "-p", "xtask", "--", "python-lines"];
+        tooling::run(
+            root,
+            &environment,
+            "rustup",
+            ["run", &channel, "cargo"].into_iter().chain(ratchet),
+        )?;
         python::run(root, &environment)?;
     }
     if group == "all" || group == "helpers" {

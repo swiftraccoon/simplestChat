@@ -70,6 +70,11 @@ build/check-security.sh fast
 CI also uses `cargo run --locked -q -p xtask -- check`. It stops on the first failure and does not install
 dependencies, start the application, or create a database. You can run
 `--web`, `--rust`, `--python`, or `--helpers` separately while iterating.
+The Python group starts with `cargo run -q -p xtask -- python-lines`, which
+fails unless `xtask/python-allowance.txt` lists exactly the tracked `*.py`
+files outside `vendor/` with no file above its row and the total within its
+`total` line; a commit that removes Python runs it with `--update`, which only
+removes rows and lowers counts, and a renamed file's row is edited by hand.
 
 The separate [security gate](docs/security.md) installs checksum-pinned scanners
 and audits first-party source, workflow policy and dependency locks. Run the
