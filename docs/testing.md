@@ -1795,7 +1795,11 @@ runner.
 
 The scanner retains inherited audit output and exactly `audit --deny unsound`,
 with only `RUSTSEC-2021-0145` and `RUSTSEC-2026-0097` excluded for mediasoup-sys
-build tools. The removed optional SQLx/rsa advisory remains unsuppressed.
+build tools and `RUSTSEC-2026-0459` for the never-compiled `libsqlite3-sys`
+lockfile entry of SQLx's optional SQLite driver (see `security/reviews.md`);
+the workspace test `libsqlite3_sys_stays_outside_the_linux_build_graph` fails
+if that crate enters the x86_64 Linux gnu or musl build graph. The removed
+optional SQLx/rsa advisory remains unsuppressed.
 Installer, path resolution and audit share one 30-minute command deadline; the
 job remains unconditional with its existing 30-minute budget, including any
 cold compilation. Every exit attempts descriptor closes and bounded,

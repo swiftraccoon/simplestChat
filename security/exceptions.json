@@ -182,6 +182,16 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
     {
+      "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2026-0459",
+      "scope": "libsqlite3-sys@0.37.0",
+      "owner": "swiftraccoon",
+      "rationale": "Bundled SQLite before 3.54.0 can return uninitialized page-cache memory when a database is opened with a sibling -wal file of a different page size; the attack vector is local and the fix is libsqlite3-sys >= 0.39.0. The patched line cannot be locked: sqlx-sqlite 0.9.0, like sqlx 0.9.0 the newest release, requires libsqlite3-sys >=0.30.1, <0.38.0.",
+      "reachability": "Reviewed full dependency graph at Cargo.lock blob 5888e85: Cargo.lock holds libsqlite3-sys 0.37.0 only as a dependency of sqlx-sqlite 0.9.0, the SQLite driver that sqlx 0.9.0 and sqlx-macros-core 0.9.0 declare optional and that their enabled features name only through weak sqlx-sqlite?/ entries, so the entry is lockfile-only. The workspace's only sqlx dependency disables default features and enables postgres, runtime-tokio, tls-native-tls, uuid, chrono, json, derive, macros and migrate. At review, cargo tree --locked --workspace --all-features --target all -e all -i libsqlite3-sys printed nothing: no workspace target or feature compiles or links libsqlite3-sys today. The required xtask test libsqlite3_sys_stays_outside_the_linux_build_graph fails closed if libsqlite3-sys enters the x86_64 Linux gnu and musl graphs, which the server image and the Ops artifact are built from, of any workspace member with all features; it runs offline in the workspace test job, so it needs no network. The hosted cargo-audit --ignore and the fast gate's exact libsqlite3-sys@0.37.0 scope bind the advisory and the version. The test binds the never-compiled premise for those Linux graphs; builds for other platforms, such as the controller on macOS, rest on the dated --target all evidence and the voiding condition. Enabling any SQLite driver feature, or adding another SQLite crate that locks 0.37.0, voids this review. Revisit when sqlx releases a SQLite driver that accepts libsqlite3-sys >= 0.39; all three are removed together.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#unreachable-libsqlite3-sys-advisory-2026-11-09"
+    },
+    {
       "scanner": "zizmor",
       "fingerprint": "self-repository:689cc4fe8ddf6cce1cd61b1d306e264b835b24f0988f7710c1bc76a78472d502",
       "scope": ".github/workflows/ci.yml#jobs/security/uses",

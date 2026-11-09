@@ -84,6 +84,16 @@ pub(super) fn audit(executable: Arc<Executable>, deadline: Instant) -> Result<Co
             "RUSTSEC-2021-0145",
             "--ignore",
             "RUSTSEC-2026-0097",
+            // libsqlite3-sys is a never-compiled lockfile entry of SQLx's optional
+            // SQLite driver (security/reviews.md). This ignore and the fast gate's
+            // exact libsqlite3-sys@0.37.0 scope bind the advisory and the version;
+            // the test libsqlite3_sys_stays_outside_the_linux_build_graph binds the
+            // never-compiled premise for the x86_64 Linux gnu and musl graphs; other
+            // platforms, such as the macOS controller, rest on the dated --target all
+            // evidence and the review's voiding condition. All three are removed
+            // together at revisit.
+            "--ignore",
+            "RUSTSEC-2026-0459",
         ],
     );
     command.executable = Some(executable);

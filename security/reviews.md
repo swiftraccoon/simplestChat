@@ -447,6 +447,66 @@ The duplicate budget is an explicit inventory of the reviewed Cargo graph.
 and the forbidden bundled-OpenSSL crate. Duplicate reductions pass; new groups
 or versions require a focused budget review. No dependency subtree is ignored.
 
+### Unreachable libsqlite3-sys advisory (2026-11-09)
+
+[RUSTSEC-2026-0459](https://rustsec.org/advisories/RUSTSEC-2026-0459)
+(CVE-2026-119375, GHSA-72w2-rjgg-q729) reports that SQLite before 3.54.0, which
+`libsqlite3-sys` 0.6.0 to 0.38.2 bundle, can return uninitialized page-cache
+memory when a process opens a database together with a sibling `-wal` file of a
+different page size. The attack vector is local: the process must open a file
+pair that a less trusted party wrote. `libsqlite3-sys` 0.39.0 bundles the fixed
+SQLite 3.54.0. Unlike the health warnings above, this is a vulnerability-class
+result. On the review date the pinned cargo-audit 0.22.2, with advisory
+database `ba4d1245f77987d28e7a7f119ed21ad844c11f57`, reports it for
+`libsqlite3-sys` 0.37.0 as the only finding without a record.
+
+`Cargo.lock` (blob `5888e853f3539faf425484f9dca42b45992826a2`) names
+`libsqlite3-sys` 0.37.0 only as a dependency of `sqlx-sqlite` 0.9.0, the SQLite
+driver that `sqlx` 0.9.0 and `sqlx-macros-core` 0.9.0 declare optional. The
+enabled features of both name that driver only through weak `sqlx-sqlite?/`
+entries, such as `sqlx-sqlite?/json`, which keep it in the lockfile without
+enabling it. A scratch crate whose `sqlx` enables only `postgres` and
+`runtime-tokio` locks no SQLite driver; adding `json` locks both crates, and
+`cargo tree -i libsqlite3-sys` still prints nothing. The workspace's only `sqlx`
+dependency disables default features and enables `postgres`, `runtime-tokio`,
+`tls-native-tls`, `uuid`, `chrono`, `json`, `derive`, `macros` and `migrate`;
+no member feature refers to `sqlx`. At review, `cargo tree --locked
+--workspace --all-features --target all -e all -i libsqlite3-sys` printed
+nothing, as did the same inversion for `sqlx-sqlite`, while `sqlx-postgres`
+showed its feature paths: no workspace target, feature or platform compiles or
+links the crate today.
+cargo-deny's feature-resolved graph agrees; its advisory check against the same
+database reports only the `basic-toml` and `paste` health warnings listed
+above. The gate runs cargo-deny only for bans, licenses and sources, and no
+cargo-deny advisory waiver exists, so the record is for cargo-audit alone.
+
+The patched line cannot be locked. On the review date the crates.io API lists
+`sqlx` 0.9.0 and `sqlx-sqlite` 0.9.0 as the newest releases, and
+[`sqlx-sqlite` 0.9.0](https://crates.io/api/v1/crates/sqlx-sqlite/0.9.0/dependencies)
+requires `libsqlite3-sys` `>=0.30.1, <0.38.0`. In a scratch crate that enables
+the SQLite driver, `cargo update -p libsqlite3-sys --precise 0.39.0` fails on
+that requirement.
+
+The exact `RUSTSEC-2026-0459` record for `libsqlite3-sys@0.37.0` expires on
+2026-11-29 with the other dependency reviews. The hosted "Audit Rust
+dependencies" step does not read this ledger and applies the same exception
+through its fixed `--ignore` list in `xtask/src/ci/audit_rust/plan.rs`. The
+required test `libsqlite3_sys_stays_outside_the_linux_build_graph` in the same
+module runs `cargo tree --locked --offline --workspace --all-features --target
+x86_64-unknown-linux-gnu --target x86_64-unknown-linux-musl -e all -i
+libsqlite3-sys` and fails closed if `libsqlite3-sys` enters the x86_64 Linux
+gnu and musl graphs, which the server image and the Ops artifact are built
+from, of any workspace member with all features. It runs offline in the
+workspace test job, so it needs no network. The hosted `--ignore` and the fast
+gate's exact `libsqlite3-sys@0.37.0` scope bind the advisory and the version.
+The test binds the never-compiled premise for those Linux graphs; builds for
+other platforms, such as the controller on macOS, rest on the dated
+`--target all` evidence and the voiding condition. Enabling any SQLite driver
+feature, or adding another SQLite crate that locks 0.37.0, voids this review
+before its expiry. Revisit when `sqlx` releases a SQLite driver that accepts
+`libsqlite3-sys` 0.39 or newer: update the lock to the fixed line and remove
+the record, the `--ignore` and the test together.
+
 ### Local-CI workflow parser (2026-10-21)
 
 The `xtask ci-evidence` migration pins `serde-saphyr 2.0.0` with only its

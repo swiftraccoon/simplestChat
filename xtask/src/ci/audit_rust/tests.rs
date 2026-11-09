@@ -251,7 +251,9 @@ async fn successful_audit_uses_validated_path_with_inherited_output_and_retires_
             "--ignore",
             "RUSTSEC-2021-0145",
             "--ignore",
-            "RUSTSEC-2026-0097"
+            "RUSTSEC-2026-0097",
+            "--ignore",
+            "RUSTSEC-2026-0459"
         ]
     );
     assert!(fixture.staging().is_empty());
@@ -270,6 +272,50 @@ async fn successful_audit_uses_validated_path_with_inherited_output_and_retires_
     }
     assert_eq!(report["exitCode"], 0);
     assert!(report["failure"].is_null());
+}
+
+// Fail-closed premise of the RUSTSEC-2026-0459 ignore in `plan::audit`. At review,
+// `cargo tree --locked --workspace --all-features --target all -e all -i libsqlite3-sys`
+// printed nothing (no target compiles it today). This required test fails closed if
+// libsqlite3-sys enters the x86_64 Linux gnu and musl graphs, which the server image and
+// the Ops artifact are built from, of any workspace member with all features; it runs
+// offline in the workspace test job, so it needs no network. The ignore and the fast
+// gate's exact libsqlite3-sys@0.37.0 scope bind the advisory and the version; this test
+// binds the never-compiled premise for those Linux graphs. Other platforms, such as the
+// controller on macOS, rest on the dated --target all evidence and the review's voiding
+// condition. All three are removed together at revisit.
+#[test]
+fn libsqlite3_sys_stays_outside_the_linux_build_graph() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let output = std::process::Command::new(env!("CARGO"))
+        .args([
+            "tree",
+            "--locked",
+            "--offline",
+            "--workspace",
+            "--all-features",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "--target",
+            "x86_64-unknown-linux-musl",
+            "-e",
+            "all",
+            "-i",
+            "libsqlite3-sys",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "libsqlite3-sys entered the x86_64 Linux build graph:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[tokio::test]

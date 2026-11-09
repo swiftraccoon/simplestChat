@@ -28,7 +28,7 @@ if stage=='install':
 import json,os,signal,sys,time
 from pathlib import Path
 root=Path(os.environ['FIXTURE_ROOT']);mode=os.environ['FIXTURE_MODE']
-assert sys.argv[1:]==['audit','--deny','unsound','--ignore','RUSTSEC-2021-0145','--ignore','RUSTSEC-2026-0097']
+assert sys.argv[1:]==['audit','--deny','unsound','--ignore','RUSTSEC-2021-0145','--ignore','RUSTSEC-2026-0097','--ignore','RUSTSEC-2026-0459']
 (root/'audit-started').write_text('owned fixture only')
 if mode=='audit-hang':
     signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
