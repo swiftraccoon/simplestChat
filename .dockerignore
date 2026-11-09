@@ -364,9 +364,6 @@ xtask/src/ci_retention/**
 !xtask/src/run_local/
 xtask/src/run_local/**
 !xtask/src/run_local/*.rs
-!xtask/src/test_env/
-xtask/src/test_env/**
-!xtask/src/test_env/*.rs
 !crates/
 crates/**
 !crates/toolkit/
@@ -375,6 +372,9 @@ crates/toolkit/**
 !crates/toolkit/src/
 crates/toolkit/src/**
 !crates/toolkit/src/*.rs
+!crates/toolkit/src/test_env/
+crates/toolkit/src/test_env/**
+!crates/toolkit/src/test_env/*.rs
 !web/
 web/**
 !web/package.json

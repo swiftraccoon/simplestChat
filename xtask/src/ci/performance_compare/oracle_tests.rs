@@ -168,10 +168,14 @@ impl Fixture {
         fs::set_permissions(&script, fs::Permissions::from_mode(0o600)).unwrap();
         let mut version = Command::new(&self.bash);
         version.arg("--version").env_clear().stderr(Stdio::null());
-        let (status, bytes) =
-            crate::test_env::helper_with_signals(version, Duration::from_secs(5), Some(4096), None)
-                .await
-                .unwrap();
+        let (status, bytes) = simplestchat_toolkit::test_env::helper_with_signals(
+            version,
+            Duration::from_secs(5),
+            Some(4096),
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(status, 0);
         let identity = [self.bash.as_os_str().as_encoded_bytes(), b"\n", &bytes].concat();
         fs::write(self.directory.join("bash-runtime.txt"), identity).unwrap();
@@ -183,7 +187,7 @@ impl Fixture {
             .env_clear()
             .envs(&self.environment)
             .stderr(Stdio::null());
-        let (status, _) = crate::test_env::helper_with_signals(
+        let (status, _) = simplestchat_toolkit::test_env::helper_with_signals(
             command,
             Duration::from_secs(5),
             Some(64 * 1024),

@@ -526,7 +526,7 @@ for (const statusBeforeCleanup of [0, 23]) {
 }
 
 // Shutdown interpretation and the pass rule for unavailable bookkeeping are
-// unit tests in xtask/src/test_env/server.rs.
+// unit tests in crates/toolkit/src/test_env/server.rs.
 
 test('helper reports an early server exit as failure', async t => {
   const result = await run(t, { TEST_SERVER_BINARY: '/usr/bin/false' });

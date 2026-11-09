@@ -16,12 +16,10 @@ mod ci_local;
 mod ci_retention;
 mod http_policy;
 mod line_length;
-mod media_ip;
 mod performance_thresholds;
 mod protocol_ts;
 mod python_lines;
 mod run_local;
-mod test_env;
 
 const USAGE: &str = "\
 Usage: cargo run -q -p xtask -- <command>
@@ -135,11 +133,11 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "python-lines" => python_lines::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
-        "media-ip" => media_ip::run(&root, rest),
+        "media-ip" => simplestchat_toolkit::media_ip::run(&root, rest),
         "performance-thresholds" => performance_thresholds::run(&root, rest),
-        "test-postgres" => test_env::run_postgres(&root, rest),
-        "test-server" => test_env::run_server(&root, rest),
-        "test-env" => test_env::run_env(&root, rest),
+        "test-postgres" => simplestchat_toolkit::test_env::run_postgres(&root, rest),
+        "test-server" => simplestchat_toolkit::test_env::run_server(&root, rest),
+        "test-env" => simplestchat_toolkit::test_env::run_env(&root, rest),
         "--help" | "-h" | "help" => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)

@@ -3,9 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 // The owned test server's environment is built by the Rust harness
-// (xtask/src/test_env/server.rs) from nothing but PATH and the opt-ins; these
+// (crates/toolkit/src/test_env/server.rs) from nothing but PATH and the opt-ins; these
 // checks pin the presentation profile's fixed log filter in that source.
-const source = readFileSync(new URL('../../xtask/src/test_env/server.rs', import.meta.url), 'utf8');
+const source = readFileSync(
+  new URL('../../crates/toolkit/src/test_env/server.rs', import.meta.url),
+  'utf8',
+);
 
 function constant(name) {
   const match = source.match(

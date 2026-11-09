@@ -28,7 +28,7 @@ async function unusedPort(udp = false) {
 // simulate an owned cluster with a JSON state file, never a real database.
 // Identity tools are fixtures too; no test changes OS identities. The root
 // runner's decision and its `runuser`/`chown` command shapes are unit tests in
-// xtask/src/test_env/postgres.rs, since the container markers are fixed paths.
+// crates/toolkit/src/test_env/postgres.rs, since the container markers are fixed paths.
 async function fixture(t, options = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-postgres-fixture.'));
   t.after(() => rm(directory, { recursive: true, force: true }));

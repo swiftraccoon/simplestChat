@@ -1,9 +1,13 @@
 //! An in-process companion shares the test command's existing signal owner.
 //! Timer actions run while the workload group remains reserved; no task escapes.
 
-use simplestchat_toolkit::owned_process::Signals;
+use crate::owned_process::Signals;
 
-pub(crate) trait Companion {
+#[expect(
+    async_fn_in_trait,
+    reason = "the harness awaits its companion in place on a current-thread runtime"
+)]
+pub trait Companion {
     /// Wait only for an in-memory event/timer. Do not acquire a subprocess here.
     async fn wait(&self);
     /// The selected action may borrow the same cancellation registration.

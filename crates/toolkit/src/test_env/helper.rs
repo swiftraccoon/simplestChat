@@ -1,8 +1,8 @@
 //! Bounded setup/readiness CLIs share service-group ownership, including drops.
 
 use super::{Stop, service::Service};
+use crate::owned_process::{self, Signals};
 use anyhow::Result;
-use simplestchat_toolkit::owned_process::{self, Signals};
 use std::{fs::File, os::fd::OwnedFd};
 use std::{
     process::{Command, Stdio},

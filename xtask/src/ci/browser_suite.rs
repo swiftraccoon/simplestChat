@@ -164,7 +164,7 @@ async fn prepare(
     environment: &Environment,
     executable: &Path,
     signals: &mut Signals,
-    detector: &mut impl crate::media_ip::Detector,
+    detector: &mut impl simplestchat_toolkit::media_ip::Detector,
 ) -> tooling::Result<Vec<Invocation>> {
     artifact_root(environment)?;
     if let Some(code) = signals.pending().await {
@@ -201,7 +201,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
             &environment,
             &executable,
             &mut signals,
-            &mut crate::media_ip::NativeDetector {
+            &mut simplestchat_toolkit::media_ip::NativeDetector {
                 root,
                 environment: &environment,
             },

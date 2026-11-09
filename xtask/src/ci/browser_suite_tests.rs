@@ -207,8 +207,8 @@ fn invalid_invocation_and_artifact_roots_refuse_before_a_child_starts() {
 }
 
 struct FutureDetector<F>(Option<F>);
-impl<F: std::future::Future<Output = anyhow::Result<Ipv4Addr>>> crate::media_ip::Detector
-    for FutureDetector<F>
+impl<F: std::future::Future<Output = anyhow::Result<Ipv4Addr>>>
+    simplestchat_toolkit::media_ip::Detector for FutureDetector<F>
 {
     async fn detect(&mut self, signals: &mut Signals) -> tooling::Result<Ipv4Addr> {
         tokio::select! {
@@ -240,7 +240,7 @@ async fn native_detector_retires_its_query_before_cancelled_browser_preparation_
     fixture
         .environment
         .insert("PATH".into(), fixture.root.clone().into_os_string());
-    let mut detector = crate::media_ip::NativeDetector {
+    let mut detector = simplestchat_toolkit::media_ip::NativeDetector {
         root: &fixture.root,
         environment: &fixture.environment,
     };

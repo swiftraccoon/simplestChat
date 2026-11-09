@@ -1,13 +1,17 @@
 //! Helpers shared by the repository's command-line tools: child commands with
 //! an explicit environment and the pinned native build settings (`tooling`),
 //! owned process groups and signals over the Ops implementation
-//! (`owned_process`), retained executable identities (`executable`), and the
+//! (`owned_process`), retained executable identities (`executable`), the
 //! reserved output-replay child that every runner binary routes first
-//! (`replay`).
+//! (`replay`), the owned disposable PostgreSQL and loopback server test
+//! environment (`test_env`), and the default route's IPv4 address for test
+//! media announcements (`media_ip`).
 
 pub mod executable;
+pub mod media_ip;
 pub mod owned_process;
 pub mod replay;
+pub mod test_env;
 pub mod tooling;
 
 #[cfg(test)]
@@ -22,5 +26,7 @@ mod tests {
         assert_send_sync::<crate::executable::Executable>();
         assert_send_sync::<crate::replay::Finalize>();
         assert_send_sync::<crate::replay::ReplayOutcome>();
+        assert_send_sync::<crate::test_env::Stop>();
+        assert_send_sync::<crate::media_ip::NativeDetector<'static>>();
     }
 }

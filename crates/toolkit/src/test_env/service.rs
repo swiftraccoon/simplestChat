@@ -6,9 +6,9 @@
 //! fresh service group, not children that deliberately create another session
 //! or privileged process group.
 
+use crate::owned_process::{self, Group};
 use anyhow::Result;
 use rustix::process::{Pid, Signal};
-use simplestchat_toolkit::owned_process::{self, Group};
 use std::os::unix::process::CommandExt;
 use std::process::{ChildStdout, Command};
 use std::time::Duration;

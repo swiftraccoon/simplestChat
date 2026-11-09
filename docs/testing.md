@@ -693,8 +693,8 @@ snapshot, C compilation, registration and hosted runtime are unmeasured here.
 
 The owned test environment is a Rust command: `cargo run -q -p xtask -- test-env`
 wraps `test-postgres` (a disposable loopback cluster) around `test-server` (an owned
-server with a clean configuration), and each runs alone too; `xtask/src/test_env/`
-holds them. `cargo run -q -p xtask -- test-server` runs `target/debug/simplestChat` as it finds it, so
+server with a clean configuration), and each runs alone too;
+`crates/toolkit/src/test_env/` holds them. `cargo run -q -p xtask -- test-server` runs `target/debug/simplestChat` as it finds it, so
 build first: a stale binary answers a new message type with "Invalid message
 format". The disposable server also opens registration and raises two
 per-address budgets for the five browsers a suite drives from one address

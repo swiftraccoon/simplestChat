@@ -5,8 +5,8 @@ use super::{
     plan,
     policy::{Clock, Supervisor},
 };
-use crate::test_env::Companion;
 use serde_json::{Value, json};
+use simplestchat_toolkit::test_env::Companion;
 use simplestchat_toolkit::{owned_process::Signals, tooling};
 use std::{
     cell::{Cell, RefCell},

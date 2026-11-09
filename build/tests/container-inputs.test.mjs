@@ -327,6 +327,9 @@ test('context excludes local-only descendants while retaining production inputs'
     '!crates/toolkit/src/',
     'crates/toolkit/src/**',
     '!crates/toolkit/src/*.rs',
+    '!crates/toolkit/src/test_env/',
+    'crates/toolkit/src/test_env/**',
+    '!crates/toolkit/src/test_env/*.rs',
   ]) assert.ok(ignoreRules.includes(rule), 'the fixed Rust controller needs narrow traversal');
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
@@ -393,6 +396,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'crates/notes.md', 'crates/private.env', 'crates/toolkit/private.env',
     'crates/toolkit/src/private.env', 'crates/toolkit/src/CLAUDE.md',
+    'crates/toolkit/src/test_env/private.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'xtask/src/ci_local/private.env',
     'xtask/src/ci/apt_mirror/private.env',
@@ -482,6 +486,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/Cargo.toml', 'xtask/src/main.rs',
     'crates/toolkit/Cargo.toml', 'crates/toolkit/src/lib.rs',
     'crates/toolkit/src/owned_process.rs', 'crates/toolkit/src/tooling.rs',
+    'crates/toolkit/src/media_ip.rs', 'crates/toolkit/src/test_env/mod.rs',
     'xtask/src/ci/apt_mirror.rs',
     'xtask/src/ci/apt_mirror/policy.rs',
     'xtask/src/ci/apt_mirror/files.rs',

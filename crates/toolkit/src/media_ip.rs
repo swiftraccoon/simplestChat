@@ -5,12 +5,12 @@
 //! loopback. Only routing and interface state is read: no DNS, no probes,
 //! no configuration changes.
 
-use anyhow::{Context, Result, anyhow, bail};
-use simplestchat_toolkit::{
+use crate::{
     owned_process::Signals,
     replay,
     tooling::{self, Environment, Failure},
 };
+use anyhow::{Context, Result, anyhow, bail};
 use std::net::Ipv4Addr;
 use std::path::Path;
 use std::process::{ExitCode, Stdio};
@@ -99,7 +99,7 @@ fn admission(deadline: Instant, required: Duration) -> tooling::Result<()> {
     Ok(())
 }
 
-pub(crate) fn run(_root: &Path, arguments: &[String]) -> Result<ExitCode> {
+pub fn run(_root: &Path, arguments: &[String]) -> Result<ExitCode> {
     if arguments.len() == 1 && matches!(arguments[0].as_str(), "--help" | "-h") {
         println!("{USAGE}");
         return Ok(ExitCode::SUCCESS);
@@ -144,10 +144,14 @@ pub(crate) fn run(_root: &Path, arguments: &[String]) -> Result<ExitCode> {
 
 /// A browser-suite detector borrows its caller's existing signal owner. It
 /// awaits every admitted query's settlement, never select-drops that owner.
-pub(crate) trait Detector {
+#[expect(
+    async_fn_in_trait,
+    reason = "the browser suite awaits its detector in place on a current-thread runtime"
+)]
+pub trait Detector {
     async fn detect(&mut self, signals: &mut Signals) -> tooling::Result<Ipv4Addr>;
 }
-pub(crate) struct NativeDetector<'a> {
+pub struct NativeDetector<'a> {
     pub root: &'a Path,
     pub environment: &'a Environment,
 }

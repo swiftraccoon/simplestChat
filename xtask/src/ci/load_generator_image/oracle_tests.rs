@@ -104,7 +104,7 @@ async fn reference(
         .env("ORACLE_FAILURE", failure)
         .env("ORACLE_STATUS", status.to_string())
         .stderr(Stdio::null());
-    let (status, _) = crate::test_env::helper_with_signals(
+    let (status, _) = simplestchat_toolkit::test_env::helper_with_signals(
         command,
         Duration::from_secs(5),
         Some(64 * 1024),
