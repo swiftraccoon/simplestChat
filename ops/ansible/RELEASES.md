@@ -143,8 +143,8 @@ Build the default Rust controller using the
 supplying GitHub credentials. Then use its absolute executable path:
 
 ```sh
-/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask \
-  release deploy \
+/absolute/controller/target/native-maintenance-controller/TARGET/debug/simplestchat-release \
+  deploy \
   --inventory /absolute/private/inventory.yml \
   --repository swiftraccoon/simplestChat \
   --origin https://chat.example.com
@@ -160,7 +160,7 @@ coordinates; the current playbook's fresh application/Ops cryptography must
 still prove the payloads and selected attempt before execution.
 
 The frontend explicitly selects native controller-side application verification.
-The trusted default `xtask release verify` bridge runs the existing complete Ops
+The trusted default `simplestchat-release verify` bridge runs the existing complete Ops
 verification owner synchronously, before remote preflight. Its 600-second whole
 budget includes a 60-second final reserve within the unchanged 660-second Ansible
 guard. Supplied application candidates still require fresh API observations and
@@ -234,7 +234,7 @@ the actual CLI exit zero as well as the complete successful summary; earlier
 positive output cannot replace that result.
 
 The frozen Python frontend retains its explicit force app-only role. The Rust
-`release deploy` operation does not accept force, maintenance or
+`simplestchat-release deploy` operation does not accept force, maintenance or
 chat-posting options; those operations keep their separate entry points.
 Source, parser and inert process checks do not themselves establish a new
 authenticated production run. The preceding frontend at `66219eaa` was qualified
@@ -278,7 +278,7 @@ package version shown below to match the selected signed Ops distribution:
   "scpub_release_deploy": true,
   "scpub_release_prepared": true,
   "scpub_release_quiet_seconds": 600,
-  "scpub_ops_xtask": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask",
+  "scpub_ops_release_controller": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/simplestchat-release",
   "scpub_ops_gh_executable": "/absolute/trusted/bin/gh",
   "scpub_ops_artifact_id": OPS_ARTIFACT_ID,
   "scpub_ops_selection": {
@@ -317,7 +317,7 @@ when opting into native verification, even for stage-only use.
 `false` and retains the Python verification route; the automatic Rust
 frontend always supplies `true`. Explicit null, strings and numeric coercion
 refuse before verification or remote work. Native mode requires absolute trusted
-`scpub_ops_xtask` and `scpub_ops_gh_executable` paths. The declared and canonical
+`scpub_ops_release_controller` and `scpub_ops_gh_executable` paths. The declared and canonical
 GitHub CLI basenames must be `gh`, with no colon in its path. A controller-side
 check requires its canonical target to be a regular executable without a final
 symlink. The verifier's `PATH` is that selected directory followed by
@@ -636,17 +636,19 @@ Python remains in application staging, Ansible and the retained helpers.
 
 ### Prepare the controller before credentials
 
-Use the caller-trusted checkout and pinned toolchain. Build the default `xtask`
-before obtaining or providing GitHub credentials. For an arm64 macOS controller:
+Use the caller-trusted checkout and pinned toolchain. Build the default
+`simplestchat-release` controller before obtaining or providing GitHub credentials.
+For an arm64 macOS controller:
 
 ```sh
-/usr/bin/env -u GH_TOKEN -u GITHUB_TOKEN cargo build --locked -p xtask --bin xtask \
+/usr/bin/env -u GH_TOKEN -u GITHUB_TOKEN cargo build --locked \
+  -p simplestchat-release --bin simplestchat-release \
   --target aarch64-apple-darwin --target-dir target/native-maintenance-controller
 ```
 
 On an x86_64 GNU/Linux controller use `--target x86_64-unknown-linux-gnu` instead.
 The resulting executable is
-`target/native-maintenance-controller/<target>/debug/xtask`; supply its absolute
+`target/native-maintenance-controller/<target>/debug/simplestchat-release`; supply its absolute
 path below. The explicit target directory avoids relying on an older default
 build. The caller trusts the checkout, compiler and resulting controller; the
 playbook does not establish their provenance.
@@ -695,7 +697,7 @@ export profile.
   "scpub_release_ci_run": CI_RUN_ID,
   "scpub_release_deploy": false,
   "scpub_release_revision": "REVISION_40_LOWERCASE_HEX",
-  "scpub_ops_xtask": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask",
+  "scpub_ops_release_controller": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/simplestchat-release",
   "scpub_ops_gh_executable": "/absolute/trusted/bin/gh",
   "scpub_ops_artifact_id": OPS_ARTIFACT_ID,
   "scpub_ops_selection": {

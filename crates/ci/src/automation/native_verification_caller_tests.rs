@@ -19,7 +19,7 @@ const REFERENCE_SELECTED: &str = "not (scpub_release_native_verification | defau
 
 fn verify_arguments(native: bool) -> Vec<&'static str> {
     let mut argv = if native {
-        vec!["{{ scpub_ops_xtask }}", "release", "verify"]
+        vec!["{{ scpub_ops_release_controller }}", "verify"]
     } else {
         vec![
             "{{ ansible_playbook_python }}",

@@ -3530,6 +3530,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplestchat-release"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "flate2",
+ "nix",
+ "object",
+ "rawzip",
+ "regex",
+ "rustix",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2 0.11.0",
+ "simplestchat-ci",
+ "simplestchat-ops",
+ "simplestchat-toolkit",
+ "tar",
+ "tokio",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "simplestchat-toolkit"
 version = "0.1.0"
 dependencies = [
@@ -4878,25 +4903,12 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
- "flate2",
- "nix",
- "object",
- "rawzip",
  "regex",
- "rustix",
  "ryu-js",
  "serde",
- "serde-saphyr",
  "serde_json",
- "sha2 0.11.0",
- "simplestchat-ci",
- "simplestchat-ops",
  "simplestchat-toolkit",
  "syn 3.0.6",
- "tar",
- "tokio",
- "toml",
  "url",
 ]
 

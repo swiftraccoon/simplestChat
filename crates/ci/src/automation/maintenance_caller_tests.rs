@@ -143,7 +143,7 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
             "scpub_ops_selection.buildRunId == scpub_release_ci_run",
             "scpub_ops_selection.revision == scpub_release_revision",
             "scpub_ops_selection.revision == scpub_release_expected_revision",
-            "scpub_ops_xtask is match('^/')",
+            "scpub_ops_release_controller is match('^/')",
             "scpub_ops_gh_executable is match('^/')",
             "scpub_ops_gh_executable | realpath | basename == 'gh'",
             concat!(
@@ -595,7 +595,7 @@ fn signed_delivery_contract(delivery: &Value) -> Check<()> {
             && export["environment"]["GITHUB_TOKEN"] == ""
             && arguments(export)?
                 == [
-                    "{{ scpub_ops_xtask }}",
+                    "{{ scpub_ops_release_controller }}",
                     "ops-artifact",
                     "export",
                     "--request",
@@ -1547,9 +1547,8 @@ fn caller_yaml_rejects_duplicate_keys_aliases_tags_and_extra_documents() {
     }
 }
 
-/// xtask's ancestors down to the release plane's ci directory, which stays in
-/// xtask until the plane has its own crate.
-const XTASK_ANCESTORS: [&str; 3] = ["xtask", "xtask/src", "xtask/src/ci"];
+/// xtask's ancestors down to its source tree.
+const XTASK_ANCESTORS: [&str; 2] = ["xtask", "xtask/src"];
 /// The CI crate's ancestors down to its automation sources.
 const CRATES_ANCESTORS: [&str; 4] = [
     "crates",
@@ -1559,9 +1558,9 @@ const CRATES_ANCESTORS: [&str; 4] = [
 ];
 
 /// The context admits the xtask and crates trees only through narrow source
-/// rules. xtask's remaining ci directory and the CI crate's automation
-/// directory are each reached through their ancestor directories, in order and
-/// each re-excluded at once; the automation directory contributes nothing but
+/// rules. xtask's sources and the CI crate's automation directory are each
+/// reached through their ancestor directories, in order and each re-excluded
+/// at once; the automation directory contributes nothing but
 /// its Rust sources, directly or in subdirectories admitted with the standard
 /// three lines.
 fn context_contract(text: &str) -> Check<()> {

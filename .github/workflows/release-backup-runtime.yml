@@ -70,7 +70,7 @@ jobs:
           printf '%s\n' "$RUNNER_TEMP/restore-controller/bin" "${restore_gh%/gh}" >> "$GITHUB_PATH"
       - name: Compile trusted acquisition and passive ELF inspection before credentials
         run: |
-          cargo build --locked -p xtask --bin xtask
+          cargo build --locked -p simplestchat-release --bin simplestchat-release
           cargo build --locked --release --target x86_64-unknown-linux-gnu \
             -p simplestchat-ops --bin simplestchat-ops
       - name: Authenticate installed musl and exercise the complete public restore command

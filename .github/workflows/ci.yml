@@ -1473,7 +1473,7 @@ jobs:
       - name: Prepare the fixed source, registry, kit and unsigned Ops bytes
         # The owner has one 60-minute invocation watchdog. Job setup consumes
         # this external 65-minute budget; cold completion is not guaranteed.
-        run: cargo run --locked -q -p xtask -- ops-artifact hosted --output "$RUNNER_TEMP/ops-hosted"
+        run: cargo run --locked -q -p simplestchat-release -- ops-artifact hosted --output "$RUNNER_TEMP/ops-hosted"
       - name: Retain only the unsigned Ops assembly
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1521,7 +1521,7 @@ jobs:
           path: ${{ runner.temp }}/ops-unsigned
       - name: Admit the exact same-run Ops signer inputs
         run: >-
-          cargo run --locked -q -p xtask -- ops-artifact signing-inputs
+          cargo run --locked -q -p simplestchat-release -- ops-artifact signing-inputs
           --directory "$RUNNER_TEMP/ops-unsigned" --output "$RUNNER_TEMP/ops-signed"
       - name: Attest the original Ops preparation, manifest and executable
         id: ops-attest

@@ -12,7 +12,7 @@
           - scpub_ops_selection.buildRunId == scpub_release_ci_run
           - scpub_ops_selection.revision == scpub_release_revision
           - scpub_ops_selection.revision == scpub_release_expected_revision
-          - scpub_ops_xtask is match('^/')
+          - scpub_ops_release_controller is match('^/')
           - scpub_ops_gh_executable is match('^/')
           - scpub_ops_gh_executable | realpath | basename == 'gh'
           - >-
@@ -184,7 +184,7 @@
     - name: Authenticate and export the exact signed pair through Rust
       ansible.builtin.command:
         argv:
-          - "{{ scpub_ops_xtask }}"
+          - "{{ scpub_ops_release_controller }}"
           - ops-artifact
           - export
           - --request

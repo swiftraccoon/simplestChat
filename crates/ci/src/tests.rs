@@ -972,8 +972,8 @@ fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_f
         Scope::CodeqlRust,
     ] {
         for name in [
-            "xtask/src/ci/ops_artifact/maintain_runtime/execute.rs",
-            "xtask/src/ci/ops_artifact/maintain_runtime/vm.rs",
+            "crates/release/src/ops_artifact/maintain_runtime/execute.rs",
+            "crates/release/src/ops_artifact/maintain_runtime/vm.rs",
             "ops/src/owned_process.rs",
             "ops/src/release/attestation/control_signals.rs",
         ] {
@@ -1002,6 +1002,7 @@ fn shared_crates_are_keyed_wherever_xtask_is() {
         for (shared, tool) in [
             ("crates/toolkit/Cargo.toml", "xtask/Cargo.toml"),
             ("crates/toolkit/Cargo.toml", "crates/ci/Cargo.toml"),
+            ("crates/toolkit/Cargo.toml", "crates/release/Cargo.toml"),
             (
                 "crates/toolkit/src/owned_process.rs",
                 "crates/ci/src/lib.rs",
@@ -1289,11 +1290,11 @@ fn release_proof_implementors_are_the_eight_proofs_and_two_test_doubles() {
         ),
     ]
     .map(|(path, name, role)| {
-        // The release plane's proofs stay in xtask until it has its own crate.
+        // The release plane's proofs live in the simplestchat-release crate.
         let path = if path.starts_with("crates/") {
             path.to_owned()
         } else {
-            format!("xtask/src/ci/{path}")
+            format!("crates/release/src/{path}")
         };
         (path, name.to_owned(), Some(role.to_owned()))
     });

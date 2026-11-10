@@ -63,7 +63,7 @@ jobs:
           printf '%s\n' "$RUNNER_TEMP/receive-controller/bin" "${receive_gh%/gh}" >> "$GITHUB_PATH"
       - name: Compile trusted controllers before exposing the API credential
         run: |
-          cargo build --locked -p xtask --bin xtask
+          cargo build --locked -p simplestchat-release --bin simplestchat-release
           cargo build --locked --release --target x86_64-unknown-linux-gnu \
             -p simplestchat-ops --bin simplestchat-ops
       - name: Authenticate both contracts and exercise the installed musl receiver

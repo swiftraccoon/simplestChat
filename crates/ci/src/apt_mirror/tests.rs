@@ -244,7 +244,7 @@ fn maintenance_compiles_without_root_before_apt_and_credentials() {
     );
     let commands = compile["run"].as_str().unwrap();
     assert!(commands.starts_with(concat!(
-        "cargo build --locked -p xtask --bin xtask\n",
+        "cargo build --locked -p simplestchat-release --bin simplestchat-release\n",
         "cargo build --locked -p simplestchat-ci --bin simplestchat-ci\n",
     )));
     assert!(!commands.contains("sudo"));

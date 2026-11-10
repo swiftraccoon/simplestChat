@@ -35,7 +35,7 @@ const MAX_TOTAL: u64 = 16 * MAX_FILE;
 const MAX_ENTRIES: usize = 8192;
 const MAX_NAMES: usize = 1024 * 1024;
 const MAX_DEPTH: usize = 8;
-const FIXED: [&str; 13] = [
+const FIXED: [&str; 14] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -45,6 +45,7 @@ const FIXED: [&str; 13] = [
     "xtask/Cargo.toml",
     "crates/toolkit/Cargo.toml",
     "crates/ci/Cargo.toml",
+    "crates/release/Cargo.toml",
     "vendor/mediasoup-0.29.0/Cargo.toml",
     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
     "load_tests/src/lib.rs",

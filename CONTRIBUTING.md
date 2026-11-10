@@ -9,9 +9,9 @@ Start with [development setup](docs/development.md), then the
 README a quick introduction; put detailed explanations alongside the system
 they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 The [workspace layout](docs/development.md#workspace-layout) names each crate:
-new crates go under `crates/`, hosted CI steps belong in `simplestchat-ci`,
-and helpers several tools share belong in `simplestchat-toolkit` rather than in
-`xtask`.
+new crates go under `crates/`, hosted CI steps belong in `simplestchat-ci`, the
+release control plane in `simplestchat-release`, and helpers several tools share
+belong in `simplestchat-toolkit` rather than in `xtask`.
 
 ## Standards for new work
 

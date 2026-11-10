@@ -1067,7 +1067,7 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Keep ordered ownership and finalizer
             source_originals[name] = original
         report["sourceSha256"] = source_hashes
         binary = ROOT / "target/x86_64-unknown-linux-gnu/release/simplestchat-ops"
-        controller = ROOT / "target/debug/xtask"
+        controller = ROOT / "target/debug/simplestchat-release"
         programs: list[Path] = []
         for path in (binary, controller):
             original = fetch_vm.Held.open(path.resolve(), fetch_vm.MAX_BINARY, control)

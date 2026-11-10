@@ -54,7 +54,7 @@ jobs:
           rustup target add --toolchain 1.99.0 x86_64-unknown-linux-gnu
       - name: Compile trusted acquisition and passive ELF inspection before credentials
         run: |
-          cargo build --locked -p xtask --bin xtask
+          cargo build --locked -p simplestchat-release --bin simplestchat-release
           cargo build --locked -p simplestchat-ci --bin simplestchat-ci
           cargo build --locked --release --target x86_64-unknown-linux-gnu \
             -p simplestchat-ops --bin simplestchat-ops
@@ -93,7 +93,7 @@ jobs:
           MAINTAIN_ARTIFACT_ID: ${{ inputs.artifact_id }}
           MAINTAIN_SCENARIO: ${{ matrix.scenario }}
         run: |
-          target/debug/xtask ops-artifact maintain-host-runtime \
+          target/debug/simplestchat-release ops-artifact maintain-host-runtime \
             --run-id "$MAINTAIN_RUN_ID" --run-attempt "$MAINTAIN_RUN_ATTEMPT" \
             --artifact-id "$MAINTAIN_ARTIFACT_ID" --scenario "$MAINTAIN_SCENARIO" \
             --output "$RUNNER_TEMP/maintain-host-runtime"

@@ -28,7 +28,7 @@ run the relevant crate without the server's native test graph:
 cargo test --locked -p xtask -- --test-threads=1
 cargo test --locked -p simplestchat-ci -- --test-threads=1
 cargo test --locked -p simplestchat-ops
-cargo test --locked -p xtask ci::ops_artifact -- --test-threads=1
+cargo test --locked -p simplestchat-release -- --test-threads=1
 cargo test --locked -p simplestchat-ci --features public-smoke public_smoke -- --test-threads=1
 ```
 
@@ -115,11 +115,12 @@ VM workflow remains a separate suite.
 
 Keeper help fixtures cover legacy/current/future global-help layouts while
 retaining strict route, status, stderr and output-size checks. The compiled
-`xtask ops-artifact runtime-diagnostics` leaf has separate pure/bounded-file tests:
+`simplestchat-release ops-artifact runtime-diagnostics` leaf has separate
+pure/bounded-file tests:
 
 ```sh
-cargo test --locked -p xtask --bin xtask \
-  ci::ops_artifact::runtime::diagnostics::tests:: -- --test-threads=1
+cargo test --locked -p simplestchat-release --bin simplestchat-release \
+  ops_artifact::runtime::diagnostics::tests:: -- --test-threads=1
 ```
 
 The reporter checks source identity, malformed/oversized/nonregular reports,
@@ -141,7 +142,7 @@ The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
 exercise lease-stream EOF, quiet-child cancellation, release ordering and the
 first interrupt surviving a later signal during joined cleanup. The source
-inventory CLI also runs with 198 selected files and a child-only 96-descriptor
+inventory CLI also runs with 199 selected files and a child-only 96-descriptor
 limit. These checks do not execute a remote capacity workload. A signed musl
 binary, Debian kernel/process behavior and a measured host run need their own
 evidence.
@@ -1540,7 +1541,7 @@ Push CI retains that same immutable production image for deployment. Offline
 reference operations tests cover export without rebuilding, commit/run/artifact
 identity, bounded CI waiting, single-host selection and stopping after a failed
 deployment or verification. The primary signed routine entry point is now
-[`xtask release deploy`](../ops/ansible/RELEASES.md#automatic-signed-routine-deployment).
+[`simplestchat-release deploy`](../ops/ansible/RELEASES.md#automatic-signed-routine-deployment).
 It admits clean published `main`, freezes one host, waits within the configured
 bound for one exact CI run/attempt and selects both signed artifact candidates.
 It invokes the current typed release playbook once; API coordinates do not skip
@@ -2759,7 +2760,7 @@ cargo test --locked -p simplestchat-ops --test release_fresh_verify_cli
 ```
 
 The routine deployment frontend now selects the same operation through the thin
-default `xtask release verify` bridge. This dispatch is synchronous before Tokio;
+default `simplestchat-release verify` bridge. This dispatch is synchronous before Tokio;
 it adds neither nested Cargo nor another verification implementation. Ansible
 native mode uses N600/M60 inside its unchanged 660-second guard and runs before
 remote preflight, including check mode. Omission selects the frozen Python
@@ -2927,7 +2928,7 @@ application deployment, a database migration, rollback or caller cutover.
 ## Native deploy and rollback fixture
 
 The manual [deploy runtime workflow](../.github/workflows/release-deploy-runtime.yml)
-uses `xtask ops-artifact deploy-runtime` and the authenticated Ops artifact's Rust
+uses `simplestchat-release ops-artifact deploy-runtime` and the authenticated Ops artifact's Rust
 guest. Its eight explicit selectors bind the current Ops/server CI attempt and
 a different previous server revision, CI attempt and artifact. Both server
 artifacts need exactly the same nonempty packaged migration map. The controller
@@ -2956,7 +2957,7 @@ platform provisioning retain their existing roles.
 Harmless help is available locally:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact deploy-runtime --help
+cargo run --locked -q -p simplestchat-release -- ops-artifact deploy-runtime --help
 ```
 
 Source and local checks do not establish signed runtime qualification. The
@@ -3000,7 +3001,7 @@ Existing operational Python and nightly/offsite callers are unchanged.
 ## Optional maintenance prerequisite experiments
 
 The four-case launcher workflow selects the Rust outer entry
-`xtask ops-artifact maintain-runtime`; the previous Python controller remains an
+`simplestchat-release ops-artifact maintain-runtime`; the previous Python controller remains an
 unchanged reference. The
 authenticated installed Ops binary now owns the explicit native guest role,
 with exactly 54 project source pins and 15 operational helper pins. Frozen Python
@@ -3094,8 +3095,8 @@ not boot or hosted-performance proof. QEMU boot, cloud-init and all four cases
 still require the actual signed workflow under its unchanged 45-minute limit.
 
 ```sh
-cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
-cargo test --locked -p xtask ci::ops_artifact::hosted::
+cargo test --locked -p simplestchat-release ops_artifact::maintain_runtime::
+cargo test --locked -p simplestchat-release ops_artifact::hosted::
 cargo test --locked -p simplestchat-ops --features maintain-guest --lib \
   release::attestation::maintain_prerequisite::guest:: -- --test-threads=1
 cargo test --locked -p simplestchat-ops \
@@ -3273,10 +3274,11 @@ enforcement. The fresh signed VM must prove the unchanged launcher's actual
 loopback readiness, natural TLS, containment and complete finalization.
 
 Guest feature checks require the project's pinned OpenSSL headers/libraries;
-default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
-actual local TLS, inert-file handoff and maintenance-table firewall tests cover
-the new guest's finite contracts. The distributed producer selects the optional
-feature and its authenticated 70-archive patched-musl/OpenSSL 4.1.0 static kit.
+default Ops and controller bootstrap builds leave native crypto disabled.
+Signed-material, actual local TLS, inert-file handoff and maintenance-table
+firewall tests cover the new guest's finite contracts. The distributed producer
+selects the optional feature and its authenticated 70-archive
+patched-musl/OpenSSL 4.1.0 static kit.
 Inert producer tests do not establish its cold build, final signed static ELF or
 fresh guest execution. All Python remains frozen.
 
@@ -3444,7 +3446,7 @@ cargo test --locked -p simplestchat-ops --features maintain-guest \
   maintenance_effect_tests -- --test-threads=1
 cargo test --locked -p simplestchat-ops stage::reentry -- --test-threads=1
 cargo test --locked -p simplestchat-ops distribution::install::tests -- --test-threads=1
-cargo test --locked -p xtask ci::ops_artifact::export -- --test-threads=1
+cargo test --locked -p simplestchat-release ops_artifact::export -- --test-threads=1
 ```
 
 These checks use real private files, atomic publications, dump/list ownership

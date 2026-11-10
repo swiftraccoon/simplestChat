@@ -293,7 +293,7 @@ raise SystemExit(1)
             root = Path(directory).resolve()
             source, output = root / "source", root / "output"
             source.mkdir(mode=0o700)
-            write(source / "target/debug/xtask", b"INERT_CONTROLLER", 0o755)
+            write(source / "target/debug/simplestchat-release", b"INERT_CONTROLLER", 0o755)
             write(
                 source / "target/x86_64-unknown-linux-gnu/release/simplestchat-ops",
                 b"INERT_CLIENT",
@@ -1065,7 +1065,7 @@ class ReceiveWholeTests(unittest.TestCase):
             write(source / "ops/ansible/files/fetch-release.py", b"INERT_ORIGINAL_ENTRY")
             home.mkdir(mode=0o700)
             write(source / "Cargo.toml", b'[workspace.package]\nversion="0.1.0"\n')
-            write(source / "target/debug/xtask", b"INERT_CONTROLLER", 0o755)
+            write(source / "target/debug/simplestchat-release", b"INERT_CONTROLLER", 0o755)
             write(
                 source / "target/x86_64-unknown-linux-gnu/release/simplestchat-ops",
                 b"INERT_CLIENT",

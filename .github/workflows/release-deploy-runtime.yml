@@ -87,7 +87,7 @@ jobs:
           printf '%s\n' "$RUNNER_TEMP/deploy-controller/bin" "${deploy_gh%/gh}" >> "$GITHUB_PATH"
       - name: Compile trusted controllers before exposing the API credential
         run: |
-          cargo build --locked -p xtask --bin xtask
+          cargo build --locked -p simplestchat-release --bin simplestchat-release
           cargo build --locked --release --target x86_64-unknown-linux-gnu \
             -p simplestchat-ops --bin simplestchat-ops
       - name: Authenticate old/current contracts and exercise installed musl deploy
@@ -104,7 +104,7 @@ jobs:
           DEPLOY_PREVIOUS_ARTIFACT_ID: ${{ inputs.previous_artifact_id }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          ./target/debug/xtask ops-artifact deploy-runtime \
+          ./target/debug/simplestchat-release ops-artifact deploy-runtime \
             --run-id "$DEPLOY_RUN_ID" --run-attempt "$DEPLOY_RUN_ATTEMPT" \
             --artifact-id "$DEPLOY_ARTIFACT_ID" \
             --server-artifact-id "$DEPLOY_SERVER_ARTIFACT_ID" \

@@ -73,7 +73,7 @@ print(json.dumps({
 
 def source_inputs() -> list[str]:
     """Use the production source manifest for the fixture, then execute actual imports."""
-    text = (ROOT / "xtask/src/ci/ops_artifact/runtime/sources.rs").read_text()
+    text = (ROOT / "crates/release/src/ops_artifact/runtime/sources.rs").read_text()
     match = re.search(r"const NAMES: &\[&str\] = &\[(.*?)\];", text, re.DOTALL)
     if match is None:
         message = "The closed source-input manifest is unavailable."

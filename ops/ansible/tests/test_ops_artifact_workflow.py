@@ -44,7 +44,7 @@ class HostedOpsWorkflowTests(unittest.TestCase):
         self.assertEqual(obj(steps[0], "with")["persist-credentials"], "false")
         self.assertEqual(steps[1]["uses"], RUST)
         self.assertEqual(steps[1]["with"], {"toolchain": "1.99.0"})
-        command = "cargo run --locked -q -p xtask -- ops-artifact hosted"
+        command = "cargo run --locked -q -p simplestchat-release -- ops-artifact hosted"
         self.assertEqual(steps[2]["run"], f'{command} --output "$RUNNER_TEMP/ops-hosted"')
         self.assertEqual(steps[3]["uses"], UPLOAD)
         upload = obj(steps[3], "with")
@@ -92,7 +92,7 @@ class HostedOpsWorkflowTests(unittest.TestCase):
                 "path": "${{ runner.temp }}/ops-unsigned",
             },
         )
-        admission = "cargo run --locked -q -p xtask -- ops-artifact signing-inputs"
+        admission = "cargo run --locked -q -p simplestchat-release -- ops-artifact signing-inputs"
         directories = '--directory "$RUNNER_TEMP/ops-unsigned" --output "$RUNNER_TEMP/ops-signed"'
         self.assertEqual(steps[3]["run"], f"{admission} {directories}")
         self.assertEqual(steps[4]["uses"], ATTEST)

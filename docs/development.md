@@ -116,15 +116,20 @@ including its port when using Vite or a second instance.
 
 ## Workspace layout
 
-The Cargo workspace has six crates. The root package `simplestchat` (`src/`) is
+The Cargo workspace has seven crates. The root package `simplestchat` (`src/`) is
 the server library and the `simplestChat` binary. `simplestchat-load-test`
 (`load_tests/`) is the `load_test` generator. `simplestchat-ops` (`ops/`) holds
 the bounded host and guest operations and the Ops artifact tools. `xtask`
 (`xtask/`) is the repository automation run as `cargo run -p xtask -- <command>`:
-developer gates and, until it has its own crate, the release controller.
-`simplestchat-ci` (`crates/ci/`) runs the hosted CI steps, local CI and cache
-retention as `cargo run --locked -q -p simplestchat-ci -- <command>`; its
-library also holds the bounded command runner the release controller drives.
+the developer gates only. `simplestchat-ci` (`crates/ci/`) runs the hosted CI
+steps, local CI and cache retention as
+`cargo run --locked -q -p simplestchat-ci -- <command>`; its library also holds
+the bounded command runner the release controller drives.
+`simplestchat-release` (`crates/release/`) is that release controller, a binary
+run as `cargo run --locked -q -p simplestchat-release -- <command>`: signed
+routine deployment and verification (`deploy`, `verify`), the Ops artifact's
+production, retention and runtime proofs (`ops-artifact`) and the private VPS
+capacity operation (`vps-capacity`).
 `simplestchat-toolkit` (`crates/toolkit/`) holds what those tools share: child
 commands with an explicit environment, the pinned native build settings, owned
 process groups and signals, retained executable identities, the reserved

@@ -57,7 +57,7 @@ jobs:
           test "$ops_gh_executable" = "$RUNNER_TEMP/ops-gh/bin/gh"
           printf '%s\n' "$RUNNER_TEMP/ops-controller/bin" "${ops_gh_executable%/gh}" >> "$GITHUB_PATH"
       - name: Compile the controller before exposing its API credential
-        run: cargo build --locked -p xtask --bin xtask
+        run: cargo build --locked -p simplestchat-release --bin simplestchat-release
       - name: Pin the exact artifact request
         id: request
         env:
@@ -113,7 +113,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           OPS_REQUEST_SHA256: ${{ steps.request.outputs.sha256 }}
         run: |
-          target/debug/xtask ops-artifact runtime \
+          target/debug/simplestchat-release ops-artifact runtime \
             --request "$RUNNER_TEMP/ops-runtime-request.json" \
             --request-sha256 "$OPS_REQUEST_SHA256"
       - name: Preserve the completed sanitized Ops summary
@@ -134,8 +134,8 @@ jobs:
           OPS_ARTIFACT_ID: ${{ inputs.artifact_id }}
           OPS_RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
         run: |
-          if test -x target/debug/xtask; then
-            target/debug/xtask ops-artifact runtime-diagnostics
+          if test -x target/debug/simplestchat-release; then
+            target/debug/simplestchat-release ops-artifact runtime-diagnostics
           fi
       - name: Preserve only the newly written sanitized diagnostic report
         if: ${{ always() && steps.diagnostics.outputs.retained == 'true' }}

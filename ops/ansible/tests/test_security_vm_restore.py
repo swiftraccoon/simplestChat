@@ -813,7 +813,7 @@ class RestoreWholeControllerTests(unittest.TestCase):
                 write(project / name, (ROOT / name).read_bytes())
             for name in (
                 "target/x86_64-unknown-linux-gnu/release/simplestchat-ops",
-                "target/debug/xtask",
+                "target/debug/simplestchat-release",
             ):
                 write(project / name, b"INERT-PROGRAM-NEVER-EXECUTED\n")
             tool_root = Path(temporary).resolve() / "tools"

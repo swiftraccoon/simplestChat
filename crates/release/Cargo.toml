@@ -1,0 +1,39 @@
+[package]
+name = "simplestchat-release"
+description = "Release control plane: signed deployment and verification, Ops artifact production, retention and runtime proofs, and private VPS capacity runs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+nix = { version = "0.31.3", default-features = false }
+object = { version = "=0.40.0", default-features = false, features = [
+    "read_core", "elf", "archive", "std",
+] }
+rawzip = "=0.5.2"
+regex = "1.13.1"
+rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
+serde_json = { version = "1.0.151", features = ["raw_value"] }
+sha2 = "0.11.0"
+simplestchat-ci = { path = "../ci" }
+simplestchat-ops = { path = "../../ops", default-features = false }
+simplestchat-toolkit = { path = "../toolkit" }
+tar = { version = "=0.4.46", default-features = false }
+tokio = { version = "1.53.3", features = ["full"] }
+toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+url = "2.5.8"
+
+[dev-dependencies]
+# Tests inject signal receivers and read bounded log descriptors; this crate's
+# own normal and release builds leave both hooks off.
+simplestchat-ci = { path = "../ci", features = ["test-hooks"] }
+simplestchat-toolkit = { path = "../toolkit", features = ["test-hooks"] }

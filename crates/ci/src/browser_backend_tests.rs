@@ -67,7 +67,7 @@ fn product_native_and_current_policy_inputs_invalidate_only_the_new_role() {
         "ops/src/release/maintain.rs",
         "ops/tests/maintenance.rs",
         "ops/ops-build-inputs.lock.json",
-        "xtask/src/ci/ops_artifact/hosted/native_build.rs",
+        "crates/release/src/ops_artifact/hosted/native_build.rs",
         "crates/ci/src/automation.rs",
         "docs/independent.md",
         "web/src/room.ts",
@@ -233,7 +233,7 @@ fn excluded_tracked_and_untracked_dependencies_refuse_before_save_or_install() {
     // scope's keyed prefixes; `xtask/` is keyed only for the legacy backend scope.
     for extra in [
         "ops/src/foreign.rs",
-        "xtask/src/ci/ops_artifact/foreign.rs",
+        "crates/release/src/ops_artifact/foreign.rs",
         "docs/foreign.md",
         "src/untracked.txt",
         "web",

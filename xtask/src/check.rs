@@ -177,10 +177,10 @@ fn matching(root: &Path, directory: &str, suffix: &str) -> tooling::Result<Vec<O
     Ok(files)
 }
 
-// Cargo uplifts a shared executable (xtask or simplestchat-ci) even for fresh
-// builds. On macOS that removes then copies the destination, so a different
-// file must not spawn it concurrently. Keep standalone files self-building;
-// serialize only this pool.
+// Cargo uplifts a shared executable (xtask, simplestchat-ci or
+// simplestchat-release) even for fresh builds. On macOS that removes then
+// copies the destination, so a different file must not spawn it concurrently.
+// Keep standalone files self-building; serialize only this pool.
 const SHARED_EXECUTABLE_TESTS: &[&str] = &[
     "build/tests/ci-evidence.test.mjs",
     "build/tests/ci-verified.test.mjs",

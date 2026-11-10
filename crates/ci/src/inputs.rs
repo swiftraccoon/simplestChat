@@ -37,6 +37,7 @@ pub(super) const BROWSER_BACKEND_FILES: &[&str] = &[
     "ops/Cargo.toml",
     "xtask/Cargo.toml",
     "crates/ci/Cargo.toml",
+    "crates/release/Cargo.toml",
     "crates/toolkit/Cargo.toml",
     "crates/toolkit/src/lib.rs",
     "crates/toolkit/src/executable.rs",

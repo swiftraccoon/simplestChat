@@ -6,7 +6,7 @@ It uses the existing Ansible playbook, image-build service and
 [`build/capacity.py`](../../build/capacity.py) measurement engine. Preparation and
 image building are explicit options; each measurement creates a new run.
 
-The Rust `xtask vps-capacity` operation uses the same workload policy and the
+The Rust `simplestchat-release vps-capacity` operation uses the same workload policy and the
 capacity engine through an explicitly selected signed Ops artifact. It owns
 preparation, SSH transport, systemd execution, collection, recovery and local
 evidence extraction. The Python controller remains available; Ansible still
@@ -58,8 +58,8 @@ selection is retained through transport, collection and final replay. No Ops
 candidate executes on the controller.
 
 ```sh
-cargo build --locked -p xtask --bin xtask
-target/debug/xtask vps-capacity \
+cargo build --locked -p simplestchat-release --bin simplestchat-release
+target/debug/simplestchat-release vps-capacity \
   --inventory ops/ansible/inventory.local.test.yml --limit test_vps \
   --revision "$(git rev-parse HEAD)" \
   --ops-ci-run "$OPS_CI_RUN_ID" --ops-run-attempt "$OPS_RUN_ATTEMPT" \

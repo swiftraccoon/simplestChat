@@ -1,8 +1,8 @@
 //! Repository automation: `cargo run -q -p xtask -- <command>`.
 //!
-//! The developer gates, the local UI and, until the release control plane has
-//! its own crate, the release commands. Hosted CI steps, local CI and cache
-//! retention run through `simplestchat-ci`.
+//! The developer gates and the local UI. Hosted CI steps, local CI and cache
+//! retention run through `simplestchat-ci`, and the release control plane
+//! through `simplestchat-release`.
 //!
 //! Every command runs from the repository root and exits non-zero on the first
 //! failure so CI and local runs behave identically; the test harness commands
@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod check;
-mod ci;
 mod http_policy;
 mod line_length;
 mod performance_thresholds;
@@ -27,15 +26,8 @@ Usage: cargo run -q -p xtask -- <command>
 
 Commands:
   run           Build and run the local UI; --skip-web reuses web/dist.
-  release       Select signed application and Ops artifacts, deploy once and verify HTTPS;
-                prepared routine host only; see `release deploy --help`.
-                `release verify --help` checks explicit signed application inputs without a host.
-  ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
-                fixed recipe; maintain-runtime owns the optional signed maintenance KVM proof.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
-  vps-capacity Authenticated private VPS measurement, collection or explicit recovery;
-                installed service callsites remain unchanged; see --help.
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
@@ -66,6 +58,8 @@ Commands:
 
 Hosted CI steps, local CI and cache retention:
   cargo run --locked -q -p simplestchat-ci -- --help
+Signed deployment and verification, Ops artifacts and private VPS capacity runs:
+  cargo run --locked -q -p simplestchat-release -- --help
 ";
 
 fn repository_root() -> Result<PathBuf> {
@@ -83,10 +77,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     let root = repository_root()?;
     match command.as_str() {
         "run" => run_local::run(&root, rest),
-        "release" => ci::run_release_frontend(&root, rest),
         "check" => check::run(&root, rest),
-        "ops-artifact" => ci::run_ops_artifact(rest),
-        "vps-capacity" => ci::run_vps_capacity(rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "python-lines" => python_lines::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
@@ -110,11 +101,6 @@ fn main() -> ExitCode {
     // registration: it only copies stdin to stdout.
     if let Some(code) = simplestchat_toolkit::replay::route(&arguments) {
         return code;
-    }
-    if arguments.len() >= 2 && arguments[0] == "release" && arguments[1] == "verify" {
-        // The Ops entry owns its runtime and original completion signals.
-        // Forward native path arguments before the existing UTF-8 router.
-        return simplestchat_ops::release::verify::run(&arguments[2..]);
     }
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match run(&arguments) {

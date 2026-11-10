@@ -410,7 +410,7 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         programs: list[Path] = []
         for path in (
             ROOT / "target/x86_64-unknown-linux-gnu/release/simplestchat-ops",
-            ROOT / "target/debug/xtask",
+            ROOT / "target/debug/simplestchat-release",
         ):
             original = fetch.Held.open(path.resolve(), fetch.MAX_BINARY, control)
             owners.inputs.append(original)

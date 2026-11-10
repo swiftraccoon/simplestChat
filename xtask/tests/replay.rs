@@ -45,11 +45,15 @@ fn reserved_replay_argument_copies_binary_input_byte_for_byte() {
 #[test]
 fn only_the_exact_single_argument_selects_the_replay_child() {
     // A command that receives the reserved word as an ordinary argument refuses
-    // it with its usage, and the removed `ci` route is an unknown command.
+    // it with its usage, and the removed `ci`, `release`, `ops-artifact` and
+    // `vps-capacity` routes are unknown commands.
     for (arguments, code) in [
         (&["__replay", "extra"][..], 1),
-        (&["ops-artifact", "__replay"][..], 2),
+        (&["media-ip", "__replay"][..], 2),
         (&["ci", "release-controller", "__replay"][..], 1),
+        (&["release", "verify", "__replay"][..], 1),
+        (&["ops-artifact", "__replay"][..], 1),
+        (&["vps-capacity", "__replay"][..], 1),
     ] {
         let output = xtask(arguments, None);
         assert_eq!(output.status.code(), Some(code), "{arguments:?}");

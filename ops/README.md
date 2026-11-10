@@ -625,10 +625,11 @@ observation. The library separates `collect_inputs(source_root)` from the pure
 toolchain resolved, registry accessed, artifact generated or candidate run.
 
 The `workspace-ops-capacity-v2` inventory selects original bytes of `Cargo.toml`,
-`Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the Ops/load-test/xtask/toolkit/CI
-manifests, the two current mediasoup path-patch manifests, and every regular
-`*.rs` under `ops/src`, the load-test library entry and capacity dispatcher, and
-Rust files under its `capacity`, `capacity_run` and `owned_process` directories.
+`Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the
+Ops/load-test/xtask/toolkit/CI/release manifests, the two current mediasoup
+path-patch manifests, and every regular `*.rs` under `ops/src`, the load-test
+library entry and capacity dispatcher, and Rust files under its `capacity`,
+`capacity_run` and `owned_process` directories.
 This covers the current named workspace discovery manifests, not complete
 Cargo/compiler I/O closure. The tool does not interpret
 TOML, resolve changed workspace members/path patches, or read other workspace,
@@ -710,7 +711,7 @@ a new plan contract tested directly, not a Python producer receipt or oracle.
 Prepare a Cargo directory source from explicitly selected local cache archives:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact registry \
+cargo run --locked -q -p simplestchat-release -- ops-artifact registry \
   --request /controlled/registry-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
@@ -820,7 +821,7 @@ Export one selected local commit without checking out, compiling or executing it
 source:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact source \
+cargo run --locked -q -p simplestchat-release -- ops-artifact source \
   --request /controlled/source-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
@@ -900,7 +901,7 @@ deep path combinations may be refused. File owners attempt explicit closes;
 temporary mature directory cursors are RAII-closed. One signal/deadline owner
 survives closes and bounded result replay. The producer's 18-minute active plus
 two-minute settlement watchdog applies; filesystem/scheduler/reap stalls and
-cold xtask compilation have no hard wall-clock guarantee.
+cold controller compilation have no hard wall-clock guarantee.
 
 Final zero exit and bounded JSON describe an **observed local commit/tree/source
 relationship** and selected Git/request identities. Paths, catalogue names,
@@ -915,17 +916,18 @@ configuration/templates and no hooks or network. No candidate is built or run.
 
 ## Controlled local unsigned producer
 
-`xtask` can execute a fixed build recipe using explicitly selected local materials:
+`simplestchat-release` can execute a fixed build recipe using explicitly selected
+local materials:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact build \
+cargo run --locked -q -p simplestchat-release -- ops-artifact build \
   --request /controlled/producer-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
 This command authorizes a build on the current Linux x86-64 host. Its dispatcher
 has no material-acquisition or installation stage. It never executes the candidate,
 signs or switches a production callsite. Ops remains
-process-free; xtask calls its existing inspector, retained-manifest pair validator
+process-free; the controller calls its existing inspector, retained-manifest pair validator
 and unsigned assembly library directly. The new first-party dependency adds Ops
 source to the native-DTLS cache inputs without changing the server ten-file release,
 required jobs, attestation policy or Python runtime.
@@ -1028,7 +1030,7 @@ owned through final output/close/deadline fences, and known nonzero statuses win
 over later cleanup errors. Combined build output is privately retained with an
 actual 64 MiB pipe-reader cap; probes and metadata have smaller fixed caps. This
 is not a hard filesystem/scheduler/reap wall-clock guarantee or measured hosted
-build timing; cold xtask compilation precedes its clock.
+build timing; cold controller compilation precedes its clock.
 
 The final bundle includes measured material, selected-tool, recipe, resolution
 and Cargo/log observations, each at most 1 MiB. Raw probe/metadata output and the
@@ -1330,7 +1332,7 @@ execution, build provenance, signing readiness or ABI/runtime compatibility.
 The controller-local transaction is:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact verify-retained \
+cargo run --locked -q -p simplestchat-release -- ops-artifact verify-retained \
   --request /absolute/request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
@@ -1453,7 +1455,7 @@ contracts. A pull request cannot request an Ops signature.
 The hosted entry point is:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact hosted --output /absolute/fresh-run
+cargo run --locked -q -p simplestchat-release -- ops-artifact hosted --output /absolute/fresh-run
 ```
 
 It requires the fixed repository, numeric repository/owner IDs, `CI` workflow,
@@ -1496,7 +1498,7 @@ inputs. Offline Cargo configuration is not a compiler filesystem sandbox or
 complete network isolation.
 
 The distributed artifact explicitly enables `maintain-guest`; default Ops and
-`xtask` bootstrap builds exclude its OpenSSL/X.509 dependencies. The builder
+controller bootstrap builds exclude its OpenSSL/X.509 dependencies. The builder
 compiles patched musl commit `7813e9119eb5fe681b6750b8a033a0490bca0941`
 and OpenSSL 4.1.0 out of tree using the measured compiler, make, Perl and shell
 roles. The musl revision includes the upstream CVE-2026-107891 repair. Selected
@@ -1582,7 +1584,7 @@ downloads the same-run unsigned assembly and independently checks the selected
 identity, original payload graph, producer outcome and pinned material catalog:
 
 ```sh
-cargo run --locked -q -p xtask -- ops-artifact signing-inputs \
+cargo run --locked -q -p simplestchat-release -- ops-artifact signing-inputs \
   --directory /absolute/unsigned-artifact --output /absolute/fresh-signer-inputs
 ```
 
@@ -1596,11 +1598,11 @@ the workflow cannot establish its own terminal result while it is running.
 
 ## Acquire one signed Ops artifact
 
-Build the default `xtask` before supplying credentials, then invoke its binary
-with an explicit `GH_TOKEN` and one pinned request:
+Build the default `simplestchat-release` before supplying credentials, then invoke
+its binary with an explicit `GH_TOKEN` and one pinned request:
 
 ```sh
-target/debug/xtask ops-artifact acquire \
+target/debug/simplestchat-release ops-artifact acquire \
   --request /absolute/acquire-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
@@ -1680,8 +1682,8 @@ step. This workflow is separate from the full application deployment/restore VM.
 The local entry point uses the closed acquisition request schema above:
 
 ```sh
-cargo build --locked -p xtask --bin xtask
-target/debug/xtask ops-artifact runtime \
+cargo build --locked -p simplestchat-release --bin simplestchat-release
+target/debug/simplestchat-release ops-artifact runtime \
   --request /absolute/runtime-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
 ```
 
@@ -1840,7 +1842,7 @@ adapters, with no new public library compatibility promise or package metadata.
 ## Private VPS capacity operation
 
 The [capacity guide](ansible/CAPACITY.md#rust-controller-and-authenticated-host-operation)
-documents `xtask vps-capacity`, its mandatory CI artifact selectors, the fixed
+documents `simplestchat-release vps-capacity`, its mandatory CI artifact selectors, the fixed
 Debian host and the retained Python controller. The public Ops entry points serve
 one framed request or one canonical systemd worker; decoded protocol records
 alone grant no execution authority. No module import starts a workload.
@@ -2117,8 +2119,8 @@ Ops three-subject contracts remain unchanged.
 GitHub API observations, download and extract it or reverify a supplied cache,
 then run the four maintained cryptographic verifiers. It returns the local
 directory and two verified file digests before contacting a deployment host.
-The default `xtask release verify` entry point delegates directly to this same
-synchronous Ops library operation before the ordinary xtask router creates a
+The default `simplestchat-release verify` entry point delegates directly to this
+same synchronous Ops library operation before the controller's ordinary router creates a
 Tokio runtime or looks up a repository root. It adds no
 second parser, nested Cargo command, dependency or verifier implementation.
 The routine Rust deployment frontend selects it for controller-side application
@@ -2567,7 +2569,7 @@ Private evidence remains protected and may contain command output/configuration;
 reports must be shared only under the existing operator privacy policy.
 
 The primary signed routine entry point is
-[`xtask release deploy`](ansible/RELEASES.md#automatic-signed-routine-deployment).
+[`simplestchat-release deploy`](ansible/RELEASES.md#automatic-signed-routine-deployment).
 It selects the exact clean published `main` revision, freezes one inventory host,
 waits within its configured bound for one CI run/attempt and selects both signed
 artifact candidates. It invokes the current typed playbook once, then freshly
@@ -2698,7 +2700,7 @@ It verifies and atomically exchanges only that known original under the actual
 workload lock. A late failure keeps the published candidate and refuses uncertain
 pending state. Neither installer authenticates signatures itself.
 
-`xtask ops-artifact export --request ABS --request-sha256 SHA` composes current
+`simplestchat-release ops-artifact export --request ABS --request-sha256 SHA` composes current
 signature verification from the opaque authenticated acquisition and publishes
 an exact three-member tar plus a pinned installer request. Its closed request
 adds `remoteInput` under the fixed executable namespace

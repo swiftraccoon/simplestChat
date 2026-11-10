@@ -5,9 +5,9 @@ const INPUTS: &str = "Require trusted native verification inputs before any remo
 const INSPECT: &str = "Inspect the declared native GitHub executable on the controller";
 const EXECUTABLE: &str = "Require the declared native GitHub executable before verification";
 const ASSERTIONS: [&str; 9] = [
-    "scpub_ops_xtask is defined",
-    "scpub_ops_xtask is string",
-    "scpub_ops_xtask is match('^/')",
+    "scpub_ops_release_controller is defined",
+    "scpub_ops_release_controller is string",
+    "scpub_ops_release_controller is match('^/')",
     "scpub_ops_gh_executable is defined",
     "scpub_ops_gh_executable is string",
     "scpub_ops_gh_executable is match('^/')",

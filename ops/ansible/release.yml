@@ -58,9 +58,9 @@
     - name: Require trusted native verification inputs before any remote preflight
       ansible.builtin.assert:
         that:
-          - scpub_ops_xtask is defined
-          - scpub_ops_xtask is string
-          - scpub_ops_xtask is match('^/')
+          - scpub_ops_release_controller is defined
+          - scpub_ops_release_controller is string
+          - scpub_ops_release_controller is match('^/')
           - scpub_ops_gh_executable is defined
           - scpub_ops_gh_executable is string
           - scpub_ops_gh_executable is match('^/')
@@ -103,9 +103,9 @@
           - scpub_ops_selection.runAttempt is integer
           - scpub_ops_selection.runAttempt > 0
           - scpub_ops_selection.runAttempt <= 9007199254740991
-          - scpub_ops_xtask is defined
-          - scpub_ops_xtask is string
-          - scpub_ops_xtask is match('^/')
+          - scpub_ops_release_controller is defined
+          - scpub_ops_release_controller is string
+          - scpub_ops_release_controller is match('^/')
           - scpub_ops_gh_executable is defined
           - scpub_ops_gh_executable is string
           - scpub_ops_gh_executable is match('^/')
@@ -151,8 +151,7 @@
     - name: Verify the signed release through the native controller before any remote preflight
       ansible.builtin.command:
         argv:
-          - "{{ scpub_ops_xtask }}"
-          - release
+          - "{{ scpub_ops_release_controller }}"
           - verify
           - --repository
           - "{{ scpub_release_repository }}"

@@ -10,7 +10,7 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 #[test]
 fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selected() {
-    // Both tool binaries compile before the pinned native libraries exist;
+    // The tool binaries compile before the pinned native libraries exist;
     // only the CI crate's optional HTTPS clients may add native TLS.
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let graph = |package: &str, features: &[&str]| {
@@ -39,7 +39,7 @@ fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selecte
         );
         String::from_utf8(output.stdout).unwrap()
     };
-    for package in ["xtask", "simplestchat-ci"] {
+    for package in ["xtask", "simplestchat-ci", "simplestchat-release"] {
         let bootstrap = graph(package, &[]);
         for dependency in ["native-tls v", "openssl v", "openssl-sys v", "aws-lc-sys v"] {
             assert!(
@@ -669,7 +669,9 @@ fn shared_executable_inventory_tracks_the_actual_cargo_consumers() {
         .filter(|path| {
             let source = fs::read_to_string(path).unwrap();
             cargo.is_match(&source)
-                && (source.contains("xtask") || source.contains("simplestchat-ci"))
+                && ["xtask", "simplestchat-ci", "simplestchat-release"]
+                    .iter()
+                    .any(|executable| source.contains(executable))
         })
         .map(|path| {
             path.strip_prefix(root)

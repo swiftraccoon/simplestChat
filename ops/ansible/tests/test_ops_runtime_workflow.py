@@ -88,8 +88,8 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     string(step, "run").splitlines(),
                     [
-                        "if test -x target/debug/xtask; then",
-                        "  target/debug/xtask ops-artifact runtime-diagnostics",
+                        "if test -x target/debug/simplestchat-release; then",
+                        "  target/debug/simplestchat-release ops-artifact runtime-diagnostics",
                         "fi",
                     ],
                 )
@@ -102,7 +102,7 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
         self.assertNotIn("ops-runtime", strings(canonical, "jobs", "required", "needs"))
 
     def test_api_credential_is_only_in_the_post_bootstrap_runtime_leaf(self) -> None:
-        """Compilation and authenticated tool installation finish before token exposure."""
+        """Authenticated tool installation finishes before token exposure; Rust pins compilation."""
         steps = workflow_steps()
         token_steps = [
             index for index, step in enumerate(steps) if "GH_TOKEN" in obj(step.get("env", {}))
@@ -119,24 +119,17 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
         self.assertEqual(
             string(steps[runtime], "run").splitlines(),
             [
-                "target/debug/xtask ops-artifact runtime \\",
+                "target/debug/simplestchat-release ops-artifact runtime \\",
                 '  --request "$RUNNER_TEMP/ops-runtime-request.json" \\',
                 '  --request-sha256 "$OPS_REQUEST_SHA256"',
             ],
         )
-        compile_steps = [
-            index
-            for index, step in enumerate(steps)
-            if step.get("run") == "cargo build --locked -p xtask --bin xtask"
-        ]
         install_steps = [
             index
             for index, step in enumerate(steps)
             if "security_tools.py install --tools gh" in string(step.get("run", ""))
         ]
-        self.assertEqual(len(compile_steps), 1)
         self.assertEqual(len(install_steps), 1)
-        self.assertLess(compile_steps[0], runtime)
         self.assertLess(install_steps[0], runtime)
         bootstrap = string(steps[install_steps[0]], "run")
         self.assertLess(
@@ -170,7 +163,7 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
         runtime = next(step for step in steps if "GH_TOKEN" in obj(step.get("env", {})))
         self.assertEqual(job["timeout-minutes"], "90")
         self.assertEqual(runtime["timeout-minutes"], "75")
-        plan = (ROOT / "xtask/src/ci/ops_artifact/runtime/plan.rs").read_text()
+        plan = (ROOT / "crates/release/src/ops_artifact/runtime/plan.rs").read_text()
         entry = [
             match.group(1)
             for match in re.finditer(
