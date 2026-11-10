@@ -267,14 +267,16 @@ fn isolated_original_owner_covers_interrupted_blocked_publication() {
         fs::remove_dir_all(root).unwrap();
         return;
     }
+    let name = concat!(
+        module_path!(),
+        "::isolated_original_owner_covers_interrupted_blocked_publication"
+    );
+    let name = name
+        .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
+        .unwrap_or(name);
     for case in ["int", "term", "first"] {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "ci::ops_artifact::deploy_frontend::lifecycle::publish_tests::\
-                isolated_original_owner_covers_interrupted_blocked_publication",
-                "--nocapture",
-            ])
+            .args(["--exact", name, "--nocapture"])
             .env(CHILD, case)
             .output()
             .unwrap();
@@ -282,6 +284,10 @@ fn isolated_original_owner_covers_interrupted_blocked_publication() {
             output.status.success(),
             "{case}: {}",
             String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"),
+            "the exact child publication test must execute: {case}"
         );
     }
 }

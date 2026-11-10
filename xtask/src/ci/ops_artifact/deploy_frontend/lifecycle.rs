@@ -187,15 +187,17 @@ mod tests {
             assert_eq!(Some(status).filter(|code| *code != 0), expected);
             return;
         }
+        let name = concat!(
+            module_path!(),
+            "::isolated_original_owner_fences_late_signal_borrowers_first_cause_and_restore"
+        );
+        let name = name
+            .strip_prefix(concat!(env!("CARGO_CRATE_NAME"), "::"))
+            .unwrap_or(name);
         let executable = std::env::current_exe().unwrap();
         for case in ["success", "int", "term", "first", "borrower", "expired"] {
             let output = std::process::Command::new(&executable)
-                .args([
-                    "--exact",
-                    "ci::ops_artifact::deploy_frontend::lifecycle::tests::\
-                isolated_original_owner_fences_late_signal_borrowers_first_cause_and_restore",
-                    "--nocapture",
-                ])
+                .args(["--exact", name, "--nocapture"])
                 .env(CHILD, case)
                 .output()
                 .unwrap();
@@ -203,6 +205,10 @@ mod tests {
                 output.status.success(),
                 "{case}: {}",
                 String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"),
+                "the exact child lifecycle test must execute: {case}"
             );
         }
     }
