@@ -493,11 +493,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:b19ab9c32deb5bf133a701ab6b0b66dd07d09cb7b6c9c9c0c3a9a74a732c6a8c",
-      "scope": "ops/ansible/tests/test_public_templates.py:82:82:9:65",
+      "fingerprint": "codeql:1ee8f6e4b112d04d34a2ba87731d2bac9d7a69707504a6eba8c3b08e9829cc18",
+      "scope": "ops/ansible/tests/test_public_templates.py:75:75:9:65",
       "owner": "swiftraccoon",
-      "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at cf941371acc877ed568f84f4e545dd622fe7badd confirms the flagged line moves from 82 to 83 unchanged. The added RP fixture value, hostname derivation and parent-RP tests only render existing dotenv templates and evaluate deployment values; no new template source or HTML sink was introduced. HTML escaping is inappropriate for these formats. Fresh CodeQL 2.27.1 Python security-extended SARIF independently confirms this exact source, query, range and message identity.",
-      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 e2d3342d865080e0cb735f0feb3036bf3f937fce431015e800c1520212eeb590. Original Python security-extended SARIF from cf941371acc877ed568f84f4e545dd622fe7badd independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
+      "rationale": "The flagged StrictUndefined Environment renders tracked local configuration templates with explicit offline fixture values, never HTML or a browser response. Source re-review at 4dcb016387184179133895d457781a85dd49e8e6 confirms the flagged line moves from 82 to 75 unchanged. That change removed the module's second renderer, a NativeEnvironment that stood in for Ansible's variable resolution, with the tests that used it and its imports; the flagged renderer, its fixture values and the templates it reads are untouched, and no template source or HTML sink was added. HTML escaping is inappropriate for these formats. The hosted CodeQL 2.27.1 Python security-extended SARIF for that revision independently confirms this exact source, query, range and message identity.",
+      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed whole-file SHA256 731c2f87fa9baf70fdd39ae20908a71dc23dca8c7b8fa81fb43c3f5cb4298d5a. Original Python security-extended SARIF from 4dcb016387184179133895d457781a85dd49e8e6 independently matches the full identity. Changes require a fresh review; no general template/test/path exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-30"
     },

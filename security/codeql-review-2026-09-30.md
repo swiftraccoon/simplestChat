@@ -1423,3 +1423,39 @@ no expiry, and with the file gone there is no source left to remediate.
 
 No query, path or test is excluded and no remote alert state changed; hosted
 ingestion remains a separate required check.
+
+## Source re-review: public template test after its sizing cases moved to Rust (2026-11-11)
+
+Hosted CI run `43001038048` at `4dcb016387184179133895d457781a85dd49e8e6`
+blocked in the Python CodeQL job's exact-review step: alert 30, the reviewed
+`py/jinja2/autoescape-false` finding in
+`ops/ansible/tests/test_public_templates.py`, was its only blocked result; the
+other seven results are waived at their reviewed identities. `4dcb0163` removed
+the module's second renderer, a `NativeEnvironment` that stood in for Ansible's
+variable resolution, with the four tests that used it and its imports, which
+moved the flagged call from line 82 to line 75. The flagged line still reads:
+
+```text
+        Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - config, not HTML.
+```
+
+| Record | Range | Complete source SHA256 | Finding fingerprint |
+|---|---|---|---|
+| Alert 30 (before) | `ops/ansible/tests/test_public_templates.py:82:82:9:65` | `e2d3342d865080e0cb735f0feb3036bf3f937fce431015e800c1520212eeb590` | `codeql:b19ab9c32deb5bf133a701ab6b0b66dd07d09cb7b6c9c9c0c3a9a74a732c6a8c` |
+| Alert 30 (now) | `ops/ansible/tests/test_public_templates.py:75:75:9:65` | `731c2f87fa9baf70fdd39ae20908a71dc23dca8c7b8fa81fb43c3f5cb4298d5a` | `codeql:1ee8f6e4b112d04d34a2ba87731d2bac9d7a69707504a6eba8c3b08e9829cc18` |
+
+`render` still renders tracked dotenv, SQL, Compose and PostgreSQL configuration
+templates with explicit offline fixture values, never HTML. Its fixture values
+and the templates it reads are unchanged, and no template source or HTML sink
+was added. The removed renderer was never flagged and had no record. The
+exception and the review JSON record take the hosted report's identity and name
+this re-review in their rationale; owner `swiftraccoon`, the reasoning and the
+`2026-11-29` expiry are unchanged.
+
+`rebind.py plan` listed this one rebind; its ten unmapped records (alerts 28,
+29, 31, 32, 59–62, 64 and 65) stay retired in place. `rebind.py validate`
+against that run's hosted policy report matches all seven reviewed identities
+it contains, with no mismatch; the eighth finding in the report is the
+maintenance-prerequisite renderer, which is waived by its exception and has no
+review JSON twin. No query, path or test is excluded and no remote alert state
+changed; hosted ingestion remains a separate required check.
