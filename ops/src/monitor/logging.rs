@@ -5,10 +5,10 @@
 //! around every step. The two separate statements are safe to repeat after an
 //! interruption, and a reload counts only once new sessions see its effect.
 
-use super::command::Request;
-use super::failure::{Failure, Result, require};
-use super::host::{Clock, DOCKER, Host};
-use super::state;
+use crate::host::command::Request;
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state;
+use crate::host::{Clock, DOCKER, Host};
 use crate::json::Json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -311,11 +311,11 @@ impl Runner for Evidence<'_> {
 /// Commands that stop being issued once a termination signal has arrived, so
 /// the outcome of an interrupted remediation is still recorded.
 pub(super) struct Interruptible<'a> {
-    pub inner: &'a dyn super::command::Commands,
+    pub inner: &'a dyn crate::host::command::Commands,
     pub stop: &'a std::sync::atomic::AtomicBool,
 }
 
-impl super::command::Commands for Interruptible<'_> {
+impl crate::host::command::Commands for Interruptible<'_> {
     fn run(&self, request: &Request<'_>) -> Result<Vec<u8>> {
         let stopped = self.stop.load(std::sync::atomic::Ordering::SeqCst);
         require(!stopped, "Database logging remediation interrupted")?;
@@ -397,8 +397,8 @@ pub(super) fn disable(host: &Host<'_>, configuration: &Path) -> (Option<String>,
 
 #[cfg(test)]
 mod tests {
-    use super::super::host::tests::Fixed;
     use super::*;
+    use crate::host::tests::Fixed;
     use serde_json::Value;
 
     /// The scripted database of one recorded case.
@@ -621,9 +621,9 @@ mod tests {
     /// outcome that says what happened; the printed line is that outcome.
     #[test]
     fn an_attempt_keeps_private_numbered_evidence_and_its_outcome_either_way() {
-        use super::super::command::tests::Scripted as Commands;
-        use super::super::host::tests::paths;
-        use super::super::state::tests::Scratch;
+        use crate::host::command::tests::Scripted as Commands;
+        use crate::host::state::tests::Scratch;
+        use crate::host::tests::paths;
         use std::io::Write as _;
         use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
         let recorded: Value = serde_json::from_str(include_str!("recorded_logging.json")).unwrap();

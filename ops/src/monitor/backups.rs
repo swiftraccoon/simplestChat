@@ -2,8 +2,8 @@
 //! without following links. A digest is rehashed unless an earlier check of
 //! the very same settled file is on record and less than a day old.
 
-use super::failure::{Failure, Result, require};
-use super::state;
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state;
 use crate::json::Json;
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
 use sha2::{Digest, Sha256};
@@ -297,8 +297,8 @@ pub(crate) fn validated(
 
 #[cfg(test)]
 mod tests {
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::state::tests::Scratch;
     use serde_json::Value;
     use std::os::unix::fs::{PermissionsExt, symlink};
 

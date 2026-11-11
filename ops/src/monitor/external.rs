@@ -6,12 +6,12 @@
 
 use super::alerts;
 use super::collect;
-use super::command::Request;
-use super::failure::{Failure, Result, require};
-use super::host::Host;
 use super::report::database;
-use super::state;
 use super::text::float;
+use crate::host::Host;
+use crate::host::command::Request;
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state;
 use crate::json::Json;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use std::collections::BTreeMap;
@@ -904,10 +904,10 @@ pub(super) fn import(host: &Host<'_>) -> Result<Option<&'static str>> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::command::tests::Scripted;
-    use super::super::host::tests::{Fixed, paths};
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::command::tests::Scripted;
+    use crate::host::state::tests::Scratch;
+    use crate::host::tests::{Fixed, paths};
     use serde_json::Value;
     use std::os::unix::fs::MetadataExt;
 

@@ -2,9 +2,9 @@
 //! allowance. Kernel counters restart with the interface, so the period's
 //! totals live in the state directory and grow by each sample's delta.
 
-use super::failure::{Failure, Result, require};
-use super::state;
 use super::text::{Sample, gauge};
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state;
 use crate::json::Json;
 use chrono::{Datelike, NaiveDate};
 use std::path::Path;
@@ -157,8 +157,8 @@ pub(super) fn transfer(
 #[cfg(test)]
 mod tests {
     use super::super::recorded::reference;
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::state::tests::Scratch;
 
     fn date(text: &serde_json::Value) -> NaiveDate {
         NaiveDate::parse_from_str(text.as_str().unwrap(), "%Y-%m-%d").unwrap()

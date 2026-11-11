@@ -1,9 +1,13 @@
-//! What a monitoring command may touch: fixed commands, the clocks and the
-//! fixed directories of one deployment. Tests substitute each.
+//! What a command on the prepared host may touch: fixed commands, the clocks
+//! and the fixed directories of one deployment. Tests substitute each.
 
-use super::command::{Commands, Request};
-use super::failure::Result;
+pub(crate) mod command;
+pub(crate) mod failure;
+pub(crate) mod state;
+
 use chrono::{DateTime, Utc};
+use command::{Commands, Request};
+use failure::Result;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -114,12 +118,12 @@ impl Host<'_> {
 }
 
 #[cfg(test)]
-pub(super) mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::cell::Cell;
 
     /// A clock that stands still unless a test moves it; sleeping advances it.
-    pub(in super::super) struct Fixed {
+    pub(crate) struct Fixed {
         pub now: Cell<DateTime<Utc>>,
         pub monotonic: Cell<Duration>,
         /// How far each monotonic reading advances the next one.
@@ -127,7 +131,7 @@ pub(super) mod tests {
     }
 
     impl Fixed {
-        pub(in super::super) fn at(text: &str) -> Self {
+        pub(crate) fn at(text: &str) -> Self {
             let now = DateTime::parse_from_rfc3339(text)
                 .unwrap()
                 .with_timezone(&Utc);
@@ -156,7 +160,7 @@ pub(super) mod tests {
     }
 
     /// Paths of one deployment under a scratch directory.
-    pub(in super::super) fn paths(root: &std::path::Path) -> Paths {
+    pub(crate) fn paths(root: &std::path::Path) -> Paths {
         Paths {
             state: root.join("state"),
             sql: root.join("sql"),

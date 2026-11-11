@@ -7,7 +7,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 /// Read at most `limit` bytes of one file.
-pub(super) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
+pub(crate) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let bytes = std::fs::read(path)?;
     if bytes.len() > limit {
         return Err(Failure::Value);
@@ -17,12 +17,12 @@ pub(super) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
 
 /// Decode strict JSON: duplicate keys, non-finite numbers and trailing text
 /// are not values.
-pub(super) fn decode(bytes: &[u8]) -> Result<Json> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<Json> {
     json::decode_limited(bytes, bytes.len().max(1)).map_err(|_| Failure::Value)
 }
 
 /// The object in `path`, or an empty one when the file does not exist.
-pub(super) fn object_or_empty(path: &Path, limit: usize) -> Result<Json> {
+pub(crate) fn object_or_empty(path: &Path, limit: usize) -> Result<Json> {
     if !path.exists() {
         return decode(b"{}");
     }
@@ -32,7 +32,7 @@ pub(super) fn object_or_empty(path: &Path, limit: usize) -> Result<Json> {
 
 /// Require an ordinary path owned by `owner` with one of `modes`, and at most
 /// `limit` bytes when a limit is given. Links are not followed.
-pub(super) fn protected(
+pub(crate) fn protected(
     path: &Path,
     owner: u32,
     directory: bool,
@@ -59,7 +59,7 @@ pub(super) fn protected(
 }
 
 /// Who owns a replaced file, and its mode.
-pub(super) struct Access {
+pub(crate) struct Access {
     pub owner: u32,
     pub group: u32,
     pub mode: u32,
@@ -67,13 +67,13 @@ pub(super) struct Access {
 
 /// Replace `path` durably with `bytes`: a private sibling is written and
 /// synced, renamed over the target, and the directory is synced.
-pub(super) fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     replace(path, bytes, None)
 }
 
 /// Replace `path` as `atomic` does, giving the new file to `access` before
 /// it takes the name.
-pub(super) fn atomic_for(path: &Path, bytes: &[u8], access: &Access) -> Result<()> {
+pub(crate) fn atomic_for(path: &Path, bytes: &[u8], access: &Access) -> Result<()> {
     replace(path, bytes, Some(access))
 }
 
@@ -108,21 +108,21 @@ fn replace(path: &Path, bytes: &[u8], access: Option<&Access>) -> Result<()> {
 }
 
 /// Replace `path` with `value` as indented JSON and a final newline.
-pub(super) fn atomic_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
+pub(crate) fn atomic_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut text = serde_json::to_string_pretty(value).map_err(|_| Failure::Value)?;
     text.push('\n');
     atomic(path, text.as_bytes())
 }
 
 #[cfg(test)]
-pub(super) mod tests {
+pub(crate) mod tests {
     use std::path::{Path, PathBuf};
 
     /// A private directory under the system temporary directory, removed on drop.
-    pub(in super::super) struct Scratch(pub PathBuf);
+    pub(crate) struct Scratch(pub PathBuf);
 
     impl Scratch {
-        pub(in super::super) fn new() -> Self {
+        pub(crate) fn new() -> Self {
             let mut random = [0_u8; 8];
             getrandom::fill(&mut random).unwrap();
             let suffix: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
@@ -131,7 +131,7 @@ pub(super) mod tests {
             Self(path.canonicalize().unwrap())
         }
 
-        pub(in super::super) fn path(&self) -> &Path {
+        pub(crate) fn path(&self) -> &Path {
             &self.0
         }
     }

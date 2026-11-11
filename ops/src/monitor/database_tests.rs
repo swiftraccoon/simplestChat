@@ -5,12 +5,12 @@
 //! return at once.
 
 use super::alerts;
-use super::command::Request;
-use super::command::tests::Scripted;
-use super::failure::Failure;
-use super::host::tests::paths;
-use super::host::{Host, System};
-use super::state::tests::Scratch;
+use crate::host::command::Request;
+use crate::host::command::tests::Scripted;
+use crate::host::failure::Failure;
+use crate::host::state::tests::Scratch;
+use crate::host::tests::paths;
+use crate::host::{Host, System};
 use chrono::{DateTime, SecondsFormat, TimeDelta, Utc};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;

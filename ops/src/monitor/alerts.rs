@@ -1,10 +1,10 @@
 //! Allowlisted Prometheus incidents. Only fixed rule names and bounded
 //! resource labels enter an incident; free-form annotations never do.
 
-use super::command::Request;
-use super::failure::{Failure, Result, require};
-use super::host::{DOCKER, Host, POSTGRES};
-use super::state;
+use crate::host::command::Request;
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state;
+use crate::host::{DOCKER, Host, POSTGRES};
 use crate::json::Json;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
@@ -381,12 +381,12 @@ pub(super) fn record(host: &Host<'_>, revision: Option<&str>) -> Result<(bool, u
 
 #[cfg(test)]
 mod tests {
-    use super::super::command::tests::Scripted;
-    use super::super::command::{Commands, Request};
-    use super::super::failure::Failure;
-    use super::super::host::tests::{Fixed, paths};
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::command::tests::Scripted;
+    use crate::host::command::{Commands, Request};
+    use crate::host::failure::Failure;
+    use crate::host::state::tests::Scratch;
+    use crate::host::tests::{Fixed, paths};
 
     /// One deployment under `scratch` with its state and statement in place.
     fn host<'a>(commands: &'a dyn Commands, clock: &'a Fixed, scratch: &Scratch) -> Host<'a> {

@@ -2,8 +2,8 @@
 //! deployment's private environment file into the file Prometheus reads. The
 //! token never leaves the host and is never printed.
 
-use super::failure::{Failure, Result, require};
-use super::state::{self, Access};
+use crate::host::failure::{Failure, Result, require};
+use crate::host::state::{self, Access};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
@@ -49,8 +49,8 @@ pub(super) fn credential(
 
 #[cfg(test)]
 mod tests {
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::state::tests::Scratch;
 
     fn access() -> Access {
         Access {

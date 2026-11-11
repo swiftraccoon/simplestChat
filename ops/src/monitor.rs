@@ -6,22 +6,18 @@
 mod alerts;
 mod backups;
 mod collect;
-mod command;
 mod credential;
 #[cfg(test)]
 mod database_tests;
 mod external;
-mod failure;
-mod host;
 mod logging;
 mod prepare;
 mod report;
-mod state;
 mod text;
 mod transfer;
 
-use command::Local;
-use host::{Host, Paths, System};
+use crate::host::command::Local;
+use crate::host::{Host, Paths, System, failure, state};
 use std::ffi::OsString;
 use std::io::Write;
 use std::process::ExitCode;

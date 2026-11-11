@@ -178,13 +178,13 @@ impl Commands for Local {
 }
 
 #[cfg(test)]
-pub(super) mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::cell::RefCell;
 
     /// One request as a scripted host saw it.
     #[derive(Clone, Debug)]
-    pub(in super::super) struct Asked {
+    pub(crate) struct Asked {
         pub argv: Vec<String>,
         pub environment: Vec<(String, String)>,
         pub input: Option<Vec<u8>>,
@@ -195,13 +195,13 @@ pub(super) mod tests {
     }
 
     /// Commands answered from a script, recording what was asked.
-    pub(in super::super) struct Scripted<F: Fn(&Request<'_>) -> Result<Vec<u8>>> {
+    pub(crate) struct Scripted<F: Fn(&Request<'_>) -> Result<Vec<u8>>> {
         pub answer: F,
         pub asked: RefCell<Vec<Asked>>,
     }
 
     impl<F: Fn(&Request<'_>) -> Result<Vec<u8>>> Scripted<F> {
-        pub(in super::super) fn new(answer: F) -> Self {
+        pub(crate) fn new(answer: F) -> Self {
             let asked = RefCell::new(Vec::new());
             Self { answer, asked }
         }

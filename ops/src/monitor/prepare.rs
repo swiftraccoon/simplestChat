@@ -4,10 +4,10 @@
 //! reviewed ones.
 
 use super::collect::docker;
-use super::command::Request;
-use super::failure::{Failure, Result, require};
-use super::host::{DOCKER, Host, POSTGRES};
 use super::report::database;
+use crate::host::command::Request;
+use crate::host::failure::{Failure, Result, require};
+use crate::host::{DOCKER, Host, POSTGRES};
 
 const CONNECTION: [&str; 6] = [
     "-h",
@@ -154,10 +154,10 @@ pub(super) fn prepare(host: &Host<'_>) -> Result<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::command::tests::Scripted;
-    use super::super::host::tests::{Fixed, paths};
-    use super::super::state::tests::Scratch;
     use super::*;
+    use crate::host::command::tests::Scripted;
+    use crate::host::state::tests::Scratch;
+    use crate::host::tests::{Fixed, paths};
     use serde_json::Value;
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
