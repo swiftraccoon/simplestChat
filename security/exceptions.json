@@ -2000,16 +2000,6 @@
       "reachability": "Reviewed 2026-10-24 for only this exact same-repository, main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. Fixed repository values select Rust 1.99.0 and x86_64-unknown-linux-gnu before compilation and before GH_TOKEN is supplied. Public CI and artifact identifiers cannot select installer source or arguments. The workflow has only contents/actions read permission, without signing or OIDC authority. Official HTTPS rustup bootstrap remains a trust boundary without an independent installer-checksum claim. This informational finding review does not waive artifact authentication, installed-byte custody, host-key, runtime, resource or finalization checks.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
-    },
-    {
-      "scanner": "codeql",
-      "fingerprint": "codeql:4ca4412d3df3a36aa53f09c206530e73b684b942bde90e5fa64e0c9d782952e3",
-      "scope": "build/security_vm_maintain_prerequisite_guest.py:742:746:19:6",
-      "owner": "swiftraccoon",
-      "rationale": "The StrictUndefined renderer emits only fixed tracked dotenv, Compose and PostgreSQL password/HBA/database-init SQL configuration in an owned disposable guest. Its actual guest fixture call supplies retained exact-source templates, fixed private domain/resource settings, selected image identities and newly generated 64-hex synthetic secrets. It produces no HTML or browser response; HTML escaping is not the encoding boundary for these configuration formats. No current-value byte discrepancy is claimed. JSON receipts and the original Caddyfile are separate outputs.",
-      "reachability": "Fresh original local CodeQL 2.27.1 Python security SARIF for 83f5a954144f62b2bfd257d19ae16164960a5fe3 binds this exact query, primary range/message and complete source SHA256 53e12b5019fb6062d904dc7439d00b2f58232780986a1cbe537848d4bd82e937. Only this local finding is reviewed; changed bytes require a fresh review. No test/path/query exclusion, automatic renewal, expiry extension or remote dismissal.",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#local-maintain-configuration-renderer"
     }
   ]
 }

@@ -2,6 +2,7 @@
 
 use super::*;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
 fn artifact(id: Value, created: Value) -> Value {
@@ -748,23 +749,18 @@ fn successful_receipt_preserves_the_existing_summary_shape() {
     );
 }
 #[test]
-fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_eight_migrations() {
-    let reference = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../build/security_vm_maintain_prerequisite_guest.py"
-    ));
+fn native_catalog_keeps_the_frozen_guest_roster_and_thirty_eight_migrations() {
     let ops = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../build/security_vm_ops_guest.py"
     ));
-    for name in catalog::guest_sources() {
-        let literal = if let Some(name) = name.strip_prefix("ops/ansible/templates/public-") {
-            name.strip_suffix(".j2").unwrap()
-        } else {
-            name.as_str()
-        };
-        assert!(reference.contains(&format!("\"{literal}\"")), "{name}");
-    }
+    // Every name of this roster was a literal of the Python guest it
+    // replaced; the digest freezes the roster as it was last compared.
+    let roster = catalog::guest_sources().into_iter().collect::<Vec<_>>();
+    assert_eq!(
+        files::hex(&Sha256::digest(roster.join("\n"))),
+        "58b0941e69c2b96b8c12d5f5ffbd0747d158385f979d3b5d4447662f37a97325"
+    );
     for (name, _) in catalog::OPS_CASES {
         assert!(ops.contains(&format!("\"{name}\"")));
     }
@@ -772,7 +768,6 @@ fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_eight_migra
     assert_eq!(catalog::guest_sources().len(), 54);
     assert_eq!(catalog::HELPERS.len(), 15);
     for old_proof in [
-        "build/security_vm_maintain_prerequisite_guest.py",
         "build/security_vm_stage_guest.py",
         "build/caddy_probe_guest.py",
         "build/caddy_materials.py",
@@ -793,24 +788,19 @@ fn workflow_entry_keeps_caps_and_selects_the_installed_native_guest() {
         "/../../.github/workflows/maintenance-launcher-runtime.yml"
     ));
     assert!(workflow.contains("target/debug/simplestchat-release ops-artifact maintain-runtime"));
-    assert!(!workflow.contains("python3 -B build/security_vm_maintain_prerequisite.py"));
+    // Both job caps cover the whole thirty-minute operation.
     assert!(workflow.contains("timeout-minutes: 45") && workflow.contains("timeout-minutes: 35"));
+    assert_eq!(control::WHOLE, Duration::from_secs(1800));
     for case in options::CASES {
         assert!(workflow.contains(case));
     }
-    let original = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../build/security_vm_maintain_prerequisite.py"
-    ));
-    assert!(original.contains("SECONDS = 1800") && original.contains("SETUP = 510"));
-    assert!(original.contains("DEBT = NATIVE + OBSERVATION"));
     let session = include_str!("session.rs");
     assert!(session.contains("\"/usr/local/libexec/simplestchat-public/simplestchat-ops\".into()"));
     assert!(
         session.contains("\"maintain-prerequisite\".into()")
             && session.contains("\"guest\".into()")
     );
-    assert!(!session.contains("security_vm_maintain_prerequisite_guest.py"));
+    assert!(!session.contains(".py"));
 }
 #[test]
 fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_roles() {

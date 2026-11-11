@@ -3324,11 +3324,12 @@ Earlier Linux CI ran
 the fixed run/init FD/process methods; the latest frozen-guest trial passed Ops33
 then failed at rendering. All four fresh signed trials remain required for the
 new guest route. This fixture does not replace operational Python or change a
-host caller. Run its 30 unchanged reference keeper tests with:
+host caller. Its controller is `simplestchat-release ops-artifact
+maintain-runtime`; the Python keeper and guest it replaced are deleted. Run the
+controller's protocol and catalog tests with:
 
 ```sh
-ops/ansible/.venv/bin/python -B -m unittest discover \
-  -s ops/ansible/tests -p 'test_security_vm_maintain_prerequisite.py' -v
+cargo test --locked -p simplestchat-release maintain_runtime -- --test-threads=1
 ```
 
 Run the two earlier local prerequisite suites independently:

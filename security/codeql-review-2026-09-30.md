@@ -1459,3 +1459,21 @@ it contains, with no mismatch; the eighth finding in the report is the
 maintenance-prerequisite renderer, which is waived by its exception and has no
 review JSON twin. No query, path or test is excluded and no remote alert state
 changed; hosted ingestion remains a separate required check.
+
+## Retired: the maintenance-prerequisite Python keeper and guest (2026-11-11)
+
+`build/security_vm_maintain_prerequisite.py` and
+`build/security_vm_maintain_prerequisite_guest.py` are deleted with their test
+module. `simplestchat-release ops-artifact maintain-runtime` and the signed Ops
+guest replaced them, no workflow ran them, and nothing imported them but each
+other and that test. The guest's configuration renderer, reviewed as the
+[local finding](#local-maintain-configuration-renderer), therefore no longer
+exists. Its exception
+(`codeql:4ca4412d3df3a36aa53f09c206530e73b684b942bde90e5fa64e0c9d782952e3`,
+scope `build/security_vm_maintain_prerequisite_guest.py:742:746:19:6`) is
+removed from `security/exceptions.json` instead of being left to lapse: an
+exact-path record for a deleted file can match nothing. It had no review JSON
+twin.
+
+No query, path or test is excluded and no remote alert state changed; hosted
+ingestion remains a separate required check.

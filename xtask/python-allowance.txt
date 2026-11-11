@@ -1,4 +1,4 @@
-total 121036
+total 115798
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -71,8 +71,6 @@ total 121036
 217	build/security_vm_fetch_guest.py
 218	build/security_vm_fetch_hosts.py
 1124	build/security_vm_guest.py
-747	build/security_vm_maintain_prerequisite.py
-2917	build/security_vm_maintain_prerequisite_guest.py
 556	build/security_vm_ops.py
 1610	build/security_vm_ops_guest.py
 259	build/security_vm_qmp.py
@@ -226,7 +224,6 @@ total 121036
 173	ops/ansible/tests/test_security_vm_fetch_guest.py
 178	ops/ansible/tests/test_security_vm_fetch_hosts.py
 818	ops/ansible/tests/test_security_vm_guest.py
-1574	ops/ansible/tests/test_security_vm_maintain_prerequisite.py
 727	ops/ansible/tests/test_security_vm_ops.py
 1050	ops/ansible/tests/test_security_vm_ops_guest.py
 261	ops/ansible/tests/test_security_vm_qmp.py
