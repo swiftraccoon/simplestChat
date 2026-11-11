@@ -1,7 +1,9 @@
 //! Fixed disposable PostgreSQL checks with an explicit captured environment.
 //!
-//! The existing Python suites remain the database/container owners. Preparation
-//! owns only its CLI groups; the same PostgreSQL harness owns the new cluster.
+//! The monitoring statements are tested by the Ops crate beside the recorder
+//! that issues them; the restore and migration suites are still Python.
+//! Preparation owns only its CLI groups; the same PostgreSQL harness owns the
+//! new cluster.
 
 use super::{
     command::{Command, Program},
@@ -46,25 +48,57 @@ impl Check {
         }
     }
     fn command(self) -> Vec<String> {
-        let pattern = match self {
-            Self::Monitoring => "test_monitoring_database.py",
-            Self::Restore => "test_restore_database.py",
-            Self::Migration => "test_migrate_public.py",
+        let suite = |pattern: &str| {
+            let fixed = [
+                "python",
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "ops/ansible/tests",
+                "-p",
+                pattern,
+                "-v",
+            ];
+            fixed.map(str::to_owned).to_vec()
         };
-        [
-            "python",
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-p",
-            pattern,
-            "-v",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
+        match self {
+            // The statements' tests live beside the recorder that issues
+            // them. Each is named exactly: a filter that matched nothing
+            // would pass having run nothing.
+            Self::Monitoring => {
+                let mut command = [
+                    "cargo",
+                    "test",
+                    "--locked",
+                    "-p",
+                    "simplestchat-ops",
+                    "--lib",
+                    "--",
+                    "--ignored",
+                    "--exact",
+                    "--test-threads=1",
+                ]
+                .map(str::to_owned)
+                .to_vec();
+                for name in [
+                    "an_ambiguous_committed_response_retains_the_outage_after_recovery",
+                    "external_history_keeps_gaps_privacy_and_retention_through_partial_recovery",
+                    "incident_lifecycle_replay_privileges_and_retention",
+                ] {
+                    command.push(format!("monitor::database_tests::{name}"));
+                }
+                command
+            }
+            Self::Restore => suite("test_restore_database.py"),
+            Self::Migration => suite("test_migrate_public.py"),
+        }
+    }
+    /// Select the tests that run only inside this check's own cluster.
+    fn select(self, environment: &mut Environment) {
+        if self == Self::Monitoring {
+            environment.insert("MONITORING_DATABASE_CHECK".into(), "1".into());
+        }
     }
 }
 
@@ -139,7 +173,8 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
         .build()?;
     let status = runtime.block_on(async {
         let mut native = Native::new(root, &environment, Signals::new()?);
-        let environment = prepare(check, &environment, &mut native).await?;
+        let mut environment = prepare(check, &environment, &mut native).await?;
+        check.select(&mut environment);
         let mut signals = native.into_signals().await?;
         test_env::postgres_with_environment(root, &check.command(), &environment, &mut signals)
             .await

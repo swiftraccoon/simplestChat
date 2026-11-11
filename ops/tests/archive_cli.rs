@@ -221,6 +221,8 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]\n",
                 "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
                 "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
+                "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
+                "       simplestchat-ops database logging disable\n",
             )
             .as_bytes()
         );

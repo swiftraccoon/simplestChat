@@ -1,0 +1,439 @@
+{
+ "digest": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de",
+ "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+ "modules": {
+  "monitoring_collect": "4535b52c272cc7af2cc1c8e431d055bf4ede584e"
+ },
+ "now": "2026-11-11T12:00:00.500000+00:00",
+ "revision": "cccccccccccccccccccccccccccccccccccccccc",
+ "scenarios": [
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-simplestchat-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "stats",
+      "--no-stream",
+      "--format",
+      "{{json .}}",
+      "simplestchat-public-simplestchat-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-postgres-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "stats",
+      "--no-stream",
+      "--format",
+      "{{json .}}",
+      "simplestchat-public-postgres-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-caddy-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "stats",
+      "--no-stream",
+      "--format",
+      "{{json .}}",
+      "simplestchat-public-caddy-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-turn-turn-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "stats",
+      "--no-stream",
+      "--format",
+      "{{json .}}",
+      "simplestchat-turn-turn-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SET statement_timeout='2s';\nSELECT json_build_object('connections',numbackends,'deadlocks',deadlocks,'rollbacks',xact_rollback,\n 'commits',xact_commit,'connection_limit',current_setting('max_connections')::int,\n 'blocked', (SELECT count(*) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0))\nFROM pg_stat_database WHERE datname=current_database();"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "http": "https://chat.example.test/ready",
+     "timeout": 3
+    },
+    {
+     "connect": [
+      "chat.example.test",
+      5349
+     ],
+     "timeout": 3
+    },
+    {
+     "tls": "chat.example.test"
+    },
+    {
+     "argv": [
+      "/usr/bin/du",
+      "-sx",
+      "--block-size=1",
+      "{root}/public/releases"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 5
+    },
+    {
+     "http": "http://127.0.0.1:9090/api/v1/alerts",
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "payload={\"observedAt\":\"2026-11-11T12:00:00.500001+00:00\",\"revision\":\"cccccccccccccccccccccccccccccccccccccccc\",\"complete\":true,\"alerts\":[{\"key\":\"2edd0cc953dc41e1d7d38dc711d12149c9330852946d7479711c112826014ba7\",\"rule\":\"ContainerRestart\",\"severity\":\"warning\",\"resource\":{\"service\":\"postgres\"}}]}"
+     ],
+     "env": null,
+     "input": "-- reviewed\n",
+     "timeout": 7
+    }
+   ],
+   "healthy": true,
+   "mode": "0o644",
+   "name": "healthy",
+   "prom": "simplestchat_ops_container_running{service=\"app\"} 1.0\nsimplestchat_ops_container_restarts{service=\"app\"} 0.0\nsimplestchat_ops_container_oom{service=\"app\"} 0.0\nsimplestchat_ops_container_cpu_percent{service=\"app\"} 12.5\nsimplestchat_ops_container_memory_percent{service=\"app\"} 3.0\nsimplestchat_ops_container_collection_ok{service=\"app\"} 1\nsimplestchat_ops_container_running{service=\"postgres\"} 1.0\nsimplestchat_ops_container_restarts{service=\"postgres\"} 2.0\nsimplestchat_ops_container_oom{service=\"postgres\"} 0.0\nsimplestchat_ops_container_cpu_percent{service=\"postgres\"} 12.5\nsimplestchat_ops_container_memory_percent{service=\"postgres\"} 3.0\nsimplestchat_ops_container_collection_ok{service=\"postgres\"} 1\nsimplestchat_ops_container_running{service=\"proxy\"} 1.0\nsimplestchat_ops_container_restarts{service=\"proxy\"} 1.0\nsimplestchat_ops_container_oom{service=\"proxy\"} 0.0\nsimplestchat_ops_container_cpu_percent{service=\"proxy\"} 12.5\nsimplestchat_ops_container_memory_percent{service=\"proxy\"} 3.0\nsimplestchat_ops_container_collection_ok{service=\"proxy\"} 1\nsimplestchat_ops_container_running{service=\"turn\"} 1.0\nsimplestchat_ops_container_restarts{service=\"turn\"} 0.0\nsimplestchat_ops_container_oom{service=\"turn\"} 0.0\nsimplestchat_ops_container_collection_ok{service=\"turn\"} 0\nsimplestchat_ops_postgres_connections 7.0\nsimplestchat_ops_postgres_deadlocks 0.0\nsimplestchat_ops_postgres_rollbacks 3.0\nsimplestchat_ops_postgres_commits 4567.0\nsimplestchat_ops_postgres_connection_limit 100.0\nsimplestchat_ops_postgres_blocked 0.0\nsimplestchat_ops_postgres_collection_ok 1\nsimplestchat_ops_public_ready 1.0\nsimplestchat_ops_turn_certificate_expiry_seconds 1798848122\nsimplestchat_ops_turn_tls_ok 1\nsimplestchat_ops_backup_last_success_seconds 1794272523.0\nsimplestchat_ops_restore_last_success_seconds 1794300000.25\nsimplestchat_ops_release_storage_bytes 123456.0\nsimplestchat_ops_evidence_collection_ok 1\nsimplestchat_ops_transfer_period_tx_bytes 1100\nsimplestchat_ops_transfer_period_rx_bytes 700\nsimplestchat_ops_transfer_allowance_bytes 2000000000000.0\nsimplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0\nsimplestchat_ops_transfer_collection_ok 1\nsimplestchat_ops_recorder_ok 1.0\nsimplestchat_ops_recorder_spool_snapshots 0\nsimplestchat_ops_recorder_spool_dropped_total 0\nsimplestchat_ops_collector_timestamp_seconds 1794398400.5\nsimplestchat_ops_collector_duration_seconds 0.75\n",
+   "recorder": {
+    "databaseOk": true,
+    "dropped": "0",
+    "lastObservedAt": "2026-11-11T12:00:00.500001+00:00"
+   },
+   "spool": [],
+   "stdout": "{\"event\": \"monitoring_collection\", \"completed\": true}\n",
+   "transfer": {
+    "last_rx": 9000,
+    "last_tx": 5000,
+    "period": "2026-11-01",
+    "rx_bytes": 700,
+    "tx_bytes": 1100
+   }
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-simplestchat-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-postgres-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-public-caddy-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "inspect",
+      "--format",
+      "{\"running\":{{.State.Running}},\"restarts\":{{.RestartCount}},\"oom\":{{.State.OOMKilled}}}",
+      "simplestchat-turn-turn-1"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SET statement_timeout='2s';\nSELECT json_build_object('connections',numbackends,'deadlocks',deadlocks,'rollbacks',xact_rollback,\n 'commits',xact_commit,'connection_limit',current_setting('max_connections')::int,\n 'blocked', (SELECT count(*) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0))\nFROM pg_stat_database WHERE datname=current_database();"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "http": "https://chat.example.test/ready",
+     "timeout": 3
+    },
+    {
+     "connect": [
+      "chat.example.test",
+      5349
+     ],
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/du",
+      "-sx",
+      "--block-size=1",
+      "{root}/public/releases"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 5
+    },
+    {
+     "http": "http://127.0.0.1:9090/api/v1/alerts",
+     "timeout": 3
+    },
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "payload={\"observedAt\":\"2026-11-11T12:00:00.500001+00:00\",\"revision\":\"cccccccccccccccccccccccccccccccccccccccc\",\"complete\":false,\"alerts\":[{\"key\":\"86ec63e9fbd62aa5abefa3dc1bef5f8ea4df7fa27957e3c5787784a50772f9a8\",\"rule\":\"PrometheusUnavailable\",\"severity\":\"critical\",\"resource\":{}}]}"
+     ],
+     "env": null,
+     "input": "-- reviewed\n",
+     "timeout": 7
+    }
+   ],
+   "healthy": false,
+   "mode": "0o644",
+   "name": "degraded",
+   "prom": "simplestchat_ops_container_collection_ok{service=\"app\"} 0\nsimplestchat_ops_container_collection_ok{service=\"postgres\"} 0\nsimplestchat_ops_container_collection_ok{service=\"proxy\"} 0\nsimplestchat_ops_container_collection_ok{service=\"turn\"} 0\nsimplestchat_ops_postgres_collection_ok 0\nsimplestchat_ops_public_ready 0.0\nsimplestchat_ops_turn_tls_ok 0\nsimplestchat_ops_backup_last_success_seconds 1794272523.0\nsimplestchat_ops_restore_last_success_seconds 0\nsimplestchat_ops_evidence_collection_ok 0\nsimplestchat_ops_transfer_period_tx_bytes 1100\nsimplestchat_ops_transfer_period_rx_bytes 700\nsimplestchat_ops_transfer_allowance_bytes 2000000000000.0\nsimplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0\nsimplestchat_ops_transfer_collection_ok 1\nsimplestchat_ops_recorder_ok 0.0\nsimplestchat_ops_recorder_spool_snapshots 1\nsimplestchat_ops_recorder_spool_dropped_total 0\nsimplestchat_ops_collector_timestamp_seconds 1794398400.5\nsimplestchat_ops_collector_duration_seconds 0.75\n",
+   "recorder": {
+    "databaseOk": false,
+    "dropped": "0",
+    "lastObservedAt": "2026-11-11T12:00:00.500002+00:00"
+   },
+   "spool": [
+    "01794398400500000000.json"
+   ],
+   "stdout": "{\"event\": \"monitoring_collection\", \"completed\": true}\n",
+   "transfer": {
+    "last_rx": 9000,
+    "last_tx": 5000,
+    "period": "2026-11-01",
+    "rx_bytes": 700,
+    "tx_bytes": 1100
+   }
+  }
+ ],
+ "schemaVersion": 1
+}

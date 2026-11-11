@@ -722,7 +722,11 @@ RESTORE_CONTAINER_E2E=1 cargo run --locked -q -p simplestchat-ci -- database-che
 cargo run --locked -q -p simplestchat-ci -- database-check migration
 ```
 
-These retain the existing Python test patterns. The restore step first pulls the
+The monitoring check runs the three tests in `ops/src/monitor/database_tests.rs`
+by their exact names (`cargo test -p simplestchat-ops --lib -- --ignored --exact`)
+with `MONITORING_DATABASE_CHECK=1`; without that selector, as in a workspace
+`--include-ignored` run, they return at once. The restore and migration checks
+retain their Python test patterns. The restore step first pulls the
 same digest-pinned PostgreSQL 18.6 image and retains `RESTORE_CONTAINER_E2E=1` in
 the workflow. Discovery runs literal `pg_config --bindir` with a 30-second outer
 bound and 4096-byte stdout ceiling, admits one existing absolute directory, and

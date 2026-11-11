@@ -14,6 +14,8 @@ A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
+The monitoring timers, the monitoring playbook's own steps and the database
+logging remediation run through this executable as well.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
 delivery through the native controller before that executable runs. The Python
@@ -1881,6 +1883,66 @@ The prospective review covers these changed contracts. Inert fixtures, actual
 local processes, Linux type checks, signed artifact interoperability and measured
 workloads provide different evidence; none substitutes for an unrun category.
 Unrelated guideline rows and the planned retrospective review remain pending.
+
+## Host monitoring and database logging
+
+The monitoring playbook, its two timers and the database logging playbook run
+these commands by the executable's installed path. Each takes no further
+argument, requires root on the prepared host, addresses only fixed local
+paths, the local Docker daemon and the deployment's own database, and prints a
+fixed line on failure that names no private value.
+
+```sh
+simplestchat-ops monitor credential
+simplestchat-ops monitor prepare
+simplestchat-ops monitor collect
+simplestchat-ops monitor external
+simplestchat-ops monitor report
+simplestchat-ops database logging disable
+```
+
+`credential` copies the prepared `METRICS_TOKEN`, and nothing else, from
+`/etc/simplestchat-public/app.env` into
+`/etc/simplestchat-monitoring/metrics-token` (root, group 10003, mode 0440)
+through a private sibling and a rename, and answers `changed` or `retained`.
+A token that is not 64 lowercase hexadecimal digits, or a destination that is
+not an ordinary file, is refused and leaves the existing credential in place.
+
+`prepare` creates the private `operations` schema and its external-check
+extension when they are absent, after retaining a verified custom-format
+archive of the database as it was, and answers `created` or `retained`. An
+existing schema must have its exact version, ownership and privileges.
+
+`collect` is the collector unit's command. It writes
+`/var/lib/simplestchat-monitoring/textfile/operations.prom` atomically with
+the `simplestchat_ops_<name>` gauges and records the current alert snapshot
+through `monitoring-alerts.sql`; a snapshot the database did not take stays in
+the bounded spool and is replayed in order. `external` is the importer unit's
+command. It asks only the fixed public GitHub API paths for the configured
+repository's two workflows, without a credential and within its request
+budget, writes `textfile/external.prom`, and replays what the database did
+not take. Both make their HTTPS
+requests through the host's `curl` (no proxy, no redirect, no configuration
+file) and `collect` reads the relay certificate through `openssl s_client`
+with hostname verification and TLS 1.2 as the floor. The reviewed statements
+stay in `/usr/local/libexec/simplestchat-public/*.sql`, installed by the
+playbook.
+
+`report` prints the private read-only operational report described in the
+[deployment guide](../docs/deployment.md#private-operational-monitoring).
+
+`database logging disable` holds the shared workload lock, applies the two
+`log_parameter_max_length` limits and verifies them in fresh sessions, as the
+[public deployment guide](ansible/PUBLIC.md) describes. Every command it
+issues leaves numbered root-private output files beside `outcome.json` in a
+new `/srv/simplestchat-public/results/database-logging.*` directory, on
+success and after a partial failure, and the outcome is also its one line of
+standard output.
+
+The answers of the Python helpers these commands replaced are recorded in
+`ops/src/monitor/recorded_*.json`; the module's tests reproduce them request
+by request without starting an interpreter. `simplestchat-ci database-check
+monitoring` runs the statements against a disposable PostgreSQL cluster.
 
 
 ## Offline server attestation preparation

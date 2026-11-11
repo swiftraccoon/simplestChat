@@ -12,6 +12,7 @@ mod ci_database_check;
 mod ci_verified;
 mod host_playbooks;
 mod migration_prepare;
+mod monitoring;
 mod performance_compare_ci;
 mod public_deployment;
 mod public_recorded_release;

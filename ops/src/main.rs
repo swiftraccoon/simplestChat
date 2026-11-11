@@ -49,7 +49,9 @@ const USAGE: &str = concat!(
     "--selection PATH --evidence PATH --output PATH\n",
     "       simplestchat-ops capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]\n",
     "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
-    "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA",
+    "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
+    "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
+    "       simplestchat-ops database logging disable",
 );
 
 fn main() -> ExitCode {
@@ -91,6 +93,21 @@ fn main() -> ExitCode {
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    for (family, run) in [
+        (
+            "monitor",
+            simplestchat_ops::monitor::run as fn(&[OsString]) -> ExitCode,
+        ),
+        ("database", simplestchat_ops::monitor::run_database),
+    ] {
+        if args.first().is_some_and(|arg| arg == family) {
+            let code = run(&args[1..]);
+            if code == ExitCode::from(2) {
+                eprintln!("{USAGE}");
+            }
+            return code;
+        }
     }
     if args.first().is_some_and(|arg| arg == "capacity") {
         if args.get(1).is_some_and(|arg| arg == "run") {

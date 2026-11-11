@@ -1,0 +1,814 @@
+{
+ "databaseLogging": {
+  "alter": [
+   "ALTER SYSTEM SET log_parameter_max_length = '0'",
+   "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+  ],
+  "query": "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s",
+  "reload": "SELECT pg_reload_conf()",
+  "settings": [
+   {
+    "explicitZero": true,
+    "label": "both explicit zero",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "value": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    }
+   },
+   {
+    "explicitZero": false,
+    "label": "defaults",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"-1\", \"source\": \"default\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"default\", \"context\": \"user\", \"pending_restart\": false}]",
+    "value": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    }
+   },
+   {
+    "explicitZero": true,
+    "label": "command line zero",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"command line\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"command line\", \"context\": \"user\", \"pending_restart\": false}]",
+    "value": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     }
+    }
+   },
+   {
+    "label": "command line nonzero",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"64\", \"source\": \"command line\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Contradictory command-line logging setting requires full configuration maintenance"
+   },
+   {
+    "label": "session override",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"session\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Database logging has an overriding session, role or database policy"
+   },
+   {
+    "label": "database override",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"database\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Database logging has an overriding session, role or database policy"
+   },
+   {
+    "label": "pending restart",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": true}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Database setting has pending restart"
+   },
+   {
+    "label": "wrong context",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Unexpected logging setting context"
+   },
+   {
+    "label": "missing row",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}]",
+    "refused": "Missing database logging settings"
+   },
+   {
+    "label": "duplicate row",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}]",
+    "refused": "Unexpected logging setting"
+   },
+   {
+    "label": "unknown name",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_statement\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Unexpected logging setting"
+   },
+   {
+    "label": "negative two",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"-2\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Invalid logging setting value"
+   },
+   {
+    "label": "eleven digits",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"12345678901\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Invalid logging setting value"
+   },
+   {
+    "explicitZero": false,
+    "label": "ten digits",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"1234567890\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "value": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "1234567890",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    }
+   },
+   {
+    "error": "ValueError",
+    "label": "setting number",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": 0, \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]"
+   },
+   {
+    "error": "ValueError",
+    "label": "not an array",
+    "raw": "{\"name\": \"log_parameter_max_length\"}"
+   },
+   {
+    "label": "three rows",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}, {\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": false}]",
+    "refused": "Missing database logging settings"
+   },
+   {
+    "label": "pending null",
+    "raw": "[{\"name\": \"log_parameter_max_length\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"superuser\", \"pending_restart\": null}, {\"name\": \"log_parameter_max_length_on_error\", \"setting\": \"0\", \"source\": \"configuration file\", \"context\": \"user\", \"pending_restart\": false}]",
+    "refused": "Database setting has pending restart"
+   }
+  ]
+ },
+ "gauge": [
+  {
+   "integer": false,
+   "line": "simplestchat_ops_container_running{service=\"app\"} 1.0",
+   "name": "container_running",
+   "service": "app",
+   "value": 1.0
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_container_restarts{service=\"proxy\"} 3.0",
+   "name": "container_restarts",
+   "service": "proxy",
+   "value": 3.0
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_container_cpu_percent 0.25",
+   "name": "container_cpu_percent",
+   "service": null,
+   "value": 0.25
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_postgres_connections 17.0",
+   "name": "postgres_connections",
+   "service": null,
+   "value": 17.0
+  },
+  {
+   "integer": true,
+   "line": "simplestchat_ops_transfer_period_tx_bytes 123456789012",
+   "name": "transfer_period_tx_bytes",
+   "service": null,
+   "value": 123456789012
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+   "name": "transfer_allowance_bytes",
+   "service": null,
+   "value": 2000000000000.0
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_transfer_allowance_bytes 2e+16",
+   "name": "transfer_allowance_bytes",
+   "service": null,
+   "value": 2e+16
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_collector_timestamp_seconds 1794400000.123456",
+   "name": "collector_timestamp_seconds",
+   "service": null,
+   "value": 1794400000.123456
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_collector_duration_seconds 0.000123",
+   "name": "collector_duration_seconds",
+   "service": null,
+   "value": 0.000123
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_backup_last_success_seconds 0.0",
+   "name": "backup_last_success_seconds",
+   "service": null,
+   "value": 0.0
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_x 1e-07",
+   "name": "x",
+   "service": null,
+   "value": 1e-07
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_x 123456789.0",
+   "name": "x",
+   "service": null,
+   "value": 123456789.0
+  },
+  {
+   "integer": false,
+   "line": "simplestchat_ops_x 0.30000000000000004",
+   "name": "x",
+   "service": null,
+   "value": 0.30000000000000004
+  }
+ ],
+ "incident": [
+  {
+   "arguments": [
+    "WorkerDeath",
+    "critical",
+    {}
+   ],
+   "value": {
+    "digest": "74df2b63e3cdfb74947b0f7062d476489a5d4b5faa92a95ba6ac1b50b63221db",
+    "resource": {},
+    "rule": "WorkerDeath",
+    "severity": "critical"
+   }
+  },
+  {
+   "arguments": [
+    "HostDiskLow",
+    "warning",
+    {
+     "instance": "host:9100",
+     "job": "node"
+    }
+   ],
+   "value": {
+    "digest": "e0852a03537cd72530d9b9158f09003925152493d7c209eaac32a00231896db5",
+    "resource": {
+     "instance": "host:9100",
+     "job": "node"
+    },
+    "rule": "HostDiskLow",
+    "severity": "warning"
+   }
+  },
+  {
+   "arguments": [
+    "ContainerRestart",
+    "warning",
+    {
+     "service": "app"
+    }
+   ],
+   "value": {
+    "digest": "f5a9e18ad3355d6d465678d9c10b5d6fc71961daed813c37c8c65c1f7acb1655",
+    "resource": {
+     "service": "app"
+    },
+    "rule": "ContainerRestart",
+    "severity": "warning"
+   }
+  },
+  {
+   "arguments": [
+    "ExternalCheckFailed",
+    "critical",
+    {
+     "component": "canary"
+    }
+   ],
+   "value": {
+    "digest": "d597f87f25fa5d0455fccfed6840d89529a8f1463ccd42b5d76ed73b9aec5939",
+    "resource": {
+     "component": "canary"
+    },
+    "rule": "ExternalCheckFailed",
+    "severity": "critical"
+   }
+  },
+  {
+   "arguments": [
+    "ContainerRestart",
+    "warning",
+    {
+     "component": "d",
+     "instance": "c",
+     "job": "a",
+     "service": "b"
+    }
+   ],
+   "value": {
+    "digest": "48d67202c161c48902f838ab8f8858165259a66048338bf4bd11e3aec3d8e52b",
+    "resource": {
+     "component": "d",
+     "instance": "c",
+     "job": "a",
+     "service": "b"
+    },
+    "rule": "ContainerRestart",
+    "severity": "warning"
+   }
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "value": {
+    "digest": "8e6509bcf7388064d84c40d363128f7906c1ce2a787bbad576a0a99d7324424d",
+    "resource": {
+     "service": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "rule": "PostgresUnavailable",
+    "severity": "critical"
+   }
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "refused": "Invalid alert label"
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": ""
+    }
+   ],
+   "refused": "Invalid alert label"
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": "has space"
+    }
+   ],
+   "refused": "Invalid alert label"
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": "ok_.:/-"
+    }
+   ],
+   "value": {
+    "digest": "7ac80c4984ff2f9eeabc21e96b8ab6544ab25d68d3949438d7b84001b78f26d1",
+    "resource": {
+     "service": "ok_.:/-"
+    },
+    "rule": "PostgresUnavailable",
+    "severity": "critical"
+   }
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "service": 7
+    }
+   ],
+   "refused": "Invalid alert label"
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "critical",
+    {
+     "pod": "x"
+    }
+   ],
+   "refused": "Unknown resource label"
+  },
+  {
+   "arguments": [
+    "PostgresUnavailable",
+    "info",
+    {}
+   ],
+   "refused": "Unknown alert rule"
+  },
+  {
+   "arguments": [
+    "UnknownRule",
+    "critical",
+    {}
+   ],
+   "refused": "Unknown alert rule"
+  },
+  {
+   "arguments": [
+    "",
+    "warning",
+    {}
+   ],
+   "refused": "Unknown alert rule"
+  }
+ ],
+ "modules": {
+  "database_logging": "ecc39530d5554a23be4b4a61206ef6c0d0dad8e6",
+  "monitoring_alerts": "66671c8fa55a07eeabf10eea217ca0496fba8600",
+  "monitoring_collect": "4535b52c272cc7af2cc1c8e431d055bf4ede584e"
+ },
+ "periodStart": [
+  {
+   "resetDay": 1,
+   "today": "2026-11-11",
+   "value": "2026-11-01"
+  },
+  {
+   "resetDay": 11,
+   "today": "2026-11-11",
+   "value": "2026-11-11"
+  },
+  {
+   "resetDay": 12,
+   "today": "2026-11-11",
+   "value": "2026-10-12"
+  },
+  {
+   "resetDay": 28,
+   "today": "2026-11-11",
+   "value": "2026-10-28"
+  },
+  {
+   "resetDay": 28,
+   "today": "2026-03-01",
+   "value": "2026-02-28"
+  },
+  {
+   "resetDay": 20,
+   "today": "2026-01-05",
+   "value": "2025-12-20"
+  },
+  {
+   "resetDay": 28,
+   "today": "2024-03-10",
+   "value": "2024-02-28"
+  },
+  {
+   "resetDay": 1,
+   "today": "2026-12-31",
+   "value": "2026-12-01"
+  },
+  {
+   "resetDay": 1,
+   "today": "2026-01-01",
+   "value": "2026-01-01"
+  },
+  {
+   "resetDay": 2,
+   "today": "2026-01-01",
+   "value": "2025-12-02"
+  }
+ ],
+ "rules": [
+  "AdmissionRefusals",
+  "ApplicationUnavailable",
+  "BackupStale",
+  "CollectorFailed",
+  "CollectorStale",
+  "ContainerMemoryPressure",
+  "ContainerRestart",
+  "ContainerUnavailable",
+  "DatabasePoolPressure",
+  "DatabaseUnavailable",
+  "ExternalCheckFailed",
+  "ExternalChecksStale",
+  "ExternalCoverageIncomplete",
+  "ExternalImportUnavailable",
+  "ExternalSpoolLoss",
+  "HostDiskLow",
+  "HostMemoryLow",
+  "MetricsUnavailable",
+  "PostgresConnectionPressure",
+  "PostgresUnavailable",
+  "PrometheusUnavailable",
+  "PublicReadinessFailed",
+  "QualityBudgetExhausted",
+  "QualitySampleStale",
+  "RecorderSpoolLoss",
+  "RecorderUnavailable",
+  "RestoreEvidenceMissing",
+  "ServerErrors",
+  "TelemetrySeriesDropped",
+  "TransferAccountingFailed",
+  "TransferAllowanceExhausted",
+  "TransferAllowanceNearlyUsed",
+  "TurnAllocationPressure",
+  "TurnCertificateExpiring",
+  "TurnMetricsUnavailable",
+  "TurnTLSUnavailable",
+  "WorkerDeath"
+ ],
+ "schemaVersion": 1,
+ "transfer": {
+  "configuration": {
+   "transfer_allowance_tb": 2,
+   "transfer_reset_day": 1
+  },
+  "samples": [
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 0",
+     "simplestchat_ops_transfer_period_rx_bytes 0",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0"
+    ],
+    "rx": 1000,
+    "state": {
+     "last_rx": 1000,
+     "last_tx": 100,
+     "period": "2026-11-01",
+     "rx_bytes": 0,
+     "tx_bytes": 0
+    },
+    "stateText": "{\n  \"period\": \"2026-11-01\",\n  \"tx_bytes\": 0,\n  \"rx_bytes\": 0,\n  \"last_tx\": 100,\n  \"last_rx\": 1000\n}\n",
+    "today": "2026-11-10",
+    "tx": 100
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 150",
+     "simplestchat_ops_transfer_period_rx_bytes 500",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0"
+    ],
+    "rx": 1500,
+    "state": {
+     "last_rx": 1500,
+     "last_tx": 250,
+     "period": "2026-11-01",
+     "rx_bytes": 500,
+     "tx_bytes": 150
+    },
+    "stateText": "{\n  \"period\": \"2026-11-01\",\n  \"tx_bytes\": 150,\n  \"rx_bytes\": 500,\n  \"last_tx\": 250,\n  \"last_rx\": 1500\n}\n",
+    "today": "2026-11-10",
+    "tx": 250
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 200",
+     "simplestchat_ops_transfer_period_rx_bytes 600",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0"
+    ],
+    "rx": 1600,
+    "state": {
+     "last_rx": 1600,
+     "last_tx": 50,
+     "period": "2026-11-01",
+     "rx_bytes": 600,
+     "tx_bytes": 200
+    },
+    "stateText": "{\n  \"period\": \"2026-11-01\",\n  \"tx_bytes\": 200,\n  \"rx_bytes\": 600,\n  \"last_tx\": 50,\n  \"last_rx\": 1600\n}\n",
+    "today": "2026-11-11",
+    "tx": 50
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 200",
+     "simplestchat_ops_transfer_period_rx_bytes 610",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1793491200.0"
+    ],
+    "rx": 10,
+    "state": {
+     "last_rx": 10,
+     "last_tx": 50,
+     "period": "2026-11-01",
+     "rx_bytes": 610,
+     "tx_bytes": 200
+    },
+    "stateText": "{\n  \"period\": \"2026-11-01\",\n  \"tx_bytes\": 200,\n  \"rx_bytes\": 610,\n  \"last_tx\": 50,\n  \"last_rx\": 10\n}\n",
+    "today": "2026-11-11",
+    "tx": 50
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 0",
+     "simplestchat_ops_transfer_period_rx_bytes 0",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1796083200.0"
+    ],
+    "rx": 900,
+    "state": {
+     "last_rx": 900,
+     "last_tx": 500,
+     "period": "2026-12-01",
+     "rx_bytes": 0,
+     "tx_bytes": 0
+    },
+    "stateText": "{\n  \"period\": \"2026-12-01\",\n  \"tx_bytes\": 0,\n  \"rx_bytes\": 0,\n  \"last_tx\": 500,\n  \"last_rx\": 900\n}\n",
+    "today": "2026-12-01",
+    "tx": 500
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 300",
+     "simplestchat_ops_transfer_period_rx_bytes 100",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1796083200.0"
+    ],
+    "rx": 1000,
+    "state": {
+     "last_rx": 1000,
+     "last_tx": 800,
+     "period": "2026-12-01",
+     "rx_bytes": 100,
+     "tx_bytes": 300
+    },
+    "stateText": "{\n  \"period\": \"2026-12-01\",\n  \"tx_bytes\": 300,\n  \"rx_bytes\": 100,\n  \"last_tx\": 800,\n  \"last_rx\": 1000\n}\n",
+    "today": "2026-12-01",
+    "tx": 800
+   },
+   {
+    "lines": [
+     "simplestchat_ops_transfer_period_tx_bytes 300",
+     "simplestchat_ops_transfer_period_rx_bytes 100",
+     "simplestchat_ops_transfer_allowance_bytes 2000000000000.0",
+     "simplestchat_ops_transfer_period_start_timestamp_seconds 1796083200.0"
+    ],
+    "rx": 1000,
+    "state": {
+     "last_rx": 1000,
+     "last_tx": 800,
+     "period": "2026-12-01",
+     "rx_bytes": 100,
+     "tx_bytes": 300
+    },
+    "stateText": "{\n  \"period\": \"2026-12-01\",\n  \"tx_bytes\": 300,\n  \"rx_bytes\": 100,\n  \"last_tx\": 800,\n  \"last_rx\": 1000\n}\n",
+    "today": "2026-12-02",
+    "tx": 800
+   }
+  ]
+ },
+ "transferSettings": [
+  {
+   "configuration": {},
+   "value": [
+    "eth0",
+    0.0,
+    1
+   ]
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": 2,
+    "transfer_interface": "ens3",
+    "transfer_reset_day": 15
+   },
+   "value": [
+    "ens3",
+    2.0,
+    15
+   ]
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": 0.5
+   },
+   "value": [
+    "eth0",
+    0.5,
+    1
+   ]
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": true
+   },
+   "refused": "Invalid transfer allowance"
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": -1
+   },
+   "refused": "Invalid transfer allowance"
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": "2"
+   },
+   "refused": "Invalid transfer allowance"
+  },
+  {
+   "configuration": {
+    "transfer_interface": "xxxxxxxxxxxxxxxx"
+   },
+   "refused": "Invalid transfer interface"
+  },
+  {
+   "configuration": {
+    "transfer_interface": "bad/if"
+   },
+   "refused": "Invalid transfer interface"
+  },
+  {
+   "configuration": {
+    "transfer_interface": ""
+   },
+   "refused": "Invalid transfer interface"
+  },
+  {
+   "configuration": {
+    "transfer_interface": 5
+   },
+   "refused": "Invalid transfer interface"
+  },
+  {
+   "configuration": {
+    "transfer_reset_day": 0
+   },
+   "refused": "Invalid transfer reset day"
+  },
+  {
+   "configuration": {
+    "transfer_reset_day": 29
+   },
+   "refused": "Invalid transfer reset day"
+  },
+  {
+   "configuration": {
+    "transfer_reset_day": 28
+   },
+   "value": [
+    "eth0",
+    0.0,
+    28
+   ]
+  },
+  {
+   "configuration": {
+    "transfer_reset_day": true
+   },
+   "refused": "Invalid transfer reset day"
+  },
+  {
+   "configuration": {
+    "transfer_reset_day": 1.0
+   },
+   "refused": "Invalid transfer reset day"
+  },
+  {
+   "configuration": {
+    "transfer_allowance_tb": 20000
+   },
+   "value": [
+    "eth0",
+    20000.0,
+    1
+   ]
+  }
+ ]
+}

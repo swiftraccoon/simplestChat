@@ -16,15 +16,29 @@
           - scpub_domain is match('^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
           - scmon_prometheus_image is match('^quay.io/prometheus/prometheus:v3.15.0@sha256:[a-f0-9]{64}$')
           - scmon_node_exporter_image is match('^quay.io/prometheus/node-exporter:v1.12.1@sha256:[a-f0-9]{64}$')
+    - name: Look for the installed Ops executable without following links
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: false
+      register: scmon_ops
+    - name: Require the Ops executable a signed release delivers
+      ansible.builtin.assert:
+        that:
+          - scmon_ops.stat.exists
+          - scmon_ops.stat.isreg
+          - scmon_ops.stat.uid == 0
+          - scmon_ops.stat.mode == '0755'
+        fail_msg: >-
+          Deliver the signed Ops executable first: run release.yml for a signed
+          revision (staging alone is enough), then repeat this playbook.
     - name: Refuse monitoring setup during unfinished owned host operations
       ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -E
-          - -B
-          - -c
-          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
-          - '{}'
+        argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, release, preflight]
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: false
       check_mode: false
   tasks:
@@ -44,28 +58,13 @@
         - {path: /var/lib/simplestchat-monitoring/external-spool, owner: root, mode: '0700'}
         - {path: /etc/systemd/journald.conf.d, owner: root, mode: '0755'}
 
-    - name: Read only the prepared metrics token into the collector credential file
+    - name: Copy only the prepared metrics token into the scrape credential file
       ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -E
-          - -c
-          - |
-            import os, re
-            from pathlib import Path
-            lines = Path('/etc/simplestchat-public/app.env').read_text().splitlines()
-            values = dict(line.split('=', 1) for line in lines if '=' in line and not line.startswith('#'))
-            token = values['METRICS_TOKEN']
-            if not re.fullmatch('[a-f0-9]{64}', token):
-                raise SystemExit('Invalid prepared metrics token')
-            path = Path('/etc/simplestchat-monitoring/metrics-token')
-            changed = not path.exists() or path.read_text() != token
-            if changed:
-                with path.open('w') as output:
-                    output.write(token)
-            os.chown(path, 0, 10003)
-            path.chmod(0o440)
-            print('changed' if changed else 'retained')
+        argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, monitor, credential]
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       no_log: true
       register: scmon_token
       changed_when: scmon_token.stdout == 'changed'
@@ -105,7 +104,7 @@
         group: '10003'
         mode: '0440'
 
-    - name: Install bounded collector and private incident recorder
+    - name: Install the reviewed monitoring statements and the relay step's helper modules
       ansible.builtin.copy:
         src: "{{ item }}"
         dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
@@ -113,13 +112,8 @@
         group: root
         mode: '0644'
       loop:
-        - monitoring_collect.py
-        - monitoring_alerts.py
-        - monitoring_prepare.py
         - monitoring-alerts.sql
         - monitoring-schema.sql
-        - monitoring_external.py
-        - monitoring_report.py
         - monitoring-external-schema.sql
         - monitoring-external.sql
         - monitoring-report.sql
@@ -153,7 +147,11 @@
 
     - name: Back up the database and prepare only the private versioned operations schema
       ansible.builtin.command:
-        argv: [/usr/bin/python3, -E, -B, /usr/local/libexec/simplestchat-public/monitoring_prepare.py]
+        argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, monitor, prepare]
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       register: scmon_schema
       changed_when: scmon_schema.stdout == 'created'
 

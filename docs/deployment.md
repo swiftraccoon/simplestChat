@@ -495,6 +495,12 @@ existing application bearer token through a private credential file. The
 monitoring containers never receive the Docker socket or database credentials.
 Prometheus has a 512 MB memory limit, 0.5 CPU quota, 15-day retention and a 1 GB
 TSDB retention target; allow additional space for its WAL and active head block.
+The playbook's own steps and both timers run the installed Ops executable
+(`simplestchat-ops monitor ...`, described in the
+[Ops guide](../ops/README.md#host-monitoring-and-database-logging)), so the host
+needs a signed release first: any `release.yml` run for a signed revision
+delivers the executable, staging alone is enough, and the playbook refuses
+before any effect when it is absent.
 The app scrape permits 15,000 series; HTTP and client instrumentation cap stored
 series at 256 and 512 respectively and count discarded observations.
 `TelemetrySeriesDropped` reports incomplete instrumentation.
@@ -602,7 +608,7 @@ Review incidents, observed duration, retained recurrence, release identifiers,
 external attempts, coverage and local spool health in one private read-only report:
 
 ```sh
-sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_report.py
+sudo /usr/local/libexec/simplestchat-public/simplestchat-ops monitor report
 ```
 
 The JSON output is bounded to 50 incident rows and 50 external attempts. An incident's
@@ -619,7 +625,7 @@ To inspect rollout and freshness without forcing another API poll:
 ```sh
 sudo systemctl status simplestchat-monitoring-external.timer
 sudo journalctl -u simplestchat-monitoring-external.service -n 20 --no-pager
-sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_report.py
+sudo /usr/local/libexec/simplestchat-public/simplestchat-ops monitor report
 ```
 
 The first timer invocation may need several polls to backfill one day. A manual

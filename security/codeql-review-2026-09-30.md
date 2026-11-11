@@ -1477,3 +1477,19 @@ twin.
 
 No query, path or test is excluded and no remote alert state changed; hosted
 ingestion remains a separate required check.
+
+## Retired: the Python monitoring collector (2026-11-11)
+
+`ops/ansible/files/monitoring_collect.py` is deleted with the other Python
+monitoring helpers and their tests: the installed Ops executable takes the
+same samples (`simplestchat-ops monitor collect`). Alert 24's fix-pending
+record (`py/insecure-protocol` at line 156, the relay certificate probe's
+default context, whose next line already required TLS 1.2) keeps its
+2026-09-30 observation in the review JSON, as alert 25's does. It has no
+exception and no expiry, and with the file gone there is no source left to
+remediate. The native probe hands the handshake to the host's
+`openssl s_client` with `-no_tls1 -no_tls1_1`, hostname verification and
+`-verify_return_error`.
+
+No query, path or test is excluded and no remote alert state changed; hosted
+ingestion remains a separate required check.

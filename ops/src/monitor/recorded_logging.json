@@ -1,0 +1,2480 @@
+{
+ "alter": [
+  "ALTER SYSTEM SET log_parameter_max_length = '0'",
+  "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+ ],
+ "cases": [
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "defaults become explicit after the second look",
+   "queries": 3,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "passed": true
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "already explicit in the configuration file",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "changed": false,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "passed": true
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "already explicit on the command line",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     }
+    },
+    "changed": false,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "passed": true
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "command line"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "one setting already explicit",
+   "queries": 2,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "passed": true
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "a session override refuses before any change",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database logging has an overriding session, role or database policy"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "session"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "session"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "a pending restart refuses before any change",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database setting has pending restart"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": true,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "the database is replaced before the first change",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": 2,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": false,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database container changed during logging remediation"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "the database is replaced between the changes",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": 3,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database container changed during logging remediation"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "the database is replaced before the reload",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": 4,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database container changed during logging remediation"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "the database is replaced after the reload took effect",
+   "queries": 2,
+   "reloadResult": "t\n",
+   "replacementAt": 5,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database container changed during logging remediation"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    }
+   ],
+   "fail": null,
+   "name": "an explicit database replaced during the check",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": 2,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    },
+    "changed": false,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database container changed during logging remediation"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "the reload is refused",
+   "queries": 1,
+   "reloadResult": "f\n",
+   "replacementAt": null,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database reload was refused"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "elided": 56
+    }
+   ],
+   "fail": null,
+   "name": "the reload never takes effect",
+   "queries": 61,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "after": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Database logging reload was not effective"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'",
+   "name": "a change fails",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Command 004 failed; inspect private output"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "the first look times out",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "error": "TimeoutExpired"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ]
+   ],
+   "timeout": "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "the catalog answer is not a list",
+   "queries": 1,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "error": "ValueError"
+   },
+   "snapshots": [
+    "{\"name\": \"x\"}"
+   ],
+   "timeout": null
+  },
+  {
+   "commands": [
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "ALTER SYSTEM SET log_parameter_max_length_on_error = '0'"
+     ],
+     "timeout": 10
+    },
+    {
+     "container": "postgres"
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT pg_reload_conf()"
+     ],
+     "timeout": 10
+    },
+    {
+     "argv": [
+      "exec",
+      "--user",
+      "999:999",
+      "--env",
+      "PGOPTIONS=-c statement_timeout=5000 -c lock_timeout=3000",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "psql",
+      "--no-psqlrc",
+      "--no-password",
+      "--set",
+      "ON_ERROR_STOP=on",
+      "--host",
+      "/run/simplestchat-postgres",
+      "--username",
+      "postgres",
+      "--dbname",
+      "simplestchat",
+      "--tuples-only",
+      "--no-align",
+      "--command",
+      "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s"
+     ],
+     "timeout": 10
+    }
+   ],
+   "fail": null,
+   "name": "the effective values become invalid after the reload",
+   "queries": 2,
+   "reloadResult": "t\n",
+   "replacementAt": null,
+   "report": {
+    "before": {
+     "log_parameter_max_length": {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     "log_parameter_max_length_on_error": {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    },
+    "changed": true,
+    "databaseContainer": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "result": {
+    "refused": "Invalid logging setting value"
+   },
+   "snapshots": [
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-1",
+      "source": "default"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "default"
+     }
+    ],
+    [
+     {
+      "context": "superuser",
+      "name": "log_parameter_max_length",
+      "pending_restart": false,
+      "setting": "-2",
+      "source": "configuration file"
+     },
+     {
+      "context": "user",
+      "name": "log_parameter_max_length_on_error",
+      "pending_restart": false,
+      "setting": "0",
+      "source": "configuration file"
+     }
+    ]
+   ],
+   "timeout": null
+  }
+ ],
+ "containerFormat": "{\"id\":{{json .Id}},\"image\":{{json .Image}},\"state\":{{json .State}},\"restarts\":{{.RestartCount}},\"configHash\":{{json (index .Config.Labels \"com.docker.compose.config-hash\")}}}",
+ "database": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "modules": {
+  "database_logging": "ecc39530d5554a23be4b4a61206ef6c0d0dad8e6"
+ },
+ "query": "SELECT json_agg(row_to_json(s) ORDER BY name) FROM (SELECT name, setting, source, context, pending_restart FROM pg_settings WHERE name IN ('log_parameter_max_length','log_parameter_max_length_on_error')) AS s",
+ "reload": "SELECT pg_reload_conf()",
+ "schemaVersion": 1
+}

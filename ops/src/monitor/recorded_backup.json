@@ -1,0 +1,1521 @@
+{
+ "cases": [
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "valid release backup",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "valid nightly backup",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "20261110T010203Z.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": null,
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "no cache given",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "none",
+     "completed": 1794272523.0
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt group readable",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "640",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt world readable",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "644",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "directory world accessible",
+   "parentMode": "755",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt is a link",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "symlink",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt has a second name",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "hardlink",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unsafe backup receipt"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt too large",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": "{\"schemaVersion\": 1, \"dump\": \"database-before.dump\", \"bytes\": 112, \"sha256\": \"4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de\", \"completedAt\": \"2026-11-10T01:02:03+00:00\"}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        ",
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Oversized configuration"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt at the size limit",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": "{\"schemaVersion\": 1, \"dump\": \"database-before.dump\", \"bytes\": 112, \"sha256\": \"4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de\", \"completedAt\": \"2026-11-10T01:02:03+00:00\"}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    ",
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt is not an object",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": "[1]",
+   "results": [
+    {
+     "cache": "empty",
+     "error": "ValueError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt repeats a key",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": "{\"schemaVersion\":1,\"schemaVersion\":1}",
+   "results": [
+    {
+     "cache": "empty",
+     "error": "ValueError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "receipt is malformed",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": "{\"schemaVersion\":",
+   "results": [
+    {
+     "cache": "empty",
+     "error": "ValueError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "another schema version",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 2,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup receipt schema"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "schema version true",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": true,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup receipt schema"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "schema version absent",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup receipt schema"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "another dump name",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "other.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup filename"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "dump name with a directory",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "../database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup filename"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "dump name not text",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": 7,
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup filename"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "nightly name with lower case",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "20261110t010203z.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup filename"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "size zero",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 0,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup size"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "size as text",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": "112",
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup size"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "size true",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": true,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup size"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "size as a float",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112.0,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup size"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "digest upper case",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605B1A1720E5A32CAF5141C60CBB525519A90E2183A39B34E6718D54258C8DE"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup digest"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "digest short",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8d"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup digest"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "digest not text",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": 5
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup digest"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion without an offset",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup completion time"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion far in the future",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2099-01-01T00:00:00+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup completion time"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion at the epoch",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "1970-01-01T00:00:00+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Invalid backup completion time"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion absent",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "error": "ValueError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion not a time",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "yesterday",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "error": "ValueError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion with Z",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03Z",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "completion with fraction and offset",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T03:02:03.250000+02:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.25,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "missing",
+   "dumpMode": "600",
+   "name": "dump missing",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "error": "OSError"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "640",
+   "name": "dump group readable",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "hardlink",
+   "dumpMode": "600",
+   "name": "dump has a second name",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Backup size or permissions differ"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "symlink",
+   "dumpMode": "600",
+   "name": "dump is a link",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Unexpected ownership or permissions"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "dump shorter than recorded",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Backup size or permissions differ"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes!",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "dump with other bytes",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "refused": "Backup digest differs"
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "keep",
+     "offset": 20
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "settled dump fills the cache and a hit keeps its time",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "unchanged",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 0
+    },
+    {
+     "cache": "keep",
+     "offset": 1
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "fresh dump is verified but not cached",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "empty",
+     "completed": 1794272523.0
+    },
+    {
+     "cache": "empty",
+     "completed": 1794272523.0
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "schema1",
+     "offset": 20
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache of an earlier schema is replaced",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "filled",
+     "checkedOffset": 20,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "keep",
+     "offset": 86411
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache older than a day is replaced",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "filled",
+     "checkedOffset": 86411,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "keep",
+     "offset": 86409
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache just inside a day is kept",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "unchanged",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 20
+    },
+    {
+     "cache": "keep",
+     "offset": 10
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache from the future is replaced",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 20,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "other-signature",
+     "offset": 20
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache for another file is replaced",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "filled",
+     "checkedOffset": 20,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  },
+  {
+   "calls": [
+    {
+     "cache": "empty",
+     "offset": 10
+    },
+    {
+     "cache": "text-time",
+     "offset": 20
+    }
+   ],
+   "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+   "dumpKind": "file",
+   "dumpMode": "600",
+   "name": "cache with a text time is replaced",
+   "parentMode": "700",
+   "receipt": {
+    "bytes": 112,
+    "completedAt": "2026-11-10T01:02:03+00:00",
+    "dump": "database-before.dump",
+    "schemaVersion": 1,
+    "sha256": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de"
+   },
+   "receiptKind": "file",
+   "receiptMode": "600",
+   "receiptRaw": null,
+   "results": [
+    {
+     "cache": "filled",
+     "checkedOffset": 10,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    },
+    {
+     "cache": "filled",
+     "checkedOffset": 20,
+     "completed": 1794272523.0,
+     "schemaVersion": 2,
+     "signatureLength": 7
+    }
+   ]
+  }
+ ],
+ "digest": "4605b1a1720e5a32caf5141c60cbb525519a90e2183a39b34e6718d54258c8de",
+ "dump": "archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes archive bytes ",
+ "modules": {
+  "release_public": "b8cfae2c7a3ab4d66f9876187f671c8d647413cf"
+ },
+ "schemaVersion": 1
+}

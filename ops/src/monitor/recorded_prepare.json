@@ -1,0 +1,2440 @@
+{
+ "modules": {
+  "monitoring_prepare": "eb76c7418eab008bcedba089bb7ce5bb231926e2",
+  "monitoring_report": "733e3d59a685308aa3c2173835083d1ba9544dba"
+ },
+ "prepare": [
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     7,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_restore",
+      "--list"
+     ],
+     "env": null,
+     "input": "<archive>",
+     "timeout": 30
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": "<monitoring-schema.sql>",
+     "timeout": 15
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT to_regclass('operations.external_schema_version');",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-external-schema.sql>",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT version FROM operations.external_schema_version;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT workflow,run_id,attempt,source_revision,deployed_revision_at_import,\n        started_at,completed_at,result,conclusion,checks,imported_at\n        FROM operations.external_runs LIMIT 0;\n        SELECT workflow,observed_at,last_complete_at,window_start,api_ok,complete,pending,\n        truncated,failure_since,history_gap_since FROM operations.external_status LIMIT 0;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT count(*)=3 AND bool_and(\n        c.relowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n        AND NOT has_table_privilege('simplestchat_app',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')\n        AND NOT has_table_privilege('simplestchat_migrate',c.oid,\n            'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'))\n        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n        WHERE n.nspname='operations' AND c.relkind='r'\n        AND c.relname IN ('external_schema_version','external_runs','external_status');",
+     "timeout": 8
+    }
+   ],
+   "facts": {
+    "external": "",
+    "schema": ""
+   },
+   "name": "fresh database",
+   "result": {
+    "stdout": "created\n"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT nspowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n            AND NOT has_schema_privilege('simplestchat_app','operations','USAGE')\n            AND NOT has_schema_privilege('simplestchat_migrate','operations','USAGE')\n            FROM pg_namespace WHERE nspname='operations';"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT to_regclass('operations.external_schema_version');",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT version FROM operations.external_schema_version;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT workflow,run_id,attempt,source_revision,deployed_revision_at_import,\n        started_at,completed_at,result,conclusion,checks,imported_at\n        FROM operations.external_runs LIMIT 0;\n        SELECT workflow,observed_at,last_complete_at,window_start,api_ok,complete,pending,\n        truncated,failure_since,history_gap_since FROM operations.external_status LIMIT 0;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT count(*)=3 AND bool_and(\n        c.relowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n        AND NOT has_table_privilege('simplestchat_app',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')\n        AND NOT has_table_privilege('simplestchat_migrate',c.oid,\n            'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'))\n        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n        WHERE n.nspname='operations' AND c.relkind='r'\n        AND c.relname IN ('external_schema_version','external_runs','external_status');",
+     "timeout": 8
+    }
+   ],
+   "facts": {
+    "external": "operations.external_schema_version",
+    "schema": "operations.schema_version"
+   },
+   "name": "everything retained",
+   "result": {
+    "stdout": "retained\n"
+   }
+  },
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     7,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT nspowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n            AND NOT has_schema_privilege('simplestchat_app','operations','USAGE')\n            AND NOT has_schema_privilege('simplestchat_migrate','operations','USAGE')\n            FROM pg_namespace WHERE nspname='operations';"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT to_regclass('operations.external_schema_version');",
+     "timeout": 8
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_restore",
+      "--list"
+     ],
+     "env": null,
+     "input": "<archive>",
+     "timeout": 30
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-external-schema.sql>",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT version FROM operations.external_schema_version;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT workflow,run_id,attempt,source_revision,deployed_revision_at_import,\n        started_at,completed_at,result,conclusion,checks,imported_at\n        FROM operations.external_runs LIMIT 0;\n        SELECT workflow,observed_at,last_complete_at,window_start,api_ok,complete,pending,\n        truncated,failure_since,history_gap_since FROM operations.external_status LIMIT 0;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT count(*)=3 AND bool_and(\n        c.relowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n        AND NOT has_table_privilege('simplestchat_app',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')\n        AND NOT has_table_privilege('simplestchat_migrate',c.oid,\n            'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'))\n        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n        WHERE n.nspname='operations' AND c.relkind='r'\n        AND c.relname IN ('external_schema_version','external_runs','external_status');",
+     "timeout": 8
+    }
+   ],
+   "facts": {
+    "external": "",
+    "schema": "operations.schema_version"
+   },
+   "name": "external tables added",
+   "result": {
+    "stdout": "created\n"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    }
+   ],
+   "facts": {
+    "schema": "operations.schema_version",
+    "version": "2"
+   },
+   "name": "unsupported schema version",
+   "result": {
+    "refused": "Unsupported operations schema version"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT nspowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n            AND NOT has_schema_privilege('simplestchat_app','operations','USAGE')\n            AND NOT has_schema_privilege('simplestchat_migrate','operations','USAGE')\n            FROM pg_namespace WHERE nspname='operations';"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    }
+   ],
+   "facts": {
+    "permissions": "f",
+    "schema": "operations.schema_version"
+   },
+   "name": "operations privileges changed",
+   "result": {
+    "refused": "Operations ownership or role privileges changed"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT nspowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n            AND NOT has_schema_privilege('simplestchat_app','operations','USAGE')\n            AND NOT has_schema_privilege('simplestchat_migrate','operations','USAGE')\n            FROM pg_namespace WHERE nspname='operations';"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT to_regclass('operations.external_schema_version');",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT version FROM operations.external_schema_version;",
+     "timeout": 8
+    }
+   ],
+   "facts": {
+    "external": "operations.external_schema_version",
+    "externalVersion": "2",
+    "schema": "operations.schema_version"
+   },
+   "name": "unsupported external version",
+   "result": {
+    "refused": "Unsupported external operations schema"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT nspowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n            AND NOT has_schema_privilege('simplestchat_app','operations','USAGE')\n            AND NOT has_schema_privilege('simplestchat_migrate','operations','USAGE')\n            FROM pg_namespace WHERE nspname='operations';"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT to_regclass('operations.external_schema_version');",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT version FROM operations.external_schema_version;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT workflow,run_id,attempt,source_revision,deployed_revision_at_import,\n        started_at,completed_at,result,conclusion,checks,imported_at\n        FROM operations.external_runs LIMIT 0;\n        SELECT workflow,observed_at,last_complete_at,window_start,api_ok,complete,pending,\n        truncated,failure_since,history_gap_since FROM operations.external_status LIMIT 0;",
+     "timeout": 8
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "SELECT count(*)=3 AND bool_and(\n        c.relowner=(SELECT oid FROM pg_roles WHERE rolname='postgres')\n        AND NOT has_table_privilege('simplestchat_app',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')\n        AND NOT has_table_privilege('simplestchat_migrate',c.oid,\n            'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'))\n        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n        WHERE n.nspname='operations' AND c.relkind='r'\n        AND c.relname IN ('external_schema_version','external_runs','external_status');",
+     "timeout": 8
+    }
+   ],
+   "facts": {
+    "external": "operations.external_schema_version",
+    "externalPermissions": "f",
+    "schema": "operations.schema_version"
+   },
+   "name": "external privileges changed",
+   "result": {
+    "refused": "External operations ownership or privileges changed"
+   }
+  },
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     0,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    }
+   ],
+   "facts": {
+    "dump": "",
+    "schema": ""
+   },
+   "name": "empty archive",
+   "result": {
+    "refused": "Empty schema backup"
+   }
+  },
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     0,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    }
+   ],
+   "facts": {
+    "fail": "pg_dump",
+    "schema": ""
+   },
+   "name": "archive command fails",
+   "result": {
+    "error": "CalledProcessError"
+   }
+  },
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     7,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_restore",
+      "--list"
+     ],
+     "env": null,
+     "input": "<archive>",
+     "timeout": 30
+    }
+   ],
+   "facts": {
+    "fail": "pg_restore",
+    "schema": ""
+   },
+   "name": "archive does not list",
+   "result": {
+    "error": "CalledProcessError"
+   }
+  },
+  {
+   "archives": [
+    [
+     "schema-before-1794398400500000000.dump",
+     7,
+     "0o600"
+    ]
+   ],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": true,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_dump",
+      "--format=custom",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": null,
+     "timeout": 60
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "pg_restore",
+      "--list"
+     ],
+     "env": null,
+     "input": "<archive>",
+     "timeout": 30
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": null,
+     "input": "<monitoring-schema.sql>",
+     "timeout": 15
+    }
+   ],
+   "facts": {
+    "fail": "monitoring-schema",
+    "schema": ""
+   },
+   "name": "schema statement fails",
+   "result": {
+    "error": "CalledProcessError"
+   }
+  },
+  {
+   "archives": [],
+   "calls": [
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT to_regclass('operations.schema_version');"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "-c",
+      "SELECT version FROM operations.schema_version;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    },
+    {
+     "archive": false,
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT incident_key,rule,severity,resource,first_seen,last_seen,resolved_at,\n            release_revision,observations FROM operations.alerts LIMIT 0;\n            SELECT singleton,observed_at FROM operations.alert_cursor LIMIT 0;"
+     ],
+     "env": {
+      "HOME": "/root",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": null,
+     "timeout": 3
+    }
+   ],
+   "facts": {
+    "fail": "incident_key",
+    "schema": "operations.schema_version"
+   },
+   "name": "column probe fails",
+   "result": {
+    "error": "CalledProcessError"
+   }
+  }
+ ],
+ "report": [
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": null,
+   "fail": false,
+   "name": "no importer state",
+   "spool": 0,
+   "status": 0,
+   "stderr": "",
+   "stdout": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.5}],\"externalAttempts\":[],\"importer\":{\"lastPollEpoch\":null,\"spoolSnapshots\":0,\"discardedSnapshots\":0,\"deployment\":null,\"scope\":\"Local spool health; a discarded snapshot means historical coverage was lost.\"}}\n"
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": "{\"lastPollAt\": 1794398000.25, \"dropped\": 3, \"deployment\": {\"repository\": \"example/chat\", \"origin\": \"https://chat.example.test\"}, \"seen\": {}}",
+   "fail": false,
+   "name": "importer state and spool",
+   "spool": 2,
+   "status": 0,
+   "stderr": "",
+   "stdout": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.5}],\"externalAttempts\":[],\"importer\":{\"lastPollEpoch\":1794398000.25,\"spoolSnapshots\":2,\"discardedSnapshots\":3,\"deployment\":{\"repository\":\"example/chat\",\"origin\":\"https://chat.example.test\"},\"scope\":\"Local spool health; a discarded snapshot means historical coverage was lost.\"}}\n"
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": "{\"dropped\": \"3\"}",
+   "fail": false,
+   "name": "dropped is not a whole number",
+   "spool": 0,
+   "status": 1,
+   "stderr": "Operational report unavailable; inspect private monitoring health.\n",
+   "stdout": ""
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": "[]",
+   "fail": false,
+   "name": "importer state is not an object",
+   "spool": 0,
+   "status": 1,
+   "stderr": "Operational report unavailable; inspect private monitoring health.\n",
+   "stdout": ""
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "[1]\n",
+   "externalState": null,
+   "fail": false,
+   "name": "database answers with an array",
+   "spool": 0,
+   "status": 1,
+   "stderr": "Operational report unavailable; inspect private monitoring health.\n",
+   "stdout": ""
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "\n",
+   "externalState": null,
+   "fail": false,
+   "name": "database answers with nothing",
+   "spool": 0,
+   "status": 1,
+   "stderr": "Operational report unavailable; inspect private monitoring health.\n",
+   "stdout": ""
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": null,
+   "fail": true,
+   "name": "database fails",
+   "spool": 0,
+   "status": 1,
+   "stderr": "Operational report unavailable; inspect private monitoring health.\n",
+   "stdout": ""
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"importer\":\"old\",\"scope\":\"s\"}\n",
+   "externalState": null,
+   "fail": false,
+   "name": "an importer field in the answer is replaced",
+   "spool": 1,
+   "status": 0,
+   "stderr": "",
+   "stdout": "{\"importer\":{\"lastPollEpoch\":null,\"spoolSnapshots\":1,\"discardedSnapshots\":0,\"deployment\":null,\"scope\":\"Local spool health; a discarded snapshot means historical coverage was lost.\"},\"scope\":\"s\"}\n"
+  },
+  {
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "exec",
+      "-i",
+      "--user",
+      "postgres",
+      "simplestchat-public-postgres-1",
+      "psql",
+      "-X",
+      "-q",
+      "-t",
+      "-A",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "-h",
+      "/run/simplestchat-postgres",
+      "-U",
+      "postgres",
+      "-d",
+      "simplestchat"
+     ],
+     "env": {
+      "LC_ALL": "C",
+      "PATH": "/usr/bin:/bin"
+     },
+     "input": "<monitoring-report.sql>",
+     "timeout": 8
+    }
+   ],
+   "database": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.50}],\"externalAttempts\":[]}\n",
+   "externalState": "{\"dropped\": 2, \"lastPollAt\": 1, \"seen\": {\"private\": \"excluded\"}, \"notBefore\": 99}",
+   "fail": false,
+   "name": "remembered runs stay out of the report",
+   "spool": 0,
+   "status": 0,
+   "stderr": "",
+   "stdout": "{\"generatedAt\":\"2026-11-11T12:00:00+00:00\",\"scope\":\"s\",\"recorderObservedAt\":null,\"incidents\":[],\"externalCoverage\":[{\"workflow\":\"canary\",\"import_age_seconds\":12.5}],\"externalAttempts\":[],\"importer\":{\"lastPollEpoch\":1,\"spoolSnapshots\":0,\"discardedSnapshots\":2,\"deployment\":null,\"scope\":\"Local spool health; a discarded snapshot means historical coverage was lost.\"}}\n"
+  }
+ ],
+ "schemaVersion": 1
+}

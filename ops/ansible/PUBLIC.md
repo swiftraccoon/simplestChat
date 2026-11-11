@@ -190,8 +190,11 @@ cd ops/ansible
 .venv/bin/ansible-playbook -i inventory.local.yml --limit YOUR_HOST database-logging.yml
 ```
 
-The worker holds the shared workload lock, identifies the current PostgreSQL
-container by its full ID, and reads only the two relevant `pg_settings` entries.
+The playbook copies nothing to the host: it runs the installed Ops executable
+(`simplestchat-ops database logging disable`) and refuses a host that no signed
+release has delivered it to. The command holds the shared workload lock,
+identifies the current PostgreSQL container by its full ID, and reads only the
+two relevant `pg_settings` entries.
 It issues separate fixed `ALTER SYSTEM` statements, requests a configuration
 reload, then verifies both effective values, their sources and the absence of a
 pending restart in fresh sessions. Already explicit zero values require no
@@ -199,8 +202,8 @@ change. Contradictory command-line settings or session/role/database overrides
 in the verification connection are refused; resolve those through the reviewed
 configuration workflow. Verification connects as `postgres` to `simplestchat`;
 it does not inspect overrides attached to other roles or existing application
-sessions. Each attempt retains root-private command evidence, worker/helper
-source digests and `outcome.json` under
+sessions. Each attempt retains root-private command evidence and
+`outcome.json` under
 `/srv/simplestchat-public/results/database-logging.*`. An interrupted partial
 application is safe to repeat after inspecting that evidence. This operation
 does not query account/profile data or remove previously retained log contents.

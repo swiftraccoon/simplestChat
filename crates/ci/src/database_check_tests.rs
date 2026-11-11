@@ -27,7 +27,7 @@ impl Executor for Fake {
 }
 
 #[tokio::test]
-async fn every_check_has_exact_python_pattern_and_restore_pull_precedes_discovery() {
+async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery() {
     let root =
         std::env::temp_dir().join(format!("database check $(literal) {}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
@@ -35,25 +35,51 @@ async fn every_check_has_exact_python_pattern_and_restore_pull_precedes_discover
         (OsString::from("PATH"), OsString::from("/usr/bin:/bin")),
         (OsString::from("RESTORE_CONTAINER_E2E"), OsString::from("1")),
     ]);
-    for (check, pattern) in [
-        (Check::Monitoring, "test_monitoring_database.py"),
-        (Check::Restore, "test_restore_database.py"),
-        (Check::Migration, "test_migrate_public.py"),
+    let suite = |pattern: &str| {
+        let fixed = [
+            "python",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "ops/ansible/tests",
+            "-p",
+        ];
+        let mut command = fixed.map(str::to_owned).to_vec();
+        command.extend([pattern.to_owned(), "-v".to_owned()]);
+        command
+    };
+    let monitoring = [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "simplestchat-ops",
+        "--lib",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "monitor::database_tests::an_ambiguous_committed_response_retains_the_outage_after_recovery",
+        "monitor::database_tests::external_history_keeps_gaps_privacy_and_retention_through_partial_recovery",
+        "monitor::database_tests::incident_lifecycle_replay_privileges_and_retention",
+    ];
+    for (check, command, selected) in [
+        (
+            Check::Monitoring,
+            monitoring.map(str::to_owned).to_vec(),
+            true,
+        ),
+        (Check::Restore, suite("test_restore_database.py"), false),
+        (Check::Migration, suite("test_migrate_public.py"), false),
     ] {
-        assert_eq!(
-            check.command(),
-            [
-                "python",
-                "-m",
-                "unittest",
-                "discover",
-                "-s",
-                "ops/ansible/tests",
-                "-p",
-                pattern,
-                "-v"
-            ]
-        );
+        assert_eq!(check.command(), command);
+        let mut owned = environment.clone();
+        check.select(&mut owned);
+        let selector = owned.get(OsStr::new("MONITORING_DATABASE_CHECK"));
+        let selector = selector.map(|value| value.to_str().unwrap());
+        assert_eq!(selector, selected.then_some("1"), "{check:?}");
+        assert_eq!(owned.len(), environment.len() + usize::from(selected));
         let mut executor = Fake {
             commands: vec![],
             output: format!("{}\n", root.display()).into_bytes(),
@@ -302,4 +328,37 @@ async fn failed_restore_discovery_does_not_hide_its_status_after_successful_pull
     assert_eq!(executor.commands.len(), 2);
     assert_eq!(executor.commands[0].program, Program::Docker);
     assert_eq!(executor.commands[1].program, Program::PgConfig);
+}
+
+/// The monitoring check names its tests exactly, so each must exist, ignored
+/// and selected by the owner's variable: a renamed or unselected test would
+/// otherwise be filtered out and the check would pass having run nothing.
+#[test]
+fn the_monitoring_check_names_exactly_the_owned_database_tests() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent);
+    let source = root.unwrap().join("ops/src/monitor/database_tests.rs");
+    let source = std::fs::read_to_string(source).unwrap();
+    let mut declared = Vec::new();
+    let mut lines = source.lines();
+    while let Some(line) = lines.next() {
+        if line != "#[test]" {
+            continue;
+        }
+        let ignored = lines.next().unwrap();
+        assert!(ignored.starts_with("#[ignore = \""), "{ignored}");
+        let function = lines.next().unwrap().strip_prefix("fn ").unwrap();
+        let name = function.strip_suffix("() {").unwrap();
+        assert_eq!(
+            lines.next(),
+            Some("    let Some(url) = database() else { return };")
+        );
+        declared.push(format!("monitor::database_tests::{name}"));
+    }
+    assert_eq!(source.matches("#[test]").count(), declared.len());
+    let command = Check::Monitoring.command();
+    assert_eq!(command[10..], declared);
+    assert_eq!(declared.len(), 3);
+    assert!(source.contains("const SELECTOR: &str = \"MONITORING_DATABASE_CHECK\";"));
 }

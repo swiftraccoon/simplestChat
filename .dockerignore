@@ -99,6 +99,9 @@ ops/src/release/attestation/verify/**
 !ops/src/capacity_vps/
 ops/src/capacity_vps/**
 !ops/src/capacity_vps/*.rs
+!ops/src/monitor/
+ops/src/monitor/**
+!ops/src/monitor/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/

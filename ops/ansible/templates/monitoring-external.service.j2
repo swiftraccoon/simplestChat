@@ -5,7 +5,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/monitoring_external.py
+ExecStart=/usr/local/libexec/simplestchat-public/simplestchat-ops monitor external
 UMask=0077
 TimeoutStartSec=90
 MemoryMax=128M

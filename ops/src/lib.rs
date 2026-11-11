@@ -12,6 +12,7 @@ pub mod capacity_vps;
 pub mod distribution;
 mod files;
 mod json;
+pub mod monitor;
 pub mod owned_process;
 pub mod release;
 
