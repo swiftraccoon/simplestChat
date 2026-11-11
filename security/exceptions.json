@@ -1494,9 +1494,9 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0",
-      "scope": "pkg:rpm/fedora/vim-data@9.2.1202-1.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1202-1.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/vim-data@9.2.1302-2.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "Pinned Fedora legal data generally rejects OPUBL-1.0 but explicitly permits documentation without section VI options and lists Vim. The exact upstream v9.2.1202 user manual (byte-identical to the reviewed v9.2.1129 manual and to the member of the manifest-verified Fedora source archive) assigns Open Publication License 1.0-or-later without exercising those options; its charity appeal is encouraged, not a stated distribution condition. Installed vim-data LICENSE is the separate Vim software notice and equals the archive's LICENSE. Neither inspected vim subpackage owns the manual path in the retained image; the metadata can reflect the source-wide aggregate. Keep every declared software term and limit any later exception to the exact package/expression with this documented context (re-reviewed 2026-10-19).",
+      "rationale": "Pinned Fedora legal data generally rejects OPUBL-1.0 but explicitly permits documentation without section VI options and lists Vim. The exact upstream v9.2.1302 user manual (byte-identical to the reviewed v9.2.1202 manual and to the member of the manifest-verified Fedora source archive) assigns Open Publication License 1.0-or-later without exercising those options; its charity appeal is encouraged, not a stated distribution condition. Installed vim-data LICENSE is the separate Vim software notice and equals the archive's LICENSE. Neither inspected vim subpackage owns the manual path in the retained image; the metadata can reflect the source-wide aggregate. Keep every declared software term and limit any later exception to the exact package/expression with this documented context (re-reviewed 2026-11-11).",
       "reachability": "The canonical artifact retains the exact vim-data notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
@@ -1504,9 +1504,9 @@
     {
       "scanner": "image-license",
       "fingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0",
-      "scope": "pkg:rpm/fedora/vim-minimal@9.2.1202-1.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1202-1.fc44.src.rpm",
+      "scope": "pkg:rpm/fedora/vim-minimal@9.2.1302-2.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
       "owner": "swiftraccoon",
-      "rationale": "This package shares the exact Vim source RPM and complete aggregate with vim-data, whose software LICENSE supplies the retained notice. The tagged manual and pinned Fedora Vim-specific Open Publication context are unchanged at 9.2.1202; the only spec change outside the patch level adds a pixman build dependency for the full configurations while the minimal configuration is built with --disable-pixman. No individually owned license file appears here. This does not infer that the minimal binary is governed by the documentation license or that all Open Publication variants are acceptable (re-reviewed 2026-10-19).",
+      "rationale": "This package shares the exact Vim source RPM and complete aggregate with vim-data, whose software LICENSE supplies the retained notice. The tagged manual and pinned Fedora Vim-specific Open Publication context are unchanged at 9.2.1302; the only spec change outside the patch level and release replaces the Fedora 45 gtk4 build conditional with a fixed disabled one, so every Fedora 44 configuration still builds against GTK 3. No individually owned license file appears here. This does not infer that the minimal binary is governed by the documentation license or that all Open Publication variants are acceptable (re-reviewed 2026-11-11).",
       "reachability": "The canonical artifact retains the exact vim-data notice set recorded in the review. This is a package-specific technical license-policy assessment; absent execution does not remove redistribution obligations. Only the exact PURL and current declaration fingerprint match automatically; changed notice/source context requires fresh review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-runtime-license-review.md"
@@ -1713,36 +1713,6 @@
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:4c5ae552460f0f1f289c1e0de4c7dcdd400e0abd820499c08e6b4581b815812b",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
-      "owner": "swiftraccoon",
-      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte belongs to two live Basenames_key_idx records of public fedora-gpg-keys 44-2 signing-key files under /usr/share/pki/rpm-gpg/: a 26-byte filename and two serialized row-identifier bytes, then the next cell's payload-size varint, three record-header bytes, a 24-byte filename and its two row-identifier bytes. The candidate is that 24-byte filename plus its two row-identifier bytes. Both basenames are also live 44-2 records under /etc/pki/rpm-gpg/ and live records of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
-    },
-    {
-      "scanner": "gitleaks",
-      "fingerprint": "image-match:5c555c9212ae3c99912d2e4215cacaec4608d5ec4704f94514c3aad04da393fa",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
-      "owner": "swiftraccoon",
-      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte belongs to two live Basenames_key_idx records of public fedora-gpg-keys 44-2 signing-key files under /usr/share/pki/rpm-gpg/: a 26-byte filename and two serialized row-identifier bytes, then the next cell's payload-size varint, three record-header bytes, a 24-byte filename and its two row-identifier bytes. The candidate is that 24-byte filename plus its two row-identifier bytes. Both basenames are also live 44-2 records under /etc/pki/rpm-gpg/ and live records of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
-    },
-    {
-      "scanner": "gitleaks",
-      "fingerprint": "image-match:3789d4a167b48392bfc5a5e34718071175c61b315c376c71cfb0fe61fc51b922",
-      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
-      "owner": "swiftraccoon",
-      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Every detected byte is one live public fedora-gpg-keys 44-2 filename index record (26 filename bytes and two serialized row-identifier bytes) followed by the four-byte header and 26 surviving content bytes of a 65-byte SQLite freeblock; the surviving bytes are a freed copy of the same filename. The candidate is the last freeblock-header byte plus that freed filename. The filename and full path also join a live record of the authenticated immutable Fedora base (44-1). This is public package metadata, not an issued bearer credential or signing private key.",
-      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
-    },
-    {
-      "scanner": "gitleaks",
       "fingerprint": "image-match:ad1c986e93b1bce33c49aed5af7693e3baa22c4d5d01a08ea631fbc042e1e50f",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
@@ -1750,6 +1720,86 @@
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-08.json (CI run 42453211328).",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-layer-001-regions-after-the-november-8-refresh--2026-11-08"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:7e9ab73f9e3d4974aa8e0d32ecc46b5ccc8ef2729276b2c60bc67c75b93e0579",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 25 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 26 surviving freed bytes are fully accounted for; the freed bytes are the 25-byte key and one-byte row identifier of a deleted index record, and they are the detector's candidate. That key and row identifier equal one live row of the pinned Fedora base under fedora-gpg-keys 44-1, the key equals the live filename, and the exact filename and full path join current fedora-gpg-keys 44-2 records. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:b7f7f08c3f763536dad1598d363e1e5877a53a482ce2502c599fe14670ab104d",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 61-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 27 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed bytes are fully accounted for; the freed bytes are the 27-byte key and one-byte row identifier of a deleted index record, and they are the detector's candidate. That key and row identifier equal one live row of the pinned Fedora base under fedora-gpg-keys 44-1, the key equals the live filename, and the exact filename and full path join current fedora-gpg-keys 44-2 records. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:055ef14cf11e5897d6eb16f2153dc4083555bbd6138fbef4f0ac08b8c4b61344",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. It spans two adjacent live index records: 26 filename bytes and two serialized row-identifier bytes of the first, then the one-byte payload size, three record-header bytes, the 24-byte filename and two row-identifier bytes of the second, all fully accounted for. The detector's candidate is the second record's filename and its two row-identifier bytes. Both filenames and full paths are current fedora-gpg-keys 44-2 records with independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:3ff5ba16f7446ef9b0d20cad91ad17b24fe1015c2a56fb7ecf42160f3934b85a",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. It spans two adjacent live index records: 26 filename bytes and two serialized row-identifier bytes of the first, then the one-byte payload size, three record-header bytes, the 24-byte filename and two row-identifier bytes of the second, all fully accounted for. The detector's candidate is the second record's filename and its two row-identifier bytes. Both filenames and full paths are current fedora-gpg-keys 44-2 records with independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:3fcea59685159e837277cf2911d170ba7e1798b1fe13a872d81bcd481d59a9e9",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. It spans two adjacent live index records: 26 filename bytes and two serialized row-identifier bytes of the first, then the one-byte payload size, three record-header bytes, the 24-byte filename and two row-identifier bytes of the second, all fully accounted for. The detector's candidate is the second record's filename and its two row-identifier bytes. Both filenames and full paths are current fedora-gpg-keys 44-2 records with independent live records in the pinned Fedora base under version 44-1. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:2b514538d881830b830d452c00793cf5372b5e10699a714597b466fcff2d874e",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 62-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 28 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 28 surviving freed filename bytes are fully accounted for; the freed bytes equal the live filename, which is the detector's candidate. The freed record's key and row identifier equal one live row of the pinned Fedora base under fedora-gpg-keys 44-1, and the exact filename and full path join current fedora-gpg-keys 44-2 records. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:bc90683abfc31d7b719b1c2996db8cdb39c901142a2d0c92734b72fa1e2271e2",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 26 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 26 surviving freed filename bytes are fully accounted for; the freed bytes equal the live filename, which is the detector's candidate. The freed record's key and row identifier equal one live row of the pinned Fedora base under fedora-gpg-keys 44-1, and the exact filename and full path join current fedora-gpg-keys 44-2 records. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
+    },
+    {
+      "scanner": "gitleaks",
+      "fingerprint": "image-match:4182a5c8f574ca62137bf267c379cf048f8fcb3334fae1e023b4ce681d8f8a2d",
+      "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
+      "owner": "swiftraccoon",
+      "rationale": "The complete 65-byte canonical match equals the inspected bounded package-install replay of this refresh. Its 29 live filename bytes, two serialized row-identifier bytes, four freeblock-header bytes and 30 surviving freed bytes are fully accounted for; the freed bytes are the 29-byte key and one-byte row identifier of a deleted index record, and they are the detector's candidate. That key and row identifier equal one live row of the pinned Fedora base under fedora-gpg-keys 44-1, the key equals the live filename, and the exact filename and full path join current fedora-gpg-keys 44-2 records. This is public package metadata, not an issued credential or signing private key.",
+      "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All metadata bytes remain in the match digest. Other findings, changed regions or paths remain blocking; the containing database and package receive no exemption. Evidence: security/secret-evidence/fedora-rpm-2026-11-11.json (CI run 42952247902).",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md#eight-database-regions-after-the-november-11-refresh--2026-11-11"
     },
     {
       "scanner": "codeql",

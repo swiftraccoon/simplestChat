@@ -31,7 +31,7 @@ EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-09-30-pr6.json"
 HISTORICAL = ROOT / "security/secret-evidence/fedora-rpm-2026-09-30.json"
 REFRESH_EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-10-19.json"
 DIRECT_EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-10-29.json"
-CURRENT_EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-11-08.json"
+CURRENT_EVIDENCE = ROOT / "security/secret-evidence/fedora-rpm-2026-11-11.json"
 BASE_EVIDENCE = ROOT / "security/secret-evidence/fedora-base-2026-09-30.json"
 DATABASE = "001/usr/lib/sysimage/rpm/rpmdb.sqlite"
 TODAY = date(2026, 9, 30)
@@ -69,7 +69,7 @@ def observation(
 
 
 def current_observation(*, replay: bool = False) -> tuple[list[JsonValue], JsonObject, JsonObject]:
-    """Reconstruct the 2026-11-08 multi-file layer-001 observation, canonical or replayed."""
+    """Reconstruct the 2026-11-11 multi-file layer-001 observation, canonical or replayed."""
     evidence = object_value(image.report(CURRENT_EVIDENCE))
     paths: JsonObject = {}
     names: dict[str, str] = {}
@@ -99,7 +99,7 @@ def current_observation(*, replay: bool = False) -> tuple[list[JsonValue], JsonO
 
 
 def current_findings() -> list[JsonObject]:
-    """Return the eight reviewed 2026-11-08 regions."""
+    """Return the thirteen current 2026-11-11 regions."""
     return [
         object_value(raw)
         for raw in array_value(object_value(image.report(CURRENT_EVIDENCE))["findings"])
@@ -113,14 +113,14 @@ class RpmSecretReviewTests(unittest.TestCase):
         """Removing any current review leaves exactly that observation blocking."""
         rows, paths, spans = current_observation()
         current = ledger.read_exceptions(today=TODAY)
-        self.assertEqual(len(rows), 8)
+        self.assertEqual(len(rows), 13)
         self.assertEqual(
-            len(array_value(image.secret_verdict(rows, [], paths, spans)["blocked"])), 8
+            len(array_value(image.secret_verdict(rows, [], paths, spans)["blocked"])), 13
         )
         result = image.secret_verdict(rows, current, paths, spans)
         self.assertTrue(result["passed"])
         waived = array_value(result["waived"])
-        self.assertEqual(len(waived), 8)
+        self.assertEqual(len(waived), 13)
         self.assertEqual(
             {string_value(object_value(raw)["fingerprint"]) for raw in waived},
             {string_value(finding["fingerprint"]) for finding in current_findings()},
@@ -184,24 +184,23 @@ class RpmSecretReviewTests(unittest.TestCase):
             image.secret_verdict(rows, current, paths, spans)
             for rows, paths, spans in (current_observation(), current_observation(replay=True))
         ]
-        self.assertTrue(results[0]["passed"])
-        self.assertTrue(results[1]["passed"])
+        self.assertEqual([result["passed"] for result in results], [True, True])
+        moved = 0
         for left, right in zip(
             array_value(results[0]["waived"]), array_value(results[1]["waived"]), strict=True
         ):
             canonical, replay = object_value(left), object_value(right)
-            self.assertEqual(canonical["fingerprint"], replay["fingerprint"])
-            self.assertEqual(canonical["spanSha256"], replay["spanSha256"])
-            self.assertEqual(canonical["spanBytes"], replay["spanBytes"])
-            for field in ("startColumn", "endColumn"):
+            for field in ("fingerprint", "spanSha256", "spanBytes", "startColumn", "endColumn"):
                 self.assertEqual(canonical[field], replay[field])
             database = canonical["path"] == DATABASE
+            moved += canonical["startLine"] != replay["startLine"]
             for field in ("fileSha256", "projectionSha256", "startLine", "endLine"):
                 with self.subTest(fingerprint=canonical["fingerprint"], field=field):
-                    if database:
+                    if database and field.endswith("Sha256"):
                         self.assertNotEqual(canonical[field], replay[field])
-                    else:
+                    elif not database:
                         self.assertEqual(canonical[field], replay[field])
+        self.assertEqual(moved, 1)  # eight database regions keep their projection lines
         # Historical replays still bind the same identities, now uniformly inactive.
         for evidence_path, same_coordinates in ((EVIDENCE, True), (REFRESH_EVIDENCE, False)):
             historical = [
@@ -259,7 +258,7 @@ class RpmSecretReviewTests(unittest.TestCase):
         }
         self.assertEqual(recurring | first_dormant, observed[EVIDENCE.name])
         # The six regions active before 2026-11-08 are exactly the ones its refresh retires.
-        retired = dormant_fingerprints(CURRENT_EVIDENCE)
+        retired = dormant_fingerprints(CURRENT_EVIDENCE.with_stem("fedora-rpm-2026-11-08"))
         self.assertEqual(
             retired,
             recurring | observed[REFRESH_EVIDENCE.name] | observed[DIRECT_EVIDENCE.name],
@@ -270,9 +269,10 @@ class RpmSecretReviewTests(unittest.TestCase):
             {string_value(item) for item in array_value(direct["recurringReviewedFingerprints"])}
             <= retired
         )
-        self.assertTrue(retired.isdisjoint(active))
+        newly = dormant_fingerprints(CURRENT_EVIDENCE)
+        self.assertEqual((len(newly), (retired | newly) & active), (3, set()))
         now = object_value(object_value(image.report(CURRENT_EVIDENCE))["trigger"])
-        self.assertEqual(array_value(now["recurringReviewedFingerprints"]), [])
+        self.assertEqual(len(array_value(now["recurringReviewedFingerprints"])), 5)
         self.assertTrue(
             retired.isdisjoint(
                 string_value(finding["fingerprint"]) for finding in current_findings()
@@ -349,12 +349,12 @@ class RpmSecretReviewTests(unittest.TestCase):
         )
 
     def test_current_database_regions_have_bounded_structural_coverage(self) -> None:
-        """All four 2026-11-08 regions are live public key-file index records or freed copies."""
+        """All nine 2026-11-11 regions are live public key-file index records or freed copies."""
         evidence = object_value(image.report(CURRENT_EVIDENCE))
         replay = object_value(evidence["replay"])
         self.assertFalse(replay["wholeDatabaseEqual"])
         self.assertFalse(replay["wholeProjectionEqual"])
-        self.assertTrue(replay["allFingerprintsEqualCanonicalBlocked"])
+        self.assertTrue(replay["detectorFingerprintsEqualCanonicalDatabaseRegions"])
         self.assertTrue(replay["profileAndMagicFilesWholeFileEqual"])
         self.assertEqual(replay["installedRuntimePackageIdentitiesEqual"], 148)
         self.assertEqual(replay["sqliteIntegrityCheck"], "ok")
@@ -363,10 +363,10 @@ class RpmSecretReviewTests(unittest.TestCase):
         regions = [
             item for item in current_findings() if object_value(item["span"])["path"] == DATABASE
         ]
-        self.assertEqual(len(regions), 4)
+        self.assertEqual(len(regions), 9)
         self.assertEqual(
             sorted(integer_value(object_value(region["span"])["spanBytes"]) for region in regions),
-            [58, 58, 58, 62],
+            [57, 58, 58, 58, 58, 61, 62, 62, 65],
         )
         freeblocks = 0
         for region in regions:
@@ -395,12 +395,12 @@ class RpmSecretReviewTests(unittest.TestCase):
                     block = object_value(raw)
                     freeblocks += 1
                     self.assertTrue(block["headerFullyCovered"])
-                    self.assertTrue(block["coveredContentEqualsLiveFilenameInSameRegion"])
-                    self.assertTrue(block["coveredContentIsCompleteLiveKeyInCurrentDatabase"])
-                    self.assertTrue(block["coveredContentIsCompleteLiveKeyInImmutableBase"])
+                    self.assertTrue(block["staleFilenameEqualsLiveFilenameInSameRegion"])
+                    self.assertTrue(block["staleFilenameIsCompleteLiveKeyInCurrentDatabase"])
+                    self.assertTrue(block["staleRecordEqualsImmutableBaseRecord"])
                 candidate = object_value(region["candidateContext"])
                 self.assertRegex(string_value(candidate["candidateSha256"]), r"^[a-f0-9]{64}$")
-        self.assertEqual(freeblocks, 2)
+        self.assertEqual(freeblocks, 6)
 
     def test_refreshed_layer_copies_repeat_reviewed_base_bytes_at_their_own_path(self) -> None:
         """Byte-identical base regions at the 001/ path need, and have, separate exact reviews."""
@@ -456,7 +456,7 @@ class RpmSecretReviewTests(unittest.TestCase):
             {"format": spans["format"], "findings": [*array_value(spans["findings"]), extra]},
         )
         self.assertFalse(result["passed"])
-        self.assertEqual(len(array_value(result["waived"])), 8)
+        self.assertEqual(len(array_value(result["waived"])), 13)
         self.assertEqual(len(array_value(result["blocked"])), 1)
 
 

@@ -19,7 +19,7 @@ EVIDENCE = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
 GLIBC_EVIDENCE = ROOT / "security/license-evidence/fedora-glibc-2026-10-01.json"
 TZDATA_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026-10-10.json"
 TZDATA_2026F_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026f-1.fc44.json"
-VIM_EVIDENCE = ROOT / "security/license-evidence/fedora-vim-2026-10-19.json"
+VIM_EVIDENCE = ROOT / "security/license-evidence/fedora-vim-2026-11-11.json"
 GCC_EVIDENCE = ROOT / "security/license-evidence/fedora-gcc-16.2.1-3.fc44.json"
 GLIBC_PACKAGES = {"glibc", "glibc-common", "glibc-minimal-langpack"}
 TZDATA_PACKAGES = {"tzdata"}
@@ -254,9 +254,9 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         )
 
     def test_superseded_vim_scopes_are_historical_evidence_only(self) -> None:
-        """The 9.2.1202 refresh does not accumulate compatibility approvals for 9.2.1129."""
+        """The 9.2.1302 refresh does not accumulate compatibility approvals for 9.2.1202."""
         updated = object_value(image.report(VIM_EVIDENCE))
-        old = [item for item in packages(evidence()) if string_value(item["name"]) in VIM_PACKAGES]
+        old = packages(object_value(image.report(VIM_EVIDENCE.with_stem("fedora-vim-2026-10-19"))))
         new = packages(updated)
         self.assertEqual({string_value(item["name"]) for item in new}, VIM_PACKAGES)
         self.assertEqual(len(new), 2)
@@ -290,7 +290,7 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         self.assertFalse(canonical["imageCheckPassed"])
         self.assertFalse(canonical["licenseCheckPassedBeforeReview"])
         self.assertFalse(canonical["secretCheckPassedBeforeReview"])
-        self.assertEqual(canonical["ciRunId"], 39212373766)
+        self.assertEqual(canonical["ciRunId"], 42952247902)
         self.assertEqual(
             set(array_value(canonical["licenseBlockedBeforeReview"])),
             {string_value(item["purl"]) for item in new},

@@ -1,5 +1,84 @@
 # Fedora RPM database secret findings
 
+## Eight database regions after the November 11 refresh — 2026-11-11
+
+The rebuilt dnf-upgrade layer (`001/`, layer
+`sha256:0db4134d20c936b475be6ded5bcb2c41d6234faec308285999a2bfcf7856e17a`) in
+[CI run 42952247902](https://github.com/swiftraccoon/simplestChat/actions/runs/42952247902)
+(revision `fabe1e1cf456e56741aab57162e74546a6afc3bb`, image
+`sha256:b463639cdb63f29908715b54a02d850fa2cba57078f030cdb0b110c2ff36f1a7`) failed
+the secret check with eight blocked regions, all in
+`001/usr/lib/sysimage/rpm/rpmdb.sqlite`. Twenty reviewed regions recurred and
+stayed waived: the 15 base-layer (`000/`) regions, the four tpm2-tss and
+`magic.mgc` regions of 2026-11-08 in byte-identical files, and one of that
+review's four database regions. The
+[new evidence](secret-evidence/fedora-rpm-2026-11-11.json) records the complete
+current layer-001 observation, 13 regions, and supports eight new exact
+records, one per complete region. The other three database regions of
+2026-11-08 do not occur in this image; per the dormancy rule they are removed
+from the active ledger and stay historical in the tests. Owner `swiftraccoon`
+and expiry **2026-11-29** are unchanged.
+
+The trigger is the `vim` update to 9.2.1302-2.fc44 (Bodhi
+`FEDORA-2026-97b00a408b`, stable 2026-11-11): the new package set reshaped the
+rpm `Basenames` index. The artifact (`13826507958`, 1,818,523 bytes, SHA-256
+equal to GitHub's digest) holds no database bytes. A new bounded local replay
+(two CPUs, 2 GiB, a 900-second deadline, the digest-pinned Fedora base and the
+canonical runtime-base `dnf upgrade` plus `dnf install` transaction with the
+same refresh epoch, on a private tmpfs storage root in the podman VM, from the
+same Containerfile bytes as the 2026-11-08 replay; no application built or
+executed) installed the same 148 runtime package identities as the canonical
+SBOM. The replayed database has the canonical size (9,895,936 bytes) and a
+different SHA-256. The pinned Gitleaks 8.30.1, run with the tier's exact
+arguments over the maintained projection of the replayed database, reports nine
+findings: the eight canonical blocked fingerprints and the recurring reviewed
+one. Eight keep the canonical projection lines and one moves; every complete
+match length and SHA-256 agrees. The three other layer-001 files are
+byte-identical in the replay, the canonical image and the 2026-11-08 review, so
+their four regions are carried over unchanged.
+
+**Structure of the eight regions.** Every byte lies in a leaf page of the
+`Basenames_key_idx` index and is accounted for as a live index record (payload
+size, record header, filename key, serialized row identifier) or as a freeblock
+(four header bytes and surviving content). Every live record is a
+`fedora-gpg-keys` 44-2 key filename whose exact filename and full path are also
+live under version 44-1 in the database of the digest-pinned Fedora base image
+(`93e5a500…`, the same bytes as in the earlier reviews).
+A freeblock's content is the remainder of a deleted index record: its key and
+row-identifier bytes after the four bytes the freeblock header overwrote. Each
+remainder equals the key and row identifier of one live row of the immutable
+base database, a `fedora-gpg-keys` 44-1 file the upgrade replaced, and its key
+equals the live filename beside it. The integrity check of the replayed
+database and the quick check of the base database are `ok`.
+
+| Fingerprint | Bytes | Accounted structure |
+| --- | --- | --- |
+| `7e9ab73f…` | 57 | 25-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 25-byte key and its 1-byte row identifier |
+| `b7f7f08c…` | 61 | 27-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 27-byte key and its 1-byte row identifier |
+| `055ef14c…`, `3ff5ba16…`, `3fcea596…` | 58 each | two adjacent live records: 26-byte filename and 2 row-identifier bytes, then 1 payload-size byte, 3 record-header bytes, 24-byte filename and 2 row-identifier bytes |
+| `2b514538…` | 62 | 28-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 28-byte key (its row identifier lies after the match) |
+| `bc90683a…` | 58 | 26-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 26-byte key (its row identifier lies after the match) |
+| `4182a5c8…` | 65 | 29-byte live filename, 2 row-identifier bytes, 4 freeblock-header bytes, freed 29-byte key and its 1-byte row identifier |
+
+In two of the eight regions (`2b514538…`, `bc90683a…`) the detector's candidate
+is a filename. In the other six it is a filename followed by that record's
+row-identifier bytes, which are printable in the projection. These are public
+package filenames and SQLite index metadata, not issued credentials or private
+keys. Candidate text, filenames and raw matches stay private; only digests,
+lengths, coordinates and structure are committed.
+
+The five recurring layer-001 records are unchanged: they keep their 2026-11-08
+review and evidence, which stays retained, and the new evidence repeats their
+complete spans.
+
+**Limits.** The canonical image check **failed** and is not relabelled. The
+full canonical archive and raw canonical database were not retained; the replay
+binds to the canonical scanner bytes through the complete span digests. Every
+finding outside these exact complete regions remains blocking: no path, package
+or rule exemption and no expiry renewal. A fresh canonical image gate is
+required before signing or deployment, and the Fedora repositories may move
+again before that build.
+
 ## Eight layer-001 regions after the November 8 refresh — 2026-11-08
 
 The rebuilt dnf-upgrade layer (`001/`, layer

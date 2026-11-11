@@ -1,0 +1,322 @@
+{
+  "canonical": {
+    "archiveSha256": "48734874cf8f229e9f6437ddda294a0c9eb6b61864bd604bbfc5dc068452ad69",
+    "artifactId": 13826507958,
+    "artifactUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/42952247902/artifacts/13826507958",
+    "artifactZipBytes": 1818523,
+    "artifactZipDigestMatchesGithubApi": true,
+    "artifactZipSha256": "cb3c503c7c4ec7ed9fa9a09424d54b889d1409af81744ae04ad351a4cbe2e10d",
+    "binarySha256": "d85780ee3a0d91deccc43b07933c3873de0a0f29bf1b5efbf0efed8dbb6ef2c2",
+    "binding": "outcome.json records runtimeLicenseEvidenceSha256, runtimeProofSha256 and sbomSha256 equal to the member hashes above; the Syft document is retained by its own hash.",
+    "ciRunId": 42952247902,
+    "ciRunUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/42952247902",
+    "imageCheckPassed": false,
+    "imageId": "sha256:b463639cdb63f29908715b54a02d850fa2cba57078f030cdb0b110c2ff36f1a7",
+    "licenseBlockedBeforeReview": [
+      "pkg:rpm/fedora/vim-data@9.2.1302-2.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
+      "pkg:rpm/fedora/vim-minimal@9.2.1302-2.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm"
+    ],
+    "licenseCheckPassedBeforeReview": false,
+    "noticeCheckPassed": true,
+    "noticeSha256": "dd39d63239c97642eabef66723823ffb44d1b7c8a76b467ec4353e3c66766442",
+    "outcomeSha256": "869fbb1c3ee363c3c31de5becc21be04a5e7658326351576da7fac7e7350b73b",
+    "platform": "linux/amd64",
+    "recordedExceptionsSha256": "36ab94428170c81f859a79e559c7a82c679617a041ab9f8aa0c48fcfd8559d18",
+    "recordedPolicySha256": "793348cbcda877fa794cd84dc4f5f8d3ffe40cc78bcca86f81c9bc939da5cf79",
+    "recordedToolLockSha256": "dc0fe6c4c227dc487103f7eabdf0583a8755e98c51eea650cd30023ca6681bf6",
+    "revision": "fabe1e1cf456e56741aab57162e74546a6afc3bb",
+    "runtimeProofPassed": true,
+    "runtimeProofSha256": "7ac8993a19d9b883559668603d4254fd9aa4672ef90f63797d8c7d42628b3a91",
+    "secretCheckPassedBeforeReview": false,
+    "secretReview": "security/secret-evidence/fedora-rpm-2026-11-11.json",
+    "selectedImage": {
+      "architecture": "amd64",
+      "archiveConfigSha256": "b463639cdb63f29908715b54a02d850fa2cba57078f030cdb0b110c2ff36f1a7",
+      "id": "sha256:b463639cdb63f29908715b54a02d850fa2cba57078f030cdb0b110c2ff36f1a7",
+      "layers": [
+        "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+        "sha256:0db4134d20c936b475be6ded5bcb2c41d6234faec308285999a2bfcf7856e17a",
+        "sha256:80f1c611148c49d250a135a528ceb72f4aca3b7cb980a100259d039bda4d362a",
+        "sha256:1601e62279218613014d6905ec1e7ae379a0a5000be0ba86c1f8bdd41ba69336",
+        "sha256:79658c036d21fcfe4b1aeb052229b1579ac82b729aea3b9db9c68af04a67c8d3",
+        "sha256:4be0c43dcfb244987c7f169c3d58b62aa5c6abf242c56b401424f01cbd5252c5",
+        "sha256:18a6e5a484aaed593c91304a7a69fadab3b672c6d425a1f4a56114dd7ca4efc2",
+        "sha256:e9ddef970a701a2bea5a4c2c6f416ef8d45e9fff91ca8e7ee22188e094fc96af",
+        "sha256:33277a9a73eb586749f1f47bc5b7e4b25a76831f15c89149703aa9b22fcd97f0",
+        "sha256:50a4f1840333d9f7b6223237cc9e989646f7f5f72c1e9886443b2d9b89aa2c01",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "spdxSha256": "74a333574c32cb2d3a3ee994d848af6cf314dc044ac221395e23a330ecefc350",
+    "syftSha256": "46ad23e20f49b488368bf98aa3cd6f8da060bb215f62ea18eeee5a0bd900279c",
+    "vulnerabilityCheckPassed": true
+  },
+  "conditions": [
+    "Each active ledger entry uses the observed canonical PURL including architecture, epoch, version and source RPM, and one current declaration fingerprint. No architecture scope was synthesized.",
+    "Complete ordered declarations and the required vim-data notice matched this image. Original raw record hashes retain scanner provenance; only validated location layer digests are normalized for raw-license review identity.",
+    "The existing ledger matches exact PURL plus declaration fingerprint; image and notice hashes in this evidence record the reviewed artifact, not additional automatically enforced matching fields. Changed notice, source or distribution context requires review even if a scanner emits the same PURL and declaration.",
+    "Fedora's Open Publication exception covers documentation only when the copyright holder exercises no section VI option; the pinned legal data lists vim. Retain every declared software term, the vim-data software notice and source/compilation/redistribution conditions. This is technical scanner policy, not complete redistribution clearance.",
+    "Changed packages, sources, declarations, notices or expiry require fresh review. No wildcard, automatic renewal, alternate historical fingerprints or general license allowance."
+  ],
+  "declarations": {
+    "D01": {
+      "records": [
+        {
+          "locations": [
+            {
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              },
+              "layerID": "sha256:0db4134d20c936b475be6ded5bcb2c41d6234faec308285999a2bfcf7856e17a",
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite"
+            }
+          ],
+          "spdxExpression": "Vim AND LGPL-2.1-or-later AND MIT AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND Apache-2.0 WITH Swift-exception",
+          "type": "declared",
+          "urls": [],
+          "value": "Vim AND LGPL-2.1-or-later AND MIT AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND Apache-2.0 WITH Swift-exception"
+        }
+      ],
+      "recordsSha256": "37d470cd49faccd880dfa9a20c2e0470a9649192bfd0e5c87b3a5b33cf121501",
+      "reviewFingerprint": "license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0"
+    }
+  },
+  "historicalEvidence": {
+    "disposition": "Historical bytes and observations remain unchanged; the 26 other exact image-license reviews this image matched are retained and the two 9.2.1202 scopes are removed from active policy.",
+    "path": "security/license-evidence/fedora-vim-2026-10-19.json",
+    "sha256": "4b5f69dfd76c90a609b1cc18c8023d4f0096e6d70e8f8a83b2e544d8952f9a86"
+  },
+  "noticeSets": {
+    "N01": {
+      "files": [
+        {
+          "bytes": 5021,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/vim-data/LICENSE",
+          "resolvedPath": "/usr/share/licenses/vim-data/LICENSE",
+          "sha256": "0b3f1f330cb1b179bb17c7c687d4cec601e0aa3462bc7f890ad4c3888d37d720"
+        }
+      ],
+      "ownerPurl": "pkg:rpm/fedora/vim-data@9.2.1302-2.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm"
+    }
+  },
+  "packages": [
+    {
+      "canonical": {
+        "architecture": "noarch",
+        "epoch": 2,
+        "purl": "pkg:rpm/fedora/vim-data@9.2.1302-2.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
+        "sourceRpm": "vim-9.2.1302-2.fc44.src.rpm",
+        "spdxLicenseDeclared": "(Vim AND LGPL-2.1-or-later AND MIT AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND Apache-2.0 WITH Swift-exception)",
+        "spdxPackageId": "SPDXRef-Package-rpm-vim-data-5c2788550c77114e",
+        "version": "2:9.2.1302-2.fc44"
+      },
+      "declaration": "D01",
+      "name": "vim-data",
+      "noticeSet": "N01",
+      "rationale": "Same complete declaration and fingerprint as the 9.2.1202 review. The Fedora source archive vim-9.2-1302.tar.bz2 matches the exact manifest SHA-512; its LICENSE member is byte-identical to the installed vim-data notice and to the reviewed notice, and its runtime/doc/usr_01.txt is byte-identical to the reviewed 9.2.1202 manual and to the upstream v9.2.1302 tag, so the Open Publication License statement without section VI options is unchanged. The pinned Fedora legal data still lists vim among the documentation exceptions. Neither inspected subpackage owns the manual path; the metadata reflects the source-wide aggregate.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009",
+        "S010"
+      ]
+    },
+    {
+      "canonical": {
+        "architecture": "x86_64",
+        "epoch": 2,
+        "purl": "pkg:rpm/fedora/vim-minimal@9.2.1302-2.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
+        "sourceRpm": "vim-9.2.1302-2.fc44.src.rpm",
+        "spdxLicenseDeclared": "(Vim AND LGPL-2.1-or-later AND MIT AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND Apache-2.0 WITH Swift-exception)",
+        "spdxPackageId": "SPDXRef-Package-rpm-vim-minimal-633898f617b84c09",
+        "version": "2:9.2.1302-2.fc44"
+      },
+      "declaration": "D01",
+      "name": "vim-minimal",
+      "noticeSet": "N01",
+      "rationale": "Same exact source RPM, complete aggregate declaration and fingerprint as vim-data; the vim-data software LICENSE supplies the retained notice. Outside the patch level and release the spec only replaces the Fedora 45 gtk4 build conditional with a fixed disabled one, which leaves every Fedora 44 configuration on GTK 3 as before, so no new linked component is inferred. This does not infer that the minimal binary is governed by the documentation license or that all Open Publication variants are acceptable.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009",
+        "S010"
+      ]
+    }
+  ],
+  "review": {
+    "authority": "Agent technical scanner-policy assessment under the owner-authorized security rollout; exact package-scoped exceptions only, not complete redistribution clearance.",
+    "date": "2026-11-11",
+    "disposition": "Accept only the observed 2:9.2.1302-2.fc44 vim-data and vim-minimal package/declaration records with retained source and notice conditions; supersede the 9.2.1202 scopes without renewing the fixed expiry.",
+    "expires": "2026-11-29",
+    "owner": "swiftraccoon"
+  },
+  "schemaVersion": 1,
+  "scope": "Exact canonical linux/amd64 Fedora vim-data and vim-minimal 2:9.2.1302-2.fc44 license-source delta review",
+  "sourceAuthentication": [
+    "Read-only official Koji getBuild responses bind successful exact NVRs vim-9.2.1302-2.fc44 and vim-9.2.1202-1.fc44 to immutable Fedora dist-git commits 0a69bfb3b5ccea267428da76a91144f639f50951 and b432bbc9eb0a935c8e486646632e7940c1c054a9; Bodhi records FEDORA-2026-97b00a408b as stable on 2026-11-11.",
+    "The source archive was fetched from the Fedora lookaside over HTTPS and hashed; its SHA-512 matches the exact manifest at the build commit. The archive's LICENSE and usr_01.txt members were compared by hash with the installed notice and the reviewed manual. No downloaded code, package scripts or tests were executed.",
+    "No independent detached RPM or release-signature verification is claimed. HTTPS source provenance plus exact hashes and the successful build mapping support this bounded source comparison; this is not a reproducible-build proof."
+  ],
+  "sourceComparison": {
+    "archiveLicenseMembers": {
+      "LICENSE": {
+        "archive": "vim-9.2-1302.tar.bz2",
+        "bytes": 5021,
+        "matchesHistoricalNotice": true,
+        "matchesInstalledNotice": true,
+        "sha256": "0b3f1f330cb1b179bb17c7c687d4cec601e0aa3462bc7f890ad4c3888d37d720"
+      },
+      "runtime/doc/usr_01.txt": {
+        "archive": "vim-9.2-1302.tar.bz2",
+        "bytes": 7322,
+        "matchesReviewedManual": true,
+        "matchesUpstreamTag": true,
+        "sha256": "2fccea6a8ee57f1d5d422a5a18d45d02962535dcb5717d914a170df9a708e7e6"
+      }
+    },
+    "fedoraNewCommit": "0a69bfb3b5ccea267428da76a91144f639f50951",
+    "fedoraOldCommit": "b432bbc9eb0a935c8e486646632e7940c1c054a9",
+    "specDelta": "Outside %changelog only the patchlevel define (1202 to 1302), the Release tag (1 to 2) and the gtk4 build conditional change: the three-line conditional that enabled gtk4 from Fedora 45 is replaced by a fixed `%bcond gtk4 0` with a two-line comment, so Fedora 44 keeps building every configuration against GTK 3. The License line, Source entries, notice installation and subpackages are unchanged; two changelog entries (2:9.2.1302-1, 2026-11-06, and 2:9.2.1302-2, 2026-11-09) are added.",
+    "upstreamNewArchives": {
+      "vim-9.2-1302.tar.bz2": "sha512 a833e421…fe447, 16011463 bytes"
+    },
+    "upstreamOldArchives": {
+      "vim-9.2-1202.tar.bz2": "934675fe25382fa7ad23eb8d904cb6cad71e8b4b57819e06fc4cae6fac9c5efa21b39ea3641d518218d60b8d43421ea1f25f55f72cb9ea6908ddfabd0b63766a"
+    },
+    "upstreamOldArchivesNote": "SHA-512 as printed in the reviewed 9.2.1202 manifest (S009); that archive was not re-downloaded because the reviewed manual and LICENSE bytes recur unchanged in the new archive."
+  },
+  "sources": {
+    "S001": {
+      "argument": "vim-9.2.1302-2.fc44",
+      "buildId": 3137638,
+      "completionTime": "2026-11-09 15:00:41.281642+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3137638",
+      "responseBytes": 2890,
+      "responseSha256": "1e35c6967b13b4d71ee870de2e6497ea4f2d31a4f8ebab5f3e308b57e4cd237f",
+      "source": "git+https://src.fedoraproject.org/rpms/vim.git#0a69bfb3b5ccea267428da76a91144f639f50951",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    },
+    "S002": {
+      "builds": [
+        "vim-9.2.1302-2.fc44"
+      ],
+      "dateStable": "2026-11-11 01:02:59",
+      "method": "HTTPS JSON (read-only)",
+      "responseBytes": 8179,
+      "responseSha256": "59f754d1113df6df9c54ec95a34400d1c18e8276226ba8df95e5bce5a829e1d0",
+      "status": "stable",
+      "updateId": "FEDORA-2026-97b00a408b",
+      "url": "https://bodhi.fedoraproject.org/updates/?builds=vim-9.2.1302-2.fc44"
+    },
+    "S003": {
+      "algorithm": "SHA512",
+      "entries": {
+        "vim-9.2-1302.tar.bz2": "a833e4213157e0c0b38eb75dc81fd74940a14af99978cbf517bc2068ef4e3030bcf6b8dc281d9384f175102b459434d30422aefae2ffd64542cb1bbdaf1fe447"
+      },
+      "method": "HTTPS raw file",
+      "sha256": "17080de3e7d862858f92f68310c8a4866f9ea9330f99690b8226939cf68c61ea",
+      "url": "https://src.fedoraproject.org/rpms/vim/raw/0a69bfb3b5ccea267428da76a91144f639f50951/f/sources"
+    },
+    "S004": {
+      "licenseLine": "License: Vim AND LGPL-2.1-or-later AND MIT AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND Apache-2.0 WITH Swift-exception",
+      "lines": 4107,
+      "method": "HTTPS raw file",
+      "sha256": "b19b3ace9da329a97fdb6f1c7538d874337f9501f46701b6577a34c847ff79ed",
+      "url": "https://src.fedoraproject.org/rpms/vim/raw/0a69bfb3b5ccea267428da76a91144f639f50951/f/vim.spec"
+    },
+    "S005": {
+      "bytes": 16011463,
+      "matchesManifest": true,
+      "method": "HTTPS download (Fedora lookaside)",
+      "sha256": "53a30c98cede802b420f4021e44d30170f30d5318dd2e79fa1f497b557f6732e",
+      "sha512": "a833e4213157e0c0b38eb75dc81fd74940a14af99978cbf517bc2068ef4e3030bcf6b8dc281d9384f175102b459434d30422aefae2ffd64542cb1bbdaf1fe447",
+      "url": "https://src.fedoraproject.org/repo/pkgs/rpms/vim/vim-9.2-1302.tar.bz2/sha512/a833e4213157e0c0b38eb75dc81fd74940a14af99978cbf517bc2068ef4e3030bcf6b8dc281d9384f175102b459434d30422aefae2ffd64542cb1bbdaf1fe447/vim-9.2-1302.tar.bz2"
+    },
+    "S006": {
+      "bytes": 7322,
+      "matchesArchiveMember": true,
+      "matchesReviewedManual": true,
+      "method": "HTTPS raw file",
+      "representation": "response-bytes",
+      "sha256": "2fccea6a8ee57f1d5d422a5a18d45d02962535dcb5717d914a170df9a708e7e6",
+      "url": "https://raw.githubusercontent.com/vim/vim/v9.2.1302/runtime/doc/usr_01.txt"
+    },
+    "S007": {
+      "bytes": 657,
+      "commit": "cbd8b74cd481a598668f05d1878fcd53a8ef78e4",
+      "gitBlob": "23b8dd4755ce0315030ed6de3e686c81d225cb59",
+      "method": "HTTPS JSON (read-only)",
+      "representation": "decoded-Fedora-API-content",
+      "sha256": "c511611681dfdeb779ce97249ab905c9d488c6ccc61de9a0a9fbfb9df4f3111c",
+      "unchangedSinceReviewedCommit": true,
+      "url": "https://forge.fedoraproject.org/api/v1/repos/legal/fedora-license-data/contents/data/OPUBL-1.0.toml?ref=cbd8b74cd481a598668f05d1878fcd53a8ef78e4"
+    },
+    "S008": {
+      "lines": 4101,
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 9.2.1202 spec, for the spec delta",
+      "sha256": "e7dac407585f90bbf3f295fb5583a12424ddbd9f602b2eab0b176e1b5780ac4f",
+      "url": "https://src.fedoraproject.org/rpms/vim/raw/b432bbc9eb0a935c8e486646632e7940c1c054a9/f/vim.spec"
+    },
+    "S009": {
+      "algorithm": "SHA512",
+      "entries": {
+        "vim-9.2-1202.tar.bz2": "934675fe25382fa7ad23eb8d904cb6cad71e8b4b57819e06fc4cae6fac9c5efa21b39ea3641d518218d60b8d43421ea1f25f55f72cb9ea6908ddfabd0b63766a"
+      },
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 9.2.1202 manifest, for the archive comparison",
+      "sha256": "4f62c06cf1a8bd846513f00298dbe10f4f78d4ffb1071eaceb830de704ecb615",
+      "url": "https://src.fedoraproject.org/rpms/vim/raw/b432bbc9eb0a935c8e486646632e7940c1c054a9/f/sources"
+    },
+    "S010": {
+      "argument": "vim-9.2.1202-1.fc44",
+      "buildId": 3122379,
+      "completionTime": "2026-10-16 13:31:40.653402+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3122379",
+      "purpose": "binds the superseded scope to its dist-git commit",
+      "responseBytes": 2891,
+      "responseSha256": "72b14841ee28142aa76cffec365f755e1011d70af16fd1ff27a06e3c5122d27e",
+      "source": "git+https://src.fedoraproject.org/rpms/vim.git#b432bbc9eb0a935c8e486646632e7940c1c054a9",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    }
+  },
+  "status": "reviewed; exact two replacement ledger entries required; all other gates remain independent",
+  "supersedes": [
+    "pkg:rpm/fedora/vim-data@9.2.1202-1.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1202-1.fc44.src.rpm",
+    "pkg:rpm/fedora/vim-minimal@9.2.1202-1.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1202-1.fc44.src.rpm"
+  ],
+  "verification": {
+    "afterReviewPassed": true,
+    "beforeReviewBlockedScopes": [
+      "pkg:rpm/fedora/vim-data@9.2.1302-2.fc44?arch=noarch&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm",
+      "pkg:rpm/fedora/vim-minimal@9.2.1302-2.fc44?arch=x86_64&distro=fedora-44&epoch=2&upstream=vim-9.2.1302-2.fc44.src.rpm"
+    ],
+    "declarationDifferenceFromHistorical": "Only the original provenance location layerID changes (the runtime package layer); the complete declaration, record fields and order otherwise match.",
+    "exactObservedPackageCount": 2,
+    "noticeBytesKindsAndResolutionMatchHistorical": true,
+    "noticeBytesMatchVerifiedSourceArchive": true,
+    "orderedDeclarationsMatchSyftAndReport": true,
+    "preservedOtherReviewCount": 26,
+    "regularNoticeDigestsMatchRpmMetadata": true,
+    "spdxPackageIdentitiesMatch": true
+  }
+}
