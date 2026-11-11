@@ -168,7 +168,10 @@ chat is live (`release.yml` with `scpub_release_deploy: false`; see
 and pass the same revision as
 `-e scpub_release_revision=<rev> -e scbench_revision=<rev>`: the playbook then
 selects the staged image, checks its revision label, and the launcher below
-starts it.
+starts it. Every release rewrites the host's `images.json` with the revision
+and image it started, so once that file names anything but the host's own
+build of `scbench_revision`, a run without both inputs stops before changing
+anything: name the running release or a newly staged one.
 
 ## Query statistics and slow queries
 
@@ -392,10 +395,10 @@ the release helper (`files/release_public.py`).
 5. Run `public.yml` naming the release the host was running, exactly as
    [preparing the configuration](#prepare-configuration) for a CI-tested image:
    `-e scpub_release_revision=<running rev> -e scbench_revision=<running rev>`.
-   Without both inputs the playbook records the inventory's provisioning
-   revision, whose image cannot serve a database migrated past it. The run
-   reinstalls the Caddyfile and records the browser-asset receipt, without
-   which the maintenance release is refused. Then recreate the application
+   Without both inputs the playbook refuses to replace the recorded release:
+   the inventory's provisioning image cannot serve a database migrated past
+   it. The run reinstalls the Caddyfile and records the browser-asset receipt,
+   without which the maintenance release is refused. Then recreate the application
    from that configuration, `sudo /usr/local/bin/simplestchat-public up -d
    --no-build --pull never`, rather than with the
    [explicit deployment command](#deploy-explicitly): that command needs

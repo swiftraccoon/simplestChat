@@ -1,9 +1,12 @@
-//! Workflow pins carried over from the Python test modules, one file per
-//! module and holding only that module's assertions. Each pin reads the same
-//! workflow, selects the same step the same way and compares the same text.
+//! Workflow and playbook pins, one file per subject. A file carried over from
+//! a Python test module takes that module's name and holds only its
+//! assertions: each pin reads the same workflow, selects the same step the
+//! same way and compares the same text. `public_recorded_release` is not
+//! carried over; it pins the public playbook's recorded-release guard.
 
 mod ci_verified;
 mod performance_compare_ci;
+mod public_recorded_release;
 mod python_quality;
 mod release_container_ci;
 mod security_ci;

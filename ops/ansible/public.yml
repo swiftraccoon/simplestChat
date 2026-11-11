@@ -144,6 +144,38 @@
       failed_when: scpub_staged_image.rc != 0 or scpub_staged_image.stdout | trim != scpub_release_revision
       when: scpub_release_revision is defined
 
+    # Every release rewrites images.json with the revision and image it started,
+    # so after the first release the inventory's provisioning build is stale and
+    # its image cannot serve a database migrated past it. Recording that build
+    # again must be a named decision, never the default.
+    - name: Look for the image identities an earlier run recorded
+      ansible.builtin.stat:
+        path: "{{ scpub_config }}/images.json"
+        get_checksum: false
+      register: scpub_recorded_images_file
+
+    - name: Read the image identities an earlier run recorded
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/images.json"
+      register: scpub_recorded_images
+      when: scpub_recorded_images_file.stat.exists
+
+    - name: Refuse to replace the recorded release with the host's own build
+      vars:
+        scpub_recorded: "{{ scpub_recorded_images.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - scpub_recorded.revision == scbench_revision
+          - scpub_recorded.serverImage == scpub_server_image
+        fail_msg: >-
+          This host records release {{ scpub_recorded.revision }}; name the running or a
+          staged release with -e scpub_release_revision=<rev> -e scbench_revision=<rev>
+          instead of recording the provisioning image, which cannot serve a database
+          migrated past it.
+      when:
+        - scpub_release_revision is not defined
+        - scpub_recorded_images_file.stat.exists
+
   tasks:
     - name: Create private configuration and persistent deployment directories
       ansible.builtin.file:
