@@ -11,26 +11,21 @@ import unittest
 from contextlib import ExitStack, contextmanager, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
-from ansible.parsing.dataloader import DataLoader
-from ansible.plugins.loader import init_plugin_loader
-from ansible.template import Templar, trust_as_template
-from test_support import objects, string, yaml_value
+import test_support
 
 # isort: split
-# Standalone helper paths are installed by the maintained test bootstrap.
 import browser_assets as command
 import release_public as public
-from release_json import JsonObject, decode_json, json_value, object_value
+from release_json import JsonObject, decode_json, object_value
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 REVISION = "a" * 40
 OTHER_REVISION = "b" * 40
-TASKS = Path(__file__).resolve().parents[1] / "tasks/browser-assets.yml"
 
 
 @dataclass(frozen=True)
@@ -98,39 +93,18 @@ def owned_command() -> Generator[Fixture]:
 class BrowserAssetCommandTests(unittest.TestCase):
     """Initialization reports actual persistent changes without rewriting stable state."""
 
-    @classmethod
-    @override
-    def setUpClass(cls) -> None:
-        """Load installed Ansible filters without any connection or remote task execution."""
-        init_plugin_loader()
-
-    @staticmethod
-    def changed(receipt: JsonObject) -> bool:
-        """Evaluate the maintained task's actual changed_when using Ansible's engine."""
-        task = objects(yaml_value(TASKS.read_text()))[0]
-        register = string(task, "register")
-        expression = string(task, "changed_when")
-        templar = Templar(
-            loader=DataLoader(), variables={register: {"stdout": json.dumps(receipt)}}
-        )
-        value = json_value(templar.template(trust_as_template("{{ " + expression + " }}")))
-        if not isinstance(value, bool):
-            message = "The Ansible change predicate must produce an actual boolean"
-            raise TypeError(message)
-        return value
-
     def test_first_initialization_changes_and_second_is_a_verified_filesystem_noop(self) -> None:
         """The second pass retains exact bytes, inodes, modes and write timestamps."""
+        helpers = test_support.ROOT / "ops/ansible/files"
+        self.assertEqual(Path(str(command.__file__)).parent, helpers)
         with owned_command() as fixture:
             status, receipt = fixture.initialize()
             self.assertEqual(status, 0)
             self.assertEqual(receipt, {"passed": True, "changed": True})
-            self.assertTrue(self.changed(receipt))
             before = fixture.snapshot()
             status, receipt = fixture.initialize()
             self.assertEqual(status, 0)
             self.assertEqual(receipt, {"passed": True, "changed": False})
-            self.assertFalse(self.changed(receipt))
             self.assertEqual(fixture.snapshot(), before)
 
     def test_revision_change_is_reported_once_and_identical_selection_stays_unchanged(self) -> None:
@@ -140,13 +114,13 @@ class BrowserAssetCommandTests(unittest.TestCase):
             for revision in (OTHER_REVISION, REVISION):
                 status, receipt = fixture.initialize(revision)
                 self.assertEqual(status, 0)
-                self.assertTrue(self.changed(receipt))
+                self.assertEqual(receipt, {"passed": True, "changed": True})
                 version = fixture.root / "browser-assets/public/app-version.json"
                 self.assertEqual(
                     object_value(decode_json(version.read_bytes())), {"revision": revision}
                 )
                 before = fixture.snapshot()
-                self.assertFalse(self.changed(fixture.initialize(revision)[1]))
+                self.assertFalse(fixture.initialize(revision)[1]["changed"])
                 self.assertEqual(fixture.snapshot(), before)
 
     def test_stable_bytes_with_incorrect_proxy_read_mode_are_repaired_and_reported(self) -> None:
@@ -157,9 +131,9 @@ class BrowserAssetCommandTests(unittest.TestCase):
             version.chmod(0o600)
             status, receipt = fixture.initialize()
             self.assertEqual(status, 0)
-            self.assertTrue(self.changed(receipt))
+            self.assertEqual(receipt, {"passed": True, "changed": True})
             self.assertEqual(version.stat().st_mode & 0o777, 0o644)
-            self.assertFalse(self.changed(fixture.initialize()[1]))
+            self.assertFalse(fixture.initialize()[1]["changed"])
 
     def test_foreign_state_and_invalid_revisions_fail_without_exposing_private_values(self) -> None:
         """No-op detection follows ownership/schema checks and cannot adopt extra files."""

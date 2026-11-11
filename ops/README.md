@@ -370,12 +370,14 @@ the retained Python oracle, never the actual host's protected release paths.
 
 ## Browser asset filesystem transactions
 
-The complete local transaction API and CLI are available for eventual verified
-Ops distribution. The installed Python `release_assets.py`, `browser_assets.py`,
-release controller and Ansible tasks remain authoritative and unchanged. This
-unit does not copy from an image, run a workload, alter a proxy or establish
-installed/runtime compatibility. Never substitute an unverified development
-binary on a release host.
+The Ansible asset tasks and the expiry timer run `initialize` and `prune`
+through the installed executable; native deployment and maintenance publish
+through the same store. A host provisioned from source has no executable until
+its first signed release: there the tasks only ensure the directory the proxy
+mounts, the timer's unit is skipped, and that release's publication initializes
+the store. The Python `release_assets.py` remains only for the force route.
+These commands do not copy from an image, run a workload or alter a proxy.
+Never substitute an unverified development binary on a release host.
 
 ```sh
 simplestchat-ops release assets capture --path /path/to/assets.tar

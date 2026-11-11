@@ -6,6 +6,7 @@
 
 mod ansible;
 mod benchmark_automation;
+mod browser_assets;
 mod cache_retention_workflow;
 mod ci_database_check;
 mod ci_verified;

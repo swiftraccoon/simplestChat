@@ -1,16 +1,41 @@
 ---
+# The proxy mounts this directory on every host; the store inside it belongs to
+# the Ops executable.
+- name: Ensure the public browser asset store directory the proxy mounts
+  ansible.builtin.file:
+    path: "{{ scpub_root }}/browser-assets"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# A host provisioned from source has no Ops executable until its first signed
+# release, whose own publication initializes the store.
+- name: Look for the installed Ops executable without following links
+  ansible.builtin.stat:
+    path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+    follow: false
+    get_checksum: false
+  register: scpub_browser_asset_ops
+
 - name: Initialize the bounded public browser asset store before startup
   ansible.builtin.command:
     argv:
-      - /usr/bin/python3
-      - -B
-      - /usr/local/libexec/simplestchat-public/browser_assets.py
+      - /usr/local/libexec/simplestchat-public/simplestchat-ops
+      - release
+      - assets
       - initialize
       - --revision
       - "{{ scpub_browser_assets_revision | default(scbench_revision) }}"
+  environment:
+    PATH: /usr/sbin:/usr/bin:/sbin:/bin
+    GH_TOKEN: ''
+    GITHUB_TOKEN: ''
   register: scpub_browser_asset_initialization
   changed_when: (scpub_browser_asset_initialization.stdout | from_json).changed
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - scpub_browser_asset_ops.stat.exists
 
 - name: Record the installed reviewed proxy capability on initial provisioning
   ansible.builtin.copy:

@@ -1,12 +1,15 @@
 [Unit]
 Description=Expire retained public simplestChat browser assets
+# A host provisioned from source has no Ops executable, and nothing retained to
+# expire, until its first signed release.
+ConditionPathExists=/usr/local/libexec/simplestchat-public/simplestchat-ops
 
 [Service]
 Type=oneshot
 RuntimeDirectory=simplestchat-bench
 RuntimeDirectoryMode=0700
 RuntimeDirectoryPreserve=yes
-ExecStart=/usr/bin/python3 -B /usr/local/libexec/simplestchat-public/browser_assets.py prune
+ExecStart=/usr/local/libexec/simplestchat-public/simplestchat-ops release assets prune
 UMask=0077
 TimeoutStartSec=30
 MemoryMax=256M
