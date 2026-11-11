@@ -51,7 +51,8 @@ const USAGE: &str = concat!(
     "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
     "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
     "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
-    "       simplestchat-ops database logging disable",
+    "       simplestchat-ops database logging disable\n",
+    "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]",
 );
 
 fn main() -> ExitCode {
@@ -100,6 +101,7 @@ fn main() -> ExitCode {
             simplestchat_ops::monitor::run as fn(&[OsString]) -> ExitCode,
         ),
         ("database", simplestchat_ops::monitor::run_database),
+        ("backup", simplestchat_ops::backup::run),
     ] {
         if args.first().is_some_and(|arg| arg == family) {
             let code = run(&args[1..]);

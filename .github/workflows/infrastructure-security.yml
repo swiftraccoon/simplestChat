@@ -51,6 +51,16 @@ jobs:
         run: |
           "$RUNNER_TEMP/vm-controller/bin/python" build/security_vm_release.py \
             --repository "$GITHUB_REPOSITORY" --output "$RUNNER_TEMP/vm-release"
+      # The guest is provisioned from source and has no signed release to
+      # deliver the Ops executable its backup units run.
+      - name: Install the pinned Rust toolchain for the guest's Ops executable
+        if: ${{ !inputs.boot_only }}
+        run: rustup toolchain install --profile minimal
+      - name: Build the Ops executable the guest's units run
+        if: ${{ !inputs.boot_only }}
+        run: >-
+          cargo build --locked --release --target x86_64-unknown-linux-gnu
+          -p simplestchat-ops --bin simplestchat-ops
       - name: Apply twice and verify host policy and isolated restore
         if: ${{ !inputs.boot_only }}
         timeout-minutes: 35

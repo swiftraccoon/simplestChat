@@ -4,7 +4,6 @@
 //! deployment's own database; none takes a host, statement or path argument.
 
 mod alerts;
-mod backups;
 mod collect;
 mod credential;
 #[cfg(test)]
@@ -16,21 +15,12 @@ mod report;
 mod text;
 mod transfer;
 
-use crate::host::command::Local;
-use crate::host::{Host, Paths, System, failure, state};
+use crate::host::command::{Interruptible, Local};
+use crate::host::{Host, Paths, System, emit, failure, state};
 use std::ffi::OsString;
-use std::io::Write;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-
-/// Write one line; a line that cannot be written is a failure of its own.
-fn emit(mut stream: impl Write, line: &str) -> bool {
-    stream
-        .write_all(line.as_bytes())
-        .and_then(|()| stream.flush())
-        .is_ok()
-}
 
 /// Whether this process may touch the prepared host's private state.
 fn root() -> bool {
@@ -126,9 +116,9 @@ pub fn run_database(arguments: &[OsString]) -> ExitCode {
         Err(_) => return refused("ReleaseError"),
     };
     let clock = System::new();
-    let commands = logging::Interruptible {
-        inner: &Local,
+    let commands = Interruptible {
         stop: &stop,
+        refusal: "Database logging remediation interrupted",
     };
     let host = Host {
         commands: &commands,

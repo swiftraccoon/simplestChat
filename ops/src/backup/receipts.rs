@@ -9,7 +9,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const MAX_RECEIPT_BYTES: u64 = 16384;
 const PRIVATE_MODE: u32 = 0o600;
@@ -157,12 +157,30 @@ fn completion(text: &str) -> Result<f64> {
 /// completed. `now` is seconds since the epoch. With `cache`, a settled
 /// archive's check is remembered and a remembered check of the identical file
 /// is trusted for a day; any other memory is forgotten.
+/// A receipt whose archive is present, private and has the recorded digest.
+pub(crate) struct Validated {
+    /// The archive the receipt names, beside it.
+    pub dump: PathBuf,
+    /// When the archive was completed, in seconds since the epoch.
+    pub completed: f64,
+}
+
+/// The completion time of a validated receipt: see [`inspected`].
 pub(crate) fn validated(
     receipt: &Path,
     owner: u32,
     now: f64,
     cache: Option<&mut Option<Entry>>,
 ) -> Result<f64> {
+    inspected(receipt, owner, now, cache).map(|validated| validated.completed)
+}
+
+pub(crate) fn inspected(
+    receipt: &Path,
+    owner: u32,
+    now: f64,
+    cache: Option<&mut Option<Entry>>,
+) -> Result<Validated> {
     let parent = receipt.parent().ok_or(Failure::Os)?;
     state::protected(parent, owner, true, &[0o700], None)?;
     state::protected(
@@ -288,11 +306,17 @@ pub(crate) fn validated(
                 checked_at: now,
             });
         }
-        return Ok(completed);
+        return Ok(Validated {
+            dump: backup,
+            completed,
+        });
     }
     require(steady, "Backup changed during validation")?;
     require(actual == digest, "Backup digest differs")?;
-    Ok(completed)
+    Ok(Validated {
+        dump: backup,
+        completed,
+    })
 }
 
 #[cfg(test)]

@@ -307,6 +307,14 @@ impl Fs {
         let scope = Scope::standalone();
         ScopedFs::new(&mut *self, &scope).metadata(parent, name)
     }
+    /// Stop holding `entry` to the identity it was read with, after one last
+    /// check of it: its owner is about to replace it.
+    pub fn release(&mut self, entry: Entry) -> Result<()> {
+        let scope = Scope::standalone();
+        ScopedFs::new(&*self, &scope).check_entry(entry)?;
+        self.records[entry].active = false;
+        Ok(())
+    }
     pub fn lock_file(&mut self, parent: Dir) -> Result<(File, Entry)> {
         let scope = Scope::standalone();
         ScopedFs::new(&mut *self, &scope).lock_file(parent)

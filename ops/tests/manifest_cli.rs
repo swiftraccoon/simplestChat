@@ -142,6 +142,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
                 "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
                 "       simplestchat-ops database logging disable\n",
+                "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
             )
             .as_bytes()
         );

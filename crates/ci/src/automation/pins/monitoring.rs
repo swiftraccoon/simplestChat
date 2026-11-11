@@ -7,38 +7,38 @@ use super::ansible::{asserted, evaluate};
 use super::{checkout_file, document};
 use serde_json::{Value, json};
 
-const OPS: &str = "/usr/local/libexec/simplestchat-public/simplestchat-ops";
+pub(super) const OPS: &str = "/usr/local/libexec/simplestchat-public/simplestchat-ops";
 const MONITORING: &str = "ops/ansible/monitoring.yml";
 const LOGGING: &str = "ops/ansible/database-logging.yml";
-const LOOK: &str = "Look for the installed Ops executable without following links";
-const REQUIRE: &str = "Require the Ops executable a signed release delivers";
+pub(super) const LOOK: &str = "Look for the installed Ops executable without following links";
+pub(super) const REQUIRE: &str = "Require the Ops executable a signed release delivers";
 const INSTRUCTION: &str = concat!(
     "Deliver the signed Ops executable first: run release.yml for a signed ",
     "revision (staging alone is enough), then repeat this playbook.",
 );
 
 /// The single play of a playbook.
-fn play(path: &str) -> Value {
+pub(super) fn play(path: &str) -> Value {
     let plays = document(path);
     assert_eq!(plays.as_array().unwrap().len(), 1, "{path}");
     plays[0].clone()
 }
 
 /// The tasks of one section, each a named mapping.
-fn section<'a>(play: &'a Value, name: &str) -> &'a [Value] {
+pub(super) fn section<'a>(play: &'a Value, name: &str) -> &'a [Value] {
     let tasks = play[name].as_array().unwrap();
     assert!(tasks.iter().all(|task| task["name"].is_string()), "{name}");
     tasks
 }
 
-fn named<'a>(tasks: &'a [Value], name: &str) -> &'a Value {
+pub(super) fn named<'a>(tasks: &'a [Value], name: &str) -> &'a Value {
     let mut found = tasks.iter().filter(|task| task["name"] == name);
     let task = found.next().unwrap_or_else(|| panic!("{name}"));
     assert!(found.next().is_none(), "{name}");
     task
 }
 
-fn names(tasks: &[Value]) -> Vec<&str> {
+pub(super) fn names(tasks: &[Value]) -> Vec<&str> {
     tasks
         .iter()
         .map(|task| task["name"].as_str().unwrap())
@@ -51,7 +51,7 @@ fn environment() -> Value {
 }
 
 /// The look and the requirement both playbooks place before any effect.
-fn requirement(pre_tasks: &[Value], register: &str) -> Value {
+pub(super) fn requirement(pre_tasks: &[Value], register: &str) -> Value {
     let look = named(pre_tasks, LOOK);
     assert_eq!(
         look["ansible.builtin.stat"],
@@ -191,15 +191,17 @@ fn monitoring_steps_report_only_the_changes_their_commands_name() {
     );
 }
 
-/// Both playbooks refuse, with the same instruction, a host whose executable
+/// Every such playbook refuses, with the same instruction, a host whose executable
 /// is absent, replaced by a link, not root's, or writable by others.
 #[test]
 fn a_host_without_the_signed_ops_executable_is_refused_before_any_effect() {
     let monitoring = play(MONITORING);
     let logging = play(LOGGING);
+    let backup = play("ops/ansible/backup.yml");
     for (pre_tasks, register) in [
         (section(&monitoring, "pre_tasks"), "scmon_ops"),
         (section(&logging, "pre_tasks"), "scpub_logging_ops"),
+        (section(&backup, "pre_tasks"), "scpub_backup_ops"),
     ] {
         let rules = requirement(pre_tasks, register);
         let stat = |value: Value| json!({register: {"stat": value}});

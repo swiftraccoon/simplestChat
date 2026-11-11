@@ -457,9 +457,12 @@ existing site, take an independent database backup and provider snapshot; copy
 backups off the VPS through a protected channel and test restoration.
 
 A nightly local dump is a separate opt-in. Set `scpub_backup_enabled: true` in
-the ignored inventory and apply [backup.yml](backup.yml). Its 04:00 UTC timer
-runs the reviewed worker under the same workload lock as releases and benchmarks.
-An active or unfinished operation blocks a new backup. The worker clears only
+the ignored inventory and apply [backup.yml](backup.yml). The playbook copies
+no helper to the host: it requires the Ops executable a signed release
+delivered and refuses a host without one. Its 04:00 UTC timer runs
+`simplestchat-ops backup nightly` under the same workload lock as releases and
+benchmarks, and retries `backup cleanup` when the run ends.
+An active or unfinished operation blocks a new backup. The command clears only
 recognized private stale partials, reserves twice the current database size plus
 1 GiB, bounds `pg_dump` inside the database container, and validates the archive
 with `pg_restore --list`. It then flushes the dump, renames it, flushes the

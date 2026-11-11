@@ -14,8 +14,8 @@ A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
-The monitoring timers, the monitoring playbook's own steps and the database
-logging remediation run through this executable as well.
+The monitoring timers, the monitoring playbook's own steps, the database
+logging remediation and the nightly backup run through this executable as well.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
 delivery through the native controller before that executable runs. The Python
@@ -1943,6 +1943,48 @@ The answers of the Python helpers these commands replaced are recorded in
 `ops/src/monitor/recorded_*.json`; the module's tests reproduce them request
 by request without starting an interpreter. `simplestchat-ci database-check
 monitoring` runs the statements against a disposable PostgreSQL cluster.
+
+## Nightly backup
+
+The backup timer's wrapper runs these two commands by the executable's
+installed path. Both require root on the prepared host and hold the shared
+workload lock; a busy lock, an unfinished journal of another operation or an
+unfinished release record refuses with one fixed line.
+
+```sh
+simplestchat-ops backup nightly [--keep-days N] [--keep-at-least N]
+simplestchat-ops backup cleanup [--keep-days N] [--keep-at-least N]
+```
+
+`nightly` removes recognized orphan partials, requires free space for twice
+the current database and a gibibyte beside it, reads the migration ledger and
+the database image, and dumps in custom format inside the database container
+with a daemon-side lifetime shorter than its own wait. The archive must be
+non-empty and list with `pg_restore --list` before it is flushed and renamed
+to `/srv/simplestchat-public/backups/nightly/STAMP.dump`; only then is
+`STAMP.receipt.json` published with the size, SHA-256, completion time, image
+and ledger. Retention then keeps the newest `--keep-at-least` validated
+archives (1 to 365, default 3) and removes older ones past `--keep-days` (1 to
+3650, default 14) with their receipts; any invalid receipt stops the pruning.
+Each night's command output stays in a private `STAMP.logs` directory of the
+same age limit. Nothing a command says is retained beyond a ceiling fixed
+before it starts: 2 MiB of inspected output or errors, and for the archive the
+smaller of 4 GiB and the filesystem's room above a 1 GiB reserve.
+
+While it works, `/run/simplestchat-bench/current.json` names the operation,
+the boot and a monotonic deadline 480 seconds ahead, the longest daemon-side
+work of an interrupted run can still be alive. Every other operation refuses
+that unfinished record. `nightly` and `cleanup` alone may take it over, and
+only once the deadline has passed on the same boot or the host has rebooted;
+`cleanup` then removes recognized partials and finalizes the journal. A
+termination signal stops the running command with its process group and
+leaves the journal unfinished for that reason.
+
+The Python helper's answers for 56 invocations are recorded in
+`ops/src/backup/recorded_nightly.json`, and the tests reproduce each one's
+commands, archives, receipts and journal. `backup_public.py` itself stays in
+the tree, frozen, until the migration cutover and the infrastructure proof's
+guest stop importing it.
 
 
 ## Offline server attestation preparation

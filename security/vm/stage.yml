@@ -69,6 +69,14 @@
         - restore-verify.sql
         - monitoring-schema.sql
 
+    - name: Install the source-built Ops executable the backup units run
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../target/x86_64-unknown-linux-gnu/release/simplestchat-ops"
+        dest: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        owner: root
+        group: root
+        mode: '0755'
+
     - name: Retain the fixture-only guest assertions
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../build/security_vm_guest.py"

@@ -1,5 +1,6 @@
 //! Same-process capability for the existing nonblocking workload flock and
-//! unfinished-journal gates. No path, owner or recovery bypass is public.
+//! unfinished-journal gates. No path or owner bypass is public, and the only
+//! recovery is a backup owner's named takeover of its own unfinished record.
 use super::{
     Result, fail,
     files::{self, Dir, Entry, Fs, ScopedFs},
@@ -11,6 +12,56 @@ use crate::{
     release::workload::Lease,
 };
 use std::fs::File;
+
+/// Unfinished ownership in the shared runtime journal that a caller may take
+/// over once it holds the lock, in order to resolve it itself. The release
+/// record never yields to a takeover.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Takeover<'a> {
+    /// Nothing: an unfinished journal refuses.
+    Nothing,
+    /// The nightly backup's own record, once its bounded daemon-side work has
+    /// aged out on this boot or the host has rebooted since. `boot` is the
+    /// current boot identity and `monotonic` the kernel's monotonic seconds.
+    ExpiredNightly { boot: &'a str, monotonic: f64 },
+    /// The offsite backup's own record.
+    Offsite,
+}
+
+/// Whether `text` is a kernel boot identity: 8-4-4-4-12 lowercase hexadecimal.
+fn boot_identity(text: &str) -> bool {
+    let groups: Vec<&str> = text.split('-').collect();
+    let hexadecimal = |group: &&str| {
+        group
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    };
+    groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12]) && groups.iter().all(hexadecimal)
+}
+
+impl Takeover<'_> {
+    /// Whether the unfinished `record` is this caller's to resolve.
+    fn admits(self, record: &Json) -> bool {
+        let operation = record.get("operation").and_then(Json::string);
+        match self {
+            Self::Nothing => false,
+            Self::Offsite => operation == Some("offsite_backup"),
+            Self::ExpiredNightly { boot, monotonic } => {
+                let deadline = match record.get("untilMonotonic") {
+                    Some(value @ (Json::Integer(_) | Json::Float(_))) => value.number(),
+                    _ => None,
+                };
+                let recorded = record.get("bootId").and_then(Json::string);
+                let recorded = recorded.filter(|recorded| boot_identity(recorded));
+                operation == Some("nightly_backup")
+                    && deadline.is_some_and(|deadline| deadline > 0.0)
+                    && recorded.is_some_and(|recorded| {
+                        recorded != boot || deadline.is_some_and(|deadline| monotonic >= deadline)
+                    })
+            }
+        }
+    }
+}
 
 /// Own the fixed root/config/work directories and one acquired workload lock.
 /// Borrow it for Store operations, then call finish to observe closes. Dropping
@@ -26,6 +77,12 @@ pub struct Workload {
 }
 impl Workload {
     pub fn acquire() -> Result<Self> {
+        Self::acquire_for(Takeover::Nothing)
+    }
+    /// Acquire as `acquire` does, admitting the one kind of unfinished
+    /// runtime journal that `takeover` names. The caller then owns resolving
+    /// it before finalizing the journal.
+    pub fn acquire_for(takeover: Takeover<'_>) -> Result<Self> {
         require(
             rustix::process::geteuid().as_raw() == 0,
             "asset_command_owner",
@@ -34,9 +91,9 @@ impl Workload {
             rustix::system::uname().sysname() == c"Linux",
             "asset_operation_failed",
         )?;
-        Self::from_fs(Fs::native()?)
+        Self::from_fs(Fs::native()?, takeover)
     }
-    fn from_fs(fs: Fs) -> Result<Self> {
+    fn from_fs(fs: Fs, takeover: Takeover<'_>) -> Result<Self> {
         let mut value = Self {
             fs,
             root: 0,
@@ -46,7 +103,7 @@ impl Workload {
             held: false,
             borrowed: None,
         };
-        let result = value.setup();
+        let result = value.setup(takeover);
         if let Err(error) = result {
             let finished = value.finish();
             // Busy is a successful CLI receipt only after owned descriptors
@@ -122,7 +179,7 @@ impl Workload {
         drop(self.borrowed.take());
         scope.result(store.and(proof).and(finished))
     }
-    fn setup(&mut self) -> Result<()> {
+    fn setup(&mut self, takeover: Takeover<'_>) -> Result<()> {
         let srv = self.fs.directory(0, "srv", None)?;
         self.root = self.fs.directory(srv, "simplestchat-public", Some(0o700))?;
         let etc = self.fs.directory(0, "etc", None)?;
@@ -149,11 +206,11 @@ impl Workload {
         }
         self.fs.access.event("locked", "")?;
         self.check()?;
-        self.journal(work, "current.json")?;
-        self.journal(self.root, "release-state.json")?;
+        self.journal(work, "current.json", takeover)?;
+        self.journal(self.root, "release-state.json", Takeover::Nothing)?;
         self.check()
     }
-    fn journal(&mut self, parent: Dir, name: &str) -> Result<()> {
+    fn journal(&mut self, parent: Dir, name: &str, takeover: Takeover<'_>) -> Result<()> {
         if self.fs.absent(parent, name)? {
             return Ok(());
         }
@@ -174,12 +231,19 @@ impl Workload {
         )?;
         let value =
             json::decode_limited(&bytes, 16384).map_err(|_| fail("asset_operation_failed"))?;
+        let finalized = value.get("finalized").and_then(Json::boolean) == Some(true);
         require(
             value.object().is_some()
                 && matches!(value.get("schemaVersion"),Some(Json::Integer(v))if v=="1")
-                && value.get("finalized").and_then(Json::boolean) == Some(true),
+                && (finalized || takeover.admits(&value)),
             "asset_operation_failed",
-        )
+        )?;
+        if takeover == Takeover::Nothing {
+            return Ok(());
+        }
+        // A caller that may take the journal over writes its own record
+        // next, so the journal is not held to the bytes just validated.
+        self.fs.release(entry)
     }
     pub(super) fn check(&self) -> Result<()> {
         require(self.held && self.lock.is_some(), "asset_operation_failed")?;
@@ -228,6 +292,24 @@ impl Workload {
         owners
     }
     #[cfg(test)]
+    pub(crate) fn fixture_for(
+        path: &std::path::Path,
+        owner: u32,
+        takeover: Takeover<'_>,
+    ) -> Result<Self> {
+        use rustix::fs::{Mode, OFlags};
+        let file = File::from(files::sys(rustix::fs::open(
+            path,
+            files::FLAGS | OFlags::DIRECTORY,
+            Mode::empty(),
+        ))?);
+        let access = files::Access {
+            owner: Some(owner),
+            hook: None,
+        };
+        Self::from_fs(Fs::open(file, access)?, takeover)
+    }
+    #[cfg(test)]
     pub(super) fn fixture(
         path: &std::path::Path,
         owner: u32,
@@ -239,13 +321,16 @@ impl Workload {
             files::FLAGS | OFlags::DIRECTORY,
             Mode::empty(),
         ))?);
-        Self::from_fs(Fs::open(
-            file,
-            files::Access {
-                owner: Some(owner),
-                hook,
-            },
-        )?)
+        Self::from_fs(
+            Fs::open(
+                file,
+                files::Access {
+                    owner: Some(owner),
+                    hook,
+                },
+            )?,
+            Takeover::Nothing,
+        )
     }
     #[cfg(test)]
     pub(crate) fn install_fixture(path: &std::path::Path, owner: u32) -> Result<Self> {

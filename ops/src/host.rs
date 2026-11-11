@@ -2,6 +2,7 @@
 //! and the fixed directories of one deployment. Tests substitute each.
 
 pub(crate) mod command;
+pub(crate) mod evidence;
 pub(crate) mod failure;
 pub(crate) mod state;
 
@@ -10,6 +11,14 @@ use command::{Commands, Request};
 use failure::Result;
 use std::path::PathBuf;
 use std::time::Duration;
+
+/// Write one line; a line that cannot be written is a failure of its own.
+pub(crate) fn emit(mut stream: impl std::io::Write, line: &str) -> bool {
+    stream
+        .write_all(line.as_bytes())
+        .and_then(|()| stream.flush())
+        .is_ok()
+}
 
 /// Wall and monotonic time.
 pub(crate) trait Clock {
@@ -22,11 +31,11 @@ pub(crate) trait Clock {
 }
 
 /// The machine's own clocks.
-pub(crate) struct System(std::time::Instant);
+pub(crate) struct System;
 
 impl System {
     pub(crate) fn new() -> Self {
-        Self(std::time::Instant::now())
+        Self
     }
 }
 
@@ -35,8 +44,13 @@ impl Clock for System {
         std::time::SystemTime::now().into()
     }
 
+    /// The kernel's monotonic clock itself, not a reading relative to this
+    /// process: a journal's deadline is compared by later processes.
     fn monotonic(&self) -> Duration {
-        self.0.elapsed()
+        let now = rustix::time::clock_gettime(rustix::time::ClockId::Monotonic);
+        let seconds = u64::try_from(now.tv_sec).unwrap_or_default();
+        let nanoseconds = u32::try_from(now.tv_nsec).unwrap_or_default();
+        Duration::new(seconds, nanoseconds)
     }
 
     fn sleep(&self, duration: Duration) {
@@ -58,6 +72,10 @@ pub(crate) struct Paths {
     pub images: PathBuf,
     /// Kernel interface statistics.
     pub network: PathBuf,
+    /// The shared runtime directory of the workload lock and its journal.
+    pub work: PathBuf,
+    /// The kernel's identity of the current boot.
+    pub boot: PathBuf,
 }
 
 impl Paths {
@@ -70,6 +88,8 @@ impl Paths {
             settings: "/etc/simplestchat-monitoring/settings.json".into(),
             images: "/etc/simplestchat-public/images.json".into(),
             network: "/sys/class/net".into(),
+            work: "/run/simplestchat-bench".into(),
+            boot: "/proc/sys/kernel/random/boot_id".into(),
         }
     }
 }
@@ -168,6 +188,8 @@ pub(crate) mod tests {
             settings: root.join("settings.json"),
             images: root.join("images.json"),
             network: root.join("net"),
+            work: root.join("work"),
+            boot: root.join("boot_id"),
         }
     }
 }

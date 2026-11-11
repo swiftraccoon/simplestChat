@@ -223,6 +223,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
                 "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
                 "       simplestchat-ops database logging disable\n",
+                "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
             )
             .as_bytes()
         );

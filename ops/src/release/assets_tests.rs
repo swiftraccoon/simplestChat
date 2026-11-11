@@ -711,3 +711,79 @@ fn required_captures_and_stable_timestamp_ties_choose_the_exact_bounded_history(
         MAX_TOTAL
     );
 }
+
+/// The backup owners may take over only their own unfinished record: the
+/// nightly one once it has aged out or the host rebooted, the offsite one
+/// always. Each recorded journal is admitted or refused as the Python lock
+/// decided, a takeover never applies to the release record, and without one
+/// every unfinished journal refuses.
+#[test]
+fn only_the_owning_backup_takes_over_its_own_unfinished_journal() {
+    let recorded = include_str!("../backup/recorded_nightly.json");
+    let recorded: serde_json::Value = serde_json::from_str(recorded).unwrap();
+    let mut journals = 0;
+    for scenario in recorded["scenarios"].as_array().unwrap() {
+        let name = scenario["name"].as_str().unwrap();
+        let before = scenario["before"].as_object().unwrap();
+        let journal = before.get("run/current.json");
+        let state = before.get("srv/release-state.json");
+        if journal.is_none() && state.is_none() || scenario["busy"] == true {
+            continue;
+        }
+        journals += 1;
+        let fixture = Fixture::new();
+        let work = fixture.path.join("run/simplestchat-bench");
+        fs::create_dir(&work).unwrap();
+        mode(&work, 0o700);
+        for (entry, path) in [
+            (journal, work.join("current.json")),
+            (
+                state,
+                fixture
+                    .path
+                    .join("srv/simplestchat-public/release-state.json"),
+            ),
+        ] {
+            if let Some(entry) = entry {
+                fs::write(&path, entry["text"].as_str().unwrap()).unwrap();
+                mode(&path, 0o600);
+            }
+        }
+        let owner = fs::metadata(&fixture.path).unwrap().uid();
+        let takeover = Takeover::ExpiredNightly {
+            boot: scenario["boot"].as_str().unwrap(),
+            monotonic: scenario["monotonic"].as_f64().unwrap(),
+        };
+        // The recorded run refused at the lock exactly when nothing was written.
+        let admitted = scenario["after"]["run/current.json"]["text"]
+            != scenario["before"]["run/current.json"]["text"]
+            || scenario["status"] == 0;
+        let nightly = Workload::fixture_for(&fixture.path, owner, takeover);
+        assert_eq!(nightly.is_ok(), admitted, "{name}");
+        drop(nightly);
+        let finalized = |entry: Option<&serde_json::Value>| {
+            entry.is_none_or(|entry| {
+                let text = entry["text"].as_str().unwrap();
+                serde_json::from_str::<serde_json::Value>(text)
+                    .is_ok_and(|value| value["finalized"] == true && value["schemaVersion"] == 1)
+            })
+        };
+        let plain = Workload::fixture_for(&fixture.path, owner, Takeover::Nothing);
+        assert_eq!(
+            plain.is_ok(),
+            finalized(journal) && finalized(state),
+            "{name}"
+        );
+        drop(plain);
+        let offsite = Workload::fixture_for(&fixture.path, owner, Takeover::Offsite);
+        let theirs = journal.is_some_and(|entry| {
+            let text = entry["text"].as_str().unwrap();
+            serde_json::from_str::<serde_json::Value>(text).is_ok_and(|value| {
+                value["operation"] == "offsite_backup" && value["schemaVersion"] == 1
+            })
+        });
+        let expected = finalized(state) && (finalized(journal) || theirs);
+        assert_eq!(offsite.is_ok(), expected, "{name}");
+    }
+    assert_eq!(journals, 13);
+}

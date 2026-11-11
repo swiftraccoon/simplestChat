@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The Python worker validates paths and owns the shared workload lock and archive lifecycle.
+# The Ops executable validates paths and owns the shared workload lock and archive lifecycle.
 set -euo pipefail
 umask 077
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
-unset PYTHONPATH PYTHONHOME DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
-helper=/usr/local/libexec/simplestchat-public/backup_public.py
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
+ops=/usr/local/libexec/simplestchat-public/simplestchat-ops
 keep_days={{ scpub_backup_keep_days | default(14) | int }}
 keep_at_least={{ scpub_backup_keep_at_least | default(3) | int }}
 {% raw %}
@@ -12,11 +12,11 @@ cleanup() {
   status=$?
   # Reacquire the shared lock before touching any recognized orphan. A busy or
   # unfinished release is left alone; next successful startup retries cleanup.
-  /usr/bin/python3 -E -s -B "$helper" cleanup >/dev/null 2>&1 || true
+  "$ops" backup cleanup >/dev/null 2>&1 || true
   exit "$status"
 }
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-/usr/bin/python3 -E -s -B "$helper" nightly --keep-days "$keep_days" --keep-at-least "$keep_at_least"
+"$ops" backup nightly --keep-days "$keep_days" --keep-at-least "$keep_at_least"
 {% endraw %}

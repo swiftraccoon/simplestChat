@@ -25,7 +25,7 @@ mod store;
 #[path = "assets_tests.rs"]
 mod tests;
 
-pub use lock::Workload;
+pub use lock::{Takeover, Workload};
 pub use model::Capture;
 pub use store::{Published, Store, Summary};
 

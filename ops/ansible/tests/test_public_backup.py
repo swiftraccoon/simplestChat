@@ -17,8 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, final, override
 from unittest.mock import Mock, patch
 
-from test_public_templates import render
-from test_support import ROOT, yaml_value
+from test_support import ROOT
 
 # isort: split
 import backup_public as backup
@@ -80,48 +79,10 @@ class NightlyBackupTests(unittest.TestCase):
                     with suppress(ProcessLookupError):
                         os.kill(descendant, signal.SIGKILL)
 
-    def test_wrapper_preserves_failure_and_runs_guarded_exit_cleanup(self) -> None:
-        """The wrapper has bounded inputs, signal exits and an unconditional cleanup trap."""
-        script = render("backup-nightly.sh.j2")
-        result = subprocess.run(
-            ["/bin/bash", "-n"], input=script, text=True, check=False, capture_output=True
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("trap cleanup EXIT", script)
-        self.assertIn('exit "$status"', script)
-        self.assertIn('"$helper" cleanup', script)
-        self.assertIn("keep_days=14", script)
-        self.assertIn("keep_at_least=3", script)
-
-    def test_units_share_the_canonical_runtime_lock_directory(self) -> None:
-        """The timer survives reboot, and its worker can open only the intended lock root."""
-        timer = render("backup-nightly.timer.j2")
-        self.assertIn("OnCalendar=*-*-* 04:00:00 UTC", timer)
-        self.assertIn("Persistent=true", timer)
-        service = render("backup-nightly.service.j2")
-        self.assertIn("Type=oneshot", service)
-        self.assertIn("RuntimeDirectory=simplestchat-bench", service)
-        self.assertIn("RuntimeDirectoryPreserve=yes", service)
-        self.assertIn(
-            "ReadWritePaths=/srv/simplestchat-public/backups /run/simplestchat-bench", service
-        )
-        self.assertIn("ProtectSystem=strict", service)
-
-    def test_playbook_bounds_retention_before_installing_anything(self) -> None:
-        """Inventory types are checked before Jinja's integer conversion can lose information."""
-        text = (ROOT / "ops/ansible/backup.yml").read_text()
-        self.assertIsInstance(yaml_value(text), list)
-        for expected in (
-            "scpub_backup_enabled | bool",
-            "scpub_backup_keep_days | default(14) is integer",
-            "scpub_backup_keep_at_least | default(3) is integer",
-            "name: simplestchat-backup.timer",
-            "backup_public.py",
-        ):
-            self.assertIn(expected, text)
-
     def test_retention_refuses_malformed_or_extreme_values(self) -> None:
         """Neither negative indexes nor shell text can reach deletion logic."""
+        # The frozen helper under test is the checkout's, not an installed copy.
+        self.assertEqual(Path(backup.__file__).parent, ROOT / "ops/ansible/files")
         for days, count in ((0, 3), (-1, 3), (3651, 3), (14, 0), (14, 366), (True, 3)):
             with self.subTest(days=days, count=count), self.assertRaises(release.ReleaseError):
                 backup.retention(days, count)

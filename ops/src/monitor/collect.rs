@@ -4,9 +4,9 @@
 //! sampled has an explicit failure gauge; no user data or secret is read.
 
 use super::alerts;
-use super::backups::{self, Entry};
 use super::text::{Sample, gauge};
 use super::transfer;
+use crate::backup::receipts::{self as backups, Entry};
 use crate::host::command::Request;
 use crate::host::failure::{Failure, Result, require};
 use crate::host::state;

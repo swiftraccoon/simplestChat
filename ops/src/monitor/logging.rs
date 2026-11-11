@@ -5,10 +5,10 @@
 //! around every step. The two separate statements are safe to repeat after an
 //! interruption, and a reload counts only once new sessions see its effect.
 
-use crate::host::command::Request;
+use crate::host::evidence::{Evidence, Streams};
 use crate::host::failure::{Failure, Result, require};
 use crate::host::state;
-use crate::host::{Clock, DOCKER, Host};
+use crate::host::{Clock, Host};
 use crate::json::Json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -34,8 +34,6 @@ const CONTAINER_FORMAT: &str = concat!(
     r#""restarts":{{.RestartCount}},"#,
     r#""configHash":{{json (index .Config.Labels "com.docker.compose.config-hash")}}}"#
 );
-const MAX_INSPECTION_BYTES: u64 = 2 * 1024 * 1024;
-const ENVIRONMENT: [(&str, &str); 2] = [("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), ("LC_ALL", "C")];
 
 /// Current container inspection and bounded fixed daemon commands.
 pub(super) trait Runner {
@@ -225,40 +223,12 @@ pub(super) fn apply(runner: &mut dyn Runner, clock: &dyn Clock, report: &mut Rep
 
 /// The daemon through the host, with every command's output kept in the
 /// attempt directory as numbered private files.
-struct Evidence<'a> {
-    host: &'a Host<'a>,
-    attempt: PathBuf,
-    number: u32,
+struct Compose<'a> {
+    evidence: Evidence<'a>,
     configuration: &'a Path,
 }
 
-impl Evidence<'_> {
-    fn run(&mut self, argv: Vec<String>, seconds: f64) -> Result<Vec<u8>> {
-        self.number += 1;
-        let prefix = self.attempt.join(format!("{:03}", self.number));
-        let (output, errors) = (
-            prefix.with_extension("stdout"),
-            prefix.with_extension("stderr"),
-        );
-        let request = Request {
-            environment: &ENVIRONMENT,
-            archive: Some(&output),
-            errors: Some(&errors),
-            ..Request::fixed(
-                argv,
-                seconds,
-                0,
-                "Command inspection output exceeded its bound",
-            )
-        };
-        self.host.commands.run(&request)?;
-        let bounded = std::fs::metadata(&output)?.len() <= MAX_INSPECTION_BYTES;
-        require(bounded, "Command inspection output exceeded its bound")?;
-        Ok(std::fs::read(&output)?)
-    }
-}
-
-impl Runner for Evidence<'_> {
+impl Runner for Compose<'_> {
     fn container(&mut self) -> Result<Json> {
         let configuration = self.configuration.to_str().ok_or(Failure::Value)?;
         let environment = format!("{configuration}/app.env");
@@ -300,26 +270,7 @@ impl Runner for Evidence<'_> {
     }
 
     fn docker(&mut self, arguments: &[&str], seconds: f64) -> Result<Vec<u8>> {
-        let argv = DOCKER
-            .iter()
-            .chain(arguments)
-            .map(|word| (*word).to_owned());
-        self.run(argv.collect(), seconds)
-    }
-}
-
-/// Commands that stop being issued once a termination signal has arrived, so
-/// the outcome of an interrupted remediation is still recorded.
-pub(super) struct Interruptible<'a> {
-    pub inner: &'a dyn crate::host::command::Commands,
-    pub stop: &'a std::sync::atomic::AtomicBool,
-}
-
-impl crate::host::command::Commands for Interruptible<'_> {
-    fn run(&self, request: &Request<'_>) -> Result<Vec<u8>> {
-        let stopped = self.stop.load(std::sync::atomic::Ordering::SeqCst);
-        require(!stopped, "Database logging remediation interrupted")?;
-        self.inner.run(request)
+        self.evidence.docker(arguments, seconds, Streams::default())
     }
 }
 
@@ -372,17 +323,16 @@ pub(super) fn disable(host: &Host<'_>, configuration: &Path) -> (Option<String>,
         changed: Some(false),
         ..Report::default()
     };
-    let mut runner = Evidence {
-        host,
-        attempt: attempt.clone(),
-        number: 0,
+    let evidence = Evidence::new(host, attempt.clone());
+    let mut runner = Compose {
+        evidence,
         configuration,
     };
     let outcome = apply(&mut runner, host.clock, &mut report);
     report.passed = outcome.is_ok();
     let failed = outcome
         .err()
-        .map(|failure| described(&failure, runner.number));
+        .map(|failure| described(&failure, runner.evidence.number));
     report.failure = failed.as_ref().map(|(text, _)| text.clone());
     report.finished_at = Some(stamp(host));
     let written = state::atomic_json(&attempt.join("outcome.json"), &report);
@@ -398,6 +348,7 @@ pub(super) fn disable(host: &Host<'_>, configuration: &Path) -> (Option<String>,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::command::Request;
     use crate::host::tests::Fixed;
     use serde_json::Value;
 
@@ -745,7 +696,7 @@ mod tests {
                 asked.len() * 2 + 1
             );
             let listing = &asked[0];
-            assert_eq!(listing.argv[..3], DOCKER.map(str::to_owned));
+            assert_eq!(listing.argv[..3], crate::host::DOCKER.map(str::to_owned));
             let project = configuration.to_str().unwrap();
             let rest: Vec<&str> = listing.argv[3..].iter().map(String::as_str).collect();
             let (environment, compose) = (
@@ -777,7 +728,8 @@ mod tests {
                 ["inspect", "--format", CONTAINER_FORMAT, &"a".repeat(64)]
             );
             for command in asked.iter() {
-                let pairs = ENVIRONMENT.map(|(key, value)| (key.to_owned(), value.to_owned()));
+                let fixed = [("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), ("LC_ALL", "C")];
+                let pairs = fixed.map(|(key, value)| (key.to_owned(), value.to_owned()));
                 assert_eq!(command.environment, pairs);
                 assert!(command.input.is_none() && command.source.is_none());
             }

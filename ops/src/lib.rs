@@ -8,6 +8,7 @@
 //! delivery and installed host operations retain their existing independent
 //! runtime and distribution requirements.
 
+pub mod backup;
 pub mod capacity_vps;
 pub mod distribution;
 mod files;

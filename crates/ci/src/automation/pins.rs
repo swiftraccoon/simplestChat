@@ -5,6 +5,7 @@
 //! carried over; it pins the public playbook's recorded-release guard.
 
 mod ansible;
+mod backups;
 mod benchmark_automation;
 mod browser_assets;
 mod cache_retention_workflow;
