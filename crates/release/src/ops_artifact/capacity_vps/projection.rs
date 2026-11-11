@@ -44,7 +44,7 @@ pub(super) fn entries(
     {
         // Non-Linux controllers use the safe portable API, whose internal
         // cursor FD has only a Drop close:
-        // rustix 1.1.5 exposes no consuming descriptor or checked close for Dir.
+        // rustix 1.1.6 exposes no consuming descriptor or checked close for Dir.
         let _permit = budget.permit()?;
         let cursor = rustix::fs::Dir::read_from(file).map_err(|_| failure(1))?;
         for entry in cursor {

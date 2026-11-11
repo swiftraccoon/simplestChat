@@ -360,7 +360,7 @@ including constructor, read, verification and close-failure paths.
 
 These are optimistic observations, not a filesystem lock, authentication,
 durable receipt, helper update serialization or runtime readiness. Operators
-must still serialize releases. The existing locked rustix 1.1.5 `process`,
+must still serialize releases. The existing locked rustix 1.1.6 `process`,
 `system` and `rand` APIs supply effective UID, uname and Linux getrandom without
 unsafe first-party code or external commands; no new package or version is
 introduced. Tests use actual owned files with synthetic ownership/identity and
@@ -1830,7 +1830,7 @@ fallback destructors do not panic. Blocking filesystem workers have abort
 checkpoints and are joined before the operation returns. OS close/reap calls
 remain outside a hard time bound. Linux source inventories use a borrowed
 directory cursor whose enclosing file has a checked close. The non-Linux inert
-fixtures use rustix 1.1.5's portable `Dir`, which exposes only destructor closure
+fixtures use rustix 1.1.6's portable `Dir`, which exposes only destructor closure
 for its internal descriptor. This narrow safe-API limitation supplies no checked
 cursor-close evidence on those unsupported runtime targets; revisit it if the
 dependency adds a consuming close API or runtime target support changes.
