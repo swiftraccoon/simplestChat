@@ -123,6 +123,17 @@ cargo test --locked -p simplestchat-release --bin simplestchat-release \
   ops_artifact::runtime::diagnostics::tests:: -- --test-threads=1
 ```
 
+The `ops-artifact runtime-request` leaf writes the hosted proof's request. Unit
+tests beside it bind its bytes to the runtime reader and its refusal order, and
+built-binary tests cover canonical identifiers and revision, exclusive private
+creation and the published digest:
+
+```sh
+cargo test --locked -p simplestchat-release --bin simplestchat-release \
+  ops_artifact::runtime::request_writer::tests:: -- --test-threads=1
+cargo test --locked -p simplestchat-release --test runtime_request -- --test-threads=1
+```
+
 The reporter checks source identity, malformed/oversized/nonregular reports,
 fresh output/readback, clamped signal-status compatibility and actual read-only
 stdout refusal. It retains only one sanitized JSON after checked finalization;

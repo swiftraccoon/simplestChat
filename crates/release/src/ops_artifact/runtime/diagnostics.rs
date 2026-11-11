@@ -273,20 +273,7 @@ fn retain(root: &Path, diagnostic: &Diagnostic, budget: &Budget) -> Result<()> {
     result.and(parent.finish())
 }
 fn marker(path: &Path) -> Result<()> {
-    let mut file = rustix::fs::open(
-        path,
-        OFlags::WRONLY | OFlags::APPEND | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map(File::from)
-    .map_err(|_| failure(1))?;
-    let written = (|| {
-        require(io(file.metadata())?.is_file())?;
-        io(file.write_all(b"retained=true\n"))?;
-        io(file.flush())
-    })();
-    let finish = nix::unistd::close(file).map_err(|_| failure(1));
-    written.and(finish)
+    super::step_output(path, b"retained=true\n")
 }
 
 // StdoutLock swallows EBADF. Keep its lock and flush its existing buffer,

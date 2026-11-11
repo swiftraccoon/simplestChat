@@ -23,6 +23,7 @@ mod projection;
 mod projection_tests;
 mod receipt;
 mod request;
+mod request_writer;
 mod sources;
 #[cfg(test)]
 mod tests;
@@ -59,4 +60,30 @@ pub(super) async fn native(path: &std::path::Path, selected: &str) -> Result<()>
 /// Retain only passive bounded case diagnostics from this CI invocation.
 pub(super) fn diagnostics() -> std::process::ExitCode {
     diagnostics::native()
+}
+
+/// Write the hosted proof's request from the workflow step's environment.
+pub(super) fn request_writer() -> std::process::ExitCode {
+    request_writer::native()
+}
+
+/// Append one line to the step's `GITHUB_OUTPUT`, which must already exist as
+/// a regular file. The final path component is never followed or created.
+fn step_output(path: &std::path::Path, line: &[u8]) -> Result<()> {
+    use rustix::fs::{Mode, OFlags};
+    use std::io::Write;
+    let flags =
+        OFlags::WRONLY | OFlags::APPEND | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+    let mut file = rustix::fs::open(path, flags, Mode::empty())
+        .map(std::fs::File::from)
+        .map_err(|_| failure(1))?;
+    let written = (|| {
+        if !io(file.metadata())?.is_file() {
+            return Err(failure(1));
+        }
+        io(file.write_all(line))?;
+        io(file.flush())
+    })();
+    let finish = nix::unistd::close(file).map_err(|_| failure(1));
+    written.and(finish)
 }

@@ -50,6 +50,7 @@ build|source|registry|verify-retained|acquire|export|runtime \
 cargo run --locked -q -p simplestchat-release -- ops-artifact hosted --output PATH\n\
 cargo run --locked -q -p simplestchat-release -- ops-artifact signing-inputs \
 --directory PATH --output PATH\n\
+cargo run --locked -q -p simplestchat-release -- ops-artifact runtime-request\n\
 cargo run --locked -q -p simplestchat-release -- ops-artifact runtime-diagnostics\n\
 simplestchat-release ops-artifact maintain-runtime --run-id N --run-attempt N --artifact-id N \
 --scenario CASE --output ABS\n\
@@ -88,6 +89,9 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     }
     if arguments == ["runtime-diagnostics"] {
         return Ok(runtime::diagnostics());
+    }
+    if arguments == ["runtime-request"] {
+        return Ok(runtime::request_writer());
     }
     if let [operation, flag, output] = arguments
         && operation == "hosted"

@@ -1,4 +1,4 @@
-total 142017
+total 141640
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -180,7 +180,6 @@ total 142017
 288	ops/ansible/tests/test_monitoring_database.py
 347	ops/ansible/tests/test_monitoring_external.py
 875	ops/ansible/tests/test_native_security.py
-377	ops/ansible/tests/test_ops_runtime_workflow.py
 463	ops/ansible/tests/test_public_backup.py
 156	ops/ansible/tests/test_public_deployment.py
 803	ops/ansible/tests/test_public_reboot.py

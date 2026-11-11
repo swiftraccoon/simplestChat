@@ -1677,7 +1677,10 @@ checkout revision. Supply that CI run ID, attempt and signed artifact ID. The
 workflow uses a free Ubuntu 24.04 runner, the pinned caller `gh` bootstrap and a
 separate Debian 13 KVM guest. Its checkout is never selected by an input.
 Controller compilation and dependency installation precede the credential-bearing
-step. This workflow is separate from the full application deployment/restore VM.
+step. The compiled controller's `ops-artifact runtime-request` writes the request
+from the three inputs and the event revision to a fresh private file, and the
+runtime step requires the SHA-256 of those exact bytes. This workflow is separate
+from the full application deployment/restore VM.
 
 The local entry point uses the closed acquisition request schema above:
 

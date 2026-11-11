@@ -64,48 +64,7 @@ jobs:
           OPS_RUN_ID: ${{ inputs.run_id }}
           OPS_RUN_ATTEMPT: ${{ inputs.run_attempt }}
           OPS_ARTIFACT_ID: ${{ inputs.artifact_id }}
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          import re
-          import tomllib
-          from pathlib import Path
-
-          def identifier(name):
-              raw = os.environ[name]
-              if not re.fullmatch(r'[1-9][0-9]{0,15}', raw) or int(raw) > 9007199254740991:
-                  raise SystemExit('Invalid Ops artifact identifier.')
-              return int(raw)
-
-          revision = os.environ['GITHUB_SHA']
-          if not re.fullmatch(r'[0-9a-f]{40}', revision):
-              raise SystemExit('Invalid Ops source revision.')
-          package = tomllib.loads(Path('Cargo.toml').read_text())['workspace']['package']['version']
-          request = {
-              'schemaVersion': 1,
-              'selection': {
-                  'repository': 'swiftraccoon/simplestChat',
-                  'revision': revision,
-                  'packageVersion': package,
-                  'target': 'x86_64-unknown-linux-musl',
-                  'protocolVersion': 1,
-                  'buildRunId': identifier('OPS_RUN_ID'),
-                  'runAttempt': identifier('OPS_RUN_ATTEMPT'),
-              },
-              'artifactId': identifier('OPS_ARTIFACT_ID'),
-              'output': str(Path(os.environ['RUNNER_TEMP']) / 'ops-runtime'),
-              'authentication': 'gh-token',
-          }
-          original = (json.dumps(request, separators=(',', ':')) + '\n').encode()
-          path = Path(os.environ['RUNNER_TEMP']) / 'ops-runtime-request.json'
-          descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-          with os.fdopen(descriptor, 'wb') as output:
-              output.write(original)
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('sha256=' + hashlib.sha256(original).hexdigest() + '\n')
-          PY
+        run: target/debug/simplestchat-release ops-artifact runtime-request
       - name: Authenticate, exercise and retire the exact Ops guest
         id: runtime
         timeout-minutes: 75
