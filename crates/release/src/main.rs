@@ -39,6 +39,8 @@ Commands:
   deploy        Select signed application and Ops artifacts, deploy once and verify HTTPS;
                 prepared routine host only; see `deploy --help`.
   verify        Check explicit signed application inputs without a host; see `verify --help`.
+  fetch         Verify one signed release, then have the host's installed Ops receiver
+                download it over SSH; see `fetch --help`.
   ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
                 fixed recipe; maintain-runtime owns the optional signed maintenance KVM proof.
   vps-capacity  Authenticated private VPS measurement, collection or explicit recovery;
@@ -104,6 +106,10 @@ fn main() -> ExitCode {
         // The Ops entry owns its runtime and original completion signals.
         // Forward native path arguments before the UTF-8 router.
         return simplestchat_ops::release::verify::run(&arguments[1..]);
+    }
+    if arguments.first().is_some_and(|command| command == "fetch") {
+        // The same forwarding for the controller half of a host transfer.
+        return simplestchat_ops::release::fetch::run(&arguments[1..]);
     }
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     match run(&arguments) {

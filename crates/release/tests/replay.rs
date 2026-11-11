@@ -70,3 +70,18 @@ fn verify_forwards_a_non_utf8_argument_before_the_utf8_router() {
     assert_eq!(output.status.code(), Some(2), "{:?}", output.status);
     assert!(output.stdout.is_empty());
 }
+
+#[test]
+fn fetch_forwards_to_the_ops_controller_before_the_utf8_router() {
+    // The Ops fetch controller owns its options: its help names its own route
+    // and a non-UTF-8 argument is its usage error, never the router's panic.
+    let help = simplestchat_release(&["fetch", "--help"], None);
+    assert_eq!(help.status.code(), Some(0), "{:?}", help.status);
+    let text = String::from_utf8(help.stdout).unwrap();
+    assert!(text.starts_with("Usage: simplestchat-ops release fetch --repository REPO"));
+    assert!(text.contains("installed Ops receiver"));
+    let argument = OsString::from_vec(vec![0xff]);
+    let output = simplestchat_release(&[OsStr::new("fetch"), argument.as_os_str()], None);
+    assert_eq!(output.status.code(), Some(2), "{:?}", output.status);
+    assert!(output.stdout.is_empty());
+}

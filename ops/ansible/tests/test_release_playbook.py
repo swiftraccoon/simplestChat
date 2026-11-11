@@ -1,28 +1,23 @@
-"""Release wiring and real Compose rendering; never contact a Docker daemon."""
+"""Real Compose rendering of a candidate image selection; never contact a Docker daemon."""
 
-import hashlib
 import json
 import shutil
 import subprocess
 import tempfile
 import unittest
 from copy import deepcopy
-from functools import cached_property
 from pathlib import Path
 from typing import override
 from unittest.mock import patch
 
-from ansible.parsing.dataloader import DataLoader
 from ansible.plugins.loader import init_plugin_loader
-from ansible.template import Templar, trust_as_template
-from test_support import array, at, obj, objects, string, strings, yaml_value
+from test_support import obj, string
 
 # isort: split
-import release_preflight
 import release_public as RELEASE  # noqa: N812 - name the helper under test.
 import test_public_templates as TEMPLATES  # noqa: N812 - shared fixture module.
 from release_artifact import sha256_file
-from release_json import JsonObject, decode_json, json_value
+from release_json import decode_json
 
 # The optional Compose check renders local fixture files without daemon access.
 # ruff: noqa: S603
@@ -32,170 +27,13 @@ PROJECT = ROOT.parents[1]
 
 
 class ReleasePlaybookTests(unittest.TestCase):
-    """Verify the release playbook contract offline."""
+    """Verify the candidate selection against the real Compose renderer offline."""
 
     @classmethod
     @override
     def setUpClass(cls) -> None:
         """Prepare the isolated fixture and register cleanup."""
         init_plugin_loader()
-
-    @cached_property
-    def play(self) -> JsonObject:
-        """Read the release playbook once per isolated test case."""
-        return obj(yaml_value((ROOT / "release.yml").read_text()), 0)
-
-    @cached_property
-    def tasks(self) -> list[JsonObject]:
-        """Read ordered tasks, requiring each task to be a mapping."""
-        return objects(self.play, "tasks")
-
-    def command(self, action: str) -> JsonObject:
-        """Find the reviewed task invoking one explicit CLI action."""
-        return next(
-            task
-            for task in self.tasks
-            if action in array(obj(task.get("ansible.builtin.command", {})).get("argv", []))
-        )
-
-    def pre_task(self, name: str) -> JsonObject:
-        """Find one preflight by its stable task name."""
-        return next(task for task in objects(self.play, "pre_tasks") if task["name"] == name)
-
-    def test_github_fetch_is_bounded_controller_only_and_precedes_common_stage(self) -> None:
-        """Verify github fetch is bounded controller only and precedes common stage."""
-        fetch = self.command("--artifact-id")
-        argv = strings(fetch, "ansible.builtin.command", "argv")
-        self.assertEqual(
-            argv,
-            [
-                "{{ ansible_playbook_python }}",
-                "-B",
-                "{{ playbook_dir }}/../../build/fetch-release.py",
-                "--repository",
-                "{{ scpub_release_repository }}",
-                "--artifact-id",
-                "{{ scpub_release_artifact_id }}",
-                "--revision",
-                "{{ scpub_release_revision }}",
-                "--ci-run",
-                "{{ scpub_release_ci_run }}",
-                "--host",
-                "{{ ansible_host }}",
-                "--user",
-                "{{ ansible_user }}",
-                "--port",
-                "{{ ansible_port | default(22) }}",
-                "--identity",
-                "{{ ansible_ssh_private_key_file }}",
-                "--output-parent",
-                "{{ (playbook_dir ~ '/../../results') | realpath }}",
-                "--verified-directory",
-                "{{ (scpub_validated_release.stdout | from_json).directory }}",
-            ],
-        )
-        self.assertEqual(fetch["delegate_to"], "localhost")
-        self.assertIs(fetch["become"], expr2=False)
-        self.assertEqual(fetch["timeout"], 1080)
-        self.assertEqual(
-            fetch["when"], ["not ansible_check_mode", "scpub_release_artifact_id is defined"]
-        )
-        self.assertNotIn("--deploy", argv)
-        self.assertNotIn("no_log", fetch)
-        receiver = next(
-            task
-            for task in self.tasks
-            if task.get("loop") == sorted(release_preflight.FETCH_HELPERS)
-        )
-        self.assertEqual(
-            receiver["ansible.builtin.copy"],
-            {
-                "src": "{{ item }}",
-                "dest": "/usr/local/libexec/simplestchat-public/{{ item }}",
-                "owner": "root",
-                "group": "root",
-                "mode": "0644",
-            },
-        )
-        self.assertEqual(
-            receiver["when"],
-            [
-                "scpub_release_artifact_id is defined",
-                "not (scpub_release_prepared | default(false) | bool)",
-            ],
-        )
-        self.assertLess(self.tasks.index(receiver), self.tasks.index(fetch))
-        self.assertLess(self.tasks.index(fetch), self.tasks.index(self.command("stage")))
-
-    def test_python_helper_and_shared_module_are_installed_together(self) -> None:
-        """Verify python helper and shared module are installed together."""
-        for filename in ("release.yml", "public.yml"):
-            play = obj(yaml_value((ROOT / filename).read_text()), 0)
-            task = next(
-                task
-                for task in objects(play, "tasks")
-                if task.get("name")
-                == (
-                    "Install the release command and shared artifact validator"
-                    if filename == "release.yml"
-                    else "Copy routine-release commands without starting a release"
-                )
-            )
-            self.assertEqual(set(strings(task, "loop")), release_preflight.BASE_HELPERS)
-            self.assertEqual(
-                task["ansible.builtin.copy"],
-                {
-                    "src": "{{ item }}",
-                    "dest": "/usr/local/libexec/simplestchat-public/{{ item }}",
-                    "owner": "root",
-                    "group": "root",
-                    "mode": "0644",
-                },
-            )
-        storage = next(
-            task
-            for task in self.tasks
-            if task.get("loop")
-            == [
-                "{{ scpub_root }}/releases",
-                "{{ scpub_root }}/releases/{{ scpub_release_revision }}",
-            ]
-        )
-        self.assertEqual(at(storage, "ansible.builtin.file", "mode"), "0700")
-
-    def test_real_ansible_lookup_preserves_source_bytes_and_selects_complete_helper_sets(
-        self,
-    ) -> None:
-        """Verify real ansible lookup preserves source bytes and selects complete helper sets."""
-        task = self.pre_task(
-            "Verify the host and exact prepared helpers without broad fact gathering"
-        )
-        argv = strings(task, "ansible.builtin.command", "argv")
-        base = {
-            name: hashlib.sha256((ROOT / "files" / name).read_bytes()).hexdigest()
-            for name in release_preflight.BASE_HELPERS
-        }
-        for prepared, github in ((None, False), (False, True), (True, False), (True, True)):
-            values: JsonObject = {"playbook_dir": str(ROOT)}
-            if prepared is not None:
-                values["scpub_release_prepared"] = prepared
-            if github:
-                values["scpub_release_artifact_id"] = 123
-            templar = Templar(loader=DataLoader(), variables=values)
-            with self.subTest(prepared=prepared, github=github):
-                code = string(json_value(templar.template(trust_as_template(argv[3]))))
-                self.assertEqual(code.encode(), (ROOT / "files/release_preflight.py").read_bytes())
-                expected = dict(base) if prepared else {}
-                if prepared and github:
-                    expected.update(
-                        {
-                            name: hashlib.sha256((ROOT / "files" / name).read_bytes()).hexdigest()
-                            for name in release_preflight.FETCH_HELPERS
-                        }
-                    )
-                result = string(json_value(templar.template(trust_as_template(argv[4]))))
-                self.assertIsInstance(result, str)
-                self.assertEqual(decode_json(result), expected)
 
     @unittest.skipUnless(
         shutil.which("docker"), "Optional offline Compose renderer requires the Docker CLI"

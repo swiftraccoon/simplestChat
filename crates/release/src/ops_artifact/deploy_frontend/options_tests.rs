@@ -48,7 +48,6 @@ fn required_inputs_have_explicit_defaults_without_filesystem_admission() {
     assert_eq!(options.origin_host, "chat.example.test");
     assert_eq!(options.wait_seconds, 3600);
     assert_eq!(options.quiet_seconds, 600);
-    assert!(!options.install_helpers);
     assert!(options.limit.is_none());
     assert!(options.ansible_playbook.is_none());
     assert!(options.gh.is_none());
@@ -67,7 +66,6 @@ fn every_explicit_tool_and_candidate_role_stays_distinct() {
             "7200",
             "--quiet-seconds",
             "0",
-            "--install-helpers",
             "--ansible-playbook",
             "/private/controller tools/ansible-playbook",
             "--gh",
@@ -79,12 +77,11 @@ fn every_explicit_tool_and_candidate_role_stays_distinct() {
         ]
         .map(str::to_owned),
     );
-    assert_eq!(arguments.len(), 21);
+    assert_eq!(arguments.len(), 20);
     let options = admitted(&arguments);
     assert_eq!(options.limit.as_deref(), Some("public_vps"));
     assert_eq!(options.wait_seconds, 7200);
     assert_eq!(options.quiet_seconds, 0);
-    assert!(options.install_helpers);
     assert_eq!(
         options.ansible_playbook.as_deref(),
         Some(Path::new("/private/controller tools/ansible-playbook"))
@@ -153,8 +150,9 @@ fn duplicate_flags_cannot_replace_a_previously_selected_value() {
         arguments.extend([flag.into(), original.into()]);
         refused(&arguments);
     }
+    // No helper is installed any more, so the retired switch is an unknown flag.
     let mut arguments = base();
-    arguments.extend(["--install-helpers".into(), "--install-helpers".into()]);
+    arguments.push("--install-helpers".into());
     refused(&arguments);
 }
 
@@ -316,7 +314,7 @@ fn accepted_input_sizes_are_bounded_before_url_or_path_construction() {
     admitted(&supplied("--limit", &"a".repeat(253)));
     refused(&supplied("--limit", &"a".repeat(254)));
     refused(&supplied("--inventory", &format!("/{}", "a".repeat(4096))));
-    let arguments = vec![String::from("--install-helpers"); 22];
+    let arguments = vec![String::from("--limit"); 21];
     refused(&arguments);
 }
 

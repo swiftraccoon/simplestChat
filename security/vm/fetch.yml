@@ -1,5 +1,5 @@
 ---
-- name: Prepare only the unchanged receiver inside the marked disposable guest
+- name: Prepare only the native receiver inside the marked disposable guest
   hosts: benchmark_hosts
   become: true
   gather_facts: false
@@ -12,6 +12,7 @@
           - ansible_user == 'fixture'
           - vm_fixture_run_id is match('^[a-f0-9]{32}$')
           - vm_fixture_revision is match('^[a-f0-9]{40}$')
+          - vm_fixture_ops_binary is match('^/')
 
     - name: Read the original cloud-init run marker
       ansible.builtin.slurp:
@@ -49,19 +50,21 @@
         group: root
         mode: '0755'
 
-    - name: Install only unchanged compatible receiver helpers
+    - name: Install only the native receiver's fixed Debian transport prerequisites
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Install only the source-built native receiver at its fixed path
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        src: "{{ vm_fixture_ops_binary }}"
+        dest: /usr/local/libexec/simplestchat-public/simplestchat-ops
         owner: root
         group: root
-        mode: '0644'
-      loop:
-        - fetch-release.py
-        - release_fetch_receiver.py
-        - release_trust.py
-        - release_artifact.py
-        - release_json.py
+        mode: '0755'
 
     - name: Install only the trusted read-only publication probe
       ansible.builtin.copy:

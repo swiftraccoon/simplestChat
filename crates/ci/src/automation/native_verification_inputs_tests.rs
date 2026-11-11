@@ -48,7 +48,7 @@ pub(super) fn result_contract(pre: &[Value]) -> Check<usize> {
     let (at, result) = named(pre, RESULT)?;
     default_failure(result)?;
     require(
-        result["when"] == SELECTED
+        result.get("when").is_none()
             && result["vars"]
                 == json!({
                     "scpub_native_verified_release":
@@ -60,7 +60,7 @@ pub(super) fn result_contract(pre: &[Value]) -> Check<usize> {
     Ok(at)
 }
 
-pub(super) fn contract(pre: &[Value], choice_at: usize, native_at: usize) -> Check<()> {
+pub(super) fn contract(pre: &[Value], native_at: usize) -> Check<()> {
     let (input_at, inputs) = named(pre, INPUTS)?;
     assertions(inputs, &ASSERTIONS)?;
     let (inspect_at, inspect) = named(pre, INSPECT)?;
@@ -81,7 +81,7 @@ pub(super) fn contract(pre: &[Value], choice_at: usize, native_at: usize) -> Che
     assertions(executable, &FILE_ASSERTIONS)?;
     for task in [inputs, inspect, executable] {
         default_failure(task)?;
-        require(task["when"] == SELECTED, "native-keeper-branch")?;
+        require(task.get("when").is_none(), "unconditional-keeper")?;
     }
     for task in pre {
         if task["register"] == "scpub_native_verification_gh" {
@@ -89,10 +89,7 @@ pub(super) fn contract(pre: &[Value], choice_at: usize, native_at: usize) -> Che
         }
     }
     require(
-        choice_at < input_at
-            && input_at < inspect_at
-            && inspect_at < exec_at
-            && exec_at < native_at,
+        input_at < inspect_at && inspect_at < exec_at && exec_at < native_at,
         "native-keeper-admission-order",
     )
 }

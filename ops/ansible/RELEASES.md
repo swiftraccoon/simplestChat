@@ -159,14 +159,14 @@ retaining their separate IDs, API lengths and digests. API metadata supplies
 coordinates; the current playbook's fresh application/Ops cryptography must
 still prove the payloads and selected attempt before execution.
 
-The frontend explicitly selects native controller-side application verification.
+Application verification is always the controller's own.
 The trusted default `simplestchat-release verify` bridge runs the existing complete Ops
-verification owner synchronously, before remote preflight. Its 600-second whole
+verification owner synchronously, before any host is contacted. Its 600-second whole
 budget includes a 60-second final reserve within the unchanged 660-second Ansible
 guard. Supplied application candidates still require fresh API observations and
-all four signature checks. Native refusal stops the playbook without a Python
-verification fallback; fetching, receiving and host staging retain their Python
-keeper roles.
+all four signature checks. Refusal stops the playbook. Fetching runs through
+the same controller's `fetch`; receiving and host staging run the Ops executable
+the playbook's signed delivery installs first.
 
 Inventory expansion must select exactly one host. `--limit HOST_ALIAS` selects
 one exact inventory alias, not an Ansible group, pattern or list. The command
@@ -190,7 +190,6 @@ The options are:
 | --- | --- |
 | `--wait-seconds N` | CI waiting, integer `0..7200`, default 3600. Zero permits the current state check without waiting for pending CI. |
 | `--quiet-seconds N` | Native room observation, integer `0..600`, default 600. |
-| `--install-helpers` | Explicitly reconcile the current Python staging helpers; otherwise require an exact prepared-host match. |
 | `--ansible-playbook ABS` | Select a caller-trusted executable and its sibling inventory tool. |
 | `--gh ABS` | Select the caller-trusted GitHub CLI. |
 | `--application-artifact-dir ABS` | Supply the original application ZIP and ten original members as candidate data. |
@@ -274,9 +273,7 @@ package version shown below to match the selected signed Ops distribution:
   "scpub_release_artifact_id": APPLICATION_ARTIFACT_ID,
   "scpub_release_expected_revision": "REVISION_40_LOWERCASE_HEX",
   "scpub_release_ci_run": CI_RUN_ID,
-  "scpub_release_native_verification": true,
   "scpub_release_deploy": true,
-  "scpub_release_prepared": true,
   "scpub_release_quiet_seconds": 600,
   "scpub_ops_release_controller": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/simplestchat-release",
   "scpub_ops_gh_executable": "/absolute/trusted/bin/gh",
@@ -306,17 +303,14 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
   -e @routine-vars.json
 ```
 
-Prepared mode requires the exact current installed Python staging helpers. If
-reviewed helper changes need installation, set `scpub_release_prepared` to the
-JSON boolean `false`; this reconciles only those helpers, without provisioning or
-migrations. Omitting `scpub_release_deploy`, or setting it to `false`, remains
-stage-only and requires no signed Ops selectors. Controller paths are required
-when opting into native verification, even for stage-only use.
+No helper file is installed on the host: the playbook delivers the signed Ops
+executable first and verifies the host, receives the release and stages it
+through that executable. Omitting `scpub_release_deploy`, or setting it to
+`false`, remains stage-only. The signed Ops selectors and both controller paths
+are required either way, because staging runs the signed executable.
 
-`scpub_release_native_verification` accepts only a JSON boolean. Omission means
-`false` and retains the Python verification route; the automatic Rust
-frontend always supplies `true`. Explicit null, strings and numeric coercion
-refuse before verification or remote work. Native mode requires absolute trusted
+Verification always runs through the native controller, before any host is
+contacted. It requires absolute trusted
 `scpub_ops_release_controller` and `scpub_ops_gh_executable` paths. The declared and canonical
 GitHub CLI basenames must be `gh`, with no colon in its path. A controller-side
 check requires its canonical target to be a regular executable without a final
@@ -327,20 +321,18 @@ the controller. The native verifier preserves it for GitHub CLI calls, alongside
 the existing permitted authentication environment; curl does not receive it.
 The native command receives the same repository/artifact/revision/CI identities,
 output parent and optional application candidate directory, plus
-`--timeout-seconds 600 --finalization-seconds 60`. Both verifier branches retain
+`--timeout-seconds 600 --finalization-seconds 60`. The verifier keeps
 localhost delegation, no privilege escalation, actual execution in check mode
 and the 660-second task guard.
 
-The native task registers a separate result. Before normalization, it must have
+The verifier registers its own result. Before adoption, it must have
 actually succeeded without skipping and returned integer status zero. Its JSON
 must contain exactly `directory`, `image.tar`, `release.json` and `revision`,
 with the selected revision, an absolute directory string and two lowercase
 64-digit hex digests. This result-shape check supplies no new authentication
-authority. The checked native result is normalized into the existing
-`scpub_validated_release` variable after the Python branch skips, so a skipped
-result cannot overwrite verified output. A native failure never triggers the
-Python branch. Omitted/false native mode keeps the original Python task and
-downstream result contract without decoding an absent native result.
+authority. Only the checked result is adopted as `scpub_validated_release`,
+the one fact later tasks read; nothing else writes it and a failure stops the
+playbook.
 
 For a separately retained input, add the optional
 [`scpub_ops_artifact_zip`](#optional-retained-artifact-inputs) absolute ZIP path.
@@ -348,16 +340,19 @@ Application staging has the separate `scpub_release_verified_directory` input;
 these fields select different artifact contracts. Both candidates are freshly
 verified during the actual operation.
 
-The playbook rejects incomplete explicit deploy inputs before remote preflight.
-It verifies and stages the signed application while chat stays online, retaining
-the original verified predicate beside the manifest. Shared signed Ops delivery
-then joins repository/revision/run/attempt and the actual staged manifest,
-authenticates the selected Ops artifact, verifies transferred bytes and performs
-native install/upgrade before canonical `release deploy` runs. Its transport,
-privacy and retained bootstrap evidence are described in the
+The playbook rejects incomplete inputs and verifies the signed application on
+the controller before any host is contacted. Shared signed Ops delivery comes
+next: it joins repository/revision/run/attempt and the manifest digest of the
+controller-verified originals with the Ops selection, authenticates the selected
+Ops artifact, verifies transferred bytes and performs native install/upgrade.
+Every later host step runs that installed executable: the host preflight, the
+receiver the controller's `fetch` reaches over SSH, staging while chat stays
+online and, when selected, canonical `release deploy`. After staging, the
+original verified predicate is retained beside the manifest. The delivery's
+transport, privacy and retained bootstrap evidence are described in the
 [shared delivery sequence](#stage-then-run-native-maintenance). A saved receipt
 never replaces actual current verifier or process success. Delivery or native
-failure stops the playbook; there is no Python deployment fallback.
+failure stops the playbook; there is no interpreted fallback.
 
 The native transaction uses `systemd-run --wait`, runtime 1800 seconds and stop
 allowance 240 seconds, with native timeout 1800 and finalization reserve 60.
@@ -484,7 +479,8 @@ and [image security evidence](../../docs/image-security.md).
 
 This avoids sending the image archive through your controller's SSH connection.
 The controller still downloads its own copy for cryptographic verification.
-Use Python 3.12+ and GitHub CLI on the controller, authenticated with
+Use the [built controller](#prepare-the-controller-before-credentials) and
+GitHub CLI, authenticated with
 `gh auth login --hostname github.com`. Only GitHub.com is supported; no GitHub
 token is installed on the VPS.
 
@@ -500,17 +496,17 @@ gh api repos/OWNER/REPOSITORY/actions/runs/BUILD_RUN_ID/artifacts \
   --jq '.artifacts[] | {id, name}'
 ```
 
-Replace the uppercase placeholders. The unsigned `scpub_release_directory`
-mode is not accepted:
+Staging takes the same typed variables as
+[direct typed deployment](#direct-typed-ansible-deployment), with
+`scpub_release_deploy` set to `false` or omitted: the signed Ops selection is
+required because the host steps run the signed executable. The unsigned
+`scpub_release_directory` mode is not accepted:
 
 ```sh
 ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
   ops/ansible/.venv/bin/ansible-playbook \
   -i ops/ansible/inventory.local.yml ops/ansible/release.yml \
-  -e scpub_release_repository=OWNER/REPOSITORY \
-  -e scpub_release_artifact_id=ARTIFACT_ID \
-  -e scpub_release_expected_revision=COMMIT_SHA \
-  -e scpub_release_ci_run=CI_RUN_ID
+  -e @routine-vars.json -e scpub_release_deploy=false
 ```
 
 The inventory must use OpenSSH with explicit `ansible_host`, `ansible_user`, and
@@ -523,8 +519,9 @@ commands, forwarding, and connection sharing are disabled. The controller does
 not use Ansible's global `ansible_ssh_args`. Host-key checking remains strict.
 
 The URL is sent only over SSH after the receiver is ready; the API token remains
-on the controller. The receiver has a 300-second deadline and the controller a
-1080-second deadline, including local verification. The Ansible controller-only
+on the controller. The receiver is the installed executable's `release receive`
+with a 300-second deadline; the controller's `fetch` has a 1020-second budget
+inside a 1080-second task guard, including local verification. The Ansible controller-only
 verification step has a separate 660-second bound. Downloaded ZIP and signed
 image evidence are verified before the common image-staging checks run. Existing release bytes are never overwritten. Private
 evidence is retained under the controller's `results/` and the VPS's release
@@ -538,21 +535,15 @@ present and identical. Budget disk space for both; no retained evidence is
 automatically deleted. Check mode still performs controller-side signature
 verification, then skips remote transfer and runtime changes.
 
-### Faster runs on a prepared host
+### Repeated runs and timing
 
-After a successful staging run, add `-e scpub_release_prepared=true` to either
-release command. This skips helper installation and checks every required helper
-against the exact SHA-256 of your controller checkout, including file types,
-ownership and permissions. A missing or changed helper fails before transfer or
-staging; it is never silently reused. GitHub fetching creates its new private
-release directory itself. A previously downloaded signed candidate may be supplied
+Every run delivers the signed Ops executable for its own revision before
+staging, so no helper set is installed or compared and a repeat needs no extra
+option. A previously downloaded signed candidate may be supplied
 as `scpub_release_verified_directory`; it is reverified against the selected
 GitHub artifact/run before remote work, with no unsigned-directory fallback.
 
-If helpers need updating, review the mismatch, then run the same stage-only
-command without prepared mode. This reconciles the helpers and release storage;
-it does not require rerunning public provisioning or stopping chat. Run only one
-release, helper update, or maintenance operation at a time. The prepared check is
+Run only one release or maintenance operation at a time. The host preflight is
 a snapshot; runtime workload locks and unfinished-operation journals remain the
 authority for staging and deployment.
 
@@ -570,8 +561,8 @@ command output, inventory names or credentials. Timings include controller and
 transport overhead; they are not service downtime or an availability guarantee.
 Check mode still verifies the signed artifact on the controller, downloading it
 there unless `scpub_release_verified_directory` supplies an existing candidate.
-It performs read-only host/helper checks but skips transfer to the host, image
-staging and deployment. Normal prepared mode still stages only unless deployment
+It skips the Ops delivery, the host preflight, transfer to the host, image
+staging and deployment. A normal run still stages only unless deployment
 is explicitly enabled.
 
 ## Deploy explicitly
@@ -820,10 +811,8 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
 
 `scpub_release_deploy: false` is the existing stage-only interface; there is no
 `build/deploy.py --stage-only` option. The release playbook independently verifies
-the selected application artifact and its exact CI provenance. Omitting prepared
-mode reconciles the existing release helpers without stopping chat. On later
-attempts, add `-e scpub_release_prepared=true` only when those helpers match this
-checkout; a mismatch refuses instead of silently reusing them. A successful
+the selected application artifact and its exact CI provenance, delivers the
+signed Ops executable and stages through it without stopping chat. A successful
 stage does not run maintenance.
 
 Successful signed staging also retains the original verified

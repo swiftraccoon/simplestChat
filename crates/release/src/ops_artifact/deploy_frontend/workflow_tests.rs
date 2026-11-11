@@ -545,8 +545,9 @@ async fn complete_routine_transaction_freezes_private_identity_calls_once_and_ch
         "target":"x86_64-unknown-linux-musl","buildRunId":123,"runAttempt":2})
     );
     assert_eq!(vars["scpub_release_deploy"], true);
-    assert_eq!(vars["scpub_release_native_verification"], true);
-    assert_eq!(vars["scpub_release_prepared"], true);
+    // Verification is always native and no helper set is reconciled.
+    assert!(vars.get("scpub_release_native_verification").is_none());
+    assert!(vars.get("scpub_release_prepared").is_none());
     assert_eq!(vars["scpub_release_quiet_seconds"], 600);
     assert_eq!(
         vars["scpub_ops_release_controller"],

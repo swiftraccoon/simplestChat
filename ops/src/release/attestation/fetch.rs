@@ -488,9 +488,10 @@ fn lifecycle(
 /// are both required; a late failure invalidates earlier emitted bytes.
 ///
 /// This dedicated Linux/macOS invocation uses trusted OpenSSH configuration and
-/// known hosts. The unchanged Python receiver must already be prepared; this
-/// does not install or authenticate a target Ops executable or retry unknown
-/// remote outcomes. Blocked OS I/O/close/reap remains outside a hard wall bound.
+/// known hosts. The host must already hold the signed Ops executable at its
+/// fixed path: the remote command is its `release receive`. This does not
+/// install or authenticate that executable or retry unknown remote outcomes.
+/// Blocked OS I/O/close/reap remains outside a hard wall bound.
 ///
 /// # Panics
 ///

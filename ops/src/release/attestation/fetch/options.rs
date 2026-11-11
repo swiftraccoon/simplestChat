@@ -12,8 +12,14 @@ pub(super) const USAGE: &str = concat!(
     "--artifact-id N --ci-run N --host HOST --user USER --identity ABS ",
     "[--port N] --output-parent ABS [--verified-directory ABS] ",
     "--timeout-seconds N --finalization-seconds M\n",
-    "Verify explicit server bytes, then fetch through the prepared Python SSH receiver. ",
-    "0 < M < N; no automatic retry or installed helper switch."
+    "Verify explicit server bytes, then fetch through the installed Ops receiver over SSH. ",
+    "0 < M < N; no automatic retry."
+);
+/// The host side: the installed signed executable, whose whole budget ends
+/// inside this controller's 315-second receipt wait.
+const RECEIVER: &str = concat!(
+    "/usr/local/libexec/simplestchat-public/simplestchat-ops release receive ",
+    "--timeout-seconds 300 --finalization-seconds 30"
 );
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ParseError {
@@ -210,14 +216,10 @@ impl Options {
             self.user.clone().into(),
             self.host.clone().into(),
             if self.user == "root" {
-                "/usr/bin/python3 -B /usr/local/libexec/simplestchat-public/fetch-release.py"
+                RECEIVER.into()
             } else {
-                concat!(
-                    "sudo -n -- /usr/bin/python3 -B ",
-                    "/usr/local/libexec/simplestchat-public/fetch-release.py"
-                )
-            }
-            .into(),
+                format!("sudo -n -- {RECEIVER}").into()
+            },
         ]);
         values
     }

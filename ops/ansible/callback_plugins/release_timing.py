@@ -32,16 +32,13 @@ MAX_SOURCE_LENGTH = 4096
 LABELS = {
     "Gathering Facts": "facts",
     "Require an explicitly selected artifact and prepared public host": "release_preflight",
-    "Verify the host and exact prepared helpers without broad fact gathering": "prepared_host",
+    "Verify the host through the delivered Ops executable without broad fact gathering": (
+        "host_preflight"
+    ),
     "Require a fresh facts-free release unit identity": "unit_identity",
-    "Require existing public configuration without exposing it": "existing_configuration",
     "Install the isolated release helper directory": "helper_directory",
-    "Install the release command and shared artifact validator": "release_helpers",
-    "Install the bounded GitHub artifact receiver": "fetch_helper",
     "Create private immutable release storage": "release_storage",
     "Verify the exact GitHub release and fetch it directly onto the prepared host": "github_fetch",
-    "Transfer artifact files without overwriting retained releases": "artifact_copy",
-    "Verify retained destination bytes match this exact controller artifact": "artifact_checksum",
     "Import and verify the image while the public service remains running": "image_stage",
     "Replace only the application when deployment was explicitly selected": "app_deploy",
 }

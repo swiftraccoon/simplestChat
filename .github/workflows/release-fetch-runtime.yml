@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   release-fetch-runtime:
-    name: Source-built GNU client and unchanged receiver on disposable Debian
+    name: Source-built GNU client and native receiver on disposable Debian
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       github.repository == 'swiftraccoon/simplestChat' }}

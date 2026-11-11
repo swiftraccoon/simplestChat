@@ -3,10 +3,8 @@
 //! source guard is evaluated by Ansible's own assert module.
 
 use super::ansible::asserted;
-use super::document;
+use super::{checkout_file, document};
 use serde_json::{Map, Value, json};
-
-const PREPARED: &str = "not (scpub_release_prepared | default(false) | bool)";
 
 /// The single play of one playbook.
 fn play(name: &str) -> Value {
@@ -144,27 +142,192 @@ fn github_source_requires_exact_identities_and_explicit_supported_ssh() {
     }
 }
 
-/// From `test_prepared_mode_skips_helper_writes_but_keeps_local_release_storage`.
+/// The routine path installs no helper file and names no interpreted script:
+/// every host step runs the delivered executable, and the private release
+/// storage is ensured on every run.
 #[test]
-fn prepared_mode_skips_helper_writes_but_keeps_local_release_storage() {
+fn routine_release_installs_no_helper_and_always_ensures_release_storage() {
     let release = play("release.yml");
     let tasks = section(&release, "tasks");
-    for task in tasks {
-        if !task["name"].as_str().unwrap().starts_with("Install ") {
-            continue;
-        }
-        match &task["when"] {
-            Value::Array(conditions) => {
-                assert!(conditions.iter().any(|condition| condition == PREPARED));
-            }
-            condition => assert_eq!(condition, PREPARED),
-        }
+    for task in section(&release, "pre_tasks").iter().chain(tasks) {
+        let name = task["name"].as_str().unwrap();
+        assert!(!name.starts_with("Install "), "{name}");
+        let copied = task["ansible.builtin.copy"]["dest"].as_str();
+        assert!(
+            !copied.is_some_and(|path| path.starts_with("/usr/local/libexec/")),
+            "{name}"
+        );
+    }
+    let text = checkout_file("ops/ansible/release.yml");
+    for retired in [
+        "scpub_release_prepared",
+        "scpub_release_native_verification",
+        ".py",
+        "ansible_playbook_python",
+    ] {
+        assert!(!text.contains(retired), "{retired}");
     }
     let storage = named(tasks, "Create private immutable release storage");
-    assert_eq!(storage["when"], PREPARED);
+    assert!(storage.get("when").is_none());
     assert_eq!(release["vars"]["ansible_pipelining"], true);
     // The delegated controller's Python is never overridden with the host's.
     assert!(release["vars"].get("ansible_python_interpreter").is_none());
+}
+
+/// Standard base64 with padding, as Ansible's slurp reports file content.
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut text = String::new();
+    for chunk in bytes.chunks(3) {
+        let word = chunk.iter().enumerate().fold(0_u32, |word, (at, byte)| {
+            word | u32::from(*byte) << (16 - 8 * at)
+        });
+        for at in 0..4 {
+            let sextet = (word >> (18 - 6 * at)) & 63;
+            let symbol = char::from(ALPHABET[sextet as usize]);
+            text.push(if at <= chunk.len() { symbol } else { '=' });
+        }
+    }
+    text
+}
+
+/// The identity the delivery joins, decided by Ansible's own assert module:
+/// the routine caller's verified originals and the shared join accept one
+/// signed identity and refuse each way the originals or the selection differ.
+#[test]
+fn verified_originals_and_the_shared_join_accept_only_one_signed_identity() {
+    let release = play("release.yml");
+    let originals = named(
+        section(&release, "tasks"),
+        "Require the verified application originals before any Ops delivery",
+    );
+    let shared = document("ops/ansible/tasks/signed-ops.yml");
+    let join = named(
+        shared[0]["block"].as_array().unwrap(),
+        "Join signed application bytes and exact Ops selection before export",
+    );
+    let revision = "a".repeat(40);
+    let manifest = "b".repeat(64);
+    let predicate = json!({
+        "repository": "example/simplestChat",
+        "revision": revision,
+        "runId": 123,
+        "runAttempt": 2,
+        "fileDigests": {"release.json": manifest},
+    });
+    let bytes = predicate.to_string().into_bytes();
+    let verified = json!({
+        "directory": "/private/verified",
+        "image.tar": "c".repeat(64),
+        "release.json": manifest,
+        "revision": revision,
+    });
+    let base = json!({
+        "scpub_app_predicate_file": {"stat": {
+            "isreg": true, "islnk": false, "nlink": 1, "size": bytes.len(),
+            "checksum": crate::io::sha256(&bytes),
+        }},
+        "scpub_app_manifest_file": {"stat": {
+            "isreg": true, "islnk": false, "checksum": manifest,
+        }},
+        "scpub_validated_release": {"stdout": verified.to_string()},
+        "scpub_app_predicate_bytes": {"content": base64(&bytes)},
+        "scpub_app_predicate": predicate,
+        "scpub_ops_selection": {
+            "repository": "example/simplestChat", "revision": revision,
+            "buildRunId": 123, "runAttempt": 2,
+        },
+    });
+    let with = |pointer: &str, value: Value| {
+        let mut case = base.clone();
+        *case.pointer_mut(pointer).unwrap() = value;
+        case
+    };
+    let cases = [
+        (base.clone(), true, true),
+        // The controller no longer holds what it verified.
+        (
+            with("/scpub_app_predicate_file/stat/islnk", json!(true)),
+            false,
+            true,
+        ),
+        (
+            with("/scpub_app_predicate_file/stat/nlink", json!(2)),
+            false,
+            true,
+        ),
+        (
+            with("/scpub_app_predicate_file/stat/size", json!(0)),
+            false,
+            true,
+        ),
+        (
+            with("/scpub_app_manifest_file/stat/isreg", json!(false)),
+            false,
+            true,
+        ),
+        // Another manifest than the verified one refuses both checks.
+        (
+            with(
+                "/scpub_app_manifest_file/stat/checksum",
+                json!("d".repeat(64)),
+            ),
+            false,
+            false,
+        ),
+        // The read bytes are not the snapshotted file.
+        (
+            with(
+                "/scpub_app_predicate_file/stat/checksum",
+                json!("e".repeat(64)),
+            ),
+            true,
+            false,
+        ),
+        // The Ops selection names another signed run, attempt, revision or repository.
+        (
+            with("/scpub_ops_selection/runAttempt", json!(3)),
+            true,
+            false,
+        ),
+        (
+            with("/scpub_ops_selection/buildRunId", json!(124)),
+            true,
+            false,
+        ),
+        (
+            with("/scpub_ops_selection/revision", json!("f".repeat(40))),
+            true,
+            false,
+        ),
+        (
+            with(
+                "/scpub_ops_selection/repository",
+                json!("other/simplestChat"),
+            ),
+            true,
+            false,
+        ),
+        // Text is not an integer identity.
+        (
+            with("/scpub_app_predicate/runId", json!("123")),
+            true,
+            false,
+        ),
+        (
+            with("/scpub_app_predicate", json!("not a mapping")),
+            true,
+            false,
+        ),
+    ];
+    let variables = cases.iter().map(|(case, _, _)| case.clone());
+    let variables = variables.collect::<Vec<_>>();
+    let held = asserted(&originals["ansible.builtin.assert"]["that"], &variables);
+    let joined = asserted(&join["ansible.builtin.assert"]["that"], &variables);
+    for (at, (case, originals, join)) in cases.iter().enumerate() {
+        assert_eq!(held[at], *originals, "originals {at}: {case}");
+        assert_eq!(joined[at], *join, "join {at}: {case}");
+    }
 }
 
 /// From `test_a_staged_release_replaces_the_on_host_build_as_the_image_source`:

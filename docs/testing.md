@@ -449,9 +449,8 @@ for values that callers must validate.
 CI uses this same gate. Set `PYTHON_CHECK_ENV` to another virtual environment
 directory to select both its pinned tools and its Python import environment.
 The checks do not install packages, contact deployment hosts, or start services.
-Updating a staging helper requires reviewed reconciliation through the direct
-release playbook with `scpub_release_prepared: false`; subsequent releases retain
-the prepared-helper hash checks and app-only replacement flow.
+Routine releases install no Python helper: the release playbook delivers the
+signed Ops executable and verifies, receives and stages through it.
 
 ### Readiness and shutdown
 
@@ -2835,7 +2834,7 @@ caller change; its success does not exercise the newly selected native branch.
 ## SSH release fetch checks
 
 The native `release fetch` command verifies locally before starting its single
-OpenSSH session with the existing Python receiver. Run its ordinary native and
+OpenSSH session with the host's installed `release receive`. Run its ordinary native and
 CLI checks:
 
 ```sh
@@ -2863,17 +2862,17 @@ turns that supplied value into a fresh download.
 Keep these fixtures separate from the actual disposable-VM SSH proof. That
 proof must bind the selected source-built executable, signed server artifact,
 generated guest/client identities and pinned known-host entry; execute both
-local-cache and local-download branches through real OpenSSH and the unchanged
-receiver; compare original published hashes and inodes; and finish all known
+local-cache and local-download branches through real OpenSSH and the same
+source-built executable's `release receive` in the guest; compare original
+published hashes and inodes; and finish all known
 VM, process, pipe and file owners before reporting success. Source-built Linux
-GNU execution is separate evidence from authenticated musl distribution or an
-installed caller migration. An already acquired archive alone does not exercise
-SSH or the receiver's download. Existing operational callers remain available.
+GNU execution is separate evidence from authenticated musl distribution. An
+already acquired archive alone does not exercise SSH or the receiver's download.
 
 ## Native host receiver checks
 
-The explicit native `release receive` operation has its own host contract and
-CLI, separate from the controller's default prepared Python receiver route. Run
+The native `release receive` operation is the host side of the controller's
+`release fetch`, with its own host contract and CLI. Run
 its ordinary regressions and actual CLI checks:
 
 ```sh
@@ -2907,7 +2906,7 @@ do not establish a successful workflow run, signed musl execution or deployment.
 
 ## Native host staging checks
 
-The explicit `release stage` command keeps the prepared Python callers available.
+The `release stage` command is what the release playbook runs on the host.
 Run its ordinary and actual CLI checks:
 
 ```sh

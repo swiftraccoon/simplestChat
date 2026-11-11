@@ -51,56 +51,14 @@
           - scpub_ops_exec_mount.stdout is match('^[^\\s,]+(,[^\\s,]+)*$')
           - "'noexec' not in scpub_ops_exec_mount.stdout.split(',')"
 
-    # Existing signed staging is authority; these are original-byte custody joins.
-    - name: Snapshot the retained signed application predicate
-      ansible.builtin.stat:
-        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
-        follow: false
-        get_checksum: true
-        checksum_algorithm: sha256
-      register: scpub_app_predicate_file
-
-    - name: Snapshot the actual staged application manifest
-      ansible.builtin.stat:
-        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release.json"
-        follow: false
-        get_checksum: true
-        checksum_algorithm: sha256
-      register: scpub_app_manifest_file
-
-    - name: Require protected original application identity files
-      ansible.builtin.assert:
-        that:
-          - scpub_app_predicate_file.stat.isreg | default(false)
-          - not (scpub_app_predicate_file.stat.islnk | default(false))
-          - scpub_app_predicate_file.stat.uid == 0
-          - scpub_app_predicate_file.stat.gid == 0
-          - scpub_app_predicate_file.stat.mode == '0600'
-          - scpub_app_predicate_file.stat.nlink == 1
-          - scpub_app_predicate_file.stat.size > 0
-          - scpub_app_predicate_file.stat.size <= 67108864
-          - scpub_app_predicate_file.stat.checksum is match('^[a-f0-9]{64}$')
-          - scpub_app_manifest_file.stat.isreg | default(false)
-          - not (scpub_app_manifest_file.stat.islnk | default(false))
-          - scpub_app_manifest_file.stat.uid == 0
-          - scpub_app_manifest_file.stat.gid == 0
-          - scpub_app_manifest_file.stat.mode == '0600'
-          - scpub_app_manifest_file.stat.checksum is match('^[a-f0-9]{64}$')
-        fail_msg: Restage the selected signed application before native maintenance.
-
-    - name: Read the original retained application predicate
-      ansible.builtin.slurp:
-        src: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
-      register: scpub_app_predicate_bytes
-      no_log: true
-
-    - name: Decode the retained predicate only for passive identity joins
+    # The caller registered its signed application originals; these are passive joins.
+    - name: Decode the signed application predicate only for passive identity joins
       ansible.builtin.set_fact:
         scpub_app_predicate: "{{ scpub_app_predicate_bytes.content | b64decode | from_json }}"
         cacheable: false
       no_log: true
 
-    - name: Join staged application bytes and exact Ops selection before export
+    - name: Join signed application bytes and exact Ops selection before export
       ansible.builtin.assert:
         that:
           - >-
@@ -117,7 +75,7 @@
             scpub_app_predicate.fileDigests['release.json'] ==
             scpub_app_manifest_file.stat.checksum
         fail_msg: >-
-          The retained staged application and Ops must select the same signed CI identity.
+          The signed application and Ops must select the same signed CI identity.
 
     - name: Create a private controller evidence directory
       ansible.builtin.tempfile:

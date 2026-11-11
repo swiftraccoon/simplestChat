@@ -4,19 +4,20 @@
 Docker/OCI image archives, and inspects local executable identities. Its production
 release builder can invoke the selected local Git and Docker tools to build or
 export an unsigned image. Local unsigned artifact preparation can write a new
-private directory, as described below. Python retains application staging,
-explicit force app-only release and other keeper roles; where this guide compares
-a native command with "the reference", it means the corresponding Python
-implementation. Signed routine deployment and prepared-host maintenance have the
-explicit native callers described below.
+private directory, as described below. The signed routine release verifies,
+receives, stages and deploys through this executable, and prepared-host
+maintenance has the explicit native caller described below. Python retains the
+explicit force app-only release, host provisioning and the other keeper roles
+named in their sections; where this guide compares a native command with "the
+reference", it means the corresponding Python implementation.
 A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
-delivery through the native controller before that executable runs. Existing
-Python files remain frozen; this is not a repository-wide runtime cutover.
+delivery through the native controller before that executable runs. The Python
+files that remain are frozen until their last caller moves.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -290,8 +291,9 @@ distinguishes actual inert process tests and hosted Docker/signing evidence.
 
 ## Read-only release preflight
 
-The implemented command is available for eventual independently verified Ops
-distribution; Ansible still supplies and runs the unchanged Python helper.
+The release playbook runs the first form below through the executable its
+signed delivery just installed. The helper-digest form remains for the force
+route, whose Python preflight Ansible still supplies.
 Do not install or substitute an unverified development binary on a release host.
 The native check requires effective UID 0, kernel Linux/x86_64 and Debian major
 13. It starts no process and does not import or execute an installed helper.
@@ -2278,19 +2280,19 @@ returns; the original owner is checked before directory creation. The native
 call can block, with the same kernel-stall qualification as file operations.
 
 Private sharing covers the two local verification operations and the
-prepared-receiver fetch controller under the same operation owner. Tests and actual
+release fetch controller under the same operation owner. Tests and actual
 authenticated transport measurements are separate evidence in the
 [testing guide](../docs/testing.md); source checks and inert oracles do not
 establish installed-binary or host readiness.
 
-## Prepared-receiver release fetch controller
+## Release fetch controller
 
-`simplestchat-ops release fetch` implements the complete local transaction in
-`build/release_fetch_controller.py`: fresh explicit API selection, local signed
-bundle verification, then the prepared Python receiver's SSH protocol. The
-Python controller, receiver and deployment/Ansible callers remain operational.
-This standalone route does not install a target executable, change bootstrap,
-retry an uncertain fetch or stage/deploy an image.
+`simplestchat-ops release fetch` is the controller half of a host transfer:
+fresh explicit API selection, local signed bundle verification, then the
+two-frame SSH protocol with the host's installed `release receive`. The release
+playbook runs it as `simplestchat-release fetch` after the signed delivery put
+the executable on the host. It does not install that executable, change
+bootstrap, retry an uncertain fetch or stage/deploy an image.
 
 ```sh
 target/release/simplestchat-ops release fetch \
@@ -2321,10 +2323,12 @@ reference PATH/HOME/USER/LOGNAME/SSH_AUTH_SOCK subset and LC_ALL=C. Grants enter
 SSH stdin only, and never public output, arguments or retained journals.
 
 The fixed OpenSSH argv preserves BatchMode, strict host keys, disabled multiplex,
-forwarding/proxy/local-command controls and the original receiver command.
+forwarding/proxy/local-command controls and the fixed receiver command:
+`/usr/local/libexec/simplestchat-public/simplestchat-ops release receive
+--timeout-seconds 300 --finalization-seconds 30`.
 OpenSSH still uses the operator's trusted user/system configuration and known
 hosts; no `-F` override or new host-key bootstrap is introduced. A non-root user
-uses the existing `sudo -n --` receiver command. The identity must be a real-UID
+reaches the same command through `sudo -n --`. The identity must be a real-UID
 owned regular file with exact mode 0400 or 0600. Native active paths are canonical
 absolute nofollow paths with UTF-8 spelling; this is narrower than Python's
 relative cache and surrogate-path domain. Retained descriptors/hashes detect
@@ -2344,8 +2348,8 @@ that same protocol ceiling, including tool checks before a new grant's child
 window is calculated. The ceiling is fenced before transport settlement; the
 original body and whole ends remain unchanged. Local GitHub/curl/verifier phase
 caps and the documented native idle/CA profile above remain in force. No subprocess CLI or fresh owner restarts
-a clock. The existing callers' 660/1080-second guards are unchanged; a source
-port does not choose or increase their limits.
+a clock. The release playbook gives it 1020 seconds with a 60-second reserve
+inside its 1080-second task guard.
 
 Stdin remains open after the URL until the final receipt arrives. The cumulative
 Ready/final receive counter and the final trailing buffer retain the reference's
@@ -2377,8 +2381,8 @@ later cleanup/journal uncertainty may update the legacy report projection.
 `release fetch --help` and `--licenses` require no runtime/environment/files or
 remote operations. Notices reuse the exact scoped local-verifier texts; no
 new dependency or complete workspace license inventory is introduced. The
-synchronous entry point must run outside an entered Tokio runtime. Review the
-[validation evidence](../docs/testing.md) before considering any caller switch.
+synchronous entry point must run outside an entered Tokio runtime. Its
+[validation evidence](../docs/testing.md) is described with the other checks.
 
 
 ## Explicit native host receiver
@@ -2434,12 +2438,10 @@ Syntax errors return2; operational refusals return1. Exit0 includes all known
 peer finalization and the original end fence. A nonzero exit invalidates earlier
 Ready, partial output or a complete earlier report, including a late failure.
 
-The existing Python receiver, prepared-helper preflight, controller command and
-operational callers remain unchanged. Source compilation and inert comparison do
-not authenticate a Linux musl executable on the target. The current authenticated
-Ops installer supports first install and exact repeat, not an upgrade. Installing
-or switching this receiver requires separately complete bootstrap and runtime
-proof; this source route makes no such switch.
+The release playbook reaches this command through the controller's
+`release fetch`, after its signed delivery installed the executable. Source
+compilation and inert comparison do not authenticate a Linux musl executable on
+the target; that authentication is the delivery's.
 
 
 ## Explicit native host staging
@@ -2523,15 +2525,16 @@ late signal, descriptor, runtime, mask or original-deadline failures.
 Syntax errors return 2; operational refusals return 1. The public facade is
 intended for dedicated synchronous use outside an entered Tokio runtime.
 
-Python staging, explicit force deployment and prepared-helper preflight
-retain their roles. Signed routine deployment and prepared maintenance have
+The release playbook stages through this command. Explicit force deployment
+and its prepared-helper preflight keep their Python route. Signed routine
+deployment and prepared maintenance have
 separate authenticated native callers. First installation and
 identical repeat remain distinct from an explicit Ops upgrade.
 Source implementation and inert fixtures do not establish Docker
-execution, signed musl readiness, measured caller budgets or a production switch.
-The separate free Debian KVM proof must authenticate both artifact contracts,
-execute the installed native stage first/repeat and check original publication,
-image identity, validator retirement and all final owners before any migration.
+execution, signed musl readiness or measured caller budgets.
+The separate free Debian KVM proof authenticates both artifact contracts,
+executes the installed native stage first/repeat and checks original publication,
+image identity, validator retirement and all final owners.
 
 
 ### Native application-only host deployment

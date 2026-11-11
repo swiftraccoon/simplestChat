@@ -540,3 +540,35 @@ fn late_real_signals_after_runtime_restore_refuse_fetch_success() {
     assert!(probes.0 > 0 && probes.1 == 0);
     assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
 }
+/// The host side of the transfer is the installed signed Ops executable with
+/// explicit budgets inside the controller's receipt wait; another user reaches
+/// it through non-interactive sudo. No interpreter is named.
+#[test]
+fn remote_command_is_the_installed_native_receiver_with_explicit_budgets() {
+    let fixture = fixture::Fixture::new();
+    let receiver = concat!(
+        "/usr/local/libexec/simplestchat-public/simplestchat-ops release receive ",
+        "--timeout-seconds 300 --finalization-seconds 30"
+    );
+    let root = Options::parse(&fixture.arguments(true)).unwrap().unwrap();
+    let mut other = fixture.arguments(true);
+    let user = other.iter().position(|value| value == "--user").unwrap() + 1;
+    other[user] = "debian".into();
+    let other = Options::parse(&other).unwrap().unwrap();
+    drop(fixture);
+    let root = root.ssh_arguments();
+    let other = other.ssh_arguments();
+    assert_eq!(root.last().unwrap(), receiver);
+    assert_eq!(
+        other.last().unwrap().to_str().unwrap(),
+        format!("sudo -n -- {receiver}")
+    );
+    for arguments in [&root, &other] {
+        let host = arguments.len() - 2;
+        assert_eq!(arguments[host], "inert.example");
+        assert!(!arguments.iter().any(|value| {
+            let value = value.to_str().unwrap();
+            value.contains("python") || value.contains(".py")
+        }));
+    }
+}

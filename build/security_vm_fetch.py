@@ -1,7 +1,7 @@
 """Prove the actual native release-fetch client in one disposable free KVM guest.
 
 This deliberate VM keeper accepts only local source-built inputs. It creates
-the sole generated loopback guest, installs the unchanged receiver, runs cached
+the sole generated loopback guest, installs the native receiver, runs cached
 then fresh native clients, probes real publication and retires every owned peer.
 No application, service, provider or production host operation is available.
 Only summary.json is suitable for upload; every raw stream remains private.
@@ -65,11 +65,6 @@ SOURCE_INPUTS = (
     "build/security_vm_fetch_hosts.py",
     "security/vm/fetch.yml",
     "security/vm/debian-cloud.json",
-    "ops/ansible/files/fetch-release.py",
-    "ops/ansible/files/release_fetch_receiver.py",
-    "ops/ansible/files/release_trust.py",
-    "ops/ansible/files/release_artifact.py",
-    "ops/ansible/files/release_json.py",
     "Cargo.lock",
     "rust-toolchain.toml",
 )
@@ -873,10 +868,12 @@ def run(  # noqa: C901, PLR0915 -- Ordered whole VM ownership.
         vm.boot(host, guest, work, port)
         report["failure"] = "stage"
         path = inventory(work, port, run_id, revision, original_tools["ssh"].path)
+        receiver = json.dumps({"vm_fixture_ops_binary": str(binary)})
+        playbook = str(ROOT / "security/vm/fetch.yml")
         _, stage = host.run(
             "fetch-stage",
-            [executable("ansible-playbook"), "-i", str(path), str(ROOT / "security/vm/fetch.yml")],
-            timeout=180,
+            [executable("ansible-playbook"), "-i", str(path), "-e", receiver, playbook],
+            timeout=300,
         )
         _ = vm.recap(stage, unchanged=False)
         guest.require_alive()

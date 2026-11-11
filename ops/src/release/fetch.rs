@@ -1,2 +1,2 @@
-//! Complete explicit server verification and prepared-receiver SSH controller.
+//! Complete explicit server verification and installed-receiver SSH controller.
 pub use super::attestation::fetch::run;

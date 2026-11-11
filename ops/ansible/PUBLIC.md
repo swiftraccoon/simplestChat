@@ -409,9 +409,8 @@ the release helper (`files/release_public.py`).
    configuration on disk. Until the next step installs the new image, the old
    one runs without a JWT secret, so account sign-in is unavailable.
 6. Run [the maintenance release](RELEASES.md#schema-and-configuration-changes-the-maintenance-release)
-   for the migrations with both signed artifacts from step 1. Stage without
-   `scpub_release_prepared` so the changed release helper is reconciled, which
-   is what the wrapper's `--install-helpers` requests; the
+   for the migrations with both signed artifacts from step 1. Staging delivers
+   the signed Ops executable itself, so no helper needs reconciling; the
    `build/deploy.py --maintenance` route supplies no signed Ops inputs and
    cannot drive this release. If its native launcher fails after the
    migrations, inspect the retained evidence and finish the selected

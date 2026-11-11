@@ -864,30 +864,30 @@ class FetchKeeperTests(unittest.TestCase):
         self.assertIsInstance(failure, ToolError)
         self.assertTrue(closed)
 
-    def test_playbook_installs_only_fixed_unchanged_helpers_after_marker(self) -> None:
+    def test_playbook_installs_only_the_native_receiver_after_marker(self) -> None:
         """No app/service/provider task or imported deployment playbook enters the fixture."""
         playbook = yaml_value((ROOT / "security/vm/fetch.yml").read_text())
         play = obj(array(playbook)[0])
         self.assertEqual(play["hosts"], "benchmark_hosts")
         pre = objects(play, "pre_tasks")
         self.assertIn("vm_fixture_run_id", string(obj(pre[2], "ansible.builtin.assert"), "that", 0))
-        helpers = next(
+        receiver = next(
             task
             for task in objects(play, "tasks")
-            if task["name"] == "Install only unchanged compatible receiver helpers"
+            if task["name"] == "Install only the source-built native receiver at its fixed path"
         )
         self.assertEqual(
-            helpers["loop"],
-            [
-                "fetch-release.py",
-                "release_fetch_receiver.py",
-                "release_trust.py",
-                "release_artifact.py",
-                "release_json.py",
-            ],
+            receiver["ansible.builtin.copy"],
+            {
+                "src": "{{ vm_fixture_ops_binary }}",
+                "dest": "/usr/local/libexec/simplestchat-public/simplestchat-ops",
+                "owner": "root",
+                "group": "root",
+                "mode": "0755",
+            },
         )
         text = (ROOT / "security/vm/fetch.yml").read_text()
-        for forbidden in ("import_playbook", "docker", "systemd", "service:", "shell:"):
+        for forbidden in ("import_playbook", "docker", "systemd", "service:", "shell:", "files/"):
             self.assertNotIn(forbidden, text)
 
 

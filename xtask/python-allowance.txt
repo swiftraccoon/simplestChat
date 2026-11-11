@@ -1,4 +1,4 @@
-total 114115
+total 113947
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -64,7 +64,7 @@ total 114115
 804	build/security_vm_deploy.py
 3236	build/security_vm_deploy_guest.py
 800	build/security_vm_deploy_injection.py
-1023	build/security_vm_fetch.py
+1020	build/security_vm_fetch.py
 217	build/security_vm_fetch_guest.py
 218	build/security_vm_fetch_hosts.py
 1124	build/security_vm_guest.py
@@ -84,7 +84,7 @@ total 114115
 12	build/test-release-container.py
 93	build/verify-release.py
 772	build/vps_ops_bootstrap.py
-244	ops/ansible/callback_plugins/release_timing.py
+241	ops/ansible/callback_plugins/release_timing.py
 450	ops/ansible/files/backup_offsite.py
 209	ops/ansible/files/backup_public.py
 291	ops/ansible/files/bounded_process.py
@@ -158,7 +158,7 @@ total 114115
 924	ops/ansible/tests/test_release_fetch_controller.py
 123	ops/ansible/tests/test_release_fetch_runtime_workflow.py
 317	ops/ansible/tests/test_release_json.py
-296	ops/ansible/tests/test_release_playbook.py
+134	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py
 224	ops/ansible/tests/test_release_timing.py
 396	ops/ansible/tests/test_restore_database.py

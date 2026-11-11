@@ -25,8 +25,8 @@ const USAGE: &str = concat!(
     "--artifact-id N --ci-run N --host HOST --user USER --identity ABS ",
     "[--port N] --output-parent ABS [--verified-directory ABS] ",
     "--timeout-seconds N --finalization-seconds M\n",
-    "Verify explicit server bytes, then fetch through the prepared Python SSH receiver. ",
-    "0 < M < N; no automatic retry or installed helper switch.\n"
+    "Verify explicit server bytes, then fetch through the installed Ops receiver over SSH. ",
+    "0 < M < N; no automatic retry.\n"
 );
 
 async fn read(reader: &mut (impl AsyncRead + Unpin), bytes: &mut Vec<u8>) -> std::io::Result<()> {

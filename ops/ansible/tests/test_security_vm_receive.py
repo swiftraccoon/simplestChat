@@ -462,7 +462,7 @@ raise SystemExit(1)
         self.assertNotIn("id-token", source)
         fixed = (ROOT / "ops/src/release/attestation/fetch/options.rs").read_text()
         self.assertIn(
-            "/usr/bin/python3 -B /usr/local/libexec/simplestchat-public/fetch-release.py", fixed
+            '"/usr/local/libexec/simplestchat-public/simplestchat-ops release receive ",', fixed
         )
 
 

@@ -18,6 +18,53 @@
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
         fail_msg: Stage the exact 40-character revision with release.yml first.
+    # Existing signed staging is authority; the delivery joins these retained originals.
+    - name: Snapshot the retained signed application predicate
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: scpub_app_predicate_file
+      when: not ansible_check_mode
+
+    - name: Snapshot the actual staged application manifest
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: scpub_app_manifest_file
+      when: not ansible_check_mode
+
+    - name: Require protected original application identity files
+      ansible.builtin.assert:
+        that:
+          - scpub_app_predicate_file.stat.isreg | default(false)
+          - not (scpub_app_predicate_file.stat.islnk | default(false))
+          - scpub_app_predicate_file.stat.uid == 0
+          - scpub_app_predicate_file.stat.gid == 0
+          - scpub_app_predicate_file.stat.mode == '0600'
+          - scpub_app_predicate_file.stat.nlink == 1
+          - scpub_app_predicate_file.stat.size > 0
+          - scpub_app_predicate_file.stat.size <= 67108864
+          - scpub_app_predicate_file.stat.checksum is match('^[a-f0-9]{64}$')
+          - scpub_app_manifest_file.stat.isreg | default(false)
+          - not (scpub_app_manifest_file.stat.islnk | default(false))
+          - scpub_app_manifest_file.stat.uid == 0
+          - scpub_app_manifest_file.stat.gid == 0
+          - scpub_app_manifest_file.stat.mode == '0600'
+          - scpub_app_manifest_file.stat.checksum is match('^[a-f0-9]{64}$')
+        fail_msg: Restage the selected signed application before native maintenance.
+      when: not ansible_check_mode
+
+    - name: Read the original retained application predicate
+      ansible.builtin.slurp:
+        src: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+      register: scpub_app_predicate_bytes
+      no_log: true
+      when: not ansible_check_mode
+
     # The caller-trusted source-built controller and gh are keepers.
     - name: Deliver the signed current Ops executable through native policy
       ansible.builtin.import_tasks: tasks/signed-ops.yml

@@ -15,7 +15,6 @@ pub(super) const USAGE: &str = concat!(
     "  --limit HOST                    exact inventory host alias\n",
     "  --wait-seconds N                CI wait, 0..7200; default 3600\n",
     "  --quiet-seconds N               room observation, 0..600; default 600\n",
-    "  --install-helpers               reconcile the current staging helpers\n",
     "  --ansible-playbook ABS          caller-trusted Ansible executable\n",
     "  --gh ABS                        caller-trusted GitHub CLI executable\n",
     "  --application-artifact-dir ABS  original application ZIP and ten members\n",
@@ -45,7 +44,6 @@ pub(super) struct Options {
     pub limit: Option<String>,
     pub wait_seconds: u64,
     pub quiet_seconds: u64,
-    pub install_helpers: bool,
     pub ansible_playbook: Option<PathBuf>,
     pub gh: Option<PathBuf>,
     pub application_artifact_dir: Option<PathBuf>,
@@ -147,7 +145,7 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
     if arguments == ["--help"] {
         return Ok(None);
     }
-    if arguments.len() > 21
+    if arguments.len() > 20
         || arguments
             .iter()
             .any(|value| value.len() > 4096 || value.chars().any(char::is_control))
@@ -156,20 +154,13 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
     }
     let mut seen = BTreeSet::new();
     let mut values = BTreeMap::new();
-    let mut install_helpers = false;
     let mut remaining = arguments.iter();
     while let Some(flag) = remaining.next() {
-        if !seen.insert(flag.as_str()) {
+        if !seen.insert(flag.as_str()) || !VALUE_FLAGS.contains(&flag.as_str()) {
             return Err(failure(2));
         }
-        if flag == "--install-helpers" {
-            install_helpers = true;
-        } else if VALUE_FLAGS.contains(&flag.as_str()) {
-            let value = remaining.next().ok_or_else(|| failure(2))?;
-            values.insert(flag.as_str(), value.as_str());
-        } else {
-            return Err(failure(2));
-        }
+        let value = remaining.next().ok_or_else(|| failure(2))?;
+        values.insert(flag.as_str(), value.as_str());
     }
     let required = |flag| values.get(flag).copied().ok_or_else(|| failure(2));
     let optional_path = |flag| values.get(flag).map(|value| path(value)).transpose();
@@ -194,7 +185,6 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
         quiet_seconds: values
             .get("--quiet-seconds")
             .map_or(Ok(600), |value| number(value, 600))?,
-        install_helpers,
         ansible_playbook: optional_path("--ansible-playbook")?,
         gh: optional_path("--gh")?,
         application_artifact_dir: optional_path("--application-artifact-dir")?,

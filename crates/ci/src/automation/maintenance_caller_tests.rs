@@ -104,7 +104,7 @@ fn stat(task: &Value, path: &str, register: &str) -> Check<()> {
     )
 }
 fn delivery_contract(auth: &[Value]) -> Check<()> {
-    require(auth.len() == 32, "closed-delivery-actions")?;
+    require(auth.len() == 28, "closed-delivery-actions")?;
     executable_bootstrap_contract(auth)?;
     for task in auth {
         default_failure(task)?;
@@ -557,7 +557,7 @@ fn private_template(task: &Value, source: &str, destination: &str) -> Check<()> 
 fn signed_delivery_contract(delivery: &Value) -> Check<()> {
     let auth = sequence(&delivery["block"])?;
     delivery_contract(auth)?;
-    staged_identity_contract(auth)?;
+    identity_join_contract(auth)?;
     let (credential_at, credential) = named(
         auth,
         "Read the user's gh token only when GH_TOKEN was not supplied",
@@ -812,6 +812,7 @@ fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
         delivery["when"] == "not ansible_check_mode" && delivery.get("rescue").is_none(),
         "delivery-scope",
     )?;
+    staged_identity_contract(pre)?;
     signed_delivery_contract(delivery)?;
     let last = tasks.last().ok_or("last-task")?;
     default_failure(last)?;
@@ -1066,20 +1067,23 @@ const PREDICATE_CUSTODY_TASKS: [&str; 7] = [
     "Require the retained original predicate bytes and private profile",
 ];
 
-fn staged_identity_contract(auth: &[Value]) -> Check<()> {
-    let (paths_at, _) = named(
-        auth,
-        "Match the exact operation revision and trusted controller paths",
-    )?;
-    let (predicate_at, predicate) =
-        named(auth, "Snapshot the retained signed application predicate")?;
+const STAGED_IDENTITY_TASKS: [&str; 4] = [
+    "Snapshot the retained signed application predicate",
+    "Snapshot the actual staged application manifest",
+    "Require protected original application identity files",
+    "Read the original retained application predicate",
+];
+const DECODE: &str = "Decode the signed application predicate only for passive identity joins";
+const JOIN: &str = "Join signed application bytes and exact Ops selection before export";
+
+/// The maintenance caller registers the originals an earlier staging retained
+/// on the host, immediately before the shared delivery joins them.
+fn staged_identity_contract(pre: &[Value]) -> Check<()> {
+    let (predicate_at, predicate) = named(pre, STAGED_IDENTITY_TASKS[0])?;
     stat(predicate, PREDICATE, "scpub_app_predicate_file")?;
-    let (manifest_at, manifest) = named(auth, "Snapshot the actual staged application manifest")?;
+    let (manifest_at, manifest) = named(pre, STAGED_IDENTITY_TASKS[1])?;
     stat(manifest, MANIFEST, "scpub_app_manifest_file")?;
-    let (profile_at, profile) = named(
-        auth,
-        "Require protected original application identity files",
-    )?;
+    let (profile_at, profile) = named(pre, STAGED_IDENTITY_TASKS[2])?;
     assertions(
         profile,
         &[
@@ -1100,17 +1104,60 @@ fn staged_identity_contract(auth: &[Value]) -> Check<()> {
             "scpub_app_manifest_file.stat.checksum is match('^[a-f0-9]{64}$')",
         ],
     )?;
-    let (read_at, read) = named(auth, "Read the original retained application predicate")?;
+    let (read_at, read) = named(pre, STAGED_IDENTITY_TASKS[3])?;
     require(
         read["ansible.builtin.slurp"]["src"] == PREDICATE
             && read["register"] == "scpub_app_predicate_bytes"
             && read["no_log"] == true,
         "predicate-read",
     )?;
-    let (decode_at, decode) = named(
-        auth,
-        "Decode the retained predicate only for passive identity joins",
+    for task in [predicate, manifest, profile, read] {
+        default_failure(task)?;
+        require(
+            task["when"] == "not ansible_check_mode"
+                && task.get("delegate_to").is_none()
+                && task.get("become").is_none(),
+            "staged-identity-on-the-host",
+        )?;
+    }
+    let (delivery_at, _) = named(pre, DELIVERY)?;
+    require(
+        predicate_at + 1 == manifest_at
+            && manifest_at + 1 == profile_at
+            && profile_at + 1 == read_at
+            && read_at + 1 == delivery_at,
+        "staged-identity-order",
     )?;
+    one_identity_writer(pre)
+}
+
+/// Each registered original has exactly one writer among a caller's tasks.
+fn one_identity_writer(tasks: &[Value]) -> Check<()> {
+    for register in [
+        "scpub_app_predicate_file",
+        "scpub_app_manifest_file",
+        "scpub_app_predicate_bytes",
+    ] {
+        let writers = tasks.iter().filter(|task| task["register"] == register);
+        require(writers.count() == 1, "one-identity-writer")?;
+    }
+    let overwritten = tasks.iter().any(|task| {
+        let facts = &task["ansible.builtin.set_fact"];
+        ["scpub_app_predicate", "scpub_app_predicate_bytes"]
+            .iter()
+            .any(|key| facts.get(*key).is_some())
+    });
+    require(!overwritten, "one-identity-writer")
+}
+
+/// The shared delivery decodes and joins whatever originals its caller
+/// registered; it reads no application file itself.
+fn identity_join_contract(auth: &[Value]) -> Check<()> {
+    let (paths_at, _) = named(
+        auth,
+        "Match the exact operation revision and trusted controller paths",
+    )?;
+    let (decode_at, decode) = named(auth, DECODE)?;
     require(
         decode["no_log"] == true
             && decode["ansible.builtin.set_fact"]
@@ -1123,10 +1170,7 @@ fn staged_identity_contract(auth: &[Value]) -> Check<()> {
                 }),
         "passive-predicate",
     )?;
-    let (join_at, join) = named(
-        auth,
-        "Join staged application bytes and exact Ops selection before export",
-    )?;
+    let (join_at, join) = named(auth, JOIN)?;
     assertions(
         join,
         &[
@@ -1153,16 +1197,32 @@ fn staged_identity_contract(auth: &[Value]) -> Check<()> {
         "Authenticate and export the exact signed pair through Rust",
     )?;
     require(
-        paths_at < predicate_at
-            && predicate_at < manifest_at
-            && manifest_at < profile_at
-            && profile_at < read_at
-            && read_at < decode_at
-            && decode_at < join_at
+        paths_at < decode_at
+            && decode_at + 1 == join_at
             && join_at < private_at
             && private_at < export_at,
-        "staged-identity-order",
-    )
+        "identity-join-order",
+    )?;
+    for task in auth {
+        require(
+            ![
+                "scpub_app_predicate_file",
+                "scpub_app_manifest_file",
+                "scpub_app_predicate_bytes",
+            ]
+            .iter()
+            .any(|register| task["register"] == *register)
+                && task.get("ansible.builtin.slurp").is_none(),
+            "delivery-reads-no-application-file",
+        )?;
+        if task["ansible.builtin.set_fact"]
+            .get("scpub_app_predicate")
+            .is_some()
+        {
+            require(task["name"] == DECODE, "one-predicate-decoder")?;
+        }
+    }
+    Ok(())
 }
 
 fn release_contract(document: &Value) -> Check<()> {
@@ -1180,12 +1240,8 @@ fn release_contract(document: &Value) -> Check<()> {
     local(fetch)?;
     default_failure(fetch)?;
     require(
-        arguments(fetch)?.get(2) == Some(&"{{ playbook_dir }}/../../build/fetch-release.py")
-            && fetch["when"]
-                == json!([
-                    "not ansible_check_mode",
-                    "scpub_release_artifact_id is defined"
-                ]),
+        arguments(fetch)?.get(..2) == Some(&["{{ scpub_ops_release_controller }}", "fetch"][..])
+            && fetch["when"] == "not ansible_check_mode",
         "signed-fetch",
     )?;
     let (stage_at, stage) = named(
@@ -1194,7 +1250,7 @@ fn release_contract(document: &Value) -> Check<()> {
     )?;
     default_failure(stage)?;
     require(
-        stage["when"] == "not ansible_check_mode" && arguments(stage)?.get(9) == Some(&"stage"),
+        stage["when"] == "not ansible_check_mode" && arguments(stage)?.get(8) == Some(&"stage"),
         "stage-success",
     )?;
     let (retain_at, _) = named(tasks, PREDICATE_CUSTODY_TASKS[0])?;
@@ -1321,23 +1377,40 @@ fn every_passive_identity_profile_and_byte_join_is_required() {
     let (caller, source) = original_documents();
     for name in [
         "Match the exact operation revision and trusted controller paths",
-        "Require protected original application identity files",
-        "Join staged application bytes and exact Ops selection before export",
+        STAGED_IDENTITY_TASKS[2],
+        JOIN,
     ] {
-        let count = auth_task_mut(&mut caller.clone(), name)["ansible.builtin.assert"]["that"]
-            .as_array()
-            .unwrap()
-            .len();
-        for at in 0..count {
-            let mut changed = caller.clone();
-            auth_task_mut(&mut changed, name)["ansible.builtin.assert"]["that"]
-                .as_array_mut()
+        let staged = name == STAGED_IDENTITY_TASKS[2];
+        let checks = |document: &mut Value| -> Vec<Value> {
+            let task = if staged {
+                task_mut(document, "pre_tasks", name)
+            } else {
+                auth_task_mut(document, name)
+            };
+            task["ansible.builtin.assert"]["that"]
+                .as_array()
                 .unwrap()
-                .remove(at);
+                .clone()
+        };
+        let replace = |document: &mut Value, values: Vec<Value>| {
+            let task = if staged {
+                task_mut(document, "pre_tasks", name)
+            } else {
+                auth_task_mut(document, name)
+            };
+            task["ansible.builtin.assert"]["that"] = Value::Array(values);
+        };
+        let original = checks(&mut caller.clone());
+        for at in 0..original.len() {
+            let mut changed = caller.clone();
+            let mut values = original.clone();
+            values.remove(at);
+            replace(&mut changed, values);
             assert!(current_contract(&changed, &source).is_err(), "{name}: {at}");
             let mut bypassed = caller.clone();
-            auth_task_mut(&mut bypassed, name)["ansible.builtin.assert"]["that"][at] =
-                "true".into();
+            let mut values = original.clone();
+            values[at] = "true".into();
+            replace(&mut bypassed, values);
             assert!(
                 current_contract(&bypassed, &source).is_err(),
                 "{name}: bypass {at}"
@@ -1345,10 +1418,103 @@ fn every_passive_identity_profile_and_byte_join_is_required() {
         }
     }
     let mut changed = caller;
-    auth_task_mut(
-        &mut changed,
-        "Join staged application bytes and exact Ops selection before export",
-    )["ansible.builtin.assert"]["that"][0] = "scpub_app_predicate.passed == true".into();
+    auth_task_mut(&mut changed, JOIN)["ansible.builtin.assert"]["that"][0] =
+        "scpub_app_predicate.passed == true".into();
+    assert!(current_contract(&changed, &source).is_err());
+}
+/// The maintenance caller's four staged originals are read on the host, in
+/// order, immediately before the delivery, and nothing else writes them.
+#[test]
+fn staged_originals_are_registered_once_on_the_host_right_before_the_delivery() {
+    let (caller, source) = original_documents();
+    current_contract(&caller, &source).unwrap();
+    for name in STAGED_IDENTITY_TASKS {
+        let mut changed = caller.clone();
+        let pre = changed[0]["pre_tasks"].as_array_mut().unwrap();
+        let at = named(pre, name).unwrap().0;
+        pre.remove(at);
+        assert!(current_contract(&changed, &source).is_err(), "{name}: gone");
+        for (field, value) in [
+            ("when", json!(false)),
+            ("delegate_to", json!("localhost")),
+            ("become", json!(false)),
+            ("failed_when", json!(false)),
+        ] {
+            let mut changed = caller.clone();
+            task_mut(&mut changed, "pre_tasks", name)[field] = value;
+            assert!(
+                current_contract(&changed, &source).is_err(),
+                "{name}: {field}"
+            );
+        }
+    }
+    for (first, second) in [
+        (STAGED_IDENTITY_TASKS[0], STAGED_IDENTITY_TASKS[1]),
+        (STAGED_IDENTITY_TASKS[2], STAGED_IDENTITY_TASKS[3]),
+        (STAGED_IDENTITY_TASKS[3], DELIVERY),
+    ] {
+        let mut changed = caller.clone();
+        let pre = changed[0]["pre_tasks"].as_array_mut().unwrap();
+        let a = named(pre, first).unwrap().0;
+        let b = named(pre, second).unwrap().0;
+        pre.swap(a, b);
+        assert!(current_contract(&changed, &source).is_err(), "{first}");
+    }
+    for (name, module, field, value) in [
+        (
+            STAGED_IDENTITY_TASKS[0],
+            "ansible.builtin.stat",
+            "follow",
+            json!(true),
+        ),
+        (
+            STAGED_IDENTITY_TASKS[1],
+            "ansible.builtin.stat",
+            "checksum_algorithm",
+            json!("sha1"),
+        ),
+        (
+            STAGED_IDENTITY_TASKS[3],
+            "ansible.builtin.slurp",
+            "src",
+            json!("/tmp/assumed-predicate.json"),
+        ),
+    ] {
+        let mut changed = caller.clone();
+        task_mut(&mut changed, "pre_tasks", name)[module][field] = value;
+        assert!(current_contract(&changed, &source).is_err(), "{name}");
+    }
+    // A second writer of a registered original, or a fact replacing the read.
+    let mut changed = caller.clone();
+    let pre = changed[0]["pre_tasks"].as_array_mut().unwrap();
+    let (at, read) = named(pre, STAGED_IDENTITY_TASKS[3]).unwrap();
+    let mut extra = read.clone();
+    extra["name"] = json!("Read another predicate");
+    pre.insert(at, extra);
+    assert!(current_contract(&changed, &source).is_err());
+    let mut changed = caller.clone();
+    changed[0]["pre_tasks"].as_array_mut().unwrap().insert(
+        0,
+        json!({
+            "name": "Assume a predicate",
+            "ansible.builtin.set_fact": {"scpub_app_predicate": {"revision": "x"}},
+        }),
+    );
+    assert_eq!(
+        current_contract(&changed, &source),
+        Err("one-identity-writer")
+    );
+    // The shared delivery itself reads no application file.
+    let mut changed = caller;
+    let delivery = task_mut(&mut changed, "pre_tasks", DELIVERY);
+    delivery["block"].as_array_mut().unwrap().insert(
+        0,
+        json!({
+            "name": "Read a predicate inside the delivery",
+            "ansible.builtin.slurp": {"src": PREDICATE},
+            "register": "scpub_app_predicate_bytes",
+        }),
+    );
     assert!(current_contract(&changed, &source).is_err());
 }
 #[test]
@@ -1356,7 +1522,7 @@ fn identity_checks_and_executable_transition_cannot_be_reordered_or_skipped() {
     let (caller, source) = original_documents();
     for (left, right) in [
         (
-            "Join staged application bytes and exact Ops selection before export",
+            JOIN,
             "Authenticate and export the exact signed pair through Rust",
         ),
         (
@@ -1365,11 +1531,7 @@ fn identity_checks_and_executable_transition_cannot_be_reordered_or_skipped() {
         ),
     ] {
         let mut changed = caller.clone();
-        let delivery = task_mut(
-            &mut changed,
-            "pre_tasks",
-            "Deliver the signed current Ops executable through native policy",
-        );
+        let delivery = task_mut(&mut changed, "pre_tasks", DELIVERY);
         let tasks = sequence(&delivery["block"]).unwrap();
         let a = named(tasks, left).unwrap().0;
         let b = named(tasks, right).unwrap().0;
@@ -1377,7 +1539,7 @@ fn identity_checks_and_executable_transition_cannot_be_reordered_or_skipped() {
         assert!(current_contract(&changed, &source).is_err(), "{left}");
     }
     for name in [
-        "Join staged application bytes and exact Ops selection before export",
+        JOIN,
         "Require the exact Rust-produced three-member transport",
     ] {
         let mut changed = caller.clone();

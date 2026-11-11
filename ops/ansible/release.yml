@@ -50,11 +50,6 @@
           with an explicit host, user, absolute private key, and root or passwordless sudo.
       when: scpub_release_artifact_id is defined
 
-    - name: Require a typed controller verification choice
-      ansible.builtin.assert:
-        that:
-          - scpub_release_native_verification | default(false) is boolean
-
     - name: Require trusted native verification inputs before any remote preflight
       ansible.builtin.assert:
         that:
@@ -70,7 +65,6 @@
         fail_msg: >-
           Native application verification requires caller-trusted absolute controller and gh
           executables, with gh selected from its explicit directory before fixed system bins.
-      when: scpub_release_native_verification | default(false)
 
     - name: Require exact native deployment inputs before any remote preflight
       ansible.builtin.assert:
@@ -117,10 +111,9 @@
             scpub_ops_artifact_zip is not defined or
             (scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))
         fail_msg: >-
-          Explicit deployment requires the typed same-revision signed application and Ops
+          A signed release requires the typed same-revision signed application and Ops
           selections, trusted absolute controller paths, and integer quiet seconds in 0..600.
           Use the direct signed Ansible operation documented in RELEASES.md.
-      when: scpub_release_deploy | default(false) | bool
 
     # Refuse a known missing or non-executable keeper before PATH resolution.
     # The outer controller retains its original tool; the verifier snapshots its
@@ -138,7 +131,6 @@
       changed_when: false
       check_mode: false
       timeout: 15
-      when: scpub_release_native_verification | default(false)
 
     - name: Require the declared native GitHub executable before verification
       ansible.builtin.assert:
@@ -146,7 +138,6 @@
           - scpub_native_verification_gh.stat.isreg | default(false)
           - not (scpub_native_verification_gh.stat.islnk | default(true))
           - scpub_native_verification_gh.stat.executable | default(false)
-      when: scpub_release_native_verification | default(false)
 
     - name: Verify the signed release through the native controller before any remote preflight
       ansible.builtin.command:
@@ -177,33 +168,6 @@
       changed_when: false
       check_mode: false
       timeout: 660
-      when: scpub_release_native_verification | default(false)
-
-    - name: Verify the signed release on the controller before any remote preflight
-      ansible.builtin.command:
-        argv:
-          - "{{ ansible_playbook_python }}"
-          - -B
-          - "{{ playbook_dir }}/../../build/verify-release.py"
-          - --repository
-          - "{{ scpub_release_repository }}"
-          - --artifact-id
-          - "{{ scpub_release_artifact_id }}"
-          - --revision
-          - "{{ scpub_release_expected_revision }}"
-          - --ci-run
-          - "{{ scpub_release_ci_run }}"
-          - --artifact-dir
-          - "{{ scpub_release_verified_directory | default('') }}"
-          - --output-parent
-          - "{{ (playbook_dir ~ '/../../results') | realpath }}"
-      delegate_to: localhost
-      become: false
-      register: scpub_validated_release
-      changed_when: false
-      check_mode: false
-      timeout: 660
-      when: not (scpub_release_native_verification | default(false))
 
     - name: Require the completed native application verification result
       vars:
@@ -233,16 +197,13 @@
         fail_msg: >-
           Native application verification must complete successfully and return only the exact
           revision, absolute verified directory, and signed image and manifest digests.
-      when: scpub_release_native_verification | default(false)
 
-    # A skipped registered reference task still writes its skipped result.
-    # Normalize only afterward, from the separately completed native command.
+    # Later tasks read one fact, adopted only from the completed and checked command.
     - name: Use the completed native controller verification result
       ansible.builtin.set_fact:
         scpub_validated_release: "{{ scpub_native_validated_release }}"
         cacheable: false
       when:
-        - scpub_release_native_verification | default(false)
         - scpub_native_validated_release is succeeded
         - not (scpub_native_validated_release.skipped | default(false))
 
@@ -251,85 +212,87 @@
         scpub_release_revision: "{{ scpub_release_expected_revision }}"
       when: scpub_release_artifact_id is defined
 
-    - name: Verify the host and exact prepared helpers without broad fact gathering
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -B
-          - -c
-          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
+  tasks:
+    # The delivery joins these controller-verified originals: the host holds no part of
+    # this release until the signed executable delivered below has staged it.
+    - name: Snapshot the controller-verified application predicate
+      ansible.builtin.stat:
+        path: >-
+          {{ (scpub_validated_release.stdout | from_json).directory }}/release-predicate.json
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_file
+      when: not ansible_check_mode
+
+    - name: Snapshot the controller-verified application manifest
+      ansible.builtin.stat:
+        path: "{{ (scpub_validated_release.stdout | from_json).directory }}/release.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_manifest_file
+      when: not ansible_check_mode
+
+    - name: Require the verified application originals before any Ops delivery
+      ansible.builtin.assert:
+        that:
+          - scpub_app_predicate_file.stat.isreg | default(false)
+          - not (scpub_app_predicate_file.stat.islnk | default(false))
+          - scpub_app_predicate_file.stat.nlink == 1
+          - scpub_app_predicate_file.stat.size > 0
+          - scpub_app_predicate_file.stat.size <= 67108864
+          - scpub_app_predicate_file.stat.checksum is match('^[a-f0-9]{64}$')
+          - scpub_app_manifest_file.stat.isreg | default(false)
+          - not (scpub_app_manifest_file.stat.islnk | default(false))
           - >-
-            {{ (({
-              'release-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release-public.py', rstrip=false) | hash('sha256'),
-              'bounded_process.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/bounded_process.py', rstrip=false) | hash('sha256'),
-              'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
-              'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
-              'release_assets.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_assets.py', rstrip=false) | hash('sha256'),
-              'browser_assets.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/browser_assets.py', rstrip=false) | hash('sha256'),
-              'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256'),
-              'runtime_profile.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/runtime_profile.py', rstrip=false) | hash('sha256'),
-              'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256'),
-              'reboot_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot_public.py', rstrip=false) | hash('sha256')
-            } | combine(({
-              'release_trust.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_trust.py', rstrip=false) | hash('sha256'),
-              'fetch-release.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/fetch-release.py', rstrip=false) | hash('sha256'),
-              'release_fetch_receiver.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_fetch_receiver.py', rstrip=false) | hash('sha256')
-            }) if scpub_release_artifact_id is defined else {}))
-            if scpub_release_prepared | default(false) | bool else {}) | to_json }}
+            scpub_app_manifest_file.stat.checksum ==
+            (scpub_validated_release.stdout | from_json)['release.json']
+        fail_msg: The controller must still hold the exact signed originals it verified.
+      when: not ansible_check_mode
+
+    - name: Read the controller-verified application predicate
+      ansible.builtin.slurp:
+        src: >-
+          {{ (scpub_validated_release.stdout | from_json).directory }}/release-predicate.json
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_bytes
+      no_log: true
+      when: not ansible_check_mode
+
+    # Staging runs the signed executable, so it arrives before any other host step.
+    - name: Deliver the signed current Ops executable through native policy
+      ansible.builtin.import_tasks: tasks/signed-ops.yml
+      when: not ansible_check_mode
+
+    - name: Verify the host through the delivered Ops executable without broad fact gathering
       vars:
         ansible_python_interpreter: /usr/bin/python3
+      ansible.builtin.command:
+        argv:
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
+          - preflight
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       register: scpub_release_preflight
       changed_when: false
-      check_mode: false
       timeout: 60
+      when: not ansible_check_mode
 
     - name: Require a fresh facts-free release unit identity
       ansible.builtin.assert:
         that:
           - (scpub_release_preflight.stdout | from_json).schemaVersion == 1
           - (scpub_release_preflight.stdout | from_json).runId is match('^[a-f0-9]{32}$')
-
-  tasks:
-    - name: Install the isolated release helper directory
-      ansible.builtin.file:
-        path: /usr/local/libexec/simplestchat-public
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      when: not (scpub_release_prepared | default(false) | bool)
-
-    - name: Install the release command and shared artifact validator
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-        owner: root
-        group: root
-        mode: '0644'
-      loop:
-        - bounded_process.py
-        - runtime_profile.py
-        - release-public.py
-        - release_public.py
-        - release_artifact.py
-        - release_assets.py
-        - browser_assets.py
-        - release_json.py
-        - reboot-public.py
-        - reboot_public.py
-      when: not (scpub_release_prepared | default(false) | bool)
-
-    - name: Install the bounded GitHub artifact receiver
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-        owner: root
-        group: root
-        mode: '0644'
-      loop: [fetch-release.py, release_fetch_receiver.py, release_trust.py]
-      when:
-        - scpub_release_artifact_id is defined
-        - not (scpub_release_prepared | default(false) | bool)
+      when: not ansible_check_mode
 
     - name: Create private immutable release storage
       ansible.builtin.file:
@@ -341,41 +304,43 @@
       loop:
         - "{{ scpub_root }}/releases"
         - "{{ scpub_root }}/releases/{{ scpub_release_revision }}"
-      when: not (scpub_release_prepared | default(false) | bool)
 
     - name: Verify the exact GitHub release and fetch it directly onto the prepared host
       ansible.builtin.command:
         argv:
-          - "{{ ansible_playbook_python }}"
-          - -B
-          - "{{ playbook_dir }}/../../build/fetch-release.py"
+          - "{{ scpub_ops_release_controller }}"
+          - fetch
           - --repository
           - "{{ scpub_release_repository }}"
-          - --artifact-id
-          - "{{ scpub_release_artifact_id }}"
           - --revision
           - "{{ scpub_release_revision }}"
+          - --artifact-id
+          - "{{ scpub_release_artifact_id }}"
           - --ci-run
           - "{{ scpub_release_ci_run }}"
           - --host
           - "{{ ansible_host }}"
           - --user
           - "{{ ansible_user }}"
-          - --port
-          - "{{ ansible_port | default(22) }}"
           - --identity
           - "{{ ansible_ssh_private_key_file }}"
+          - --port
+          - "{{ ansible_port | default(22) }}"
           - --output-parent
           - "{{ (playbook_dir ~ '/../../results') | realpath }}"
           - --verified-directory
           - "{{ (scpub_validated_release.stdout | from_json).directory }}"
+          - --timeout-seconds
+          - '1020'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: "{{ scpub_ops_gh_executable | dirname }}:/usr/bin:/bin:/usr/sbin:/sbin"
       delegate_to: localhost
       become: false
       changed_when: true
       timeout: 1080
-      when:
-        - not ansible_check_mode
-        - scpub_release_artifact_id is defined
+      when: not ansible_check_mode
 
     - name: Import and verify the image while the public service remains running
       vars:
@@ -388,11 +353,19 @@
           - --property=RuntimeMaxSec=600
           - --property=TimeoutStopSec=60
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/release-public.py
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
           - stage
+          - --revision
           - "{{ scpub_release_revision }}"
+          - --timeout-seconds
+          - '600'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: true
       when: not ansible_check_mode
 
@@ -499,12 +472,6 @@
             scpub_release_predicate_source.stat.checksum
         fail_msg: The transferred predicate must retain its original verified bytes.
       when: not ansible_check_mode
-
-    - name: Deliver the signed current Ops executable through native policy
-      ansible.builtin.import_tasks: tasks/signed-ops.yml
-      when:
-        - not ansible_check_mode
-        - scpub_release_deploy | default(false) | bool
 
     - name: Replace only the application when deployment was explicitly selected
       vars:
