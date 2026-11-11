@@ -1,4 +1,4 @@
-total 139466
+total 139132
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -180,7 +180,6 @@ total 139466
 347	ops/ansible/tests/test_monitoring_external.py
 875	ops/ansible/tests/test_native_security.py
 463	ops/ansible/tests/test_public_backup.py
-156	ops/ansible/tests/test_public_deployment.py
 803	ops/ansible/tests/test_public_reboot.py
 2018	ops/ansible/tests/test_public_release.py
 310	ops/ansible/tests/test_public_seed.py
@@ -195,7 +194,7 @@ total 139466
 123	ops/ansible/tests/test_release_fetch_runtime_workflow.py
 490	ops/ansible/tests/test_release_http_policy.py
 317	ops/ansible/tests/test_release_json.py
-474	ops/ansible/tests/test_release_playbook.py
+296	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py
 224	ops/ansible/tests/test_release_timing.py
 396	ops/ansible/tests/test_restore_database.py

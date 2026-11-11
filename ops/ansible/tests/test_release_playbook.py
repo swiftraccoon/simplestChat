@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import re
 import shutil
 import subprocess
 import tempfile
@@ -16,7 +15,6 @@ from unittest.mock import patch
 from ansible.parsing.dataloader import DataLoader
 from ansible.plugins.loader import init_plugin_loader
 from ansible.template import Templar, trust_as_template
-from jinja2 import Environment, StrictUndefined, UndefinedError
 from test_support import array, at, obj, objects, string, strings, yaml_value
 
 # isort: split
@@ -31,14 +29,6 @@ from release_json import JsonObject, decode_json, json_value
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT.parents[1]
-
-
-def matches(value: object, pattern: object) -> bool:
-    """Expose the Ansible match predicate to the isolated Jinja environment."""
-    if not isinstance(pattern, str):
-        message = "Match patterns must be strings"
-        raise TypeError(message)
-    return re.match(pattern, str(value)) is not None
 
 
 class ReleasePlaybookTests(unittest.TestCase):
@@ -71,105 +61,6 @@ class ReleasePlaybookTests(unittest.TestCase):
     def pre_task(self, name: str) -> JsonObject:
         """Find one preflight by its stable task name."""
         return next(task for task in objects(self.play, "pre_tasks") if task["name"] == name)
-
-    @staticmethod
-    def assertions_pass(task: JsonObject, values: JsonObject) -> bool:
-        """Evaluate the real assertion expressions against bounded fixture values."""
-        environment = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 - configuration.
-        environment.tests["match"] = matches
-        try:
-            return all(
-                environment.compile_expression(expression)(**values)
-                for expression in strings(task, "ansible.builtin.assert", "that")
-            )
-        except (UndefinedError, TypeError):
-            return False
-
-    def github_values(self) -> JsonObject:
-        """Provide valid fictional identities, not usable credentials or hosts."""
-        return {
-            "scpub_release_repository": "example/simplestChat",
-            "scpub_release_artifact_id": 1234,
-            "scpub_release_expected_revision": "a" * 40,
-            "scpub_release_ci_run": 5678,
-            "ansible_host": "chat.example.test",
-            "ansible_user": "root",
-            "ansible_ssh_private_key_file": "/private/controller key",
-        }
-
-    def test_only_current_signed_github_artifacts_can_select_a_release(self) -> None:
-        """An unsigned local directory cannot bypass the required source/run contract."""
-        assertions = strings(self.play, "pre_tasks", 0, "ansible.builtin.assert", "that")
-        self.assertIn("scpub_release_directory is not defined", assertions)
-        self.assertIn("scpub_release_artifact_id is defined", assertions)
-        remote = self.pre_task("Select the explicitly pinned GitHub revision")
-        self.assertEqual(
-            at(remote, "ansible.builtin.set_fact", "scpub_release_revision"),
-            "{{ scpub_release_expected_revision }}",
-        )
-        self.assertFalse(
-            any(
-                task.get("name") == "Select the verified local source revision"
-                for task in objects(self.play, "pre_tasks")
-            )
-        )
-
-    def test_github_source_requires_exact_identities_and_explicit_supported_ssh(self) -> None:
-        """Verify github source requires exact identities and explicit supported ssh."""
-        task = self.pre_task(
-            "Require an exact GitHub source and supported key-based SSH connection"
-        )
-        self.assertEqual(task["when"], "scpub_release_artifact_id is defined")
-        self.assertTrue(self.assertions_pass(task, self.github_values()))
-        self.assertTrue(
-            self.assertions_pass(
-                task,
-                dict(
-                    self.github_values(),
-                    ansible_user="deploy",
-                    ansible_host="chat-alias",
-                    ansible_port="2222",
-                ),
-            )
-        )
-        for key in self.github_values():
-            values = self.github_values()
-            del values[key]
-            with self.subTest(missing=key):
-                self.assertFalse(self.assertions_pass(task, values))
-        for key, value in (
-            ("scpub_release_repository", "https://github.com/example/repo"),
-            ("scpub_release_repository", "example/repo/extra"),
-            ("scpub_release_repository", "example/"),
-            ("scpub_release_artifact_id", 0),
-            ("scpub_release_artifact_id", True),
-            ("scpub_release_artifact_id", "01"),
-            ("scpub_release_ci_run", -1),
-            ("scpub_release_ci_run", "1.0"),
-            ("scpub_release_expected_revision", "main"),
-            ("scpub_release_expected_revision", "A" * 40),
-            ("ansible_connection", "local"),
-            ("ansible_connection", "paramiko"),
-            ("ansible_host", ""),
-            ("ansible_host", "2001:db8::1"),
-            ("ansible_host", "-oProxyCommand=command"),
-            ("ansible_user", ""),
-            ("ansible_ssh_private_key_file", "~/.ssh/id_ed25519"),
-            ("ansible_port", 0),
-            ("ansible_port", 65536),
-            ("ansible_port", True),
-            ("ansible_password", ""),
-            ("ansible_ssh_pass", ""),
-            ("ansible_ssh_password", ""),
-            ("ansible_become_password", ""),
-            ("ansible_become_pass", ""),
-            ("ansible_ssh_common_args", "-J jump.example.test"),
-            ("ansible_ssh_extra_args", "-F custom.conf"),
-        ):
-            with self.subTest(key=key, value=value):
-                self.assertFalse(
-                    self.assertions_pass(task, dict(self.github_values(), **{key: value}))
-                )
 
     def test_github_fetch_is_bounded_controller_only_and_precedes_common_stage(self) -> None:
         """Verify github fetch is bounded controller only and precedes common stage."""
@@ -271,30 +162,6 @@ class ReleasePlaybookTests(unittest.TestCase):
             ]
         )
         self.assertEqual(at(storage, "ansible.builtin.file", "mode"), "0700")
-
-    def test_prepared_mode_skips_helper_writes_but_keeps_local_release_storage(self) -> None:
-        """Verify prepared mode skips helper writes but keeps local release storage."""
-        for task in self.tasks:
-            if string(task, "name").startswith("Install "):
-                condition = task["when"]
-                if isinstance(condition, list):
-                    self.assertIn("not (scpub_release_prepared | default(false) | bool)", condition)
-                else:
-                    self.assertEqual(
-                        condition, "not (scpub_release_prepared | default(false) | bool)"
-                    )
-        storage = next(
-            task
-            for task in self.tasks
-            if task["name"] == "Create private immutable release storage"
-        )
-        self.assertEqual(
-            storage["when"],
-            "not (scpub_release_prepared | default(false) | bool)",
-        )
-        self.assertIs(at(self.play, "vars", "ansible_pipelining"), expr2=True)
-        # Do not override the delegated controller's Python with Debian's path.
-        self.assertNotIn("ansible_python_interpreter", obj(self.play, "vars"))
 
     def test_real_ansible_lookup_preserves_source_bytes_and_selects_complete_helper_sets(
         self,
@@ -427,48 +294,3 @@ class ReleasePlaybookTests(unittest.TestCase):
 
 if __name__ == "__main__":
     _ = unittest.main()
-
-
-class PublicPlaybookSelectionTests(unittest.TestCase):
-    """The full playbook takes the image from an on-host build or a staged release."""
-
-    def test_a_staged_release_replaces_the_on_host_build_as_the_image_source(self) -> None:
-        """With scpub_release_revision the staged image is selected and its label checked."""
-        play = obj(yaml_value((ROOT / "public.yml").read_text()), 0)
-        assertions = strings(play, "pre_tasks", 0, "ansible.builtin.assert", "that")
-        self.assertIn(
-            "scpub_release_revision is not defined or scpub_release_revision == scbench_revision",
-            assertions,
-        )
-        tasks = {string(task, "name"): task for task in objects(play, "pre_tasks")}
-        for name in (
-            "Read the previously verified application image manifest",
-            "Select the retained application artifact without rebuilding",
-        ):
-            self.assertEqual(tasks[name]["when"], "scpub_release_revision is not defined")
-        staged = tasks["Read the release the controller staged while chat was live"]
-        self.assertEqual(staged["when"], "scpub_release_revision is defined")
-        self.assertEqual(
-            at(staged, "ansible.builtin.slurp", "src"),
-            "{{ scpub_root }}/releases/{{ scpub_release_revision }}/staged.json",
-        )
-        label = tasks["Require the staged image to carry the release revision"]
-        self.assertEqual(label["when"], "scpub_release_revision is defined")
-        self.assertIn(
-            "org.opencontainers.image.revision",
-            " ".join(strings(label, "ansible.builtin.command", "argv")),
-        )
-        self.assertIn("scpub_release_revision", string(label, "failed_when"))
-        selection = tasks["Retain the verified application image selection"]
-        self.assertIn(
-            "scpub_staged_release",
-            string(selection, "ansible.builtin.set_fact", "scpub_server_image"),
-        )
-        self.assertEqual(
-            at(
-                tasks["Require a content-addressed application image"],
-                "ansible.builtin.assert",
-                "that",
-            ),
-            "scpub_server_image is match('^sha256:[a-f0-9]{64}$')",
-        )

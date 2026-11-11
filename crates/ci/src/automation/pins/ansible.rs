@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// The inventory name of the fixture host that assertion plays target.
+const FIXTURE_HOST: &str = "_fixture";
+
 /// The checkout root.
 pub(super) fn root() -> PathBuf {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -106,17 +109,18 @@ pub(super) fn play(tasks: &Value, variables: &Value, vars_files: &[&str]) -> Scr
         "vars": vars,
         "tasks": tasks,
     }]);
+    run(&book, "localhost,", &scratch);
+    scratch
+}
+
+/// Run one generated playbook against `inventory` and require it to succeed.
+fn run(book: &Value, inventory: &str, scratch: &Scratch) {
     // JSON is YAML, so the generated play needs no YAML writer.
     let path = scratch.path().join("play.json");
-    std::fs::write(&path, serde_json::to_vec(&book).unwrap()).unwrap();
-    let inventory: &OsStr = "localhost,".as_ref();
-    let output = ansible(
-        "ansible-playbook",
-        &["-i".as_ref(), inventory, path.as_os_str()],
-        &scratch,
-    );
-    succeeded(&output);
-    scratch
+    std::fs::write(&path, serde_json::to_vec(book).unwrap()).unwrap();
+    let inventory: &OsStr = inventory.as_ref();
+    let arguments = ["-i".as_ref(), inventory, path.as_os_str()];
+    succeeded(&ansible("ansible-playbook", &arguments, scratch));
 }
 
 /// Render templates from `ops/ansible/templates` with Ansible's template
@@ -141,6 +145,49 @@ pub(super) fn render(
         ((*name).to_owned(), text)
     };
     names.iter().map(rendered).collect()
+}
+
+/// Run the assert module with `rules` once per case and report which cases it
+/// accepted. An undefined variable, or a rule that cannot be evaluated,
+/// refuses the case, as it would on a host.
+pub(super) fn asserted(rules: &Value, cases: &[Value]) -> Vec<bool> {
+    let mut tasks = Vec::new();
+    for (index, case) in cases.iter().enumerate() {
+        tasks.push(json!({
+            "ansible.builtin.assert": {"that": rules, "quiet": true},
+            "vars": case,
+            "register": format!("verdict_{index}"),
+            "ignore_errors": true,
+        }));
+    }
+    let verdicts = (0..cases.len())
+        .map(|index| format!("verdict_{index} is success"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let scratch = Scratch::new();
+    tasks.push(json!({
+        "ansible.builtin.copy": {
+            "content": format!("{{{{ [{verdicts}] | to_json }}}}"),
+            "dest": scratch.path().join("verdicts.json"),
+            "mode": "0600",
+        },
+        "delegate_to": "localhost",
+        "vars": {
+            "ansible_connection": "local",
+            "ansible_python_interpreter": "{{ ansible_playbook_python }}",
+        },
+    }));
+    // The play targets a named host over the default transport, because a
+    // local play defines `ansible_connection` and `ansible_host` itself and
+    // would decide rules about them. Assertions run on the controller and
+    // never connect. The host's name is not a valid address, so a case is
+    // accepted only on the values it supplies.
+    let book = json!([{"hosts": "all", "gather_facts": false, "tasks": tasks}]);
+    run(&book, &format!("{FIXTURE_HOST},"), &scratch);
+    let verdicts = std::fs::read(scratch.path().join("verdicts.json")).unwrap();
+    let verdicts: Vec<bool> = serde_json::from_slice(&verdicts).unwrap();
+    assert_eq!(verdicts.len(), cases.len());
+    verdicts
 }
 
 /// Evaluate each expression against each case's variables. The result is one

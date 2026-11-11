@@ -1245,8 +1245,8 @@ Re-reviewed, and resolved in the source:
   added.
 
 Retired in place (no finding at the analyzed revision). As with alerts 64 and
-65, the false-positive records for alerts 59–62, 32, 28 and 29 stay bound to
-their last reviewed bytes, waive nothing and lapse with their exceptions on
+65, the false-positive records for alerts 59–62, 32, 28, 29 and 31 stay bound
+to their last reviewed bytes, waive nothing and lapse with their exceptions on
 2026-11-29;
 fix-pending alert 25 has no exception and no expiry and stays as its
 2026-09-30 observation:
@@ -1265,6 +1265,12 @@ fix-pending alert 25 has no exception and no expiry and stays as its
   line from `crates/ci/src/automation/pins/benchmark_automation.rs`, and the
   module's one remaining test imports no Jinja. The flagged calls no longer
   exist in the file.
+- Alert 31 (`ops/ansible/tests/test_release_playbook.py:78`,
+  `py/jinja2/autoescape-false`): the commit that moved the release source
+  guard's pins to Rust removed `assertions_pass` and its Jinja `Environment`.
+  Ansible's own assert module now evaluates the guard from
+  `crates/ci/src/automation/pins/release_playbook.rs`. The flagged call no
+  longer exists in the file.
 - Alert 25 (fix-pending, `build/release_http_policy.py:273`, the `wrap_socket`
   call now at line 270): the ledger keeps fix-pending records as the 2026-09-30
   observation and grants them no exception. `af2b7502` set the TLS 1.2 minimum,
