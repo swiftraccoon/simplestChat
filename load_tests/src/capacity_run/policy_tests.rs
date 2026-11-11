@@ -1,29 +1,29 @@
-//! Offline parser, judging, search, generator and report comparisons to Python.
+//! Offline parser, judging, search, generator and report comparisons with the
+//! answers recorded from the retired Python runner.
 
 use super::{commands, conclude, host, json, judge, options, parsers, search, types::*};
 use serde_json::{Value, json as value};
-use std::io::Write;
-use std::path::Path;
-use std::process::{Command, Stdio};
 
-pub(super) fn oracle(script: &str, input: &Value) -> Value {
-    oracle_bytes(script, &serde_json::to_vec(input).unwrap())
+/// The answers the retired Python runner gave, recorded before its removal.
+pub(super) fn recorded() -> Value {
+    serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
 }
 
-pub(super) fn oracle_bytes(script: &str, input: &[u8]) -> Value {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let mut child = Command::new("python3").arg("-c")
-        .arg(format!("import sys,json,re\nsys.path[:0]=[sys.argv[1],sys.argv[2]]\nimport capacity as c\n{script}"))
-        .arg(root.join("build")).arg(root.join("ops/ansible/files"))
-        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
+/// The digest that binds a recorded answer to the exact input it was given.
+pub(super) fn digest(input: &[u8]) -> String {
+    use sha2::Digest as _;
+    let bytes = sha2::Sha256::digest(input);
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// One recorded answer, refused when the generated input is no longer the
+/// one the Python runner was asked with.
+fn answer(label: &str, input: &Value) -> Value {
+    let recorded = recorded();
+    let entry = &recorded[label];
+    let asked = digest(&serde_json::to_vec(input).unwrap());
+    assert_eq!(entry["inputSha256"], asked, "{label}");
+    entry.get("answers").unwrap_or(&entry["answer"]).clone()
 }
 
 fn step(index: usize) -> StepResult {
@@ -44,8 +44,9 @@ fn step(index: usize) -> StepResult {
     }
 }
 
+/// Python answered with `record(judge(step, Limits()))` for each step.
 #[test]
-fn all_judging_reasons_thresholds_and_cap_attribution_match_python() {
+fn all_judging_reasons_thresholds_and_cap_attribution_match_the_record() {
     let mut cases = Vec::new();
     for index in 0..256 {
         let mut result = step(index);
@@ -91,17 +92,7 @@ fn all_judging_reasons_thresholds_and_cap_attribution_match_python() {
     failed.generator_failure_count = 8;
     cases.push(failed);
     let input = serde_json::to_value(&cases).unwrap();
-    let expected = oracle(
-        r#"
-def snake(k): return re.sub(r'[A-Z]',lambda m:'_'+m[0].lower(),k)
-answer=[]
-for v in json.load(sys.stdin):
- s=c.StepResult(**{snake(k):v for k,v in v.items()})
- answer.append(c.record(c.judge(s,c.Limits())))
-print(json.dumps(answer))
-"#,
-        &input,
-    );
+    let expected = answer("judging", &input);
     let actual = cases
         .iter()
         .map(|step| judge::judge(step, Limits::default()))
@@ -109,8 +100,11 @@ print(json.dumps(answer))
     assert_eq!(serde_json::to_value(actual).unwrap(), expected);
 }
 
+/// Python answered, for each case, with the shape `shape_for` chose, the
+/// `StepPlan`'s clients, rooms, ramp and window, `forwarded_streams`, the
+/// plan's `generator_args` and `next_size` after one passing trial.
 #[test]
-fn plans_argv_streams_shapes_and_search_match_python_generated_cases() {
+fn plans_argv_streams_shapes_and_search_match_the_recorded_cases() {
     let mut input = Vec::new();
     let mut actual = Vec::new();
     for workload in Workload::ALL {
@@ -155,24 +149,7 @@ fn plans_argv_streams_shapes_and_search_match_python_generated_cases() {
             }
         }
     }
-    let expected = oracle(
-        r#"
-answer=[]
-for v in json.load(sys.stdin):
- w,h,a,n=v['workload'],v['host'],v['audio'],v['size']
- shape=c.shape_for(w,h,deployment_workers=max(1,h-1))
- plan=c.StepPlan(w,n,5,20,30,shape.workers)
- search=c.replace(c.search_for(w,shape,5,6),audio_only=a)
- trial=c.Trial(n,True,True,.31,.25,.6)
- answer.append(dict(shape=c.record(shape),clients=plan.clients,rooms=plan.rooms,
- ramp=plan.ramp_seconds,window=c.step_window(100.,plan),
- streams=c.forwarded_streams(w,n,5,audio_only=a),
- args=plan.generator_args(c.Browser(audio_only=a,chat_interval_ms=3000),'label',('srv','gen')),
- next=c.next_size(search,[trial],c.Limits(),shape.generator_cpus)))
-print(json.dumps(answer))
-"#,
-        &Value::Array(input),
-    );
+    let expected = answer("plans", &Value::Array(input));
     assert_eq!(Value::Array(actual), expected);
 }
 
@@ -270,8 +247,10 @@ fn browser_settings_and_ownership_options_are_explicit() {
     );
 }
 
+/// Python answered with the record of a meetings `StepResult` after
+/// `read_summary` and `read_clients` had read the same two documents.
 #[test]
-fn summary_delivery_counts_and_invalid_measurement_guards_match_python() {
+fn summary_delivery_counts_and_invalid_measurement_guards_match_the_record() {
     let summary = value!({"run":{"passed":false,"failureReasons":["a","b","c","d","e","f"]},
         "totalErrors":3,"failedConnections":1,"failedConsumers":2,"validatedConsumers":9,
         "totalDatagramsSent":1200,"measurement":{"packetsReceived":100,"bytesReceived":2000,"durationMs":5000},
@@ -288,13 +267,7 @@ fn summary_delivery_counts_and_invalid_measurement_guards_match_python() {
         &crate::capacity::json::parse(&serde_json::to_vec(&clients).unwrap()).unwrap(),
     )
     .unwrap();
-    let expected = oracle(
-        r#"
-v=json.load(sys.stdin);s=c.StepResult('meetings',40,40,8,'',generator_passed=True)
-c.read_summary(s,v['summary']);c.read_clients(s,v['clients']);print(json.dumps(c.record(s)))
-"#,
-        &value!({"summary":summary,"clients":clients}),
-    );
+    let expected = answer("summary", &value!({"summary":summary,"clients":clients}));
     assert_eq!(serde_json::to_value(&result).unwrap(), expected);
     assert_eq!(result.generator_failure_count, 6);
     assert_eq!(result.generator_failures.len(), 5);
@@ -328,10 +301,8 @@ fn python_report_number_and_unicode_framing_is_preserved() {
         values: vec![1.0, 1e-7, 1e20, -0.0, f64::INFINITY, f64::NAN],
         map: [(0, 0.5)].into(),
     };
-    let expected = oracle(
-        "v={'text':'é\\x7f😀','values':[1.,1e-7,1e20,-0.,float('inf'),float('nan')],'map':{0:.5}}\nprint(json.dumps(json.dumps(v,indent=2)))",
-        &Value::Null,
-    );
+    // Python answered with `json.dumps(value, indent=2)` of the same value.
+    let expected = answer("framing", &Value::Null);
     assert_eq!(
         String::from_utf8(json::bytes(&record).unwrap()).unwrap(),
         expected.as_str().unwrap()
@@ -339,8 +310,10 @@ fn python_report_number_and_unicode_framing_is_preserved() {
     assert_eq!(host::rounded(2.675, 2), 2.67);
 }
 
+/// Python answered, for each history, with `next_size` over its trials and
+/// the record of `ceiling_of` on one worker.
 #[test]
-fn bracketing_budget_invalid_trials_and_every_ceiling_bound_match_reference() {
+fn bracketing_budget_invalid_trials_and_every_ceiling_bound_match_the_record() {
     let mut inputs = Vec::new();
     let mut actual = Vec::new();
     for workload in Workload::ALL {
@@ -412,21 +385,7 @@ fn bracketing_budget_invalid_trials_and_every_ceiling_bound_match_reference() {
             }
         }
     }
-    let expected = oracle(
-        r#"
-def snake(k):return re.sub(r'[A-Z]',lambda m:'_'+m[0].lower(),k)
-answer=[]
-for v in json.load(sys.stdin):
- history=[]
- for entry in v['history']:
-  s=c.StepResult(**{snake(k):v for k,v in entry['step'].items()});z=c.Verdict(**entry['verdict']);history.append((s,z))
- trials=[c.Trial(s.size,z.passed,z.valid,s.busiest_worker,s.mean_worker,s.generator_cores) for s,z in history]
- search=c.replace(c.search_for(v['workload'],c.Shape(1.,1,2.8),5,v['steps']),audio_only=v['audio'])
- answer.append(dict(next=c.next_size(search,trials,c.Limits(),2.8),ceiling=c.record(c.ceiling_of(v['workload'],history,2.8,workers=1))))
-print(json.dumps(answer))
-"#,
-        &Value::Array(inputs),
-    );
+    let expected = answer("bracketing", &Value::Array(inputs));
     assert_eq!(Value::Array(actual), expected);
     assert_eq!(
         search::shape(Workload::Meetings, 4, 3, Some(1.25), Some(0.2)).generator_cpus,

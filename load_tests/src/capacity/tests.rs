@@ -1,60 +1,27 @@
-//! Pure policy and offline CLI parity with the retained Python capacity tool.
+//! Pure policy and offline CLI parity with the answers recorded from the
+//! retired Python capacity tool.
 
 use super::*;
 use serde_json::json;
 use std::fs;
-use std::process::{Command as Process, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-fn source() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_owned()
-}
 
 fn native(arguments_: &[&str]) -> Result<String> {
     execute(arguments(&arguments_.iter().map(OsString::from).collect::<Vec<_>>()).unwrap())
 }
 
-fn oracle(arguments: &[&str]) -> std::process::Output {
-    Process::new("python3")
-        .arg(source().join("build/capacity.py"))
-        .args(arguments)
-        .output()
-        .unwrap()
+/// The answers the retired Python adviser gave, recorded before its removal.
+fn recorded() -> serde_json::Value {
+    serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
 }
 
-fn versioned_oracle(arguments: &[&str]) -> ((u32, u32), std::process::Output) {
-    // The version belongs to the same interpreter invocation as the unchanged
-    // CLI. Only its fixed, at-most-16-byte header is removed from stderr.
-    let program = r"
-import json,runpy,sys
-from pathlib import Path
-sys.stderr.write(json.dumps(list(sys.version_info[:2]),separators=(',',':'))+'\n')
-sys.stderr.flush()
-sys.argv=sys.argv[1:]
-sys.path[0]=str(Path(sys.argv[0]).parent)
-runpy.run_path(sys.argv[0],run_name='__main__')
-";
-    let mut output = Process::new("python3")
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .args(["-c", program])
-        .arg(source().join("build/capacity.py"))
-        .args(arguments)
-        .output()
-        .unwrap();
-    let end = output.stderr.iter().position(|b| *b == b'\n').unwrap();
-    assert!(end < 16, "the interpreter version header is bounded");
-    let [major, minor]: [u32; 2] = serde_json::from_slice(&output.stderr[..end]).unwrap();
-    assert!(
-        major == 3 && minor >= 10,
-        "the oracle requires Python 3.10+"
-    );
-    output.stderr.drain(..=end);
-    ((major, minor), output)
+/// The digest that binds a recorded answer list to the exact generated input.
+fn digest(input: &str) -> String {
+    use sha2::Digest as _;
+    let bytes = sha2::Sha256::digest(input.as_bytes());
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[test]
@@ -162,8 +129,10 @@ fn original_reference_suggestions_respect_workers_memory_ports_and_explicit_quot
 }
 
 #[test]
-fn suggest_stdout_matches_python_for_original_examples_and_quota_edges() {
-    for arguments in [
+fn suggest_stdout_matches_the_recorded_python_examples_and_quota_edges() {
+    let recorded = recorded();
+    let examples = recorded["suggest"].as_array().unwrap();
+    let cases = [
         vec!["suggest", "--vcpus", "8", "--memory-gib", "16"],
         vec![
             "suggest",
@@ -206,16 +175,13 @@ fn suggest_stdout_matches_python_for_original_examples_and_quota_edges() {
             "--app-memory-mib",
             "2048",
         ],
-    ] {
-        let expected = oracle(&arguments);
-        assert!(
-            expected.status.success(),
-            "{}",
-            String::from_utf8_lossy(&expected.stderr)
-        );
+    ];
+    assert_eq!(examples.len(), cases.len());
+    for (arguments, expected) in cases.iter().zip(examples) {
+        assert_eq!(expected["arguments"], json!(arguments));
         assert_eq!(
-            native(&arguments).unwrap().as_bytes(),
-            expected.stdout,
+            json!(native(arguments).unwrap()),
+            expected["stdout"],
             "{arguments:?}"
         );
     }
@@ -259,21 +225,20 @@ fn lexical_numeric_adapter_preserves_numbers_legacy_nonfinite_and_string_identit
     );
 }
 
+/// Python answered with `format(x, 'g')`, `repr(x)` and `format(x, ',.0f')`.
 #[test]
-fn formatter_matches_reference_rounding_general_exponents_and_commas() {
-    let mut command = Process::new("python3").args(["-c", "import json,sys; print(json.dumps([[format(x,'g'),repr(x),format(x,',.0f')] for x in json.load(sys.stdin)]))"])
-        .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+fn formatter_matches_the_recorded_rounding_general_exponents_and_commas() {
     let values = [
         0.0, -0.0, 1.25, 999999.9, 1e6, 1e-4, 1e-5, 1e16, 1e15, 4648.9, 11111.1,
     ];
-    command
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(serde_json::to_string(&values).unwrap().as_bytes())
-        .unwrap();
-    let output = command.wait_with_output().unwrap();
-    let expected: Vec<Vec<String>> = serde_json::from_slice(&output.stdout).unwrap();
+    let recorded = recorded();
+    let entry = &recorded["format"];
+    assert_eq!(
+        entry["inputSha256"],
+        digest(&serde_json::to_string(&values).unwrap())
+    );
+    let expected: Vec<Vec<String>> = serde_json::from_value(entry["answers"].clone()).unwrap();
+    assert_eq!(expected.len(), values.len());
     for (value, expected) in values.into_iter().zip(expected) {
         assert_eq!(
             [
@@ -327,7 +292,7 @@ fn calibration(label: &str, price: Option<f64>) -> serde_json::Value {
 }
 
 #[test]
-fn calibration_legacy_defaults_camel_case_and_missing_workloads_match_reference() {
+fn calibration_legacy_defaults_camel_case_and_missing_workloads_match_the_record() {
     let fixture = Fixture::new();
     let mut value = calibration("legacy", None);
     value["ceilings"]
@@ -345,14 +310,14 @@ fn calibration_legacy_defaults_camel_case_and_missing_workloads_match_reference(
         "--calibration",
         path.to_str().unwrap(),
     ];
-    let expected = oracle(&args);
-    assert!(
-        expected.status.success(),
-        "{}",
-        String::from_utf8_lossy(&expected.stderr)
-    );
+    // Both tools name the calibration file they were given in their heading.
+    let recorded = recorded();
+    let placed = |text: &serde_json::Value| {
+        let directory = fixture.0.to_str().unwrap();
+        text.as_str().unwrap().replace("{fixture}", directory)
+    };
     let output = native(&args).unwrap();
-    assert_eq!(output.as_bytes(), expected.stdout);
+    assert_eq!(output, placed(&recorded["legacyCalibration"]["stdout"]));
     assert!(output.contains("about 450 viewers"));
     assert!(output.contains("All-publishing rooms: 0 people"));
     // Python's writer emits Infinity for a zero-price report; unused cost fields
@@ -362,12 +327,16 @@ fn calibration_legacy_defaults_camel_case_and_missing_workloads_match_reference(
         .replace("\"cost\":null", "\"cost\":{\"unused\":Infinity}");
     fs::write(&path, source).unwrap();
     assert_eq!(native(&args).unwrap(), output);
-    assert!(oracle(&args).status.success());
+    assert_eq!(
+        output,
+        placed(&recorded["legacyCalibration"]["unusedInfinityCostStdout"])
+    );
 }
 
 #[test]
 fn nonreference_calibration_shapes_refuse_before_printing_any_settings() {
     let fixture = Fixture::new();
+    let recorded = recorded();
     for (field, change) in [
         ("meetingSize", json!(30)),
         ("audioOnly", json!(true)),
@@ -392,16 +361,17 @@ fn nonreference_calibration_shapes_refuse_before_printing_any_settings() {
             path.to_str().unwrap(),
             "--env",
         ];
-        let expected = oracle(&args);
-        assert!(!expected.status.success());
-        assert!(expected.stdout.is_empty());
+        // The Python tool printed nothing and wrote this refusal to stderr.
         let error = native(&args).unwrap_err().to_string();
-        assert_eq!(format!("capacity: {error}\n").as_bytes(), expected.stderr);
+        assert_eq!(
+            json!(format!("capacity: {error}\n")),
+            recorded["nonreference"][field]
+        );
     }
 }
 
 #[test]
-fn comparison_rank_lower_bounds_absent_measurements_and_unicode_match_reference() {
+fn comparison_rank_lower_bounds_absent_measurements_and_unicode_match_the_record() {
     let fixture = Fixture::new();
     let mut dear = calibration("dear", Some(40.0));
     dear["host"]["cpuModel"] = json!("processor 🦊 é repeated long model text");
@@ -425,10 +395,8 @@ fn comparison_rank_lower_bounds_absent_measurements_and_unicode_match_reference(
         paths[1].to_str().unwrap(),
         paths[2].to_str().unwrap(),
     ];
-    let expected = oracle(&args);
-    assert!(expected.status.success());
     let output = native(&args).unwrap();
-    assert_eq!(output.as_bytes(), expected.stdout);
+    assert_eq!(json!(output), recorded()["comparison"]["stdout"]);
     let rows = output.lines().collect::<Vec<_>>();
     assert!(rows[1].starts_with("cheap"));
     assert!(rows[2].starts_with("dear"));
@@ -449,23 +417,19 @@ fn comparison_rejects_mixed_profiles_before_emitting_any_rankings() {
         normal.to_str().unwrap(),
         changed.to_str().unwrap(),
     ];
-    let expected = oracle(&args);
-    assert!(!expected.status.success());
-    assert!(expected.stdout.is_empty());
+    // The Python tool printed nothing and wrote this refusal to stderr.
     assert_eq!(
-        format!("capacity: {}\n", native(&args).unwrap_err()).as_bytes(),
-        expected.stderr
+        json!(format!("capacity: {}\n", native(&args).unwrap_err())),
+        recorded()["mixedProfiles"]["stderr"]
     );
 }
 
 #[test]
-fn legacy_nonfinite_comparisons_keep_native_refusal_and_versioned_python_identity() {
+fn legacy_nonfinite_comparisons_keep_the_refusal_recorded_from_python_3_14() {
     let fixture = Fixture::new();
     let mut paths = Vec::new();
-    let mut finite_paths = Vec::new();
     for name in ["first", "second"] {
         let mut report = calibration(name, None);
-        finite_paths.push(fixture.write(&format!("{name}-finite.json"), &report));
         report["measurement"]["browser"]["pixelRatio"] = serde_json::Value::Null;
         let path = fixture.write(&format!("{name}.json"), &report);
         let source = fs::read_to_string(&path)
@@ -484,30 +448,17 @@ fn legacy_nonfinite_comparisons_keep_native_refusal_and_versioned_python_identit
         "the same meeting size, media, speakers, browser settings and chat interval"
     );
     assert_eq!(native(&args).unwrap_err().to_string(), refusal);
-    let (version, expected) = versioned_oracle(&args);
-    if version >= (3, 13) {
-        assert_eq!(expected.status.code(), Some(1));
-        assert!(expected.stdout.is_empty());
-        assert_eq!(format!("capacity: {refusal}\n").as_bytes(), expected.stderr);
-    } else {
-        // Before 3.13, dataclass tuple equality treats the decoder's shared NaN
-        // object as equal by identity. Rust deliberately retains its refusal.
-        assert_eq!(expected.status.code(), Some(0));
-        assert!(expected.stderr.is_empty());
-        let finite = native(&[
-            "compare",
-            finite_paths[0].to_str().unwrap(),
-            finite_paths[1].to_str().unwrap(),
-        ])
-        .unwrap();
-        assert_eq!(finite.as_bytes(), expected.stdout);
-    }
+    // Python 3.13 and later refuse the same way. Before 3.13, dataclass tuple
+    // equality treated the decoder's shared NaN object as equal by identity
+    // and the Python tool printed the comparison; Rust keeps the refusal.
+    let recorded = recorded();
+    let entry = &recorded["nonfinite"];
+    assert_eq!(
+        entry["pair"],
+        json!({"status":1,"stdout":"","stderr":format!("capacity: {refusal}\n")})
+    );
     let single = ["compare", paths[0].to_str().unwrap()];
-    let (single_version, expected) = versioned_oracle(&single);
-    assert_eq!(single_version, version);
-    assert_eq!(expected.status.code(), Some(0));
-    assert!(expected.stderr.is_empty());
-    assert_eq!(native(&single).unwrap().as_bytes(), expected.stdout);
+    assert_eq!(json!(native(&single).unwrap()), entry["single"]["stdout"]);
 }
 
 #[test]
@@ -529,8 +480,9 @@ fn report_reads_refuse_final_symlinks_devices_and_files_over_the_original_bound(
     );
 }
 
+/// Python answered with the standard output of its `main` for each case.
 #[test]
-fn generated_host_suggestions_match_python_without_running_a_workload() {
+fn generated_host_suggestions_match_the_recorded_python_answers() {
     let mut cases = Vec::new();
     for index in 0..160 {
         let cpus = [1, 2, 4, 8, 16, 65, 128, 256][index % 8];
@@ -561,36 +513,14 @@ fn generated_host_suggestions_match_python_without_running_a_workload() {
         }
         cases.push(arguments);
     }
-    let mut child = Process::new("python3")
-        .args([
-            "-c",
-            r"
-import contextlib, io, json, pathlib, sys
-sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / 'build'))
-import capacity
-outputs=[]
-for args in json.load(sys.stdin):
-    stream=io.StringIO()
-    with contextlib.redirect_stdout(stream):
-        assert capacity.main(args) == 0
-    outputs.append(stream.getvalue())
-print(json.dumps(outputs))
-",
-            source().to_str().unwrap(),
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(serde_json::to_string(&cases).unwrap().as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success());
-    let expected: Vec<String> = serde_json::from_slice(&output.stdout).unwrap();
+    let recorded = recorded();
+    let entry = &recorded["hosts"];
+    assert_eq!(
+        entry["inputSha256"],
+        digest(&serde_json::to_string(&cases).unwrap())
+    );
+    let expected: Vec<String> = serde_json::from_value(entry["answers"].clone()).unwrap();
+    assert_eq!(expected.len(), cases.len());
     for (arguments_, expected) in cases.into_iter().zip(expected) {
         let command =
             arguments(&arguments_.iter().map(OsString::from).collect::<Vec<_>>()).unwrap();
@@ -598,6 +528,8 @@ print(json.dumps(outputs))
     }
 }
 
+/// Python answered with `record(suggest_for(Host(*host), ceilings, …))` for
+/// each case, reading the ceilings through `ceilings_from_report`.
 #[test]
 fn generated_calibrated_suggestions_preserve_cpu_memory_network_and_fallback_policy() {
     let mut cases = Vec::new();
@@ -622,36 +554,15 @@ fn generated_calibrated_suggestions_preserve_cpu_memory_network_and_fallback_pol
             "ceilings":ceilings,"cpus":if index%3==0 {Some(2.75)} else {None},
             "memory":if index%5==0 {Some(1536)} else {None}}));
     }
-    let mut child = Process::new("python3")
-        .args([
-            "-c",
-            r"
-import json,pathlib,sys
-sys.path.insert(0,str(pathlib.Path(sys.argv[1])/'build'))
-import capacity
-results=[]
-for case in json.load(sys.stdin):
-    ceilings=capacity.ceilings_from_report({'ceilings':case['ceilings']})
-    value=capacity.suggest_for(capacity.Host(*case['host']),ceilings,
-        app_cpus=case['cpus'],app_memory_mib=case['memory'])
-    results.append(capacity.record(value))
-print(json.dumps(results))
-",
-            source().to_str().unwrap(),
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(serde_json::to_string(&cases).unwrap().as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success());
-    let expected: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let recorded = recorded();
+    let entry = &recorded["calibrated"];
+    assert_eq!(
+        entry["inputSha256"],
+        digest(&serde_json::to_string(&cases).unwrap())
+    );
+    let expected: Vec<serde_json::Value> =
+        serde_json::from_value(entry["answers"].clone()).unwrap();
+    assert_eq!(expected.len(), cases.len());
     for (case, expected) in cases.into_iter().zip(expected) {
         let report =
             json::parse(&serde_json::to_vec(&json!({"ceilings":case["ceilings"]})).unwrap())

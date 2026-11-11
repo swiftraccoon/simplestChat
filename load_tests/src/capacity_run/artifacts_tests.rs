@@ -1,10 +1,10 @@
-//! Owned tar fixtures and the retained Python artifact reader as an oracle.
+//! Owned tar fixtures, and the manifest recorded from the retired Python
+//! artifact reader.
 
 use super::*;
 use std::io::Cursor;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 struct Fixture(PathBuf);
@@ -313,8 +313,10 @@ fn successful_collection_publishes_its_manifest_last_and_removes_only_its_archiv
     assert!(!failed.0.join("collection.json").exists());
 }
 
+/// Python answered with the manifest `capacity_artifacts.extract` returned
+/// for the same archive.
 #[test]
-fn ordinary_tar_manifests_match_the_python_reference() {
+fn ordinary_tar_manifests_match_the_recorded_python_manifest() {
     let fixture = Fixture::new();
     let source = fixture.archive(&[
         ("./", b'5', b""),
@@ -323,18 +325,9 @@ fn ordinary_tar_manifests_match_the_python_reference() {
     ]);
     let destination = fixture.0.join("native");
     let native = extract(&source, &destination).unwrap();
-    let reference = Command::new("python3").args(["-c", "import json,sys; from pathlib import Path; sys.path[:0]=[sys.argv[1],sys.argv[2]];import capacity_artifacts;print(json.dumps(capacity_artifacts.extract(Path(sys.argv[3]),Path(sys.argv[4]))))"])
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("build"))
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("ops/ansible/files"))
-        .arg(&source).arg(fixture.0.join("python")).output().unwrap();
-    assert!(
-        reference.status.success(),
-        "Python oracle fixture failed: {}",
-        String::from_utf8_lossy(&reference.stderr)
-    );
     assert_eq!(
         native,
-        serde_json::from_slice::<Value>(&reference.stdout).unwrap()
+        crate::capacity_run::policy_tests::recorded()["tarManifest"]
     );
 }
 

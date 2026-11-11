@@ -1,4 +1,5 @@
-//! Full report bytes and summaries are checked against the retained Python API.
+//! Full report bytes and summaries are checked against the answers recorded
+//! from the retired Python API.
 
 use super::{
     context::Context,
@@ -6,15 +7,21 @@ use super::{
     host, json,
     options::Options,
     ownership::Ownership,
-    policy_tests::oracle_bytes,
+    policy_tests::{digest, recorded},
     process::Cancellation,
     report, search,
     types::*,
 };
 use std::sync::Arc;
 
+/// Python rebuilt each report with `build_report` from the same measured
+/// values and answered with its `json.dumps(report, indent=2)` text and its
+/// `summary_lines`.
 #[test]
-fn generated_reports_projection_cost_recommendations_and_framing_match_reference() {
+fn generated_reports_projection_cost_recommendations_and_framing_match_the_record() {
+    let recorded = recorded();
+    let answers = recorded["reports"]["answers"].as_array().unwrap();
+    assert_eq!(answers.len(), 36);
     let directory = Directory::new();
     let engine = FakeEngine::new(Arc::new(FakeClock::default()));
     let cancellation = Cancellation::default();
@@ -191,26 +198,11 @@ fn generated_reports_projection_cost_recommendations_and_framing_match_reference
             "label":options.label,"monthly_price":options.monthly_price,"egress_price_per_gb":options.egress_price_per_gb,
             "included_egress_tb":options.included_egress_tb,"port_mbps":options.port_mbps}),
         };
-        let expected = oracle_bytes(
-            r#"
-from pathlib import Path
-from dataclasses import fields
-v=json.load(sys.stdin);r=v['report'];m=r['measurement']
-def snake(k): return re.sub(r'[A-Z]',lambda m:'_'+m[0].lower(),k)
-def record(cls,v):return cls(**{snake(k):v for k,v in v.items() if snake(k) in {f.name for f in fields(cls)}})
-options=c.Options(**v['options'])
-browser=record(c.Browser,m['browser']);shapes={w:record(c.Shape,s) for w,s in m['shapes'].items()}
-context=c.Context(c.Engine('fake'),'fixture','srv','gen',('s','g'),shapes['meetings'],m['limits']['workerLoad'],m['serverMemory'],m['generatorMemory'],browser,Path('.'),lambda _:None,tuple(m['serverEnv'].items()))
-limits=record(c.Limits,m['limits']);deployment=record(c.Deployment,r['deployment'])
-results={}
-for s in r['steps']:
- results.setdefault(s['workload'],[]).append((record(c.StepResult,s),c.Verdict(s['passed'],s['valid'],tuple(s['reasons']))))
-ceilings={w:record(c.Ceiling,s) for w,s in r['ceilings'].items()}
-measured=c.Measured(r['host'],r['images'],context,limits,deployment,shapes)
-result=c.build_report(options,measured,results,ceilings);result['finishedAt']=r['finishedAt']
-print(json.dumps({'report':json.dumps(result,indent=2),'summary':c.summary_lines(result)}))
-"#,
-            &json::bytes(&input).unwrap(),
+        let expected = &answers[usize::try_from(index).unwrap()];
+        assert_eq!(
+            expected["inputSha256"],
+            digest(&json::bytes(&input).unwrap()),
+            "report case {index}"
         );
         assert_eq!(
             String::from_utf8(json::bytes(&record).unwrap()).unwrap(),

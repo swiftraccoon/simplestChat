@@ -1,23 +1,11 @@
-//! Actual retained Python functions are the oracle; every operational boundary
-//! is refused or replaced with owned in-memory observations/private fixtures.
+//! The answers the retired Python worker's functions gave are the record;
+//! every operational boundary was refused or replaced with owned in-memory
+//! observations and private fixtures when they were taken.
 
 use super::*;
 use serde_json::{Value, json};
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
 const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-fn root() -> PathBuf {
-    std::env::var_os("VPS_REFERENCE_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .into()
-        })
-}
 fn request() -> Value {
     json!({"revision":REVISION,"run":"b".repeat(32),"workload":"meetings","label":"audio30",
         "firstSize":30,"steps":1,"meetingSize":30,"speakers":30,"runtimeSeconds":1200,
@@ -110,62 +98,17 @@ fn numbers(value: &mut Value) {
         _ => {}
     }
 }
-fn compare(cases: &[Value]) {
-    let script = r#"
-import json,pathlib,sys,tempfile
-root=pathlib.Path(sys.argv[1]);sys.path[:0]=[str(root/'build'),str(root/'ops/ansible/files')]
-import vps_capacity_remote as p
-
-def forbidden(*args,**kwargs):raise AssertionError('operational boundary forbidden')
-p.command=forbidden;p.container_ids=forbidden
-p.subprocess.Popen=forbidden;p.subprocess.run=forbidden
-result=[]
-for case in json.load(sys.stdin):
- try:
-  op=case['op']
-  if op=='validate':value=p.validate_request(json.loads(case['raw']) if 'raw'in case else case['request'])
-  elif op=='arguments':value=p.capacity_argv(p.validate_request(case['request']),case['images'])[3:]
-  elif op=='assess':value=p.assess(case['report'],p.validate_request(case['request']))
-  elif op=='finished':value=p.unit_finished(case['state'])
-  elif op=='parse-unit':
-   p.command=lambda *a,**kw:case['text'];value=p.unit_state('fixture.service');p.command=forbidden
-  elif op=='residuals':
-   s=case['snapshot']
-   with tempfile.TemporaryDirectory(prefix='vps-policy-oracle-') as directory:
-    directory=pathlib.Path(directory);(directory/'workload').mkdir()
-    if s.get('journal') is not None:(directory/'workload/ownership.json').write_text(json.dumps(s['journal']))
-    p.container_ids=lambda **kw:s['owned'] if kw.get('label') else s['after']
-    def inspect(args,**kw):
-     assert args[:len(p.DOCKER)+1]==p.DOCKER+['inspect']
-     return json.dumps(s['inspections'][args[-1]])
-    p.command=inspect;value=p.residuals(directory,s['before'])
-   p.command=forbidden;p.container_ids=forbidden
-  else:raise AssertionError('unknown pure operation')
-  result.append({'ok':True,'value':value})
- except p.CapacityControlError as error:result.append({'ok':False,'error':str(error)})
-json.dump(result,sys.stdout)
-"#;
-    let mut child = Command::new("python3")
-        .args(["-I", "-c", script])
-        .arg(root())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(cases).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+/// Compares each case with the answer recorded under `label`, refusing a
+/// case list that is no longer the one the Python worker was asked with.
+fn compare(label: &str, cases: &[Value]) {
+    use sha2::Digest as _;
+    let recorded: Value =
+        serde_json::from_str(include_str!("vps_recorded_reference.json")).unwrap();
+    let entry = &recorded[label];
+    let asked = sha2::Sha256::digest(serde_json::to_vec(cases).unwrap());
+    let asked: String = asked.iter().map(|byte| format!("{byte:02x}")).collect();
+    assert_eq!(entry["inputSha256"], asked, "{label}");
+    let expected: Vec<Value> = serde_json::from_value(entry["answers"].clone()).unwrap();
     assert_eq!(expected.len(), cases.len());
     for (index, (case, mut expected)) in cases.iter().zip(expected).enumerate() {
         let mut actual = match native(case) {
@@ -309,7 +252,7 @@ fn requests_preserve_python_types_error_order_and_operational_bounds() {
     let mut unknown = request();
     unknown["futureField"] = json!({"a":[1,"two",true]});
     cases.push(json!({"op":"validate","request":unknown}));
-    compare(&cases);
+    compare("requests", &cases);
 }
 
 #[test]
@@ -336,7 +279,7 @@ fn capacity_arguments_reuse_the_existing_run_contract_for_every_supported_shape(
             }
         }
     }
-    compare(&cases);
+    compare("arguments", &cases);
 }
 
 #[test]
@@ -409,7 +352,7 @@ fn assessment_retains_lower_bounds_but_rejects_foreign_or_invalid_measurements()
             if audio { 1.0.into() } else { (-0.0).into() };
         cases.push(json!({"op":"assess","request":req,"report":input}));
     }
-    compare(&cases);
+    compare("assessment", &cases);
 }
 
 #[test]
@@ -448,7 +391,7 @@ fn terminal_unit_recognition_keeps_retained_success_and_missing_state_separate()
         cases.push(json!({"op":"parse-unit","text":format!(
             "LoadState=loaded{separator}ActiveState=inactive{separator}MainPID=0")}));
     }
-    compare(&cases);
+    compare("units", &cases);
 }
 
 #[test]
@@ -509,7 +452,7 @@ fn ownership_requires_each_exact_observation_and_redacts_unrelated_inspection_fi
         input["inspections"]["f".repeat(64)][0]["Config"]["Image"] = actual;
         cases.push(json!({"op":"residuals","snapshot":input}));
     }
-    compare(&cases);
+    compare("ownership", &cases);
     let output = native(&cases[0]).unwrap().to_string();
     assert!(!output.contains("PRIVATE_SENTINEL"));
     assert!(!output.contains("Env"));
