@@ -1,16 +1,18 @@
 # Bootstrap a private benchmark VPS
 
-`build/bootstrap.py` enrolls access to one explicitly selected host and invokes
-the canonical `site.yml` playbook. It supports fresh Debian 13 x86_64 hosts with
-systemd, including providers that require changing the initial SSH password.
-It also supports rerunning against an already enrolled host without reading or
-rotating its password. It does not deploy the public application, change SSH
-server policy, remove existing authorized keys, or run capacity tests.
+`simplestchat-release bootstrap` enrolls access to one explicitly selected host
+and invokes the canonical `site.yml` playbook. It supports fresh Debian 13
+x86_64 hosts with systemd, including providers that require changing the initial
+SSH password. It also supports rerunning against an already enrolled host
+without reading or rotating its password. It does not deploy the public
+application, change SSH server policy, remove existing authorized keys, or run
+capacity tests.
 
-Use a clean, committed checkout and the pinned controller environment from
-[README.md](README.md#prepare-a-host). The controller uses the system OpenSSH
-tools and Python's standard POSIX terminal APIs; no password automation package
-or SSH agent forwarding is required. The source revision must equal the clean
+Use a clean, committed checkout, the release controller built from it
+(`cargo build --locked -p simplestchat-release`) and the pinned Ansible
+environment from [README.md](README.md#prepare-a-host). The controller uses the
+system OpenSSH tools; no password automation package, pseudo-terminal or SSH
+agent forwarding is involved. The source revision must equal the clean
 controller checkout's full `HEAD`, because Ansible installs helpers from that
 checkout as well as checking out the selected revision on the VPS.
 
@@ -45,7 +47,7 @@ must be unused for a first setup; the existing `~/.ssh` and `results` parent
 directories must be present.
 
 ```sh
-ops/ansible/.venv/bin/python build/bootstrap.py \
+target/debug/simplestchat-release bootstrap \
   --host test.example.net --user debian --name test_vps \
   --revision "$(git rev-parse HEAD)" \
   --identity "$HOME/.ssh/simplestchat_test_ed25519" \
@@ -75,16 +77,22 @@ Before attempting password authentication, the controller creates the selected
 replacement-password file exclusively, mode `0600`, outside the checkout, or
 reuses an existing protected file. Both its contents and parent directory are
 fsynced before any forced change begins. SSH keys are likewise flushed before
-remote enrollment. The controller and password child disable core dumps and use
-absolute OpenSSH binaries with a small environment allowlist; inherited loader,
-Python, shell, Ansible and SSH-agent hooks do not reach child processes.
+remote enrollment. The controller disables core dumps and uses absolute OpenSSH
+binaries with a small environment allowlist; inherited loader, interpreter,
+shell, Ansible and SSH-agent hooks do not reach child processes.
 Ansible uses the `C.UTF-8` locale on supported Linux and macOS controllers;
 its startup requires UTF-8. Generic SSH/password subprocesses keep the plain
 `C` locale, independent of the caller's language settings.
-The supported dialogue is the English OpenSSH/Debian password
-exchange, with bounded time, output and prompt counts and terminal echo checked
-before each secret write. Unsupported prompts fail with a fixed error code;
-remote authentication transcripts are neither logged nor printed.
+
+The login password reaches OpenSSH through its own `SSH_ASKPASS` interface: for
+one session the controller writes the password to an owner-only file and a
+small helper beside the identity, points OpenSSH at the helper, and removes
+both when the session ends. The helper answers a password prompt and nothing
+else. A forced password change is then answered over the session's own input,
+on the remote terminal OpenSSH requests. The supported dialogue is the English
+OpenSSH/Debian password exchange, with bounded time, output and prompt counts.
+Unsupported or repeated prompts fail with a fixed error code; remote
+authentication transcripts are neither logged nor printed.
 
 Debian may close the connection immediately after successfully changing the
 expired password. In that case the controller reconnects once with the saved
@@ -101,8 +109,10 @@ server configuration unchanged.
 
 ## Preflight and provisioning
 
-The read-only preflight records the OS, architecture, CPU count, kernel, disk
-space, Python version, Docker presence and passwordless-sudo availability. It
+The read-only preflight runs two fixed POSIX shell programs over the enrolled
+key and validates every value they print. It records the OS, architecture, CPU
+count, kernel, disk space, Python version, Docker presence and passwordless-sudo
+availability. It
 requires Debian 13 x86_64 with systemd and at least 20 GiB free on the `/srv`
 filesystem, or `/` if `/srv` is absent. `--minimum-free-gib` can explicitly change
 that planning threshold. It is a reserve for build inputs, layers and evidence,
@@ -142,7 +152,7 @@ reads, password generation and rotation. Do not include
 `--initial-maintenance` during ordinary source advancement.
 
 ```sh
-ops/ansible/.venv/bin/python build/bootstrap.py \
+target/debug/simplestchat-release bootstrap \
   --host test.example.net --user debian --name test_vps \
   --revision "$(git rev-parse HEAD)" \
   --identity "$HOME/.ssh/simplestchat_test_ed25519" \
@@ -170,9 +180,10 @@ the evidence. Unexpected transport overrides, other groups or enabled stored
 maintenance flags are rejected rather than rewritten.
 
 Every subprocess has live byte and time limits, including provisioning when its
-output is retained only as a log. Standard output and standard error each have a
-2 MiB ceiling. Overflow terminates the owned process group and preserves a failed
-receipt; it does not truncate a failed operation into a successful one.
+output is retained only as a log. An inspected command's combined output has a
+2 MiB ceiling and the provisioning log a 4 MiB one. Overflow terminates the owned
+process group and preserves a failed receipt; it does not truncate a failed
+operation into a successful one.
 
 Continue with [automated private capacity measurements](CAPACITY.md) to prepare
 the selected revision, build immutable images, run bounded measurements and
@@ -194,8 +205,12 @@ or a terminated controller is not proof that remote package work stopped.
 Likewise, never remove an unfinished ownership record or a workload lock to make
 provisioning proceed. No test host should share a production database.
 
-The automated test suite uses fake SSH/Ansible boundaries, disposable local
-files and real local PTYs. It covers forced password rotation, reconnects,
-terminal echo refusal, time/output limits, secret-free arguments, key-only
-reruns, host pinning, key preservation and inventory revision overrides. It
-does not claim provider-specific authentication or live provisioning coverage.
+The automated test suite (`cargo test --locked -p simplestchat-release
+bootstrap`) uses recorded SSH/Ansible answers, disposable local files and real
+child processes standing in for OpenSSH. It covers forced password rotation,
+reconnects, the askpass helper, time/output limits, secret-free arguments,
+key-only reruns, host pinning, key preservation and inventory revision
+overrides, and on Linux it runs both preflight programs against the test
+machine. It does not claim provider-specific authentication or live
+provisioning coverage: run one real bootstrap against a disposable host before
+relying on a changed controller.

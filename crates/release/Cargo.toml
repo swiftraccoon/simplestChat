@@ -1,6 +1,6 @@
 [package]
 name = "simplestchat-release"
-description = "Release control plane: signed deployment and verification, Ops artifact production, retention and runtime proofs, and private VPS capacity runs"
+description = "Release control plane: signed deployment and verification, Ops artifact production, retention and runtime proofs, private VPS capacity runs and benchmark host bootstrap"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
+base64 = "0.23.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 nix = { version = "0.31.3", default-features = false }
@@ -19,7 +20,7 @@ object = { version = "=0.40.0", default-features = false, features = [
 ] }
 rawzip = "=0.5.2"
 regex = "1.13.1"
-rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
+rustix = { version = "1.1.5", features = ["fs", "process", "system", "termios"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
 serde_json = { version = "1.0.151", features = ["raw_value"] }

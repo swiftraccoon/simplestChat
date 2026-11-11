@@ -328,6 +328,9 @@ crates/release/**
 !crates/release/src/
 crates/release/src/**
 !crates/release/src/*.rs
+!crates/release/src/bootstrap/
+crates/release/src/bootstrap/**
+!crates/release/src/bootstrap/*.rs
 !crates/release/src/ops_artifact/
 crates/release/src/ops_artifact/**
 !crates/release/src/ops_artifact/*.rs

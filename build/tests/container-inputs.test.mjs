@@ -421,6 +421,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/ci/private.env', 'crates/ci/src/private.env', 'crates/ci/src/CLAUDE.md',
     'crates/ci/tests/private.env', 'crates/ci/src/automation/pins/private.env',
     'crates/release/private.env', 'crates/release/src/private.env', 'crates/release/src/CLAUDE.md',
+    'crates/release/src/bootstrap/private.env',
     'crates/release/tests/private.env', 'crates/release/src/ops_artifact/pins/private.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'crates/ci/src/local/private.env',

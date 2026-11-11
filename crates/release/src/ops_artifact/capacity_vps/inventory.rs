@@ -16,7 +16,7 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(super) struct Target {
+pub(crate) struct Target {
     pub host: String,
     pub user: String,
     pub port: u16,
@@ -134,7 +134,7 @@ impl Node {
         }
     }
 }
-pub(super) fn decode(bytes: &[u8], name: &str, revision: &str) -> Result<Map<String, Value>> {
+pub(crate) fn decode(bytes: &[u8], name: &str, revision: &str) -> Result<Map<String, Value>> {
     if bytes.is_empty() || bytes.len() > 65536 {
         return Err(failure(1));
     }
@@ -373,7 +373,7 @@ impl Inventory {
         Ok(())
     }
 }
-pub(super) fn quote(value: &str) -> String {
+pub(crate) fn quote(value: &str) -> String {
     if !value.is_empty()
         && value
             .bytes()

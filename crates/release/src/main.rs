@@ -5,12 +5,13 @@
 //! Its command families are `deploy` (the signed routine deployment),
 //! `verify` (signed application verification, forwarded before any UTF-8
 //! parsing), `ops-artifact` (the Ops artifact's production, retention and
-//! runtime proofs) and `vps-capacity` (the private VPS capacity operation).
+//! runtime proofs), `vps-capacity` (the private VPS capacity operation) and
+//! `bootstrap` (SSH enrollment and preparation of a private benchmark host).
 //! Every command exits non-zero on the first failure. They find their files
 //! in different places:
-//! - `deploy` and `ops-artifact maintain-runtime`, `maintain-host-runtime`
-//!   and `deploy-runtime` use [`root`], the checkout two levels above this
-//!   crate's manifest;
+//! - `deploy`, `bootstrap` and `ops-artifact maintain-runtime`,
+//!   `maintain-host-runtime` and `deploy-runtime` use [`root`], the checkout
+//!   two levels above this crate's manifest;
 //! - `ops-artifact verify-retained`, `acquire`, `export` and `runtime`, and
 //!   `vps-capacity`, use the caller's current directory;
 //! - `ops-artifact hosted` uses the hosted runner's `GITHUB_WORKSPACE`, and
@@ -28,6 +29,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod bootstrap;
 mod ops_artifact;
 
 const USAGE: &str = "\
@@ -41,6 +43,8 @@ Commands:
                 fixed recipe; maintain-runtime owns the optional signed maintenance KVM proof.
   vps-capacity  Authenticated private VPS measurement, collection or explicit recovery;
                 installed service callsites remain unchanged; see --help.
+  bootstrap     Enroll SSH access to one private Debian benchmark host and optionally
+                prepare it through site.yml; see `bootstrap --help`.
 ";
 
 /// The repository checkout, two levels above this crate's manifest.
@@ -80,6 +84,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "deploy" => Ok(ops_artifact::run_release_frontend(&root()?, rest)),
         "ops-artifact" => ops_artifact::run(rest),
         "vps-capacity" => run_vps_capacity(rest),
+        "bootstrap" => Ok(bootstrap::run(rest, &root()?)),
         "--help" | "-h" | "help" => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)

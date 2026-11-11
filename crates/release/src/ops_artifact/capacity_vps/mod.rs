@@ -7,7 +7,7 @@ mod archive;
 mod controller_tests;
 mod execute;
 mod files;
-mod inventory;
+pub(crate) mod inventory;
 mod options;
 mod plan;
 pub(crate) mod prepare;

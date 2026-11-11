@@ -1,7 +1,4 @@
-total 115798
-11	build/bootstrap.py
-195	build/bootstrap_access.py
-913	build/bootstrap_controller.py
+total 114115
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -121,7 +118,6 @@ total 115798
 581	ops/ansible/files/turn_public.py
 144	ops/ansible/tests/test_automation.py
 426	ops/ansible/tests/test_backup_offsite.py
-564	ops/ansible/tests/test_bootstrap_controller.py
 344	ops/ansible/tests/test_bounded_process.py
 214	ops/ansible/tests/test_browser_assets_command.py
 536	ops/ansible/tests/test_caddy_materials.py
