@@ -6,6 +6,7 @@
 
 mod ci_database_check;
 mod ci_verified;
+mod host_playbooks;
 mod performance_compare_ci;
 mod public_recorded_release;
 mod python_quality;

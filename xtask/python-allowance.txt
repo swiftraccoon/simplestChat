@@ -1,4 +1,4 @@
-total 139965
+total 139755
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -165,7 +165,6 @@ total 139965
 766	ops/ansible/tests/test_deploy_controller.py
 134	ops/ansible/tests/test_dns_handoff.py
 367	ops/ansible/tests/test_force_release.py
-210	ops/ansible/tests/test_host_playbooks.py
 349	ops/ansible/tests/test_issue_account_recovery.py
 431	ops/ansible/tests/test_maintain_namespace_probe.py
 985	ops/ansible/tests/test_migrate_public.py
