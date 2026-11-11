@@ -20,15 +20,15 @@
     {
       "suite": "noble-security",
       "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/binary-amd64/Packages.xz",
-      "sha256": "cc9b37e7f02c4552a66d51d784c36b0fbc5c3552c508ec084880ec3815dec52b",
-      "bytes": 1156920,
+      "sha256": "1eb91a5ace60312e3abfae347d048c0a17d6a0eb0b898b34f03d61c4f884d1e0",
+      "bytes": 1160084,
       "xzMembers": 1
     },
     {
       "suite": "noble-updates",
       "url": "https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages.xz",
-      "sha256": "1f0a499734e39e903c4898d11cfcfca70939f3d907051f2946f06e518d675fbd",
-      "bytes": 1424864,
+      "sha256": "1632bdc68349c6547bda6c393dfe17af1293feda58b22614df5d7293a43411ce",
+      "bytes": 1444008,
       "xzMembers": 1
     }
   ],
@@ -763,10 +763,10 @@
     {
       "name": "libperl5.38t64",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/libperl5.38t64_5.38.2-3.2ubuntu0.6_amd64.deb",
-      "sha256": "e9e5ac9a657e0cacf5f0de977c1573c696ee74515d5136c4e9a0ce9467d32ae7",
-      "bytes": 4863614,
-      "version": "5.38.2-3.2ubuntu0.6",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/libperl5.38t64_5.38.2-3.2ubuntu0.7_amd64.deb",
+      "sha256": "134f2d9341d97b8a3582df4d646f8da19d505aa75eb42e67cefb7570c42be7cc",
+      "bytes": 4863750,
+      "version": "5.38.2-3.2ubuntu0.7",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
@@ -896,10 +896,10 @@
     {
       "name": "linux-libc-dev",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-libc-dev_6.8.0-147.147_amd64.deb",
-      "sha256": "fec8e4a308c03cd98dace67370a8d5a8031c36741796065c9f6e3f9548ab0cd2",
-      "bytes": 1595188,
-      "version": "6.8.0-147.147",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-libc-dev_6.8.0-149.149_amd64.deb",
+      "sha256": "e4b7b9c5023ba727908868661e1113d28ed9b68e47aed00e314723dad4b2b31d",
+      "bytes": 1698546,
+      "version": "6.8.0-149.149",
       "archiveRoot": "",
       "component": "",
       "dependencies": []
@@ -933,10 +933,10 @@
     {
       "name": "perl",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl_5.38.2-3.2ubuntu0.6_amd64.deb",
-      "sha256": "1a2341674a1c69e3247537ab243dc3d5878b74a39a696964232e1a4f5a27502d",
-      "bytes": 231438,
-      "version": "5.38.2-3.2ubuntu0.6",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl_5.38.2-3.2ubuntu0.7_amd64.deb",
+      "sha256": "5e95eaa0db06b3eb4c669c033a6a9347f47c2923c8fd1297c7d9c553c4f8d153",
+      "bytes": 231404,
+      "version": "5.38.2-3.2ubuntu0.7",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
@@ -949,10 +949,10 @@
     {
       "name": "perl-base",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl-base_5.38.2-3.2ubuntu0.6_amd64.deb",
-      "sha256": "50e1b2c2646387a94664fbea144af1d1b16cf6e0778426baa198166ca3246697",
-      "bytes": 1825574,
-      "version": "5.38.2-3.2ubuntu0.6",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl-base_5.38.2-3.2ubuntu0.7_amd64.deb",
+      "sha256": "38045b6be63d521ab389b2fe619f0d22ad0582191605e6108a4c51b452090265",
+      "bytes": 1827882,
+      "version": "5.38.2-3.2ubuntu0.7",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
@@ -964,10 +964,10 @@
     {
       "name": "perl-modules-5.38",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl-modules-5.38_5.38.2-3.2ubuntu0.6_all.deb",
-      "sha256": "9c4c90145209d4f85be9255417008e8decb9cd5d189f446fd39ad096e31199cf",
-      "bytes": 3110182,
-      "version": "5.38.2-3.2ubuntu0.6",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/p/perl/perl-modules-5.38_5.38.2-3.2ubuntu0.7_all.deb",
+      "sha256": "8d2652aa897458aa2482be38d1d0fb26745e87450ab5b620b33180ab0078190c",
+      "bytes": 3109958,
+      "version": "5.38.2-3.2ubuntu0.7",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
