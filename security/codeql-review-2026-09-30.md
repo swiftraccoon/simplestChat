@@ -1245,8 +1245,9 @@ Re-reviewed, and resolved in the source:
   added.
 
 Retired in place (no finding at the analyzed revision). As with alerts 64 and
-65, the false-positive records for alerts 59–62 and 32 stay bound to their last
-reviewed bytes, waive nothing and lapse with their exceptions on 2026-11-29;
+65, the false-positive records for alerts 59–62, 32, 28 and 29 stay bound to
+their last reviewed bytes, waive nothing and lapse with their exceptions on
+2026-11-29;
 fix-pending alert 25 has no exception and no expiry and stays as its
 2026-09-30 observation:
 
@@ -1257,6 +1258,13 @@ fix-pending alert 25 has no exception and no expiry and stays as its
 - Alert 32 (`build/release_container_harness.py:179`): `da6f7b41` removed the
   caller-supplied mode, so `write_new` always creates files with mode `0o600`.
   The analysis reports no `py/overly-permissive-file` finding.
+- Alerts 28 and 29 (`ops/ansible/tests/test_automation.py:39` and `:395`,
+  `py/jinja2/autoescape-false`): the commit that moved the benchmark template
+  and condition pins to Rust removed both Jinja `Environment` constructions.
+  Templates are now rendered and conditions evaluated by Ansible's own command
+  line from `crates/ci/src/automation/pins/benchmark_automation.rs`, and the
+  module's one remaining test imports no Jinja. The flagged calls no longer
+  exist in the file.
 - Alert 25 (fix-pending, `build/release_http_policy.py:273`, the `wrap_socket`
   call now at line 270): the ledger keeps fix-pending records as the 2026-09-30
   observation and grants them no exception. `af2b7502` set the TLS 1.2 minimum,

@@ -1,4 +1,4 @@
-total 139755
+total 139466
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -145,7 +145,7 @@ total 139755
 543	ops/ansible/files/seed_public_room.py
 581	ops/ansible/files/turn_public.py
 20	ops/ansible/filter_plugins/sizing.py
-433	ops/ansible/tests/test_automation.py
+144	ops/ansible/tests/test_automation.py
 426	ops/ansible/tests/test_backup_offsite.py
 564	ops/ansible/tests/test_bootstrap_controller.py
 344	ops/ansible/tests/test_bounded_process.py
