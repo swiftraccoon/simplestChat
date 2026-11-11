@@ -1,4 +1,4 @@
-total 128805
+total 121036
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -6,8 +6,6 @@ total 128805
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
 1104	build/caddy_probe_vm.py
-2696	build/capacity.py
-169	build/capacity_artifacts.py
 241	build/ci_release_checks.py
 578	build/ci_verified.py
 11	build/deploy.py
@@ -28,7 +26,6 @@ total 128805
 1680	build/release_container_harness.py
 657	build/release_deploy.py
 722	build/release_fetch_controller.py
-12	build/run-vps-capacity.py
 306	build/security_actions.py
 461	build/security_archive.py
 244	build/security_awslc.py
@@ -91,8 +88,6 @@ total 128805
 652	build/security_vm_vps_guest.py
 12	build/test-release-container.py
 93	build/verify-release.py
-598	build/vps_capacity_controller.py
-880	build/vps_capacity_remote.py
 772	build/vps_ops_bootstrap.py
 244	ops/ansible/callback_plugins/release_timing.py
 450	ops/ansible/files/backup_offsite.py
@@ -134,10 +129,6 @@ total 128805
 536	ops/ansible/tests/test_caddy_materials.py
 1893	ops/ansible/tests/test_caddy_probe_guest.py
 1077	ops/ansible/tests/test_caddy_probe_vm.py
-1407	ops/ansible/tests/test_capacity.py
-155	ops/ansible/tests/test_capacity_artifacts.py
-129	ops/ansible/tests/test_capacity_container.py
-175	ops/ansible/tests/test_capacity_ownership.py
 352	ops/ansible/tests/test_ci_release_checks.py
 1073	ops/ansible/tests/test_ci_verified.py
 245	ops/ansible/tests/test_database_logging.py
@@ -247,8 +238,6 @@ total 128805
 523	ops/ansible/tests/test_security_vm_vps_guest.py
 75	ops/ansible/tests/test_support.py
 450	ops/ansible/tests/test_turn_public.py
-693	ops/ansible/tests/test_vps_capacity_controller.py
-855	ops/ansible/tests/test_vps_capacity_remote.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py
 6	typings/ansible/parsing/dataloader.pyi
 22	typings/ansible/plugins/callback/__init__.pyi

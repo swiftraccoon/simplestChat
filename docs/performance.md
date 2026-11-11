@@ -873,8 +873,8 @@ The [load-test binary](../load_tests/README.md#build-and-run) provides offline
 `capacity suggest` and `capacity compare` commands for sizing hosts and ranking
 the same workload's reports. They read local files and calculate recommendations
 without starting a runtime, server, container or workload. Their output matches
-the retained [`build/capacity.py`](../build/capacity.py) reference and the managed
-deployment's calculation API.
+the answers recorded from the Python tool they replaced, and the managed
+deployment's group variables carry the same calculation.
 
 The same binary provides `capacity run` for explicit measurements. It needs
 Docker or Podman and the built images on Linux (Podman's VM on a Mac works for

@@ -1,10 +1,10 @@
 //! What this process was given and what that carries, said once at startup so
 //! an operator can see a mis-sized deployment in the first log lines.
 //!
-//! The costs are the reference figures `build/capacity.py` uses (an EPYC-class
+//! The costs are the reference figures `load_test capacity` uses (an EPYC-class
 //! VPS, 2026-09-26): a meeting participant 8 millicores of worker CPU, a
 //! webinar viewer 3, and a room of everyone publishing stops near 28 whatever
-//! the host. `build/capacity.py run` measures a host's own.
+//! the host. `load_test capacity run` measures a host's own.
 
 use std::path::Path;
 

@@ -1844,9 +1844,9 @@ adapters, with no new public library compatibility promise or package metadata.
 
 ## Private VPS capacity operation
 
-The [capacity guide](ansible/CAPACITY.md#rust-controller-and-authenticated-host-operation)
-documents `simplestchat-release vps-capacity`, its mandatory CI artifact selectors, the fixed
-Debian host and the retained Python controller. The public Ops entry points serve
+The [capacity guide](ansible/CAPACITY.md#controller-and-authenticated-host-operation)
+documents `simplestchat-release vps-capacity`, its mandatory CI artifact selectors and the fixed
+Debian host. The public Ops entry points serve
 one framed request or one canonical systemd worker; decoded protocol records
 alone grant no execution authority. No module import starts a workload.
 

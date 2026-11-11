@@ -909,5 +909,5 @@ def main(argv: list[str] | None = None) -> int:
         print("bootstrap: invalid_local_or_remote_metadata", file=sys.stderr)  # noqa: T201
         return 1
     print(f"Bootstrap evidence: {output}")  # noqa: T201 -- Explicit CLI result.
-    print("Inventory maintenance flags remain false; use run-vps-capacity.py for build and tests.")  # noqa: T201
+    print("Maintenance flags remain false; build and test with simplestchat-release vps-capacity.")  # noqa: T201
     return 0

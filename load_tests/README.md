@@ -171,12 +171,13 @@ measurements use `load_test capacity run --server-image IMAGE --generator-image 
 that command starts owned containers under quotas in a shared isolated loopback
 namespace. It preserves ownership and failure evidence, stops verified IDs
 before collection and attempts both removals. See [host sizing](../docs/performance.md#sizing-a-host)
-for prerequisites and measured-workload limits. Python remains the parity
-reference and the managed deployment filter/controller implementation.
-The explicit compiled-command parity check reuses an already-built executable:
+for prerequisites and measured-workload limits. The crate's tests compare the
+commands with the answers recorded from the Python tool they replaced, and
+`tests/capacity_cli.rs` does so for the compiled command. The explicit
+`capacity run` command check reuses an already-built executable:
 
 ```sh
-LOAD_TEST_CAPACITY_BINARY="$PWD/target/release/load_test" node --test load_tests/capacity-parity.test.mjs load_tests/capacity-run-command.test.mjs
+LOAD_TEST_CAPACITY_BINARY="$PWD/target/release/load_test" node --test load_tests/capacity-run-command.test.mjs
 ```
 
 ### Linux container

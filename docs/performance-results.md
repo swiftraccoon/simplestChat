@@ -243,7 +243,9 @@ prepared with the bootstrap guide. The ignored inventory and alias below name
 the test host; substitute your own private benchmark inventory and alias:
 
 ```sh
-ops/ansible/.venv/bin/python build/run-vps-capacity.py \
+# The capacity controller of that revision, a Python script then; see that
+# revision's ops/ansible/CAPACITY.md for how it was started.
+CONTROLLER \
   --inventory ops/ansible/inventory.local.ovh-test.yml --limit ovh_test \
   --revision 47aa837d9cf563b108256ed1cc0ecaaac8eb60ca \
   --prepare --build-images --label ovh-audio150-3w-repro \
@@ -283,7 +285,7 @@ untracked.
 Why the largest webinar lost a few viewers' video (the Mac calibration below
 stopped at 500): each viewer that starts watching asks the presenter for a
 keyframe, and the SFU sends every keyframe to every viewer. Single-size runs of
-[`build/capacity.py`](../build/capacity.py) on the Mac VM (`--workloads webinar
+the capacity tool (a Python script then) on the Mac VM (`--workloads webinar
 --first-size 545 --steps 1`: two workers under 2 CPUs beside a 5.8-CPU
 generator, 4 joins a second, a 30-second warmup and a 60-second window) varied
 `MEDIA_KEYFRAME_REQUEST_DELAY_MS`, mediasoup's per-stream coalescing of those
@@ -321,7 +323,7 @@ over 12 ms. The server now defaults to 1000 ms, which fails no more often than
 
 ## The VPS calibrated on its own cores — 2026-09-26
 
-[`build/capacity.py`](../build/capacity.py) on the production host (4 AMD EPYC
+The capacity tool (a Python script then) on the production host (4 AMD EPYC
 7R13 vCPUs, 12 GiB, KVM) as a transient unit beside the live app, with owned
 loopback-only containers: the deployed image (`36400e5`, image
 `a760cba6b8b746b6`) and the CI-built load-test image of the same commit
@@ -358,7 +360,7 @@ not the worker's CPU, bounds a webinar on this host.
 
 ## Browser-faithful calibration of the Mac VM — 2026-09-26
 
-The first full run of [`build/capacity.py`](../build/capacity.py) ([sizing a
+The first full run of the capacity tool, a Python script then ([sizing a
 host](performance.md#sizing-a-host)): the 8-CPU, 16 GiB Podman VM on Apple
 silicon, both images built at `ff74dbb` (server `e5f3e35d280946ba`, generator
 `ffd019dfcb980e1d`), every workload on two media workers under a 2-CPU quota

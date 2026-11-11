@@ -145,7 +145,7 @@ set `scpub_transfer_allowance_tb` (and `scpub_transfer_reset_day` when the
 billing period does not start on the first). The monitoring collector totals
 the default interface's traffic per period in both directions, which is how
 providers usually count, and `TransferAllowanceNearlyUsed` fires at 80 % and
-`TransferAllowanceExhausted` at 100 %. `build/capacity.py suggest
+`TransferAllowanceExhausted` at 100 %. `load_test capacity suggest
 --included-egress-tb N` says what an allowance carries in participant-hours;
 for most hosts that, not CPU or the port, is the sustained-use ceiling.
 
@@ -284,7 +284,7 @@ sudo /usr/local/bin/simplestchat-public logs --tail 100 simplestchat caddy
 
 TURN is opt-in; see the managed relay below. Direct and relayed media still need
 checks from real browsers and networks. The sizing derived from the host is a
-starting point, not a measured guarantee: `build/capacity.py run` measures it.
+starting point, not a measured guarantee: `load_test capacity run` measures it.
 
 ## Managed TURN on the same VPS
 

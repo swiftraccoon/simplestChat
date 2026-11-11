@@ -1,4 +1,4 @@
-//! Ordered Serde records written with the retained Python report's JSON framing.
+//! Ordered Serde records written with the retired Python report's JSON framing.
 //!
 //! JSON float handling is explicit: zero-price reports contain Infinity, and
 //! Python's scientific exponents and ASCII escapes are part of the reference.

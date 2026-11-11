@@ -1,32 +1,30 @@
 # Automated private VPS capacity measurements
 
-`build/run-vps-capacity.py` prepares an exact source revision, builds its images,
-runs a bounded capacity experiment and collects the evidence on the controller.
-It uses the existing Ansible playbook, image-build service and
-[`build/capacity.py`](../../build/capacity.py) measurement engine. Preparation and
-image building are explicit options; each measurement creates a new run.
+`simplestchat-release vps-capacity` prepares an exact source revision, builds
+its images, runs a bounded capacity experiment and collects the evidence on the
+controller. It uses the existing Ansible playbook, the image-build service and
+the `load_test capacity run` measurement engine, through an explicitly selected
+signed Ops artifact. Preparation and image building are explicit options; each
+measurement creates a new run.
 
-The Rust `simplestchat-release vps-capacity` operation uses the same workload policy and the
-capacity engine through an explicitly selected signed Ops artifact. It owns
-preparation, SSH transport, systemd execution, collection, recovery and local
-evidence extraction. The Python controller remains available; Ansible still
-provisions the host. The standalone host binary targets Debian
-13/x86_64 with systemd. Fedora runtime images remain separate measured workload
-inputs and do not establish the host executable's ABI compatibility.
+The controller owns preparation, SSH transport, systemd execution, collection,
+recovery and local evidence extraction; Ansible still provisions the host. The
+standalone host binary targets Debian 13/x86_64 with systemd. Fedora runtime
+images remain separate measured workload inputs and do not establish the host
+executable's ABI compatibility.
 
-The pure request parser keeps Python's integer/float distinction, finite quota
-checks and unknown fields. Requests are bounded at 512 KiB and report/inspection
-inputs at 8 MiB, using the existing JSON numeric-token adapter and Serde's bounded
-nesting and Unicode-scalar domain. Unpaired surrogates and deeper JSON are refused;
-parity does not extend to Python's broader decoder domain. Malformed nested NaN
-image values remain unconfirmed; normal engine image identities are strings.
-Unit output is bounded at 16 MiB, matching the two captured streams.
-The future operation owner must also bound aggregate snapshot count and bytes;
+The request parser distinguishes integers from floats, requires finite quotas
+and refuses unknown fields. Requests are bounded at 512 KiB and report/inspection
+inputs at 8 MiB, using the capacity tool's JSON numeric-token adapter and Serde's
+bounded nesting and Unicode-scalar domain. Unpaired surrogates and deeper JSON are
+refused. Malformed nested NaN image values remain unconfirmed; normal engine image
+identities are strings. Unit output is bounded at 16 MiB, matching the two captured
+streams. The operation owner must also bound aggregate snapshot count and bytes;
 per-record limits alone do not establish an aggregate collection budget.
 Argument generation returns only the `run` suffix, so an operation owner
 must select and verify the actual executable. A residual snapshot is evidence of
 ownership; destructive recovery must still re-inspect each immutable ID at the
-last operation boundary, as the Python controller does today.
+last operation boundary.
 
 Use a dedicated private benchmark host prepared with the
 [bootstrap controller](BOOTSTRAP.md), the pinned Ansible Python environment,
@@ -49,7 +47,7 @@ first access belongs to bootstrap. Private keys, inventory and generated
 evidence remain outside tracked source. The controller refuses a public host,
 running containers, active builds or tests, and unfinished cleanup records.
 
-## Rust controller and authenticated host operation
+## Controller and authenticated host operation
 
 Build the controller before supplying its GitHub credential. Select the signed
 Ops artifact from the successful CI attempt for this exact committed revision;
@@ -71,9 +69,9 @@ target/debug/simplestchat-release vps-capacity \
 The controller requires `GH_TOKEN` for authenticated acquisition. It removes
 that credential from SSH, Ansible and workload child environments. The example
 presumes an already prepared host and images; add `--prepare` and
-`--build-images` explicitly when needed. Workload flags retain the Python
-controller's defaults and policy. Running an experiment still requires selecting
-the target, quotas and duration; source tests are not a capacity measurement.
+`--build-images` explicitly when needed; `--help` lists every workload flag with
+its default. Running an experiment still requires selecting the target, quotas
+and duration; source tests are not a capacity measurement.
 
 Each run stages exactly the authenticated manifest, selection and musl binary
 under `/srv/simplestchat-bench/artifacts/ops-runtime.RUN`. The stdlib Python
@@ -103,10 +101,9 @@ whole-response ceiling. Archives are bounded at 512 MiB compressed, 1 GiB
 expanded, 144 MiB per member and 10,000 logical files. Extraction retains the
 shared nofollow namespace limits: each derived absolute directory path is at most
 4,096 bytes and 32 components, with no ASCII controls. Those limits include the
-controller evidence ancestry; arbitrary-depth Python archive acceptance is not
-claimed. Sparse PAX metadata is refused because the selected Rust tar reader
-cannot reproduce that extension's extraction semantics. Canonical host evidence
-contains shallow regular files.
+controller evidence ancestry. Sparse PAX metadata is refused because the selected
+tar reader cannot reproduce that extension's extraction semantics. Canonical host
+evidence contains shallow regular files.
 
 The generated execution inventory explicitly replaces `scbench_revision` with
 the selected revision. Original operator bytes remain retained and checked. YAML
@@ -121,9 +118,11 @@ $12.32 monthly price. Replace the inventory and alias with your own private
 benchmark host. Port speed and price are planning inputs, not measurements.
 
 ```sh
-ops/ansible/.venv/bin/python build/run-vps-capacity.py \
+target/debug/simplestchat-release vps-capacity \
   --inventory ops/ansible/inventory.local.test.yml --limit test_vps \
   --revision "$(git rev-parse HEAD)" \
+  --ops-ci-run "$OPS_CI_RUN_ID" --ops-run-attempt "$OPS_RUN_ATTEMPT" \
+  --ops-artifact "$OPS_ARTIFACT_ID" \
   --prepare --build-images --label audio30-one-worker \
   --workload meetings --first-size 30 --steps 1 --meeting-size 30 \
   --speakers 30 --audio-only --chat-interval-ms 30000 \
@@ -294,9 +293,12 @@ and original source revision. Collection waits for the existing unit to finish,
 then retrieves its results without starting another measurement:
 
 ```sh
-ops/ansible/.venv/bin/python build/run-vps-capacity.py \
+target/debug/simplestchat-release vps-capacity \
   --inventory ops/ansible/inventory.local.test.yml --limit test_vps \
-  --revision ORIGINAL_FULL_COMMIT --collect ORIGINAL_32_CHARACTER_RUN_ID
+  --revision ORIGINAL_FULL_COMMIT \
+  --ops-ci-run "$OPS_CI_RUN_ID" --ops-run-attempt "$OPS_RUN_ATTEMPT" \
+  --ops-artifact "$OPS_ARTIFACT_ID" \
+  --collect ORIGINAL_32_CHARACTER_RUN_ID
 ```
 
 When the unit has stopped but verified owned containers remain, use `--recover`
@@ -313,22 +315,17 @@ them with `--prepare` or `--build-images`, and do not delete journals or locks t
 bypass a refusal. Host failure and reboot can erase `/run` state; retain the
 durable evidence and inspect ownership before performing another experiment.
 
-## Verify container integration locally
+## Verify the controller and worker offline
 
-The ordinary helper suite tests invalid archive metadata, output overflow,
-inventory mutation and lease loss with isolated fixtures. An additional opt-in
-check starts a real server and a tiny result-writing container using reviewed,
-already available immutable images. It verifies isolated HTTP, read-only roots,
-archive collection and anonymous-volume cleanup; it starts no media load and
-does not claim capacity or image provenance:
+The controller, host worker and measurement engine have their own suites. They
+test invalid archive metadata, output overflow, changed inventory or source and
+lease loss with isolated fixtures, and start no container or remote command:
 
 ```sh
-CAPACITY_CONTAINER_TEST=1 CAPACITY_ENGINE=docker \
-CAPACITY_SERVER_IMAGE=sha256:REPLACE_WITH_SERVER_IMAGE_ID \
-CAPACITY_GENERATOR_IMAGE=sha256:REPLACE_WITH_GENERATOR_IMAGE_ID \
-ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p 'test_capacity_container.py'
+cargo test --locked -p simplestchat-release capacity_vps -- --test-threads=1
+cargo test --locked -p simplestchat-ops capacity_vps -- --test-threads=1
+cargo test --locked -p simplestchat-load-test capacity
 ```
 
-Use `CAPACITY_ENGINE=podman` for an existing local Podman VM. The check never
-pulls images or changes unrelated containers, networks or volumes.
+They establish neither capacity nor image provenance; only a measurement on the
+host does.

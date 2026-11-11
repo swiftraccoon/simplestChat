@@ -23,9 +23,9 @@ use the capacity runner on a disposable host to validate the intended workload
 before admitting that many users. The runner generates load and is a separate,
 explicitly operated measurement step, not part of ordinary setup.
 
-The Rust `load_test capacity suggest` adviser preserves `build/capacity.py`'s
-calculation; the managed Ansible deployment uses that Python reference through
-a controller-side filter. Oracle tests compare their results. The model bounds meeting and webinar
+The `load_test capacity suggest` adviser and the managed Ansible deployment's
+group variables carry the same calculation; tests compare both with the answers
+recorded from the Python model they replaced. The model bounds meeting and webinar
 estimates by CPU, measured per-participant memory with a twofold allowance, and
 80% of the sold network port. Default workers are bounded at 64 and generated
 room ceilings at 10,000, matching runtime constraints. A calibrated
