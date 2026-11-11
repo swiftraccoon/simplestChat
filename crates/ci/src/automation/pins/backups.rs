@@ -231,3 +231,121 @@ fn infrastructure_guest_receives_the_source_built_ops_executable() {
     );
     assert!(position(build["name"].as_str().unwrap()) < applied);
 }
+
+/// The offsite playbook requires the executable too, verifies the host
+/// through it, and copies nothing but the reviewed verification statement
+/// beside it.
+#[test]
+fn offsite_backup_installs_only_the_verification_statement() {
+    let play = play("ops/ansible/backup-offsite.yml");
+    let pre_tasks = section(&play, "pre_tasks");
+    assert_eq!(
+        names(pre_tasks),
+        [
+            "Require an explicit SFTP repository and private controller credential files",
+            LOOK,
+            REQUIRE,
+            "Verify the prepared public host before installing anything",
+        ]
+    );
+    requirement(pre_tasks, "scpub_offsite_ops");
+    let preflight = &pre_tasks[3];
+    assert_eq!(
+        preflight["ansible.builtin.command"],
+        json!({"argv": [OPS, "release", "preflight"]})
+    );
+    assert_eq!(preflight["changed_when"], false);
+    assert_eq!(preflight["check_mode"], false);
+    let tasks = section(&play, "tasks");
+    assert_eq!(
+        names(tasks),
+        [
+            "Install the pinned Debian archive client",
+            "Create private offsite settings",
+            "Install explicit credentials and supplied host-key trust without logging values",
+            "Install the current offsite repository settings",
+            "Install the reviewed restore verification statement",
+            "Install bounded upload and restore units",
+            "Enable the explicit offsite schedules",
+        ]
+    );
+    let statement = named(tasks, "Install the reviewed restore verification statement");
+    assert_eq!(
+        statement["ansible.builtin.copy"],
+        json!({
+            "src": "restore-verify.sql",
+            "dest": "/usr/local/libexec/simplestchat-public/restore-verify.sql",
+            "owner": "root", "group": "root", "mode": "0644",
+        })
+    );
+    assert!(statement.get("loop").is_none());
+    assert_eq!(tasks[2]["no_log"], true);
+    let text = checkout_file("ops/ansible/backup-offsite.yml");
+    for absent in ["python", ".py"] {
+        assert!(!text.contains(absent), "{absent}");
+    }
+}
+
+/// From `test_service_recovers_after_exit_and_schedules_do_not_overlap`: each
+/// unit runs its own action and always the bounded recovery afterwards, both
+/// through the executable, and the two schedules keep separate windows.
+#[test]
+fn offsite_units_run_and_recover_through_the_ops_executable() {
+    let source = super::ansible::root().join("ops/ansible/templates");
+    let mut tasks = Vec::new();
+    for action in ["upload", "restore"] {
+        for kind in ["service", "timer"] {
+            tasks.push(json!({
+                "ansible.builtin.template": {
+                    "src": format!("{}/backup-offsite.{kind}.j2", source.to_str().unwrap()),
+                    "dest": format!("{{{{ scratch }}}}/{action}.{kind}"),
+                    "mode": "0600",
+                },
+                "vars": {"item": {"action": action, "kind": kind}},
+            }));
+        }
+    }
+    let scratch = super::ansible::play(&json!(tasks), &json!({}), &[]);
+    let rendered = |name: &str| std::fs::read_to_string(scratch.path().join(name)).unwrap();
+    for action in ["upload", "restore"] {
+        let service = rendered(&format!("{action}.service"));
+        let lines: Vec<&str> = service.lines().collect();
+        let start = format!("ExecStart={OPS} backup offsite {action}");
+        let recover = format!("ExecStopPost={OPS} backup offsite recover");
+        for kept in [
+            start.as_str(),
+            recover.as_str(),
+            "Type=oneshot",
+            "RuntimeDirectory=simplestchat-bench",
+            "RuntimeDirectoryPreserve=yes",
+            "UMask=0077",
+            "TimeoutStartSec=2100",
+            "TimeoutStopSec=180",
+            "ProtectSystem=strict",
+            "ReadWritePaths=/var/lib/simplestchat-monitoring /run/simplestchat-bench",
+        ] {
+            assert!(lines.contains(&kept), "{action}: {kept}");
+        }
+        assert_eq!(
+            lines.iter().filter(|line| line.starts_with("Exec")).count(),
+            2
+        );
+        assert!(!service.contains("python"));
+    }
+    let upload = rendered("upload.timer");
+    let restore = rendered("restore.timer");
+    assert!(
+        upload
+            .lines()
+            .any(|line| line == "OnCalendar=*-*-* 04:30:00 UTC")
+    );
+    assert!(
+        restore
+            .lines()
+            .any(|line| line == "OnCalendar=Sun *-*-* 06:00:00 UTC")
+    );
+    for timer in [&upload, &restore] {
+        assert_eq!(timer.matches("OnCalendar=").count(), 1);
+        assert!(timer.lines().any(|line| line == "Persistent=true"));
+    }
+}

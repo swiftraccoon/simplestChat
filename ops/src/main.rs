@@ -52,7 +52,9 @@ const USAGE: &str = concat!(
     "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
     "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
     "       simplestchat-ops database logging disable\n",
-    "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]",
+    "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
+    "       simplestchat-ops backup offsite upload|restore|recover ",
+    "[--snapshot ID] [--stamp STAMP]",
 );
 
 fn main() -> ExitCode {

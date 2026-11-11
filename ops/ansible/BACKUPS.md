@@ -50,8 +50,12 @@ scpub_backup_restore_data_mib: 256
 
 The playbook transfers the supplied files without logging their contents and
 installs them as root-owned 0600 files beneath `/etc/simplestchat-backup` (0700).
-It installs both timers but does not perform a deployment or restore into the
-application database:
+It copies no helper program to the host: both units run the installed Ops
+executable (`simplestchat-ops backup offsite upload|restore|recover`), so the
+playbook requires the executable a signed release delivered and refuses a
+host without one. Beside it the playbook installs only the reviewed
+`restore-verify.sql`. It installs both timers but does not perform a
+deployment or restore into the application database:
 
 ```sh
 ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
@@ -78,15 +82,15 @@ sudo systemctl start simplestchat-backup-restore.service
 Uploads accept only a verified nightly receipt whose archive is at most
 36 hours old. The receipt records the archive hash and size, the exact
 PostgreSQL image and the applied migration versions/checksums. Restic encrypts
-both the archive and its receipt. The helper records the full snapshot ID and
+both the archive and its receipt. The command records the full snapshot ID and
 repository identity in `/var/lib/simplestchat-monitoring/offsite-latest.json`;
 selection never uses an ambiguous `latest` lookup against arbitrary repository
 contents. No remote snapshots are deleted or pruned by this workflow. Configure
 storage-side retention, capacity and deletion protection separately.
 
 A restore retrieves the selected receipt and archive through `restic dump`.
-A streaming byte ceiling bounds each download before it is written. The helper checks private file
-ownership, type and mode, the receipt schema, archive size and SHA256 before
+A streaming byte ceiling bounds each download before it is written. The
+command checks private file ownership, type and mode, the receipt schema, archive size and SHA256 before
 running PostgreSQL. The isolated restore uses the exact recorded local image
 with `--pull never`, restores every archive section, compares the migration
 ledger, checks table/constraint/role invariants and runs `pg_amcheck`. It deletes
@@ -110,8 +114,8 @@ drill after growth. An archive, expanded database or process that exceeds its
 bound fails verification; it does not produce a success timestamp. Downloads
 reserve their configured maximum plus 1 GiB of local free space.
 
-All installed helper commands stream stdout and stderr under live byte limits;
-ordinary command output is capped at 2 MiB per stream. An explicit archive
+Every command the executable issues streams stdout and stderr under live byte
+limits; ordinary command output is capped at 2 MiB per stream. An explicit archive
 output path allows at most 4 GiB, further restricted by its configured download
 limit and the initial free space less a 1 GiB reserve. Nightly and release dumps
 use this same archive ceiling. An overflow cancels the owned process group,
@@ -124,7 +128,7 @@ are not automatically pruned. They contain archive identities, operational
 metadata and potentially private error output; keep them on the private host.
 A command timeout stops the owned local process group. The next restore refuses
 an unrelated retained restore container. Each offsite operation first records an
-unfinished canonical ownership journal, so an abrupt worker termination blocks
+unfinished canonical ownership journal, so an abrupt termination blocks
 release and benchmark admission. The service's `ExecStopPost` and the next offsite
 invocation recover that exact attempt: they verify the recorded container name,
 label, image and full ID before removing it, remove only recognized private
@@ -132,14 +136,14 @@ download files, and finalize the journal only after cleanup succeeds. Recovery
 does not turn the original failure into a successful upload or restore.
 
 To recover without starting a new upload or reading repository credentials, use
-the installed worker:
+the installed executable:
 
 ```sh
-sudo /usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_offsite.py recover
+sudo /usr/local/libexec/simplestchat-public/simplestchat-ops backup offsite recover
 ```
 
 An ownership mismatch remains blocked with private evidence for investigation;
-the helper never deletes every container sharing a label. Release backups from
+the command never deletes every container sharing a label. Release backups from
 before the recorded-ledger contract are rejected rather than interpreted through
 an older format.
 
@@ -160,7 +164,7 @@ the lost application VPS's state:
 ```sh
 sudo systemd-run --unit=simplestchat-offsite-drill \
   --property=Type=exec --property=RuntimeMaxSec=2100 --property=TimeoutStopSec=45 --wait \
-  /usr/bin/python3 -E -s -B /usr/local/libexec/simplestchat-public/backup_offsite.py \
+  /usr/local/libexec/simplestchat-public/simplestchat-ops backup offsite \
   restore --snapshot FULL_64_CHARACTER_SNAPSHOT_ID --stamp YYYYMMDDTHHMMSSZ
 ```
 

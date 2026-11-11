@@ -1,4 +1,4 @@
-total 110941
+total 110065
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -85,7 +85,6 @@ total 110941
 93	build/verify-release.py
 772	build/vps_ops_bootstrap.py
 241	ops/ansible/callback_plugins/release_timing.py
-450	ops/ansible/files/backup_offsite.py
 209	ops/ansible/files/backup_public.py
 291	ops/ansible/files/bounded_process.py
 60	ops/ansible/files/browser_assets.py
@@ -110,7 +109,6 @@ total 110941
 7	ops/ansible/files/seed-public-room.py
 543	ops/ansible/files/seed_public_room.py
 581	ops/ansible/files/turn_public.py
-426	ops/ansible/tests/test_backup_offsite.py
 344	ops/ansible/tests/test_bounded_process.py
 188	ops/ansible/tests/test_browser_assets_command.py
 536	ops/ansible/tests/test_caddy_materials.py

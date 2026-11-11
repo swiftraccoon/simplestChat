@@ -15,7 +15,8 @@ release preflight checks the fixed host paths without executing installed helper
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
 The monitoring timers, the monitoring playbook's own steps, the database
-logging remediation and the nightly backup run through this executable as well.
+logging remediation, the nightly backup and the offsite upload and restore
+drill run through this executable as well.
 The separate Ops install/upgrade commands publish one original-pinned executable
 at its fixed helper path. Both signed host callers authenticate its
 delivery through the native controller before that executable runs. The Python
@@ -1985,6 +1986,58 @@ The Python helper's answers for 56 invocations are recorded in
 commands, archives, receipts and journal. `backup_public.py` itself stays in
 the tree, frozen, until the migration cutover and the infrastructure proof's
 guest stop importing it.
+
+## Offsite upload and restore drill
+
+The offsite units run these commands by the executable's installed path; the
+[backup guide](ansible/BACKUPS.md) is the operator's description. Each
+requires root on the prepared host and holds the shared workload lock.
+
+```sh
+simplestchat-ops backup offsite upload
+simplestchat-ops backup offsite restore [--snapshot ID --stamp STAMP]
+simplestchat-ops backup offsite recover
+```
+
+Settings and credentials are read only from `/etc/simplestchat-backup`: a
+strict eight-field `settings.json` and three private non-empty files that
+only the repository client and its SSH transport open. The client runs with
+no cache, strict host keys from the supplied file, no agent, no inherited SSH
+configuration and no password prompt.
+
+`upload` sends the newest validated nightly archive, at most a day and a half
+old, with its receipt, and records the exact 64-character snapshot identity
+the repository reports in
+`/var/lib/simplestchat-monitoring/offsite-latest.json`. `restore` takes that
+record, or an explicit snapshot and archive timestamp, retrieves the receipt
+and the archive under byte ceilings into a private directory of its attempt,
+validates them, and restores the archive in a disposable container of the
+archive's own PostgreSQL image: no network, memory filesystems only, the
+configured memory and data ceilings. It compares the restored migration
+ledger with the receipt's, runs the reviewed `restore-verify.sql` and
+`pg_amcheck`, removes the one container it created after checking its name,
+label, image and identity, and only then writes `outcome.json` and
+`restore-verified.timestamp`. The downloaded plaintext never outlives the
+attempt.
+
+Each attempt has a directory under
+`/var/lib/simplestchat-monitoring/offsite/` with the numbered private output
+of every command, and names itself in `/run/simplestchat-bench/current.json`
+until it finishes. Every other operation refuses that unfinished record.
+These three commands alone may take it over: before anything else they remove
+the exact container a restore recorded, refuse a labeled container no record
+names, remove only the attempt's recognized downloads and finalize the
+journal as not passed. `recover` does only that. A failed upload or restore
+recovers itself the same way before reporting its failure.
+
+The Python helper's answers for 125 invocations are recorded in
+`ops/src/backup/recorded_offsite.json`, each command with the answer it got.
+The test replays them request by request: every command must be the recorded
+one, and every invocation must leave the recorded selection, evidence,
+downloads and journal. The isolated verification here serves the drill;
+`release backup verify` remains the verifier of a release attempt's backup,
+and `restore_verify.py` stays in the tree, frozen, for the restore proofs'
+guests that still import it.
 
 
 ## Offline server attestation preparation

@@ -4,7 +4,9 @@
 //! workload lock, and takes no host, statement or path argument.
 
 mod nightly;
+mod offsite;
 pub(crate) mod receipts;
+mod restore;
 
 use crate::host::command::Interruptible;
 use crate::host::failure::{Failure, Result, require};
@@ -17,6 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const FAILED: &str = "Nightly backup failed; inspect the private backup logs and journals.\n";
+const OFFSITE_FAILED: &str = "Offsite operation failed; inspect private evidence and settings.\n";
 
 /// The request `arguments` spell, or nothing when they are not one: an
 /// action, then each retention option at most once with a whole number.
@@ -78,21 +81,89 @@ fn execute(
     Ok(line)
 }
 
-/// Run `backup nightly|cleanup` on the prepared host. A syntax error returns
-/// 2 before any effect; every other failure is one fixed line.
-pub fn run(arguments: &[OsString]) -> ExitCode {
-    let Some(request) = parse(arguments) else {
-        return ExitCode::from(2);
+/// The offsite request `arguments` spell after `offsite`, or nothing when
+/// they are not one: an action, then each selector at most once.
+fn parse_offsite(arguments: &[OsString]) -> Option<offsite::Request> {
+    let mut words = arguments.iter().map(|word| word.to_str());
+    let action = match words.next()?? {
+        "upload" => offsite::Action::Upload,
+        "restore" => offsite::Action::Restore,
+        "recover" => offsite::Action::Recover,
+        _ => return None,
     };
+    let (mut snapshot, mut stamp) = (None, None);
+    while let Some(word) = words.next() {
+        let word = word?;
+        let (name, value) = match word.split_once('=') {
+            Some(pair) => pair,
+            None => (word, words.next()??),
+        };
+        let slot = match name {
+            "--snapshot" => &mut snapshot,
+            "--stamp" => &mut stamp,
+            _ => return None,
+        };
+        if slot.is_some() {
+            return None;
+        }
+        *slot = Some(value.to_owned());
+    }
+    Some(offsite::Request {
+        action,
+        snapshot: snapshot.unwrap_or_default(),
+        stamp: stamp.unwrap_or_default(),
+    })
+}
+
+/// Run one offsite request under the workload lock taken through `lock`.
+/// The offsite owner may take over its own unfinished record to resolve it.
+fn execute_offsite(
+    host: &Host<'_>,
+    request: &offsite::Request,
+    privileged: bool,
+    lock: impl FnOnce(Takeover<'_>) -> std::result::Result<Workload, assets::Failure>,
+) -> Result<&'static str> {
+    require(privileged, "Offsite backup requires root")?;
+    let workload = lock(Takeover::Offsite).map_err(|_| Failure::Os)?;
+    let outcome = offsite::run(host, request);
+    let released = workload.finish().map_err(|_| Failure::Os);
+    let line = outcome?;
+    released?;
+    Ok(line)
+}
+
+/// Run `backup nightly|cleanup` or `backup offsite upload|restore|recover`
+/// on the prepared host. A syntax error returns 2 before any effect; every
+/// other failure is one fixed line.
+pub fn run(arguments: &[OsString]) -> ExitCode {
+    let offsite = match arguments.split_first() {
+        Some((family, rest)) if family == "offsite" => match parse_offsite(rest) {
+            Some(request) => Some(request),
+            None => return ExitCode::from(2),
+        },
+        _ => None,
+    };
+    let nightly = if offsite.is_none() {
+        parse(arguments)
+    } else {
+        None
+    };
+    if offsite.is_none() && nightly.is_none() {
+        return ExitCode::from(2);
+    }
     // Everything a backup creates is private to root.
     rustix::process::umask(rustix::fs::Mode::from_raw_mode(0o077));
     let stop = Arc::new(AtomicBool::new(false));
     let handled = [signal_hook::consts::SIGTERM, signal_hook::consts::SIGINT]
         .iter()
         .all(|signal| signal_hook::flag::register(*signal, Arc::clone(&stop)).is_ok());
+    let (refusal, failed) = match offsite {
+        Some(_) => ("Offsite backup interrupted", OFFSITE_FAILED),
+        None => ("Nightly backup interrupted", FAILED),
+    };
     let commands = Interruptible {
         stop: &stop,
-        refusal: "Nightly backup interrupted",
+        refusal,
     };
     let clock = System::new();
     let host = Host {
@@ -102,10 +173,13 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
         owner: 0,
     };
     let privileged = rustix::process::geteuid().is_root();
-    let outcome = if handled {
-        execute(&host, request, privileged, Workload::acquire_for)
-    } else {
-        Err(Failure::Os)
+    let outcome = match (handled, &offsite, nightly) {
+        (true, Some(request), _) => {
+            let line = execute_offsite(&host, request, privileged, Workload::acquire_for);
+            line.map(|line| Some(line.to_owned()))
+        }
+        (true, None, Some(request)) => execute(&host, request, privileged, Workload::acquire_for),
+        _ => Err(Failure::Os),
     };
     let interrupted = stop.load(Ordering::SeqCst);
     let printed = !interrupted
@@ -113,7 +187,7 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
     if printed {
         return ExitCode::SUCCESS;
     }
-    let _ = emit(std::io::stderr(), FAILED);
+    let _ = emit(std::io::stderr(), failed);
     ExitCode::FAILURE
 }
 
@@ -131,10 +205,12 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
-    const TOPS: [(&str, &str); 3] = [
+    const TOPS: [(&str, &str); 5] = [
         ("srv", "srv/simplestchat-public"),
         ("etc", "etc/simplestchat-public"),
         ("run", "run/simplestchat-bench"),
+        ("offsite", "offsite"),
+        ("state", "state"),
     ];
 
     /// Where a recorded path lives under the scratch root: the recorder's
@@ -157,7 +233,8 @@ mod tests {
     /// Build the recorded tree, then give every entry its recorded age.
     fn build(base: &Path, tree: &serde_json::Map<String, Value>, epoch: i64) {
         chmod(base, 0o700);
-        for (top, _) in TOPS {
+        // The lock's three directories have a parent of their own.
+        for (top, _) in TOPS.iter().filter(|(_, fixed)| fixed.contains('/')) {
             std::fs::DirBuilder::new()
                 .mode(0o700)
                 .create(base.join(top))
@@ -182,8 +259,12 @@ mod tests {
                 continue;
             }
             chmod(&path, mode(entry));
+            // An entry without a recorded age keeps the one it just got.
+            let Some(age) = entry["mtime"].as_i64() else {
+                continue;
+            };
             let stamp = rustix::fs::Timespec {
-                tv_sec: epoch + entry["mtime"].as_i64().unwrap(),
+                tv_sec: epoch + age,
                 tv_nsec: 0,
             };
             let times = rustix::fs::Timestamps {
@@ -193,6 +274,23 @@ mod tests {
             rustix::fs::utimensat(rustix::fs::CWD, &path, &times, rustix::fs::AtFlags::empty())
                 .unwrap();
         }
+    }
+
+    /// The workload lock as another operation that created it holds it.
+    fn held_lock(base: &Path) -> std::fs::File {
+        let work = base.join("run/simplestchat-bench");
+        if !work.exists() {
+            std::fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&work)
+                .unwrap();
+        }
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true).mode(0o600);
+        let lock = options.open(work.join("workload.lock")).unwrap();
+        let exclusive = rustix::fs::FlockOperation::NonBlockingLockExclusive;
+        rustix::fs::flock(&lock, exclusive).unwrap();
+        lock
     }
 
     /// The tree as the recorder listed it: recorded name to kind and content.
@@ -206,7 +304,9 @@ mod tests {
                     .find(|(_, fixed)| target.starts_with(base.join(fixed)))
                     .unwrap();
                 let rest = target.strip_prefix(base.join(fixed)).unwrap();
-                format!("link:{top}/{}", rest.display())
+                let rest = rest.to_str().unwrap();
+                let separator = if rest.is_empty() { "" } else { "/" };
+                format!("link:{top}{separator}{rest}")
             } else if metadata.is_dir() {
                 "directory".to_owned()
             } else {
@@ -358,20 +458,7 @@ mod tests {
                 },
                 owner: uid,
             };
-            // Another operation holds the lock it created.
-            let holder = (scenario["busy"] == true).then(|| {
-                let work = base.join("run/simplestchat-bench");
-                std::fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(&work)
-                    .unwrap();
-                let mut options = std::fs::OpenOptions::new();
-                options.write(true).create_new(true).mode(0o600);
-                let lock = options.open(work.join("workload.lock")).unwrap();
-                let exclusive = rustix::fs::FlockOperation::NonBlockingLockExclusive;
-                rustix::fs::flock(&lock, exclusive).unwrap();
-                lock
-            });
+            let holder = (scenario["busy"] == true).then(|| held_lock(base));
             let privileged = scenario["euid"] == 0;
             let outcome = execute(&host, request, privileged, |takeover| {
                 Workload::fixture_for(base, uid, takeover)
@@ -447,6 +534,288 @@ mod tests {
                 let source = ours.source.as_deref().map(file);
                 assert_eq!(source.as_deref(), theirs["input"].as_str(), "{name}");
                 assert!(ours.input.is_none(), "{name}");
+            }
+        }
+    }
+
+    /// The recorder's placeholders for names that are random on a host.
+    fn normalized(text: &str, base: &Path) -> String {
+        let mut text = text.replace(base.to_str().unwrap(), "<base>");
+        // The lock's fixed directories stand where the recorder had one each.
+        for (top, fixed) in TOPS {
+            text = text.replace(fixed, top);
+        }
+        for prefix in [
+            "upload.",
+            "restore.",
+            "download.",
+            "recovery.",
+            "scpub-restore-",
+        ] {
+            let length = if prefix.ends_with('-') { 32 } else { 8 };
+            let placeholder = if prefix.ends_with('-') {
+                "<id>"
+            } else {
+                "<name>"
+            };
+            let mut rebuilt = String::new();
+            let mut rest = text.as_str();
+            while let Some(at) = rest.find(prefix) {
+                let after = &rest[at + prefix.len()..];
+                let unique = after.get(..length).filter(|unique| {
+                    unique.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+                });
+                rebuilt.push_str(&rest[..at + prefix.len()]);
+                match unique {
+                    Some(_) => {
+                        rebuilt.push_str(placeholder);
+                        rest = &after[length..];
+                    }
+                    None => rest = after,
+                }
+            }
+            rebuilt.push_str(rest);
+            text = rebuilt;
+        }
+        text
+    }
+
+    /// A recorded text with its placeholders made concrete for this run.
+    fn concrete(text: &str, base: &Path) -> String {
+        let mut text = text.to_owned();
+        for (top, fixed) in TOPS {
+            text = text.replace(&format!("<base>/{top}"), &format!("<base>/{fixed}"));
+        }
+        text.replace("<base>", base.to_str().unwrap())
+            .replace(".<name>", ".abcd1234")
+            .replace("<id>", &"1".repeat(32))
+    }
+
+    /// A long body the recorder spelled as a repeat, or a literal one.
+    fn body(spelled: &Value) -> String {
+        match spelled.as_str() {
+            Some(text) => text.to_owned(),
+            None => spelled["repeat"]
+                .as_str()
+                .unwrap()
+                .repeat(usize::try_from(spelled["count"].as_u64().unwrap()).unwrap()),
+        }
+    }
+
+    /// One hundred and twenty-five recorded invocations of the Python
+    /// offsite helper, replayed request by request: each command the Rust
+    /// issues must be the recorded one, and receives the recorded answer.
+    /// Each invocation is admitted or refused as recorded and leaves the
+    /// recorded settings, selection, evidence, downloads and journal.
+    #[test]
+    fn every_recorded_offsite_invocation_is_replayed_request_by_request() {
+        let recorded: Value =
+            serde_json::from_str(include_str!("backup/recorded_offsite.json")).unwrap();
+        #[expect(clippy::cast_possible_truncation, reason = "a whole number of seconds")]
+        let epoch = recorded["epoch"].as_f64().unwrap() as i64;
+        let scenarios = recorded["scenarios"].as_array().unwrap();
+        assert_eq!(scenarios.len(), 125);
+        let uid = rustix::process::geteuid().as_raw();
+        let statements = Path::new(env!("CARGO_MANIFEST_DIR")).join("ansible/files");
+        let restic: Vec<&str> = recorded["restic"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|word| word.as_str().unwrap())
+            .collect();
+        for scenario in scenarios {
+            let name = scenario["name"].as_str().unwrap();
+            let arguments = scenario["arguments"].as_array().unwrap();
+            let arguments: Vec<OsString> = arguments
+                .iter()
+                .map(|word| word.as_str().unwrap().into())
+                .collect();
+            let status = scenario["status"].as_i64().unwrap();
+            let Some(request) = parse_offsite(&arguments) else {
+                assert_eq!(status, 2, "{name}");
+                continue;
+            };
+            assert_ne!(status, 2, "{name}");
+            let scratch = Scratch::new();
+            let base = scratch.path();
+            let before =
+                &recorded["trees"][usize::try_from(scenario["before"].as_u64().unwrap()).unwrap()];
+            let before = before.as_object().unwrap();
+            // The recorded tree with its placeholders made concrete.
+            let mut started = serde_json::Map::new();
+            for (path, entry) in before {
+                let mut entry = entry.clone();
+                for key in ["text", "link"] {
+                    if let Some(text) = entry[key].as_str() {
+                        entry[key] = Value::String(concrete(text, base));
+                    }
+                }
+                started.insert(concrete(path, base), entry);
+            }
+            build(base, &started, epoch);
+            let calls = scenario["calls"].as_array().unwrap();
+            let position = std::cell::Cell::new(0_usize);
+            let container = std::cell::RefCell::new("1".repeat(32));
+            let commands = Scripted::new(|asked: &Asked<'_>| {
+                let call = calls
+                    .get(position.get())
+                    .unwrap_or_else(|| panic!("{name}: an unrecorded command {:?}", asked.argv));
+                position.set(position.get() + 1);
+                if let Some(at) = asked.argv.iter().position(|word| word == "create") {
+                    let unique = asked.argv[at + 2].strip_prefix("scpub-restore-").unwrap();
+                    container.replace(unique.to_owned());
+                }
+                // As on a host, both files exist from before the command starts.
+                let private = |path: &Path| {
+                    let mut options = std::fs::OpenOptions::new();
+                    options
+                        .write(true)
+                        .create_new(true)
+                        .mode(0o600)
+                        .open(path)
+                        .unwrap()
+                };
+                let mut output = private(asked.archive.unwrap());
+                private(asked.errors.unwrap());
+                let said = match &call["written"] {
+                    Value::Null => call["answer"].as_str().unwrap_or_default().to_owned(),
+                    spelled => body(spelled),
+                };
+                let said = said
+                    .replace("<id>", &container.borrow())
+                    .replace("<base>", base.to_str().unwrap());
+                let most = usize::try_from(asked.ceiling.unwrap())
+                    .unwrap()
+                    .min(said.len());
+                output.write_all(&said.as_bytes()[..most]).unwrap();
+                match call["raises"].as_str() {
+                    Some("timeout") => Err(Failure::Timeout),
+                    Some("command") => Err(Failure::Command),
+                    Some("limit") => Err(Failure::Refused("command_stdout_limit_exceeded")),
+                    _ => Ok(Vec::new()),
+                }
+            });
+            commands.free.set(scenario["free"].as_u64());
+            let clock = Fixed::at(recorded["now"].as_str().unwrap());
+            clock.tick.set(Duration::from_millis(250));
+            let host = Host {
+                commands: &commands,
+                clock: &clock,
+                paths: Paths {
+                    root: base.join("srv/simplestchat-public"),
+                    work: base.join("run/simplestchat-bench"),
+                    offsite: base.join("offsite"),
+                    state: base.join("state"),
+                    sql: statements.clone(),
+                    ..paths(base)
+                },
+                owner: uid,
+            };
+            let holder = (scenario["busy"] == true).then(|| held_lock(base));
+            let privileged = scenario["euid"] == 0;
+            let outcome = execute_offsite(&host, &request, privileged, |takeover| {
+                Workload::fixture_for(base, uid, takeover)
+            });
+            drop(holder);
+            match &outcome {
+                Ok(line) => {
+                    assert_eq!(status, 0, "{name}");
+                    assert_eq!(*line, scenario["stdout"].as_str().unwrap(), "{name}");
+                }
+                Err(_) => {
+                    assert_eq!(status, 1, "{name}: {outcome:?}");
+                    assert_eq!(
+                        scenario["stderr"].as_str().unwrap(),
+                        OFFSITE_FAILED,
+                        "{name}"
+                    );
+                }
+            }
+            // The recorded end tree: the start tree with what changed.
+            let mut after = before.clone();
+            for removed in scenario["removed"].as_array().unwrap() {
+                after.remove(removed.as_str().unwrap());
+            }
+            for (path, entry) in scenario["changed"].as_object().unwrap() {
+                after.insert(path.clone(), entry.clone());
+            }
+            let mut left = BTreeMap::new();
+            for (path, (mode, content)) in listed(base) {
+                // Numbered command output is evidence the recorder's scripted
+                // runner never wrote.
+                let file = path.rsplit('/').next().unwrap();
+                let numbered =
+                    file.len() == 10 && (file.ends_with(".stdout") || file.ends_with(".stderr"));
+                if !numbered {
+                    left.insert(normalized(&path, base), (mode, normalized(&content, base)));
+                }
+            }
+            assert_eq!(left, expected(&after), "{name}");
+            let asked = commands.asked.borrow();
+            assert_eq!(asked.len(), calls.len(), "{name}");
+            let relative =
+                |path: &Path| normalized(path.strip_prefix(base).unwrap().to_str().unwrap(), base);
+            for (ours, theirs) in asked.iter().zip(calls) {
+                let line = &recorded["commandLines"]
+                    [usize::try_from(theirs["argv"].as_u64().unwrap()).unwrap()];
+                let mut line: Vec<&str> = line
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|word| word.as_str().unwrap())
+                    .collect();
+                if line[0] == "<restic>" {
+                    line.splice(0..1, restic.iter().copied());
+                }
+                let said: Vec<String> = ours
+                    .argv
+                    .iter()
+                    .map(|word| normalized(word, base))
+                    .collect();
+                let said = if theirs["kind"] == "docker" {
+                    assert_eq!(
+                        ours.argv[..3],
+                        crate::host::DOCKER.map(str::to_owned),
+                        "{name}"
+                    );
+                    &said[3..]
+                } else {
+                    &said[..]
+                };
+                assert_eq!(said, line, "{name}");
+                assert!(
+                    (ours.seconds - theirs["timeout"].as_f64().unwrap()).abs() < f64::EPSILON,
+                    "{name}"
+                );
+                let archive = ours.archive.as_deref().unwrap();
+                match theirs["output"].as_str() {
+                    Some(output) => {
+                        assert_eq!(relative(archive), output, "{name}");
+                        let free = scenario["free"].as_u64().unwrap();
+                        let limit = theirs["limit"].as_u64().unwrap();
+                        assert_eq!(
+                            ours.ceiling,
+                            Some(limit.min(free - 1024 * 1024 * 1024)),
+                            "{name}"
+                        );
+                    }
+                    None => {
+                        let attempt = relative(archive.parent().unwrap());
+                        assert_eq!(attempt, theirs["attempt"].as_str().unwrap(), "{name}");
+                        assert_eq!(ours.ceiling, Some(2 * 1024 * 1024), "{name}");
+                    }
+                }
+                let source = ours.source.as_deref().map(relative);
+                assert_eq!(source.as_deref(), theirs["input"].as_str(), "{name}");
+                let typed = theirs["data"].as_u64().map(|index| {
+                    recorded["inputs"][usize::try_from(index).unwrap()]
+                        .as_str()
+                        .unwrap()
+                        .as_bytes()
+                });
+                assert_eq!(ours.input.as_deref(), typed, "{name}");
             }
         }
     }

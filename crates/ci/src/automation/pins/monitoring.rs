@@ -131,8 +131,6 @@ fn monitoring_runs_its_own_steps_through_the_installed_ops_executable() {
             "monitoring-external-schema.sql",
             "monitoring-external.sql",
             "monitoring-report.sql",
-            "restore_verify.py",
-            "restore-verify.sql",
             "turn_public.py",
             "bounded_process.py",
             "runtime_profile.py",
@@ -198,10 +196,12 @@ fn a_host_without_the_signed_ops_executable_is_refused_before_any_effect() {
     let monitoring = play(MONITORING);
     let logging = play(LOGGING);
     let backup = play("ops/ansible/backup.yml");
+    let offsite = play("ops/ansible/backup-offsite.yml");
     for (pre_tasks, register) in [
         (section(&monitoring, "pre_tasks"), "scmon_ops"),
         (section(&logging, "pre_tasks"), "scpub_logging_ops"),
         (section(&backup, "pre_tasks"), "scpub_backup_ops"),
+        (section(&offsite, "pre_tasks"), "scpub_offsite_ops"),
     ] {
         let rules = requirement(pre_tasks, register);
         let stat = |value: Value| json!({register: {"stat": value}});

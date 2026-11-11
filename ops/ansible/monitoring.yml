@@ -117,8 +117,6 @@
         - monitoring-external-schema.sql
         - monitoring-external.sql
         - monitoring-report.sql
-        - restore_verify.py
-        - restore-verify.sql
         - turn_public.py
         - bounded_process.py
         - runtime_profile.py

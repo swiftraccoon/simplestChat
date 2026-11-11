@@ -161,6 +161,8 @@ fn completion(text: &str) -> Result<f64> {
 pub(crate) struct Validated {
     /// The archive the receipt names, beside it.
     pub dump: PathBuf,
+    /// The receipt itself.
+    pub record: Json,
     /// When the archive was completed, in seconds since the epoch.
     pub completed: f64,
 }
@@ -308,6 +310,7 @@ pub(crate) fn inspected(
         }
         return Ok(Validated {
             dump: backup,
+            record,
             completed,
         });
     }
@@ -315,6 +318,7 @@ pub(crate) fn inspected(
     require(actual == digest, "Backup digest differs")?;
     Ok(Validated {
         dump: backup,
+        record,
         completed,
     })
 }

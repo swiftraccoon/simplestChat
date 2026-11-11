@@ -133,6 +133,25 @@ impl Json {
         }
     }
 }
+/// A decoded value serialized with every object's keys in the order they
+/// were read, where [`Json`] itself writes them sorted.
+pub(crate) struct InOrder<'a>(pub &'a Json);
+
+impl serde::Serialize for InOrder<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self.0 {
+            Json::Object(entries, order) => {
+                let fields = order
+                    .iter()
+                    .filter_map(|key| Some((key, Self(entries.get(key)?))));
+                serializer.collect_map(fields)
+            }
+            Json::Array(items) => serializer.collect_seq(items.iter().map(Self)),
+            other => other.serialize(serializer),
+        }
+    }
+}
+
 impl serde::Serialize for Json {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {

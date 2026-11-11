@@ -36,14 +36,31 @@
           - scpub_backup_offsite_password_file is defined
         fail_msg: Supply the opted-in initialized SFTP repository, pinned host keys, credentials and bounded restore resources.
 
-    - name: Verify the prepared public host before installing helpers
+    - name: Look for the installed Ops executable without following links
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: false
+      register: scpub_offsite_ops
+
+    - name: Require the Ops executable a signed release delivers
+      ansible.builtin.assert:
+        that:
+          - scpub_offsite_ops.stat.exists
+          - scpub_offsite_ops.stat.isreg
+          - scpub_offsite_ops.stat.uid == 0
+          - scpub_offsite_ops.stat.mode == '0755'
+        fail_msg: >-
+          Deliver the signed Ops executable first: run release.yml for a signed
+          revision (staging alone is enough), then repeat this playbook.
+
+    - name: Verify the prepared public host before installing anything
       ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -B
-          - -c
-          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
-          - '{}'
+        argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, release, preflight]
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: false
       check_mode: false
 
@@ -91,23 +108,13 @@
               'restoreMemoryMiB': scpub_backup_restore_memory_mib | default(512),
               'restoreDataMiB': scpub_backup_restore_data_mib | default(256)} | to_nice_json }}
 
-    - name: Install the reviewed offsite and restore workers
+    - name: Install the reviewed restore verification statement
       ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        src: restore-verify.sql
+        dest: /usr/local/libexec/simplestchat-public/restore-verify.sql
         owner: root
         group: root
         mode: '0644'
-      loop:
-        - bounded_process.py
-        - runtime_profile.py
-        - backup_offsite.py
-        - backup_public.py
-        - restore_verify.py
-        - restore-verify.sql
-        - release_public.py
-        - release_artifact.py
-        - release_json.py
 
     - name: Install bounded upload and restore units
       ansible.builtin.template:

@@ -76,6 +76,8 @@ pub(crate) struct Paths {
     pub work: PathBuf,
     /// The kernel's identity of the current boot.
     pub boot: PathBuf,
+    /// The offsite backup's private settings and credentials.
+    pub offsite: PathBuf,
 }
 
 impl Paths {
@@ -90,6 +92,7 @@ impl Paths {
             network: "/sys/class/net".into(),
             work: "/run/simplestchat-bench".into(),
             boot: "/proc/sys/kernel/random/boot_id".into(),
+            offsite: "/etc/simplestchat-backup".into(),
         }
     }
 }
@@ -190,6 +193,7 @@ pub(crate) mod tests {
             network: root.join("net"),
             work: root.join("work"),
             boot: root.join("boot_id"),
+            offsite: root.join("offsite"),
         }
     }
 }

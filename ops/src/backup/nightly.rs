@@ -19,7 +19,7 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const SOCKET: &str = "/run/simplestchat-postgres";
 const CONTAINER: &str = "name=^simplestchat-public-postgres-1$";
 const SIZE: &str = "SELECT pg_database_size(current_database())";
-const LEDGER: &str = "SELECT version, success, encode(checksum, 'hex') \
+pub(super) const LEDGER: &str = "SELECT version, success, encode(checksum, 'hex') \
                       FROM public._sqlx_migrations ORDER BY version";
 
 /// What the command was asked to do.

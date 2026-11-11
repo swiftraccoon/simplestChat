@@ -143,6 +143,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops monitor collect|credential|external|prepare|report\n",
                 "       simplestchat-ops database logging disable\n",
                 "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
+                "       simplestchat-ops backup offsite upload|restore|recover ",
+                "[--snapshot ID] [--stamp STAMP]\n",
             )
             .as_bytes()
         );
