@@ -369,8 +369,9 @@ exclusion. Static policy replay is distinct from a new analyzer run.
 ## Cache retention trigger
 
 On 2026-10-05, the high-severity `dangerous-triggers` finding for
-`cache-retention.yml#on` was reviewed against the complete workflow and
-`build/ci_cache_retention.py`. Its feature SHA-256 is
+`cache-retention.yml#on` was reviewed against the complete workflow and its
+retention helper, whose owner is now `crates/ci/src/retention`. Its feature
+SHA-256 is
 `60b335d5888cbd8f0bfc149534de1747011b3fb170702cb69d34688fb75731ec`.
 
 The `workflow_run` event matches completed CI on main. Before checkout, the job
@@ -395,9 +396,11 @@ request, and the objects involved remain disposable build caches.
 
 The job grants `contents: read` and `actions: write` for this narrow operation;
 its helper defaults to dry-run outside the explicitly applying workflow.
-`test_ci_cache_retention.py` exercises the trigger guards, rejected run states,
+`crates/ci/src/retention/retention_tests.rs` exercises the rejected run states,
 stale main revisions, complete inventories, recent-use protection, re-planning
-and forbidden deletion endpoints without issuing API mutations. The review
+and forbidden deletion endpoints without issuing API mutations, and
+`crates/ci/src/automation/pins/cache_retention_workflow.rs` pins the trigger
+guards. The review
 expires on 2026-11-29 and covers only this exact trigger feature and location.
 Changing the guards, checkout provenance, token scope or helper deletion
 boundary requires renewed assessment; no other trigger finding is suppressed.

@@ -3,6 +3,7 @@
 use super::*;
 use chrono::{DateTime, Duration as TimeDelta, SecondsFormat, Utc};
 use policy::{Entry, REFERENCE, REPOSITORY};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
@@ -57,7 +58,6 @@ sys.exit(response.get('status',0))
 struct Fixture {
     root: PathBuf,
     environment: simplestchat_toolkit::tooling::Environment,
-    python: PathBuf,
 }
 
 impl Fixture {
@@ -107,11 +107,7 @@ impl Fixture {
         .into_iter()
         .map(|(name, value)| (name.into(), value))
         .collect();
-        Self {
-            root,
-            environment,
-            python: python.into(),
-        }
+        Self { root, environment }
     }
 
     fn client(&self, apply: bool) -> client::Github {
@@ -149,6 +145,10 @@ impl Drop for Fixture {
     }
 }
 
+/// The answers the retired Python helper gave for these tests' inputs.
+fn recorded() -> Value {
+    serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
+}
 fn quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
@@ -511,7 +511,7 @@ async fn default_execution_is_read_only_and_failure_keeps_exact_deleted_ids() {
 }
 
 #[tokio::test]
-async fn fake_client_transactions_and_reports_match_the_python_cli() {
+async fn fake_client_transactions_and_reports_match_the_recorded_python_cli() {
     for apply in [false, true] {
         let entries = [entry(1), entry(2), entry(3)];
         let responses = if apply {
@@ -526,7 +526,7 @@ async fn fake_client_transactions_and_reports_match_the_python_cli() {
         } else {
             vec![page(&entries)]
         };
-        let native = Fixture::new(responses.clone());
+        let native = Fixture::new(responses);
         let mut client = native.client(apply);
         let report = execute(
             &mut client,
@@ -538,46 +538,21 @@ async fn fake_client_transactions_and_reports_match_the_python_cli() {
         )
         .await
         .unwrap();
-        let reference = Fixture::new(responses);
-        let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .unwrap()
-            .join("build/ci_cache_retention.py");
-        let mut command = Command::new(&reference.python);
-        command
-            .arg(script)
-            .current_dir(&reference.root)
-            .env_clear()
-            .envs(&reference.environment);
-        if apply {
-            command.args(["--apply", "--run-id", "123", "--revision", REVISION]);
-        }
-        let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let reports = String::from_utf8(output.stdout)
-            .unwrap()
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).unwrap())
-            .collect::<Vec<_>>();
+        let recorded = &recorded()["cli"][if apply { "apply" } else { "dryRun" }];
+        let reports = recorded["reports"].as_array().unwrap();
         assert_eq!(reports[0], report);
         if apply {
             assert_eq!(reports[1], json!({"deletedIds":client.deleted}));
+            assert_eq!(reports.len(), 2);
         } else {
             assert_eq!(reports.len(), 1);
         }
-        let arguments = |fixture: &Fixture| {
-            fixture
-                .calls()
-                .iter()
-                .map(|call| call["args"].clone())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(arguments(&native), arguments(&reference));
+        let arguments = native
+            .calls()
+            .iter()
+            .map(|call| call["args"].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(json!(arguments), recorded["arguments"]);
     }
 }
 
@@ -714,7 +689,7 @@ fn command_line_defaults_help_and_invalid_values_are_explicit() {
 }
 
 #[test]
-fn pure_family_and_plan_match_the_retained_python_reference() {
+fn pure_family_and_plan_match_the_recorded_python_reference() {
     let prefixes = [
         "buildx-v2-main-Linux-X64",
         "buildx-v3-main-Linux-X64",
@@ -864,65 +839,23 @@ fn pure_family_and_plan_match_the_retained_python_reference() {
         "2026-10-02T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
     );
     assert!(Entry::parse(&edge_inputs[1]).is_err());
-    let fixture = Fixture::new(vec![]);
-    let data = fixture.root.join("reference-input.json");
-    fs::write(
-        &data,
-        serde_json::to_vec(
-            &json!({"keys":keys,"scenarios":scenarios,"timestamps":timestamp_inputs,"edges":edge_inputs}),
-        )
-        .unwrap(),
+    // The recorded answers belong to exactly these generated inputs.
+    let input = serde_json::to_vec(
+        &json!({"keys":keys,"scenarios":scenarios,"timestamps":timestamp_inputs,"edges":edge_inputs}),
     )
     .unwrap();
-    let program = r"
-import json,sys
-from datetime import datetime,UTC,timedelta
-sys.path.insert(0,sys.argv[1])
-import ci_cache_retention as reference
-data=json.load(open(sys.argv[2]))
-plans=[]
-for scenario in data['scenarios']:
-    reference.SOFT_BYTES=scenario['soft']
-    reference.MAX_DELETIONS=scenario['maximum']
-    plans.append([item.identifier for item in reference.plan(
-        [reference.Entry.parse(item) for item in scenario['entries']],datetime(2026,10,5,tzinfo=UTC))])
-def timestamp(raw):
-    try:
-        return (reference.Entry.parse(raw).created-datetime(1970,1,1,tzinfo=UTC))//timedelta(microseconds=1)
-    except (ValueError, TypeError, reference.ToolError): return None
-print(json.dumps({'families':[reference.family(key) for key in data['keys']],'plans':plans,
-    'timestamps':[timestamp(item) for item in data['timestamps']],
-    'edges':[timestamp(item) for item in data['edges']],'pythonVersion':list(sys.version_info[:2])}))
-";
-    let output = Command::new("python3")
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .args(["-c", program])
-        .arg(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .and_then(Path::parent)
-                .unwrap()
-                .join("build"),
-        )
-        .arg(data)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let expected: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let digest = Sha256::digest(&input)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let expected = &recorded()["pure"];
+    assert_eq!(expected["inputSha256"], digest.as_str());
     assert_eq!(expected["families"], json!(families));
     assert_eq!(expected["plans"], json!(plans));
     assert_eq!(expected["timestamps"], json!(parsed_timestamps));
-    // GitHub's canonical UTC metadata above is decisive on every supported
-    // interpreter. Noncanonical ISO extensions differ in Python before 3.14.
-    if expected["pythonVersion"][0].as_u64().unwrap() > 3
-        || expected["pythonVersion"][1].as_u64().unwrap() >= 14
-    {
-        assert_eq!(expected["edges"], json!(parsed_edges));
-    }
+    // The answers were recorded with Python 3.14, whose parser decides the
+    // noncanonical ISO extensions as well as GitHub's canonical UTC metadata.
+    assert_eq!(expected["edges"], json!(parsed_edges));
 }
 
 #[test]

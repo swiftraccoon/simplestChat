@@ -14,7 +14,7 @@ mod tests;
 mod workflows;
 
 const USAGE: &str = "usage: cargo run --locked -q -p simplestchat-ci -- evidence \
-record|complete|requirements [--id CHECK] [--root CHECKOUT]";
+record|complete [--id CHECK] [--root CHECKOUT]";
 
 struct Context {
     root: PathBuf,
@@ -131,22 +131,6 @@ impl Context {
         )
     }
 
-    /// Retained only for callers comparing the old Python helper's operations.
-    /// The Rust completion command needs no Python environment or YAML install.
-    fn requirements(&self) -> Result<String> {
-        let bytes = files::bounded(&self.root.join("ops/ansible/requirements.txt"))?;
-        let source = String::from_utf8(bytes)?.replace("\\\n", " ");
-        let entries = source
-            .lines()
-            .filter(|line| line.starts_with("pyyaml=="))
-            .collect::<Vec<_>>();
-        ensure!(
-            entries.len() == 1 && entries[0].contains("--hash=sha256:"),
-            "local_ci_yaml_requirement"
-        );
-        Ok(format!("{}\n", entries[0]))
-    }
-
     fn execute(&self, operation: &str, identifier: &str) -> Result<()> {
         ensure!(
             self.environment.get("ACT").map(String::as_str) == Some("true")
@@ -160,10 +144,6 @@ impl Context {
         match operation {
             "record" => self.record(identifier),
             "complete" => self.complete(),
-            "requirements" => {
-                print!("{}", self.requirements()?);
-                Ok(())
-            }
             _ => unreachable!("operation validated at CLI boundary"),
         }
     }
@@ -184,7 +164,7 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     let parsed = (|| {
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
-                "record" | "complete" | "requirements" if operation.is_none() => {
+                "record" | "complete" if operation.is_none() => {
                     operation = Some(argument.clone());
                 }
                 "--id" => identifier = arguments.next()?.clone(),
