@@ -241,6 +241,9 @@ crates/ci/src/automation/**
 !crates/ci/src/automation/pins/
 crates/ci/src/automation/pins/**
 !crates/ci/src/automation/pins/*.rs
+!crates/ci/src/automation/pins/security_ci/
+crates/ci/src/automation/pins/security_ci/**
+!crates/ci/src/automation/pins/security_ci/*.rs
 !crates/ci/src/production_image/
 crates/ci/src/production_image/**
 !crates/ci/src/production_image/*.rs
