@@ -1,4 +1,4 @@
-total 141640
+total 141154
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -189,7 +189,6 @@ total 141640
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
-486	ops/ansible/tests/test_release_container_ci.py
 400	ops/ansible/tests/test_release_container_fixture.py
 1906	ops/ansible/tests/test_release_container_harness.py
 893	ops/ansible/tests/test_release_fetch.py
