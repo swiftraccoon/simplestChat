@@ -1,4 +1,4 @@
-total 141154
+total 139965
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -207,7 +207,7 @@ total 141154
 281	ops/ansible/tests/test_security_archive.py
 133	ops/ansible/tests/test_security_base_secrets.py
 85	ops/ansible/tests/test_security_check.py
-1284	ops/ansible/tests/test_security_ci.py
+95	ops/ansible/tests/test_security_ci.py
 660	ops/ansible/tests/test_security_codeql_cache.py
 223	ops/ansible/tests/test_security_codeql_cargo.py
 258	ops/ansible/tests/test_security_codeql_health.py

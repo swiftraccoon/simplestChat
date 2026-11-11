@@ -1,7 +1,23 @@
-//! Assertions moved from `ops/ansible/tests/test_security_ci.py`.
+//! CI trust boundaries, gate completeness and release evidence selection,
+//! carried over from the Python workflow tests. This file holds the command
+//! pins; `gates`, `codeql` and `image` hold the rest by subject.
+
+mod codeql;
+mod gates;
+mod image;
 
 use super::{document, first, run, steps, workflow};
 use serde_json::Value;
+use std::collections::BTreeSet;
+
+const TOOLCHAIN_ACTION: &str = "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d";
+const NOT_VERIFIED: &str = "steps.verified.outputs.cache-hit != 'true'";
+
+/// The keys of a mapping.
+fn keys(value: &Value) -> BTreeSet<&str> {
+    let mapping = value.as_object().unwrap();
+    mapping.keys().map(String::as_str).collect()
+}
 
 /// From `test_native_dtls_cache_miss_bootstrap_controller_and_source_closure`:
 /// the one native-dtls step that runs the CI binary records success exactly.

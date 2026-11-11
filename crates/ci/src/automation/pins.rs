@@ -79,3 +79,14 @@ fn run(step: &Value) -> &str {
 fn script(step: &Value) -> &str {
     step.get("run").map_or("", |run| run.as_str().unwrap())
 }
+
+/// A step's `uses`, which must be text when present; empty when absent.
+fn uses(step: &Value) -> &str {
+    step.get("uses").map_or("", |uses| uses.as_str().unwrap())
+}
+
+/// Whether a mapping lacks every one of `keys`.
+fn lacks(mapping: &Value, keys: &[&str]) -> bool {
+    assert!(mapping.is_object());
+    keys.iter().all(|key| mapping.get(key).is_none())
+}

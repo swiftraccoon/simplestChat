@@ -2,7 +2,7 @@
 //! over from the Python workflow tests. Every named step is the job's only
 //! step with that name, and each pin inspects the workflow offline.
 
-use super::{checkout_file, run, script, steps, unique, workflow};
+use super::{checkout_file, lacks, run, script, steps, unique, uses, workflow};
 use serde_json::{Value, json};
 
 const COMPOSE_TOOL: &str = "Install checksum-pinned production Compose";
@@ -67,16 +67,6 @@ impl Deployment {
 fn position(steps: &[Value], wanted: &Value) -> usize {
     let found = steps.iter().position(|step| std::ptr::eq(step, wanted));
     found.unwrap()
-}
-
-/// A step's `uses`, which must be text when present; empty when absent.
-fn uses(step: &Value) -> &str {
-    step.get("uses").map_or("", |uses| uses.as_str().unwrap())
-}
-
-/// Whether a step lacks every one of `keys`.
-fn lacks(step: &Value, keys: &[&str]) -> bool {
-    keys.iter().all(|key| step.get(key).is_none())
 }
 
 fn deployment_run(name: &str) -> String {
