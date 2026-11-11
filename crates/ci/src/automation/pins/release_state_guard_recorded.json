@@ -1,0 +1,359 @@
+{
+  "schemaVersion": 1,
+  "template": {
+    "run-benchmark": "dfdd44cfac829a9b6b611e1d0ef80fd2fef97572"
+  },
+  "guardSha256": "80e370b2c8925147d765296ac3cb369095d5801140b910ddef2ee7901ec505a1",
+  "python": "Python 3.15.0",
+  "cases": [
+    {
+      "name": "absent",
+      "kind": "none",
+      "status": 0,
+      "stdout": "No unfinished public release.\n",
+      "stderr": ""
+    },
+    {
+      "name": "finalized",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}\n",
+      "status": 0,
+      "stdout": "No unfinished public release.\n",
+      "stderr": ""
+    },
+    {
+      "name": "finalized with other fields",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"finalized\": true, \"revision\": \"abc\", \"schemaVersion\": 1}",
+      "status": 0,
+      "stdout": "No unfinished public release.\n",
+      "stderr": ""
+    },
+    {
+      "name": "unfinished",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":false}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "another schema version",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":2,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "finalized absent",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "finalized as text",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":\"true\"}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "finalized as a number",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":1}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "group readable",
+      "kind": "file",
+      "mode": "640",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "world readable",
+      "kind": "file",
+      "mode": "644",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "owner read only",
+      "kind": "file",
+      "mode": "400",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "set-user-id bit",
+      "kind": "file",
+      "mode": "4600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "symbolic link to a valid record",
+      "kind": "link",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "dangling symbolic link",
+      "kind": "dangling",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "directory in its place",
+      "kind": "directory",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "empty",
+      "kind": "file",
+      "mode": "600",
+      "content": "",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "largest admitted size",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "pad": 16384,
+      "status": 0,
+      "stdout": "No unfinished public release.\n",
+      "stderr": ""
+    },
+    {
+      "name": "one byte too large",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "pad": 16385,
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "parent group accessible",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "parentMode": "750",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "parent world accessible",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "parentMode": "755",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "parent reached through a link",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "parentLink": true,
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "array",
+      "kind": "file",
+      "mode": "600",
+      "content": "[1]",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "text",
+      "kind": "file",
+      "mode": "600",
+      "content": "\"finalized\"",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "null",
+      "kind": "file",
+      "mode": "600",
+      "content": "null",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version absent",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version true",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":true,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version as a float",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1.0,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version as an exponent",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1e0,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version as text",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":\"1\",\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version null",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":null,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "schema version zero",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":0,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "schema version negative",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":-1,\"finalized\":true}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Inspect and recover the unfinished public release first\n"
+    },
+    {
+      "name": "malformed",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,",
+      "status": 1,
+      "stdout": "",
+      "stderr": "<traceback>"
+    },
+    {
+      "name": "trailing text",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true} x",
+      "status": 1,
+      "stdout": "",
+      "stderr": "<traceback>"
+    },
+    {
+      "name": "duplicate key last wins",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":false,\"finalized\":true}",
+      "status": 0,
+      "stdout": "No unfinished public release.\n",
+      "stderr": ""
+    },
+    {
+      "name": "named pipe in its place",
+      "kind": "pipe",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "empty object",
+      "kind": "file",
+      "mode": "600",
+      "content": "{}",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "record owned by another user",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "recordOwner": "other",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    },
+    {
+      "name": "directory owned by another user",
+      "kind": "file",
+      "mode": "600",
+      "content": "{\"schemaVersion\":1,\"finalized\":true}",
+      "parentOwner": "other",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Operational precondition failed\n"
+    }
+  ]
+}

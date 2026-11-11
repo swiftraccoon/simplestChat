@@ -38,9 +38,58 @@ fn rendered(name: &str) -> &'static str {
 
 /// The exact inline release-state guard a script embeds.
 fn embedded_guard(script: &str) -> &str {
-    let guard = regex::Regex::new(r"(?s)python3 - <<'PY'\n(.*?)\nPY").unwrap();
+    let guard = regex::Regex::new(r"(?s)/bin/sh -eu <<'GUARD'\n(.*?)\nGUARD\n").unwrap();
     let found = guard.captures(script).expect("a release-state guard");
     found.get(1).unwrap().as_str()
+}
+
+/// The recorded answers of the retired inline Python guard, with the record
+/// states they were given.
+fn recorded_guard() -> Value {
+    serde_json::from_str(include_str!("release_state_guard_recorded.json")).unwrap()
+}
+
+/// Build one recorded state under `scratch` and return the root directory the
+/// guard is pointed at.
+fn guard_state(case: &Value, scratch: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let mode = |text: &Value| {
+        let bits = u32::from_str_radix(text.as_str().unwrap(), 8).unwrap();
+        std::fs::Permissions::from_mode(bits)
+    };
+    let parent = scratch.join("root");
+    std::fs::create_dir(&parent).unwrap();
+    let record = parent.join("release-state.json");
+    let content = case["content"].as_str().unwrap_or_default();
+    match case["kind"].as_str().unwrap() {
+        "file" => {
+            let width = case["pad"].as_u64().map_or(0, |pad| pad as usize);
+            std::fs::write(&record, format!("{content:<width$}")).unwrap();
+            std::fs::set_permissions(&record, mode(&case["mode"])).unwrap();
+        }
+        "directory" => std::fs::create_dir(&record).unwrap(),
+        "link" => {
+            let target = parent.join("target.json");
+            std::fs::write(&target, content).unwrap();
+            std::fs::set_permissions(&target, mode(&json!("600"))).unwrap();
+            symlink(&target, &record).unwrap();
+        }
+        "dangling" => symlink(parent.join("missing.json"), &record).unwrap(),
+        "pipe" => {
+            let mut made = Command::new("mkfifo");
+            made.args(["-m", "600"]).arg(&record);
+            assert!(made.status().unwrap().success());
+        }
+        "none" => {}
+        other => panic!("unknown recorded state {other}"),
+    }
+    let parent_mode = case.get("parentMode").cloned().unwrap_or(json!("700"));
+    std::fs::set_permissions(&parent, mode(&parent_mode)).unwrap();
+    if case["parentLink"] == true {
+        symlink(&parent, scratch.join("link")).unwrap();
+        return scratch.join("link");
+    }
+    parent
 }
 
 /// Whether a program accepts `script` on standard input.
@@ -245,6 +294,8 @@ fn persistent_release_guards_are_identical_and_precede_work() {
         assert_eq!(task["changed_when"], false, "{filename}");
         assert_eq!(task["check_mode"], false, "{filename}");
         let argv = task["ansible.builtin.command"]["argv"].as_array().unwrap();
+        assert_eq!(argv.len(), 4, "{filename}");
+        assert_eq!(argv[..3], [json!("/bin/sh"), json!("-eu"), json!("-c")]);
         let embedded = argv[argv.len() - 1].as_str().unwrap();
         assert_eq!(embedded.trim_end(), guard, "{filename}");
     }
@@ -258,6 +309,69 @@ fn persistent_release_guards_are_identical_and_precede_work() {
         assert!(guarded < script.find(after).unwrap(), "{after}");
     }
     assert!(scripts[1].find(guard).unwrap() < scripts[1].find("manifest=").unwrap());
+}
+
+/// The shell guard gives the answer the retired Python guard gave for every
+/// recorded state of the release record: absent or finalized passes, an
+/// unfinished release asks for recovery, and anything else about the file,
+/// its directory or its shape refuses the precondition. Only the fixed root
+/// and owner are substituted, for a scratch directory and the current user.
+#[test]
+fn release_state_guard_answers_as_the_recorded_python_guard_did() {
+    use std::os::unix::fs::MetadataExt;
+    let recorded = recorded_guard();
+    let guard = embedded_guard(rendered(RUN_BENCHMARK));
+    assert!(accepts("shellcheck", &["--shell=sh", "-"], guard));
+    assert!(!guard.contains("python") && !guard.contains("{{") && !guard.contains("{%"));
+    let cases = recorded["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 39);
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let scratch = Scratch::new();
+        let root = guard_state(case, scratch.path());
+        let owner = std::fs::metadata(scratch.path()).unwrap().uid();
+        let fixed = "root=/srv/simplestchat-public\n";
+        assert_eq!(guard.matches(fixed).count(), 1);
+        assert_eq!(guard.matches("-user 0 ").count(), 2);
+        // The record's owner is the first test and its directory's the second;
+        // a state "owned by another user" expects an owner this user is not.
+        let expected = |field: &str| owner + u32::from(case[field] == "other");
+        let program = guard
+            .replace(fixed, &format!("root='{}'\n", root.display()))
+            .replacen(
+                "-user 0 ",
+                &format!("-user {} ", expected("recordOwner")),
+                1,
+            )
+            .replacen(
+                "-user 0 ",
+                &format!("-user {} ", expected("parentOwner")),
+                1,
+            );
+        let output = Command::new("/bin/sh")
+            .args(["-eu", "-c", &program])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        if name == "schema version as an exponent" {
+            // Python read `1e0` as a float and refused the precondition; jq
+            // reads the integer one, so this finalized record passes.
+            assert_eq!(case["stderr"], "Operational precondition failed\n");
+            assert_eq!(output.status.code(), Some(0), "{name}");
+            continue;
+        }
+        // Malformed text ended the Python guard with a traceback; the shell
+        // guard names the same refusal as for any other unreadable shape.
+        let refusal = match case["stderr"].as_str().unwrap() {
+            "<traceback>" => "Operational precondition failed\n",
+            message => message,
+        };
+        let status = output.status.code().map(i64::from);
+        assert_eq!(status, case["status"].as_i64(), "{name}: {stderr}");
+        assert_eq!(stdout, case["stdout"].as_str().unwrap(), "{name}");
+        assert_eq!(stderr, refusal, "{name}");
+    }
 }
 
 /// From `test_static_units_are_inspected_without_repeated_disable_changes`:

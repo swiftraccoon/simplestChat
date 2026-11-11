@@ -1,4 +1,4 @@
-total 113947
+total 113803
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -116,7 +116,6 @@ total 113947
 7	ops/ansible/files/seed-public-room.py
 543	ops/ansible/files/seed_public_room.py
 581	ops/ansible/files/turn_public.py
-144	ops/ansible/tests/test_automation.py
 426	ops/ansible/tests/test_backup_offsite.py
 344	ops/ansible/tests/test_bounded_process.py
 214	ops/ansible/tests/test_browser_assets_command.py

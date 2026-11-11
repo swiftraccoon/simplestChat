@@ -334,7 +334,7 @@ class MonitoringTests(unittest.TestCase):
                     with self.assertRaises(SystemExit):
                         exec(compiled, {})  # noqa: S102 - only repository-owned literal failure branches, no external input.
                     checked += 1
-        self.assertGreater(checked, 30)
+        self.assertGreater(checked, 20)
 
 
 if __name__ == "__main__":

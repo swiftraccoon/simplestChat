@@ -20,7 +20,7 @@ bounded() { [[ "$1" =~ ^[1-9][0-9]{0,2}$ ]] && ((10#$1 >= $2 && 10#$1 <= $3)); }
 bounded "$workers" 1 4 && bounded "$clients" 2 30 && bounded "$rooms" 1 4 || exit 2
 bounded "$duration" 3 180 && bounded "$ramp_up" 1 120 && bounded "$warmup" 10 60 || exit 2
 ((clients <= rooms * 10 && rooms <= clients))
-for required in docker jq curl nsenter flock timeout realpath od awk sha256sum python3; do command -v "$required" >/dev/null; done
+for required in docker jq curl nsenter flock timeout realpath od awk sha256sum find wc; do command -v "$required" >/dev/null; done
 [[ "$output" == /* && ! -e "$output" && ! -L "$output" ]]
 [[ "$output" != *,* && ! "$output" =~ [[:cntrl:]] ]]
 output="$(realpath -e -- "$(dirname -- "$output")")/$(basename -- "$output")"
@@ -31,29 +31,28 @@ else mkdir -m 700 /run/simplestchat-bench; fi
 exec 9<>/run/simplestchat-bench/workload.lock
 [[ -f /run/simplestchat-bench/workload.lock && $(stat -c '%u:%a' /run/simplestchat-bench/workload.lock) == 0:600 ]]
 flock --exclusive --nonblock 9
-python3 - <<'PY'
-import json
-import stat
-from pathlib import Path
-record = Path('/srv/simplestchat-public/release-state.json')
-if record.exists() or record.is_symlink():
-    metadata = record.lstat()
-    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
-        raise SystemExit('Operational precondition failed')
-    if not (stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384):
-        raise SystemExit('Operational precondition failed')
-    parent = record.parent.lstat()
-    if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
-        raise SystemExit('Operational precondition failed')
-    if not (stat.S_IMODE(parent.st_mode) == 0o700):
-        raise SystemExit('Operational precondition failed')
-    value = json.loads(record.read_text())
-    if not (isinstance(value, dict) and type(value.get('schemaVersion')) is int):
-        raise SystemExit('Operational precondition failed')
-    if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
-        raise SystemExit('Inspect and recover the unfinished public release first')
-print('No unfinished public release.')
-PY
+/bin/sh -eu <<'GUARD'
+root=/srv/simplestchat-public
+record=$root/release-state.json
+if [ -e "$record" ] || [ -L "$record" ]; then
+  refuse() {
+    echo 'Operational precondition failed' >&2
+    exit 1
+  }
+  [ -n "$(find "$record" -prune -type f -user 0 -perm 600)" ] || refuse
+  size=$(($(wc -c <"$record")))
+  [ "$size" -gt 0 ] || refuse
+  [ "$size" -le 16384 ] || refuse
+  [ -n "$(find "$root" -prune -type d -user 0 -perm 700)" ] || refuse
+  jq -e 'type == "object" and (.schemaVersion | tojson | test("^-?[0-9]+$"))' \
+    "$record" >/dev/null 2>&1 || refuse
+  jq -e '.schemaVersion == 1 and .finalized == true' "$record" >/dev/null || {
+    echo 'Inspect and recover the unfinished public release first' >&2
+    exit 1
+  }
+fi
+echo 'No unfinished public release.'
+GUARD
 endpoint="${DOCKER_HOST:-$(docker context inspect --format '{{.Endpoints.docker.Host}}')}"
 [[ "$endpoint" =~ ^unix:///[^[:cntrl:]]+$ ]]
 unset DOCKER_CONTEXT DOCKER_HOST DOCKER_TLS_VERIFY DOCKER_CERT_PATH

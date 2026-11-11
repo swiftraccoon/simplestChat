@@ -206,13 +206,14 @@ test('public-project refusal precedes private workload state and never changes p
 });
 
 test('persistent unfinished-release guard runs under the workload lock before Docker access', () => {
-  const guard = runner.indexOf("record = Path('/srv/simplestchat-public/release-state.json')");
+  const guard = runner.indexOf("/bin/sh -eu <<'GUARD'\nroot=/srv/simplestchat-public\n");
   assert.ok(guard > runner.indexOf('flock --exclusive --nonblock 9'));
   assert.ok(guard < runner.indexOf('endpoint='));
   assert.ok(guard < runner.indexOf('mkdir -m 700 -- "$output"'));
-  assert.match(runner, /stat\.S_ISREG\(metadata\.st_mode\) and metadata\.st_uid == 0/);
-  assert.match(runner, /stat\.S_IMODE\(parent\.st_mode\) == 0o700/);
-  assert.match(runner, /value\.get\('schemaVersion'\) == 1 and value\.get\('finalized'\) is True/);
+  assert.ok(runner.includes('[ -n "$(find "$record" -prune -type f -user 0 -perm 600)" ] || refuse'));
+  assert.ok(runner.includes('[ -n "$(find "$root" -prune -type d -user 0 -perm 700)" ] || refuse'));
+  assert.ok(runner.includes("jq -e '.schemaVersion == 1 and .finalized == true' \"$record\""));
+  assert.ok(!runner.includes('python'));
 });
 
 function emergencyFixture(t, preparation = '') {

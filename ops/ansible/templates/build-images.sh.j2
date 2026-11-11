@@ -22,29 +22,28 @@ if [[ -e /run/simplestchat-bench/current.json ]]; then
   [[ ! -L /run/simplestchat-bench/current.json && $(stat -c '%u:%a' /run/simplestchat-bench/current.json) == 0:600 ]]
   jq -e '.schemaVersion == 1 and .finalized == true' /run/simplestchat-bench/current.json >/dev/null
 fi
-python3 - <<'PY'
-import json
-import stat
-from pathlib import Path
-record = Path('/srv/simplestchat-public/release-state.json')
-if record.exists() or record.is_symlink():
-    metadata = record.lstat()
-    if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
-        raise SystemExit('Operational precondition failed')
-    if not (stat.S_IMODE(metadata.st_mode) == 0o600 and 0 < metadata.st_size <= 16384):
-        raise SystemExit('Operational precondition failed')
-    parent = record.parent.lstat()
-    if not (stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0):
-        raise SystemExit('Operational precondition failed')
-    if not (stat.S_IMODE(parent.st_mode) == 0o700):
-        raise SystemExit('Operational precondition failed')
-    value = json.loads(record.read_text())
-    if not (isinstance(value, dict) and type(value.get('schemaVersion')) is int):
-        raise SystemExit('Operational precondition failed')
-    if not (value.get('schemaVersion') == 1 and value.get('finalized') is True):
-        raise SystemExit('Inspect and recover the unfinished public release first')
-print('No unfinished public release.')
-PY
+/bin/sh -eu <<'GUARD'
+root=/srv/simplestchat-public
+record=$root/release-state.json
+if [ -e "$record" ] || [ -L "$record" ]; then
+  refuse() {
+    echo 'Operational precondition failed' >&2
+    exit 1
+  }
+  [ -n "$(find "$record" -prune -type f -user 0 -perm 600)" ] || refuse
+  size=$(($(wc -c <"$record")))
+  [ "$size" -gt 0 ] || refuse
+  [ "$size" -le 16384 ] || refuse
+  [ -n "$(find "$root" -prune -type d -user 0 -perm 700)" ] || refuse
+  jq -e 'type == "object" and (.schemaVersion | tojson | test("^-?[0-9]+$"))' \
+    "$record" >/dev/null 2>&1 || refuse
+  jq -e '.schemaVersion == 1 and .finalized == true' "$record" >/dev/null || {
+    echo 'Inspect and recover the unfinished public release first' >&2
+    exit 1
+  }
+fi
+echo 'No unfinished public release.'
+GUARD
 running_public=$(timeout --signal=TERM --kill-after=1s 8s docker ps --quiet \
   --filter 'label=com.docker.compose.project=simplestchat-public') || {
   echo 'Cannot verify whether public chat is running; refusing the image build.' >&2; exit 1;

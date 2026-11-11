@@ -175,7 +175,9 @@ fn unfinished_release_preflight_precedes_public_configuration() {
     assert_eq!(release["check_mode"], false);
     let script = checkout_file(SCRIPT);
     let at = |text: &str| script.find(text).unwrap();
-    let journal = at("record = Path('/srv/simplestchat-public/release-state.json')");
+    let journal = at(
+        "/bin/sh -eu <<'GUARD'\nroot=/srv/simplestchat-public\nrecord=$root/release-state.json\n",
+    );
     assert!(at("flock -n 9") < journal);
     assert!(journal < at("compose()"));
 }
