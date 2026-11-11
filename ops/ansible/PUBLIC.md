@@ -92,8 +92,9 @@ Caddy, TURN and the system. `MAX_CONNECTIONS` starts from reference workload
 estimates, including 175 webinar viewers per worker, then accounts for the
 application memory budget and advertised network port. `MAX_ROOMS` follows the
 connection limit, with a minimum of 64; room membership is capped at 10,000.
-The Ansible filter in `filter_plugins/sizing.py` calls the same model as
-`build/capacity.py suggest`. These are planning estimates from reference
+The expressions in `group_vars/benchmark_hosts.yml` carry the same arithmetic as
+`load_test capacity suggest`, and both configuration playbooks refuse sizing
+outside what that model accepts. These are planning estimates from reference
 measurements, not measured capacity for your host or a guarantee that runtime
 CPU admission guards prevent memory or network exhaustion.
 
@@ -103,7 +104,7 @@ CPU admission guards prevent memory or network exhaustion.
 inventory to override one (for example `scpub_media_workers: 2` behind a
 firewall you cannot change that opens only UDP 40000–40001). Compose publishes
 the range itself; a host needs no firewall rule of its own for it.
-`build/capacity.py suggest --vcpus N --memory-gib M --port-mbps P`
+`load_test capacity suggest --vcpus N --memory-gib M --port-mbps P`
 previews the defaults for the same host facts and port, and the server logs its
 sizing at startup. Explicit inventory overrides remain operator policy. A
 128-vCPU, 256-GiB host with a 40-Gbit/s port, for example, still receives at most

@@ -59,6 +59,21 @@
       when: scpub_turn_enabled | bool
       no_log: true
 
+    # The capacity expressions in group_vars divide by these values; refuse an
+    # inventory override the model and the server would not accept.
+    - name: Require sizing the capacity model and the server accept
+      ansible.builtin.assert:
+        that:
+          - scpub_media_workers | int >= 1
+          - scpub_media_workers | int <= 64
+          - scpub_app_memory_mib | int >= 512
+          - scpub_port_mbps | float > 0
+          - scpub_webinar_viewers_per_worker | int >= 1
+          - scpub_webinar_viewers_per_worker | int <= 10000
+        fail_msg: >-
+          Sizing needs 1 to 64 media workers, at least 512 MiB for the app, a positive
+          port speed and 1 to 10000 webinar viewers per worker.
+
     # The helper installs it with the image after the stop, once its identity
     # lines (secrets, origin, address, RUN_MIGRATIONS) match the installed file.
     - name: Render the candidate application configuration from the host's facts

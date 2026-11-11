@@ -50,7 +50,6 @@ SOURCE_PREFIXES = (
     "build/",
     "ops/ansible/files/",
     "ops/ansible/callback_plugins/",
-    "ops/ansible/filter_plugins/",
     "web/src/",
 )
 RULE_ID = re.compile(r"simplestchat\.[a-z][a-z0-9-]{1,80}")

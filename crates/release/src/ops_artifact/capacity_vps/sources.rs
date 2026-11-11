@@ -15,8 +15,6 @@ pub(super) const NAMES: &[&str] = &[
     "build/vps_ops_bootstrap.py",
     "build/benchmark-container.sh",
     "build/cleanup-container-benchmark.sh",
-    "build/capacity.py",
-    "build/capacity_artifacts.py",
     "ops/ansible/ansible.cfg",
     "ops/ansible/site.yml",
     "ops/ansible/group_vars/benchmark_hosts.yml",
@@ -31,9 +29,7 @@ pub(super) const NAMES: &[&str] = &[
     "ops/ansible/templates/docker.sources.j2",
     "ops/ansible/templates/docker.preferences.j2",
     "ops/ansible/templates/containerd-runtime.conf.j2",
-    "ops/ansible/filter_plugins/sizing.py",
     "ops/ansible/callback_plugins/release_timing.py",
-    "ops/ansible/files/bounded_process.py",
 ];
 
 pub(super) struct Sources {

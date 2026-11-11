@@ -37,13 +37,13 @@ scpub_enabled: false
 scpub_registration_enabled: false
 # Retain the original relying-party identity when moving to one of its subdomains.
 scpub_webauthn_rp_id: "{{ scpub_domain }}"
-# Sizing follows the host unless the inventory says otherwise (the model is
-# build/capacity.py's: the app takes all but one vCPU and the memory beyond a
+# Sizing follows the host unless the inventory says otherwise (the model is the
+# capacity adviser's: the app takes all but one vCPU and the memory beyond a
 # quarter, at least 1 GiB, kept for the database, the proxy and the system;
 # MAX_CONNECTIONS counts the lightest participants, webinar viewers at 175 per
 # worker as measured on an EPYC-class VPS, and heavier shapes meet the
-# per-worker CPU guard first). `build/capacity.py suggest --vcpus N --memory-gib M`
-# prints the same numbers with what they carry; `run` measures a host.
+# per-worker CPU guard first). `load_test capacity suggest --vcpus N --memory-gib M`
+# prints the same numbers with what they carry; `load_test capacity run` measures a host.
 # The addresses clients reach: the host's default routes unless the inventory
 # says otherwise. A dual-stack host announces both; an IPv6-only host announces
 # IPv6 as its only address.
@@ -71,14 +71,29 @@ scpub_app_cpus: "{{ [1, (ansible_processor_vcpus | default(2) | int) - (scpub_re
 scpub_media_workers: "{{ [64, [1, scpub_app_cpus | int] | max] | min }}"
 scpub_app_memory_mib: "{{ [512, (scpub_host_memory_mib | int) - (scpub_reserved_memory_mib | int)] | max }}"
 scpub_webinar_viewers_per_worker: 175
-scpub_capacity_plan: >-
-  {{ (scpub_media_workers | int) | simplestchat_capacity(
-    scpub_app_memory_mib | int, scpub_port_mbps | float, scpub_webinar_viewers_per_worker | int) }}
-scpub_max_connections: "{{ scpub_capacity_plan.connections }}"
+# What the app's workers, its memory limit and the port carry, from the ceilings
+# measured per worker (docs/performance-results.md): 85 meeting participants at
+# 2.39 Mbit/s and 2 MiB each, or 175 webinar viewers at 1 Mbit/s and 1.28 MiB
+# each. A limit allows twice the measured memory and the port is planned to
+# 80 % of its speed. A calibrated viewers-per-worker figure changes what a
+# worker's CPU carries; each viewer keeps the measured memory and traffic. The
+# arithmetic and its order are the capacity adviser's, so both give the same
+# numbers (pinned by crates/ci/src/automation/pins/sizing.rs).
+scpub_meeting_capacity: >-
+  {{ [85 * (scpub_media_workers | int), (scpub_app_memory_mib | int) // 4,
+      ((scpub_port_mbps | float) * 0.8 / ((85 * 2.39) / 85)) | int] | min }}
+scpub_webinar_capacity: >-
+  {%- set viewers = scpub_webinar_viewers_per_worker | int -%}
+  {%- set share = viewers / 175 -%}
+  {%- set peak_bytes = (234881024 * share) | round(0, 'ceil') | int -%}
+  {{ [viewers * (scpub_media_workers | int),
+      ((scpub_app_memory_mib | int) * 1048576 / (peak_bytes / viewers * 2.0)) | int,
+      ((scpub_port_mbps | float) * 0.8 / (175.0 * share / viewers)) | int] | min }}
+scpub_max_connections: "{{ [scpub_meeting_capacity | int, scpub_webinar_capacity | int, 10] | max }}"
 scpub_max_rooms: "{{ [64, scpub_max_connections | int] | max }}"
 # A room's viewers spread over every worker, so one webinar may fill the host;
 # the broadcaster ceiling keeps the all-publishing grid within the per-viewer cap.
-scpub_max_participants_per_room: "{{ scpub_capacity_plan.participants }}"
+scpub_max_participants_per_room: "{{ [2, [10000, scpub_webinar_capacity | int] | min] | max }}"
 scpub_max_broadcasters_per_room: 30
 # Policy, not capacity: accounts and persisted rooms the site admits.
 scpub_max_users: 100

@@ -32,7 +32,6 @@ under these maintained production paths:
 - `build/`
 - `ops/ansible/files/`
 - `ops/ansible/callback_plugins/`
-- `ops/ansible/filter_plugins/`
 - `web/src/`
 
 Rust tests embedded in these modules are included. Standalone Python/browser test

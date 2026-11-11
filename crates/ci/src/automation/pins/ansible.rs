@@ -193,6 +193,17 @@ pub(super) fn asserted(rules: &Value, cases: &[Value]) -> Vec<bool> {
 /// Evaluate each expression against each case's variables. The result is one
 /// row per case with one value per expression, exactly as Ansible computed it.
 pub(super) fn evaluate(expressions: &[&str], cases: &[Value]) -> Vec<Vec<Value>> {
+    evaluate_in(&[], expressions, cases)
+}
+
+/// Evaluate as [`evaluate`] does, with the variable files of a deployment
+/// loaded underneath each case, so a case stands for a host's facts and its
+/// inventory overrides.
+pub(super) fn evaluate_in(
+    vars_files: &[&str],
+    expressions: &[&str],
+    cases: &[Value],
+) -> Vec<Vec<Value>> {
     let mut tasks = Vec::new();
     for case in cases {
         let row = expressions
@@ -214,7 +225,7 @@ pub(super) fn evaluate(expressions: &[&str], cases: &[Value]) -> Vec<Vec<Value>>
             "mode": "0600",
         },
     }));
-    let scratch = play(&Value::Array(tasks), &json!({}), &[]);
+    let scratch = play(&Value::Array(tasks), &json!({}), vars_files);
     let rows = std::fs::read(scratch.path().join("rows.json")).unwrap();
     let rows: Vec<Vec<Value>> = serde_json::from_slice(&rows).unwrap();
     assert_eq!(rows.len(), cases.len());

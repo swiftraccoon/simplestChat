@@ -56,7 +56,6 @@ pub(super) fn run(root: &Path, environment: &Environment) -> tooling::Result<()>
                 b"build/".as_slice(),
                 b"ops/ansible/files/",
                 b"ops/ansible/callback_plugins/",
-                b"ops/ansible/filter_plugins/",
                 b"ops/ansible/tests/",
             ]
             .iter()

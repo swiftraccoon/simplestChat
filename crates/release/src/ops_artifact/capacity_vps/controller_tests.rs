@@ -634,7 +634,7 @@ impl Executor for Remote {
             self.reports.push(bytes.to_vec());
             if self.source_after_replay {
                 fs::write(
-                    self.caller.join("build/capacity.py"),
+                    self.caller.join("build/benchmark-container.sh"),
                     b"changed source after replay\n",
                 )
                 .unwrap();

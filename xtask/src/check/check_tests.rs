@@ -74,7 +74,6 @@ const SOURCES: &[&str] = &[
     "build/nested/untracked.py",
     "ops/ansible/files/host.py",
     "ops/ansible/callback_plugins/observer.py",
-    "ops/ansible/filter_plugins/filter.py",
     "ops/ansible/tests/test_new\ncase.py",
     "typings/fixture/nested.pyi",
 ];
@@ -1168,6 +1167,7 @@ fn python_rejects_new_source_roots_before_any_checker() {
         "typings/unapproved.py",
         "crates/ci/src/other/module.py",
         "crates/ci/src/release_http_policy/module.py",
+        "ops/ansible/filter_plugins/module.py",
         "xtask/src/ci/module.py",
     ] {
         let fixture = Fixture::new();

@@ -1,4 +1,4 @@
-total 128985
+total 128805
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -61,7 +61,7 @@ total 128985
 88	build/security_secret_projection.py
 239	build/security_secret_spans.py
 145	build/security_secrets.py
-374	build/security_semgrep.py
+373	build/security_semgrep.py
 251	build/security_semgrep_summary.py
 27	build/security_source_scope.py
 512	build/security_tools.py
@@ -126,7 +126,6 @@ total 128985
 7	ops/ansible/files/seed-public-room.py
 543	ops/ansible/files/seed_public_room.py
 581	ops/ansible/files/turn_public.py
-20	ops/ansible/filter_plugins/sizing.py
 144	ops/ansible/tests/test_automation.py
 426	ops/ansible/tests/test_backup_offsite.py
 564	ops/ansible/tests/test_bootstrap_controller.py
@@ -163,7 +162,7 @@ total 128985
 803	ops/ansible/tests/test_public_reboot.py
 2018	ops/ansible/tests/test_public_release.py
 310	ops/ansible/tests/test_public_seed.py
-611	ops/ansible/tests/test_public_templates.py
+453	ops/ansible/tests/test_public_templates.py
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
@@ -246,7 +245,7 @@ total 128985
 451	ops/ansible/tests/test_security_vm_restore_inputs.py
 721	ops/ansible/tests/test_security_vm_stage.py
 523	ops/ansible/tests/test_security_vm_vps_guest.py
-76	ops/ansible/tests/test_support.py
+75	ops/ansible/tests/test_support.py
 450	ops/ansible/tests/test_turn_public.py
 693	ops/ansible/tests/test_vps_capacity_controller.py
 855	ops/ansible/tests/test_vps_capacity_remote.py

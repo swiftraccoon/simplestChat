@@ -16,7 +16,6 @@ for directory in (
     "build",
     "ops/ansible/files",
     "ops/ansible/callback_plugins",
-    "ops/ansible/filter_plugins",
 ):
     sys.path.insert(0, str(ROOT / directory))
 

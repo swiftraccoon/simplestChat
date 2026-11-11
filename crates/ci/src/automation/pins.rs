@@ -22,6 +22,7 @@ mod security_ci;
 mod security_codeql_cache;
 mod security_vm_boot;
 mod session_soak_ci;
+mod sizing;
 
 use serde_json::Value;
 use std::path::Path;
