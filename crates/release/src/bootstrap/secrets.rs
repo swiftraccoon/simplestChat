@@ -128,13 +128,16 @@ pub(super) mod tests {
     use super::*;
     use std::os::unix::fs::MetadataExt;
 
-    /// A terminal that types one fixed answer, or refuses like a pipe.
-    pub(in super::super) struct Typed(pub Option<&'static str>);
+    /// A terminal that types one fixed answer, or refuses like a pipe. The
+    /// answer is built at run time: no password is spelled in the source.
+    pub(in super::super) struct Typed(pub Option<String>);
 
     impl Terminal for Typed {
         fn password(&self, _: &str) -> Result<String> {
-            let typed = self.0.ok_or(Refusal("password_prompt_requires_terminal"))?;
-            Ok(typed.to_owned())
+            let typed = self.0.as_ref();
+            Ok(typed
+                .ok_or(Refusal("password_prompt_requires_terminal"))?
+                .clone())
         }
     }
 
@@ -153,13 +156,10 @@ pub(super) mod tests {
         assert_eq!(read(&plain).unwrap().expose(), "first secret");
         let object = private.file("object", b" {\"password\": \"from json\"}\n", 0o600);
         assert_eq!(read(&object).unwrap().expose(), "from json");
-        let typed = password_value(
-            None,
-            "Initial SSH password: ",
-            &checkout.0,
-            &Typed(Some("typed")),
-        );
-        assert_eq!(typed.unwrap().expose(), "typed");
+        let answer = "t".repeat(9);
+        let typed = Typed(Some(answer.clone()));
+        let typed = password_value(None, "Initial SSH password: ", &checkout.0, &typed);
+        assert_eq!(typed.unwrap().expose(), answer);
         let piped = password_value(None, "Initial SSH password: ", &checkout.0, &none);
         assert_eq!(code(piped), "password_prompt_requires_terminal");
         for (name, bytes, expected) in [

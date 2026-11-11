@@ -304,6 +304,7 @@ mod tests {
         let private = Scratch::new();
         let checkout = Scratch::new();
         let host = Map::new();
+        let answer = "s".repeat(10);
         let run = |status: Result<i32>, sudo: bool| {
             let output = Scratch::new();
             let request = Request {
@@ -321,7 +322,7 @@ mod tests {
                 seen: RefCell::new(Vec::new()),
             };
             let facts = json!({"passwordlessSudo": sudo});
-            let typed = Typed(Some("typed sudo"));
+            let typed = Typed(Some(answer.clone()));
             let result = provision(
                 &playbook,
                 &typed,
@@ -338,7 +339,7 @@ mod tests {
         assert!(!seen[0].0.contains(&"--become-password-file".to_owned()));
         let (typed, seen) = run(Ok(0), false);
         typed.unwrap();
-        assert_eq!(seen[0].3.as_ref().unwrap().0, "typed sudo\n");
+        assert_eq!(seen[0].3.as_ref().unwrap().0, format!("{answer}\n"));
         let (failed, _) = run(Ok(2), false);
         assert_eq!(
             failed.unwrap_err(),
