@@ -1,4 +1,4 @@
-total 139132
+total 139033
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -173,7 +173,7 @@ total 139132
 782	ops/ansible/tests/test_migration_controller.py
 206	ops/ansible/tests/test_migration_dns.py
 159	ops/ansible/tests/test_migration_inspect.py
-212	ops/ansible/tests/test_migration_prepare.py
+113	ops/ansible/tests/test_migration_prepare.py
 257	ops/ansible/tests/test_migration_tls.py
 341	ops/ansible/tests/test_monitoring.py
 288	ops/ansible/tests/test_monitoring_database.py
