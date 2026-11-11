@@ -1845,7 +1845,7 @@ The launcher uses [act](https://github.com/nektos/act) to execute
 [CI](../.github/workflows/ci.yml)'s `required` job and its actual dependency graph,
 including the reusable security and CodeQL workflows. There is no separate list
 of local checks to drift from the workflow. Install Go 1.25.0 or newer and Podman on
-macOS (`brew install go podman`). Git, Python 3, curl and `patch` are also
+macOS (`brew install go podman`). Git, curl and `patch` are also
 prerequisites. The launcher builds its checksum-pinned act 0.2.89 with the
 repository's shared concurrency limit, then verifies and reuses that executable
 under `.cache/ci-act`. It does not use an ambient act installation.

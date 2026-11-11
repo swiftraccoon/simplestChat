@@ -4,6 +4,7 @@
 //! receipts; focused jobs always remain partial. Cleanup stops only the owned
 //! VM started by this invocation, never an ambient or pre-existing engine.
 
+mod act;
 mod engine;
 mod evidence;
 mod options;
@@ -123,7 +124,7 @@ async fn run_with_env(
         print!("{}", options::USAGE);
         return Ok(0);
     };
-    for tool in ["curl", "git", "python3"] {
+    for tool in ["curl", "git", "go"] {
         require_tool(root, &environment, tool)?;
     }
     let mut runner = Runner::new(root, environment, signals);
@@ -282,7 +283,7 @@ async fn owned(
     )?)?);
     let output = output.as_ref().expect("created output");
     println!("Local CI evidence: {}", output.path.display());
-    let act = text(runner.capture("python3", ["build/ci_local_act.py"]).await?)?;
+    let act = act::prepare(runner).await?;
     let socket = engine::select(runner, context, options).await?;
     engine::ready(runner, &socket, &output.path).await?;
     if !options.disposable && context.platform == "linux/arm64" {

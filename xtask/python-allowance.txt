@@ -1,4 +1,4 @@
-total 138247
+total 137803
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -8,9 +8,8 @@ total 138247
 1104	build/caddy_probe_vm.py
 2696	build/capacity.py
 169	build/capacity_artifacts.py
-260	build/ci_local_act.py
 241	build/ci_release_checks.py
-580	build/ci_verified.py
+578	build/ci_verified.py
 11	build/deploy.py
 11	build/fetch-release.py
 61	build/force_deploy.py
@@ -155,9 +154,8 @@ total 138247
 155	ops/ansible/tests/test_capacity_artifacts.py
 129	ops/ansible/tests/test_capacity_container.py
 175	ops/ansible/tests/test_capacity_ownership.py
-180	ops/ansible/tests/test_ci_local_act.py
 352	ops/ansible/tests/test_ci_release_checks.py
-1075	ops/ansible/tests/test_ci_verified.py
+1073	ops/ansible/tests/test_ci_verified.py
 245	ops/ansible/tests/test_database_logging.py
 766	ops/ansible/tests/test_deploy_controller.py
 134	ops/ansible/tests/test_dns_handoff.py

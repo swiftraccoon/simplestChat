@@ -37,9 +37,9 @@ if tool == 'git':
         elif enabled('INVALID_BASE'): sys.exit(128)
         else: print(('a' if enabled('SAME_BASE') else 'b')*40)
     else: sys.exit(93)
-elif tool == 'python3':
-    assert args == ['build/ci_local_act.py']
-    print(pathlib.Path(env['CI_FIXTURE_BIN']) / 'act')
+elif tool == 'go':
+    assert args == ['env', 'GOVERSION', 'GOOS', 'GOARCH']
+    print('go1.27.1\ndarwin\narm64')
 elif tool == 'uname': print(env.get('CI_FIXTURE_ARCH', 'arm64') if args == ['-m'] else env.get('CI_FIXTURE_OS', 'Darwin'))
 elif tool == 'curl':
     if enabled('ENGINE_DOWN'): sys.exit(7)
@@ -183,7 +183,7 @@ impl Fixture {
         let python = String::from_utf8(python.stdout).unwrap().trim().to_owned();
         let dispatcher = temporary.join("fake tools.py");
         fs::write(&dispatcher, DISPATCH).unwrap();
-        for tool in ["git", "curl", "python3", "uname", "podman", "act"] {
+        for tool in ["git", "curl", "go", "uname", "podman", "act"] {
             let path = bin.join(tool);
             fs::write(
                 &path,
@@ -219,7 +219,30 @@ impl Fixture {
                 &format!("name: {name}\n"),
             );
         }
+        fixture.warm_act_cache();
         fixture
+    }
+
+    /// Give the checkout a pinned act build whose cache entry is intact, so
+    /// preparation returns the fake runner without a compiler or network.
+    fn warm_act_cache(&self) {
+        use sha2::{Digest, Sha256};
+        let hexadecimal = |bytes: &[u8]| -> String {
+            let digest = Sha256::digest(bytes);
+            digest.iter().map(|byte| format!("{byte:02x}")).collect()
+        };
+        let patch = "reviewed fixture patch\n";
+        let pin = json!({"patchSha256": hexadecimal(patch.as_bytes())}).to_string();
+        self.write("build/ci-local-act.patch", patch);
+        self.write("build/ci-local-act.json", &pin);
+        let key = hexadecimal(format!("{pin}go1.27.1\ndarwin\narm64\n").as_bytes());
+        let target = self.root.join(".cache/ci-act").join(&key);
+        fs::create_dir_all(&target).unwrap();
+        let act = fs::read(self.bin.join("act")).unwrap();
+        fs::write(target.join("act"), &act).unwrap();
+        fs::set_permissions(target.join("act"), fs::Permissions::from_mode(0o755)).unwrap();
+        let receipt = json!({"inputSha256": key, "binarySha256": hexadecimal(&act)});
+        fs::write(target.join("receipt.json"), receipt.to_string()).unwrap();
     }
 
     fn write(&self, path: &str, contents: &str) {
@@ -383,7 +406,7 @@ fn full_arm_run_uses_exact_workflow_pins_resources_private_inputs_and_receipts()
     ] {
         assert!(options.contains(required));
     }
-    assert_eq!(tools(&outcome, "python3").len(), 1);
+    assert_eq!(tools(&outcome, "go").len(), 1);
     let event: Value =
         serde_json::from_slice(&fs::read(option(act, "--eventpath")).unwrap()).unwrap();
     assert_eq!(event["before"], BASE);
@@ -501,7 +524,7 @@ fn help_and_full_gate_guards_refuse_before_any_engine_action() {
 
 #[test]
 fn missing_prerequisites_refuse_without_falling_back_to_host_tools() {
-    for tool in ["curl", "git", "python3"] {
+    for tool in ["curl", "git", "go"] {
         let fixture = Fixture::new();
         fs::remove_file(fixture.bin.join(tool)).unwrap();
         let outcome = fixture.run(&[], &[]);
@@ -887,7 +910,7 @@ fn existing_lock_directory_or_link_prevents_invocation_and_is_not_removed() {
         }
         let outcome = fixture.run(&[], &[]);
         assert_eq!(outcome.code, 2);
-        assert!(tools(&outcome, "python3").is_empty());
+        assert!(tools(&outcome, "go").is_empty());
         assert!(fs::symlink_metadata(&lock).is_ok());
         assert_eq!(
             fs::read_to_string(fixture.root.join("target/act/marker")).unwrap(),
@@ -1011,7 +1034,7 @@ fn gateway_preserves_python_non_global_ipv4_policy_not_only_rfc1918() {
 
 #[test]
 fn command_failures_preserve_status_and_release_owned_lock() {
-    for phase in ["python3", "podman-ssh", "curl-networks", "act"] {
+    for phase in ["go", "podman-ssh", "curl-networks", "act"] {
         let fixture = Fixture::new();
         let outcome = fixture.run(
             &[],

@@ -58,6 +58,9 @@ impl Signals {
 pub(super) struct Runner {
     pub root: PathBuf,
     pub environment: Environment,
+    /// When set, a command still running after this long is stopped with its
+    /// whole process group and reported as status 124.
+    pub limit: Option<Duration>,
     signals: Signals,
 }
 
@@ -78,6 +81,7 @@ impl Runner {
         Self {
             root: root.into(),
             environment,
+            limit: None,
             signals,
         }
     }
@@ -292,6 +296,13 @@ impl Runner {
                 })
             })
         };
+        let limit = self.limit;
+        let expired = async {
+            match limit {
+                Some(limit) => tokio::time::sleep(limit).await,
+                None => std::future::pending().await,
+            }
+        };
         let status = tokio::select! {
             result = child.wait() => result.map(tooling::shell_status).map_err(io_failure)?,
             signal = self.signals.next() => {
@@ -299,6 +310,12 @@ impl Runner {
                 if let Some(reader) = reader { reader.abort(); }
                 if let Some(writer) = writer { writer.abort(); }
                 return Err(Failure::new(signal, "Local CI interrupted."));
+            }
+            () = expired => {
+                stop(&mut child, group, 143).await;
+                if let Some(reader) = reader { reader.abort(); }
+                if let Some(writer) = writer { writer.abort(); }
+                return Err(Failure::new(124, "Local CI command exceeded its time limit."));
             }
         };
         if let Some(writer) = writer {

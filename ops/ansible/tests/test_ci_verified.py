@@ -288,7 +288,6 @@ class VerifiedCacheTests(unittest.TestCase):
             "native_security_cache",
             "security_vendor",
             "ci_verified",
-            "ci_local_act",
         ]
         visited: set[str] = set()
         while pending:
@@ -456,7 +455,6 @@ class VerifiedCacheTests(unittest.TestCase):
             ".github/workflows/ci.yml",
             ".github/actions/native-toolchain/action.yml",
             "build/security_image.py",
-            "build/ci_local_act.py",
             "ops/ansible/files/release_public.py",
             "security/image-policy.json",
             "Dockerfile",
