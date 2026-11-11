@@ -15,8 +15,6 @@ mod oracle_tests;
 mod plan;
 mod policy;
 #[cfg(test)]
-mod reference_pins;
-#[cfg(test)]
 mod tests;
 pub(super) mod tools;
 

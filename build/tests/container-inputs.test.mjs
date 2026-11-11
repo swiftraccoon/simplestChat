@@ -432,6 +432,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/ci/src/automation/retained/artifact.zip',
     'crates/ci/src/evidence/private.env',
     'crates/ci/src/retention/private.env',
+    'crates/ci/src/release_http_policy/private.env',
+    'crates/ci/src/release_http_policy/recorded_reference.json',
     'crates/ci/src/codeql_cache/private.env',
     'crates/ci/src/production_image/private.env',
     'crates/ci/src/install_compose/private.env',
@@ -634,29 +636,3 @@ test('standalone container benchmark admits only its reviewed reference closure'
 });
 
 
-test('release HTTP checker admits only its reviewed offline reference closure', () => {
-  for (const filename of [
-    'crates/ci/src/release_http_policy/oracle.py',
-    'crates/ci/src/release_http_policy/__init__.py',
-    'crates/ci/src/release_http_policy/reference/build/release_container_fixture.py',
-    'crates/ci/src/release_http_policy/reference/build/release_container_harness.py',
-    'crates/ci/src/release_http_policy/reference/build/release_http_policy.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/bounded_process.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/release_artifact.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/release_assets.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/release_json.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/release_public.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/runtime_profile.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_release_container_harness.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_release_http_policy.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_support.py',
-    'crates/ci/src/release_http_policy/reference/security/http-policy.json',
-  ]) assert.equal(excluded(filename), false, filename);
-  for (const filename of [
-    'crates/ci/src/release_http_policy/private.env',
-    'crates/ci/src/release_http_policy/reference/build/other.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/files/other.py',
-    'crates/ci/src/release_http_policy/reference/ops/ansible/tests/other.py',
-    'crates/ci/src/release_http_policy/reference/security/other.json',
-  ]) assert.equal(excluded(filename), true, filename);
-});

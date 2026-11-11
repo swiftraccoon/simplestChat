@@ -2,15 +2,16 @@
 
 The canonical `build/test-release-container.py` harness performs one passive HTTP
 policy check after its application and Caddy fixture become ready. The check is
-implemented by `build/release_http_policy.py`; it uses only the Python standard
-library and the repository's bounded process helper, and it reads the expected
-headers and content security policy from `security/http-policy.json`, which
+the `release-http-policy` command of `simplestchat-ci`
+(`crates/ci/src/release_http_policy`), compiled with the `release-http-policy`
+feature; there is no Python checker and no fallback to one. Its expected headers
+and content security policy are compiled in from `security/http-policy.json`, which
 `cargo run -q -p xtask -- http-policy` writes from the server's own definitions
 (`cargo run --locked -q -p xtask -- check --rust` fails when that file is stale). It does not start another
 application, compile an image, or invoke the public chat smoke.
 
 The harness supplies its exact application/Caddy container IDs, ownership token,
-private CA path and recorded CA SHA-256. The helper inspects only those IDs through
+private CA path and recorded CA SHA-256. The checker inspects only those IDs through
 the fixed local Docker socket. Both containers must be running with this fixture's
 ownership label, the expected Compose project, and their exact service labels.
 Caddy must publish HTTPS on precisely `127.0.0.1:443`, with no other published
@@ -45,22 +46,21 @@ overrides and unreviewed additions fail instead of inheriting an apparently safe
 These requests are anonymous and must not set any cookie, including a cookie
 with otherwise secure flags. This is an absence check, not a test of authenticated
 cookie issuance. Existing Rust authentication tests cover the issued refresh
-cookie's host prefix, Secure, HttpOnly, SameSite and path attributes. This helper
+cookie's host prefix, Secure, HttpOnly, SameSite and path attributes. This checker
 does not log in or create a session just to repeat those tests.
 
-The helper rejects duplicate/control-bearing headers, more than 64 headers and
-more than 16 KiB of parsed header fields. Python's HTTP parser additionally bounds
-individual wire header lines and total header count before this stricter policy
-check. Responses must use the expected MIME type and no content compression.
-An announced oversized body is rejected before reading it; otherwise the client
-reads at most the endpoint budget plus one byte before closing the connection.
+The checker rejects duplicate/control-bearing headers, more than 64 headers and
+more than 16 KiB of parsed header fields. Responses must use the expected MIME
+type and no content compression. An announced oversized body is rejected, and
+no response may exceed its endpoint budget.
 
-Each socket operation has a three-second timeout. A 25-second process deadline
-also covers slow TLS/header/body delivery and Docker ownership inspection. Each
-Docker inspection has its own five-second deadline and output ceilings. The
-parent harness gives the helper 35 seconds and terminates its owned process group
-if it does not settle. The helper makes no request until ownership and CA checks
-have passed.
+Connecting and each read have a three-second inactivity timeout, and one
+25-second deadline covers all five requests. Each of the four Docker
+inspections, two before the requests and two after, has its own five-second
+deadline and output ceilings. The whole command is bounded at 180 seconds; the
+parent harness gives it 210 seconds, then 60 more to settle, before it
+terminates the owned process group. The checker makes no request until
+ownership and CA checks have passed.
 
 ## Evidence and existing checks
 
@@ -90,11 +90,16 @@ media correctness, production network policy or resistance to an active attack.
 Run offline parser, transport, ownership and harness-wiring tests with:
 
 ```sh
-python3 -m unittest discover -s ops/ansible/tests -p test_release_http_policy.py
+cargo test --locked -p simplestchat-ci --features release-http-policy \
+  release_http_policy -- --test-threads=1
+python3 -m unittest discover -s ops/ansible/tests -p test_release_container_policy.py
 python3 -m unittest discover -s ops/ansible/tests -p test_release_container_harness.py
 ```
 
-These tests mock the transport and Docker inspection; they do not contact a
-network endpoint. The real check runs only as part of the disposable Linux
+These tests replace the transport and Docker inspection; they do not contact a
+network endpoint. The policy matrices are also compared with the answers the
+retired Python checker gave for them, recorded in
+`crates/ci/src/release_http_policy/recorded_reference.json` before its removal.
+The real check runs only as part of the disposable Linux
 release-container harness described in [testing.md](testing.md). Its controller
 supports AMD64 and ARM64; the production image under test remains AMD64.

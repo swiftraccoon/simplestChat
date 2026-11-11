@@ -1,68 +1,21 @@
-//! Retained actual fifteen tests plus policy matrices executed without exec/socket APIs.
-//! The frozen checker predates `includeSubDomains`, so its copy of each case carries its
-//! own required HSTS value wherever the native case carries the policy file's.
+//! The retained policy matrices against the answers the frozen Python checker
+//! gave for them, recorded before that checker was removed. No process,
+//! exec or socket API is used.
 
 use super::{fixture::*, *};
-use crate::process::{Executor, Native};
 use serde_json::{Value, json};
-use simplestchat_toolkit::owned_process::Signals;
-use std::{
-    fs::{self, File, OpenOptions},
-    io::Write,
-    os::unix::fs::OpenOptionsExt,
-    path::Path,
-    sync::Arc,
-};
+use sha2::{Digest, Sha256};
 
-async fn reference(cases: &[Value]) -> Result<Value> {
-    reference_pins::check()?;
-    let f = Fixture::new();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .unwrap();
-    let python = simplestchat_toolkit::executable::select(
-        root,
-        &simplestchat_toolkit::tooling::inherited_env(),
-        std::ffi::OsStr::new("python3"),
-    )?;
-    let tools = tools::Tools::selected(python);
-    let scratch = files::Scratch::open(&f.root)?;
-    let input = f.root.join("oracle-input");
-    let mut file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .mode(0o600)
-        .open(&input)
-        .unwrap();
-    let bytes = serde_json::to_vec(&json!({"cases":cases})).unwrap();
-    assert!(bytes.len() <= 4 * 1024 * 1024);
-    file.write_all(&bytes).unwrap();
-    files::close(file).unwrap();
-    let file = File::open(&input).unwrap();
-    fs::remove_file(input).unwrap();
-    let mut capture = scratch.capture().await?;
-    let time = plan::Time::new(Clock::new());
-    let (mut command, proof) = tools.oracle(&time)?;
-    command.stdin = Some(Arc::new(file));
-    capture.attach(&mut command)?;
-    let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-    let environment = simplestchat_toolkit::tooling::Environment::new();
-    let mut native = Native::new(root, &environment, Signals::injected(rx));
-    let outcome = native.run(command).await;
-    let clean = native.cleanup_passed();
-    drop(native);
-    let bytes = capture.finish(proof.seals());
-    drop(proof);
-    let tool = tools.finish();
-    let scratch = scratch.finish();
-    outcome?;
-    tool?;
-    scratch?;
-    if !clean {
-        return Err(fail(1, "oracle_cleanup"));
-    }
-    serde_json::from_slice(&bytes?).map_err(|_| fail(1, "oracle_output"))
+/// The frozen checker's recorded answers.
+fn recorded() -> Value {
+    serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
+}
+
+/// The digest that binds recorded answers to exactly these generated cases.
+/// The bytes are stable because `serde_json` keeps object keys sorted.
+fn digest(cases: &[Value]) -> String {
+    let bytes = Sha256::digest(serde_json::to_vec(cases).unwrap());
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 fn case(index: usize) -> Value {
     let response = response(index);
@@ -334,29 +287,11 @@ fn cases() -> Vec<Value> {
 
     cases
 }
-fn frozen(cases: &[Value]) -> Vec<Value> {
-    let table: Value =
-        serde_json::from_str(include_str!("../../../../security/http-policy.json")).unwrap();
-    let current = table["headers"]["strict-transport-security"]
-        .as_str()
-        .unwrap();
-    let mut cases = cases.to_vec();
-    for rows in cases
-        .iter_mut()
-        .filter_map(|case| case.get_mut("headers").and_then(Value::as_array_mut))
-    {
-        for row in rows {
-            if row[0] == "strict-transport-security" && row[1] == current {
-                row[1] = json!("max-age=31536000");
-            }
-        }
-    }
-    cases
-}
-#[tokio::test]
-async fn actual_fifteen_original_tests_and_bounded_policy_matrix_match() {
+#[test]
+fn actual_fifteen_original_tests_and_bounded_policy_matrix_match() {
     let cases = cases();
-    let old = reference(&frozen(&cases)).await.unwrap();
+    let old = &recorded()["matrix"];
+    assert_eq!(old["casesSha256"], digest(&cases));
     assert_eq!(old["originalTests"], 15);
     assert_eq!(old["report"], policy::report());
     assert_eq!(old["results"].as_array().unwrap().len(), cases.len());
@@ -365,8 +300,8 @@ async fn actual_fifteen_original_tests_and_bounded_policy_matrix_match() {
     }
 }
 
-#[tokio::test]
-async fn original_positive_surrogate_and_depth_inputs_are_named_bounded_domain_refusals() {
+#[test]
+fn original_positive_surrogate_and_depth_inputs_are_named_bounded_domain_refusals() {
     let f = Fixture::new();
     let raw = String::from_utf8(inspection(&f.config, 0)).unwrap();
     let other = String::from_utf8(inspection(&f.config, 1)).unwrap();
@@ -381,7 +316,10 @@ async fn original_positive_surrogate_and_depth_inputs_are_named_bounded_domain_r
         );
         cases.push(json!({"kind":"inspection","records":[row,other]}));
     }
-    let old = reference(&cases).await.unwrap();
+    // The frozen checker accepted both inputs; the native one refuses them
+    // as bounded domain errors.
+    let old = &recorded()["refusals"];
+    assert_eq!(old["casesSha256"], digest(&cases));
     assert_eq!(old["originalTests"], 15);
     assert_eq!(old["report"], policy::report());
     assert_eq!(old["results"].as_array().unwrap().len(), cases.len());

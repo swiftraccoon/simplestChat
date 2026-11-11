@@ -48,10 +48,7 @@ pub(super) fn run(root: &Path, environment: &Environment) -> tooling::Result<()>
         .split(|byte| *byte == 0)
         .filter(|path| !path.is_empty())
     {
-        if source.starts_with(b"vendor/")
-            || source.starts_with(b"reference/")
-            || source.starts_with(b"crates/ci/src/release_http_policy/reference/")
-        {
+        if source.starts_with(b"vendor/") || source.starts_with(b"reference/") {
             continue;
         }
         let allowed = (source.ends_with(b".py")
@@ -61,7 +58,6 @@ pub(super) fn run(root: &Path, environment: &Environment) -> tooling::Result<()>
                 b"ops/ansible/callback_plugins/",
                 b"ops/ansible/filter_plugins/",
                 b"ops/ansible/tests/",
-                b"crates/ci/src/release_http_policy/",
             ]
             .iter()
             .any(|prefix| source.starts_with(prefix)))

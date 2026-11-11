@@ -77,8 +77,6 @@ const SOURCES: &[&str] = &[
     "ops/ansible/filter_plugins/filter.py",
     "ops/ansible/tests/test_new\ncase.py",
     "typings/fixture/nested.pyi",
-    "crates/ci/src/release_http_policy/oracle.py",
-    "crates/ci/src/release_http_policy/__init__.py",
 ];
 const DISPATCH: &str = r#"
 {
@@ -207,7 +205,6 @@ impl Fixture {
             "results/generated.py",
             "vendor/upstream.py",
             "reference/example.py",
-            "crates/ci/src/release_http_policy/reference/build/release_http_policy.py",
         ]) {
             fixture.write(name, "# inert source\n");
         }
@@ -1170,8 +1167,8 @@ fn python_rejects_new_source_roots_before_any_checker() {
         "build/unapproved.pyi",
         "typings/unapproved.py",
         "crates/ci/src/other/module.py",
-        "crates/ci/src/release_http_policy_unapproved/module.py",
-        "xtask/src/ci/release_http_policy/module.py",
+        "crates/ci/src/release_http_policy/module.py",
+        "xtask/src/ci/module.py",
     ] {
         let fixture = Fixture::new();
         fixture.write(source, "# policy must be explicit\n");

@@ -1397,3 +1397,29 @@ Replaying that SARIF with `build/security_codeql_triage.py sarif` against the
 updated ledger waives all twelve findings and blocks none. No query, path or
 test is excluded and no remote alert state changed; hosted ingestion remains a
 separate required check.
+
+## Retired: the release-HTTP frozen reference and the Python response checker (2026-11-11)
+
+The frozen Python reference under `crates/ci/src/release_http_policy/reference/`
+and its oracle program are deleted. The answers the frozen checker gave for the
+retained policy matrices are recorded in
+`crates/ci/src/release_http_policy/recorded_reference.json`, and the native
+tests compare against that record without starting an interpreter. The retained
+fixture copy reviewed as the
+[local finding](#local-release-http-retained-fixture) therefore no longer
+exists at any path. Its exception
+(`codeql:853c6b9737565e363c2ace3efe30754d17aaad6789c17ce93393dbd41aa13ab0`,
+scope
+`crates/ci/src/release_http_policy/reference/build/release_container_fixture.py:171:175:19:6`)
+is removed from `security/exceptions.json` instead of being left to lapse: an
+exact-path record for a deleted file can match nothing. It had no review JSON
+twin.
+
+The same change deletes `build/release_http_policy.py`, the superseded Python
+response checker that nothing invoked: the release fixture runs the native
+`release-http-policy` command. Alert 25's fix-pending record keeps its
+2026-09-30 observation in the review JSON, as before. It has no exception and
+no expiry, and with the file gone there is no source left to remediate.
+
+No query, path or test is excluded and no remote alert state changed; hosted
+ingestion remains a separate required check.

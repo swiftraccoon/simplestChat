@@ -1,0 +1,485 @@
+{
+  "recorded": {
+    "description": "Answers of the retired frozen Python response checker, run through its oracle program over the cases these tests generate, recorded before its removal. The checker predated includeSubDomains, so it received each case with its own required Strict-Transport-Security value in place of the policy file value.",
+    "interpreter": "CPython 3.14.9",
+    "oracleBlob": "ce08aaa856b2b7991b7ec7bb392ba2756a028090",
+    "revision": "c70f3f2b10b2377832167b7dd019bc256b814b6c"
+  },
+  "matrix": {
+    "casesSha256": "b3440061a681ac6e1549dbfa48a773af44c0c11a344b6df75fcf850406d839da",
+    "originalTests": 15,
+    "report": {
+      "anonymousCookiesAbsent": true,
+      "contentSecurityPolicy": true,
+      "jsonNoStore": true,
+      "missingAuthorizationRejected": true,
+      "passed": true,
+      "privateEndpointsOmitted": true,
+      "requests": 5,
+      "responseLimits": true,
+      "scope": "owned-loopback-release-fixture",
+      "securityHeaders": true
+    },
+    "results": [
+      {
+        "passed": true
+      },
+      {
+        "code": "http_status",
+        "passed": false
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_status",
+        "passed": false
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_status",
+        "passed": false
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_status",
+        "passed": false
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_status",
+        "passed": false
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_body_size",
+        "passed": false
+      },
+      {
+        "code": "http_server_header",
+        "passed": false
+      },
+      {
+        "code": "http_anonymous_cookie",
+        "passed": false
+      },
+      {
+        "code": "http_hsts",
+        "passed": false
+      },
+      {
+        "code": "http_content_type",
+        "passed": false
+      },
+      {
+        "code": "http_content_encoding",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_csp",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_csp",
+        "passed": false
+      },
+      {
+        "code": "http_content_type",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_hsts",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_security_headers",
+        "passed": false
+      },
+      {
+        "code": "http_duplicate_header",
+        "passed": false
+      },
+      {
+        "code": "http_duplicate_header",
+        "passed": false
+      },
+      {
+        "code": "http_duplicate_header",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_header_count",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_headers_size",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_public_capabilities",
+        "passed": false
+      },
+      {
+        "code": "http_public_capabilities",
+        "passed": false
+      },
+      {
+        "code": "http_public_capabilities",
+        "passed": false
+      },
+      {
+        "code": "http_public_capabilities",
+        "passed": false
+      },
+      {
+        "code": "http_public_capabilities",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_content_length",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "fixture_container_ownership",
+        "passed": false
+      },
+      {
+        "code": "fixture_container_ownership",
+        "passed": false
+      },
+      {
+        "code": "fixture_container_ownership",
+        "passed": false
+      },
+      {
+        "code": "fixture_container_ownership",
+        "passed": false
+      },
+      {
+        "code": "fixture_container_ownership",
+        "passed": false
+      },
+      {
+        "code": "fixture_https_publication",
+        "passed": false
+      },
+      {
+        "code": "fixture_https_publication",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "passed": true
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      },
+      {
+        "code": "http_policy_failed",
+        "passed": false
+      }
+    ]
+  },
+  "refusals": {
+    "casesSha256": "d57054de5f665c081504de375d4af1a1244f8fa7ecf80a00f475686f641bd009",
+    "originalTests": 15,
+    "report": {
+      "anonymousCookiesAbsent": true,
+      "contentSecurityPolicy": true,
+      "jsonNoStore": true,
+      "missingAuthorizationRejected": true,
+      "passed": true,
+      "privateEndpointsOmitted": true,
+      "requests": 5,
+      "responseLimits": true,
+      "scope": "owned-loopback-release-fixture",
+      "securityHeaders": true
+    },
+    "results": [
+      {
+        "passed": true
+      },
+      {
+        "passed": true
+      }
+    ]
+  }
+}

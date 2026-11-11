@@ -432,9 +432,6 @@ recorded by editing its row by hand.
 The source gate runs Ruff's complete stable rule set, its formatter, and
 basedpyright's `all` mode over every maintained Python file and type stub,
 including tests. It rejects a new source directory until explicitly included.
-The offline release-HTTP oracle package under `crates/ci/src/release_http_policy`
-is a maintained checked root; its exact historical `reference/` copies retain
-the existing reference exclusion and are checked by byte pins and oracle tests.
 Third-party `vendor/` sources and ignored private operator scripts are outside
 this policy. ShellCheck, `jq`, and the Ansible dependencies are required for the
 offline tests; the optional Compose renderer needs the Docker CLI, not a daemon.

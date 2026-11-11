@@ -1,4 +1,4 @@
-total 137803
+total 128985
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -28,7 +28,6 @@ total 137803
 1680	build/release_container_harness.py
 657	build/release_deploy.py
 722	build/release_fetch_controller.py
-370	build/release_http_policy.py
 12	build/run-vps-capacity.py
 306	build/security_actions.py
 461	build/security_archive.py
@@ -95,20 +94,6 @@ total 137803
 598	build/vps_capacity_controller.py
 880	build/vps_capacity_remote.py
 772	build/vps_ops_bootstrap.py
-1	crates/ci/src/release_http_policy/__init__.py
-318	crates/ci/src/release_http_policy/oracle.py
-268	crates/ci/src/release_http_policy/reference/build/release_container_fixture.py
-1491	crates/ci/src/release_http_policy/reference/build/release_container_harness.py
-373	crates/ci/src/release_http_policy/reference/build/release_http_policy.py
-243	crates/ci/src/release_http_policy/reference/ops/ansible/files/bounded_process.py
-351	crates/ci/src/release_http_policy/reference/ops/ansible/files/release_artifact.py
-471	crates/ci/src/release_http_policy/reference/ops/ansible/files/release_assets.py
-99	crates/ci/src/release_http_policy/reference/ops/ansible/files/release_json.py
-1950	crates/ci/src/release_http_policy/reference/ops/ansible/files/release_public.py
-188	crates/ci/src/release_http_policy/reference/ops/ansible/files/runtime_profile.py
-1767	crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_release_container_harness.py
-455	crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_release_http_policy.py
-76	crates/ci/src/release_http_policy/reference/ops/ansible/tests/test_support.py
 244	ops/ansible/callback_plugins/release_timing.py
 450	ops/ansible/files/backup_offsite.py
 209	ops/ansible/files/backup_public.py
@@ -184,10 +169,10 @@ total 137803
 1131	ops/ansible/tests/test_release_build.py
 400	ops/ansible/tests/test_release_container_fixture.py
 1906	ops/ansible/tests/test_release_container_harness.py
+93	ops/ansible/tests/test_release_container_policy.py
 893	ops/ansible/tests/test_release_fetch.py
 924	ops/ansible/tests/test_release_fetch_controller.py
 123	ops/ansible/tests/test_release_fetch_runtime_workflow.py
-490	ops/ansible/tests/test_release_http_policy.py
 317	ops/ansible/tests/test_release_json.py
 296	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py

@@ -25,7 +25,6 @@ pub(crate) struct Invocation {
     root: PathBuf,
     environment: Environment,
     arguments: Vec<OsString>,
-    program: Program,
     time: Time,
     latest: Instant,
     used: AtomicBool,
@@ -41,7 +40,7 @@ impl std::fmt::Debug for Invocation {
 impl Invocation {
     pub(crate) fn begin(&self, command: &Command) -> Result<()> {
         if self.used.swap(true, Ordering::SeqCst)
-            || command.program != self.program
+            || command.program != Program::Docker
             || command.arguments != self.arguments
             || command.timeout != Duration::from_secs(5)
             || command.grace != Duration::from_secs(1)
@@ -49,7 +48,7 @@ impl Invocation {
             || command.capture.is_some()
             || command.stdout.is_some()
             || command.combined_log.is_some()
-            || (command.stdin.is_some() != (self.program == Program::Python))
+            || command.stdin.is_some()
             || command
                 .separate_logs
                 .as_ref()
@@ -64,7 +63,7 @@ impl Invocation {
     pub(crate) fn validate(&self, program: Program, args: &[OsString]) -> Result<&Path> {
         if !self.used.load(Ordering::SeqCst)
             || self.invalid.load(Ordering::SeqCst)
-            || program != self.program
+            || program != Program::Docker
             || args != self.arguments
         {
             return Err(fail(1, "fixture_container_inspection"));
@@ -110,12 +109,6 @@ pub(super) struct Tools {
     executable: Arc<Executable>,
 }
 impl Tools {
-    #[cfg(test)]
-    pub fn selected(executable: Executable) -> Self {
-        Self {
-            executable: Arc::new(executable),
-        }
-    }
     pub fn open(path: &Path) -> Result<Self> {
         Ok(Self {
             executable: Arc::new(
@@ -153,40 +146,8 @@ impl Tools {
             .into_iter()
             .collect(),
             arguments: command.arguments.clone(),
-            program: Program::Docker,
             time: time.clone(),
             latest,
-            used: AtomicBool::new(false),
-            invalid: AtomicBool::new(false),
-            observed: AtomicBool::new(false),
-            seals: Mutex::new(None),
-        });
-        command.release_http = Some(proof.clone());
-        Ok((command, proof))
-    }
-    #[cfg(test)]
-    pub fn oracle(&self, time: &Time) -> Result<(Command, Arc<Invocation>)> {
-        let mut command = Command::capture(Program::Python, &["-I", "-B"]);
-        command.arguments.push(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("src/release_http_policy/oracle.py")
-                .into_os_string(),
-        );
-        command.timeout = Duration::from_secs(5);
-        command.grace = Duration::from_secs(1);
-        let proof = Arc::new(Invocation {
-            executable: self.executable.clone(),
-            root: PathBuf::from("/"),
-            environment: [
-                ("PATH".into(), "/usr/bin:/bin".into()),
-                ("LC_ALL".into(), "C".into()),
-            ]
-            .into_iter()
-            .collect(),
-            arguments: command.arguments.clone(),
-            program: Program::Python,
-            time: time.clone(),
-            latest: time.docker(0)?,
             used: AtomicBool::new(false),
             invalid: AtomicBool::new(false),
             observed: AtomicBool::new(false),
