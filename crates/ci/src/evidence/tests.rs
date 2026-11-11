@@ -161,8 +161,39 @@ fn real_workflows_complete_with_byte_identical_receipts_and_exclusive_publicatio
         fs::read(fixture.path.join("oracle/required.json")).unwrap()
     );
     let report = files::document(&fixture.path.join("native/required.json")).unwrap();
-    assert_eq!(report["checks"].as_array().unwrap().len(), 8);
-    assert_eq!(report["workflows"].as_object().unwrap().len(), 3);
+    // The receipt names every first-party coverage contract, every gate the
+    // workflow's final job needs, and the three workflows it read.
+    assert_eq!(
+        report["checks"],
+        json!([
+            "browser-accounts",
+            "browser-media",
+            "browser-stress",
+            "codeql-actions",
+            "codeql-javascript-typescript",
+            "codeql-python",
+            "codeql-rust",
+            "security-fast",
+        ])
+    );
+    let ci = files::bounded(&fixture.path.join(".github/workflows/ci.yml")).unwrap();
+    let mut gates = workflows::jobs(&ci).unwrap()["required"]["needs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    gates.sort_unstable();
+    assert_eq!(report["gates"], json!(gates));
+    assert_eq!(
+        report["workflows"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>(),
+        ["ci.yml", "codeql.yml", "security.yml"].into()
+    );
     assert!(fixture.context.complete().is_err());
     assert!(!fixture.oracle("complete", "").status.success());
 }
@@ -177,6 +208,18 @@ fn successful_records_bind_identity_match_bytes_and_cannot_be_replaced() {
     assert_eq!(
         fs::read(&path).unwrap(),
         fs::read(fixture.path.join("oracle/receipts/browser-media.json")).unwrap()
+    );
+    // The receipt carries exactly the caller's identity.
+    assert_eq!(
+        files::document(&path).unwrap(),
+        json!({
+            "schema": 1,
+            "status": "passed",
+            "check": "browser-media",
+            "runId": "1".repeat(32),
+            "revision": "a".repeat(40),
+            "base": "b".repeat(40),
+        })
     );
     assert_eq!(
         fs::metadata(path).unwrap().permissions().mode() & 0o777,

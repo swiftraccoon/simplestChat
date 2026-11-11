@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
-import yaml
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 
 import security_vm as vm
@@ -144,38 +142,6 @@ class BootModeTests(unittest.TestCase):
                         self.assertTrue(stream.closed)
             finally:
                 guest.close()
-
-    def test_workflow_manual_mode_cannot_replace_scheduled_signed_validation(self) -> None:
-        """Default/scheduled runs retain acquisition and full validation; boot has no artifact."""
-        path = Path(__file__).resolve().parents[3] / ".github/workflows/infrastructure-security.yml"
-        raw = cast("dict[object, object]", yaml.safe_load(path.read_text()))
-        # PyYAML's YAML 1.1 safe loader decodes the workflow's `on` key as True.
-        trigger = object_value(raw[True])
-        manual = object_value(object_value(trigger["workflow_dispatch"])["inputs"])
-        option = object_value(manual["boot_only"])
-        self.assertEqual(option["type"], "boolean")
-        self.assertIs(type(option["default"]), bool)
-        self.assertFalse(option["default"])
-        self.assertIn("schedule", trigger)
-        job = object_value(object_value(raw["jobs"])["infrastructure"])
-        self.assertIn("boot diagnostics", cast("str", job["name"]))
-        steps = cast("list[object]", job["steps"])
-        by_name = {
-            cast("str", item["name"]): item
-            for raw_step in steps
-            if "name" in (item := object_value(raw_step))
-        }
-        for name in (
-            "Acquire and verify the exact signed main release",
-            "Apply twice and verify host policy and isolated restore",
-        ):
-            self.assertEqual(by_name[name]["if"], "${{ !inputs.boot_only }}")
-        boot = by_name["Diagnose only the owned Debian guest boot"]
-        self.assertEqual(
-            boot["if"], "${{ github.event_name == 'workflow_dispatch' && inputs.boot_only }}"
-        )
-        self.assertIn("--boot-only", cast("str", boot["run"]))
-        self.assertNotIn("--artifact-dir", cast("str", boot["run"]))
 
 
 def cloud_report(**changes: object) -> bytes:

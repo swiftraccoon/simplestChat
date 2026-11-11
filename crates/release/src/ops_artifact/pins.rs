@@ -5,7 +5,9 @@
 //! each release runtime workflow's controller build to the path its Python
 //! helper opens.
 
+mod ops_artifact_workflow;
 mod ops_runtime_workflow;
+mod release_fetch_runtime_workflow;
 mod release_runtime_controllers;
 
 use serde_json::Value;

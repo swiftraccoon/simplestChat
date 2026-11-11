@@ -1,4 +1,4 @@
-total 143162
+total 142017
 11	build/bootstrap.py
 195	build/bootstrap_access.py
 913	build/bootstrap_controller.py
@@ -158,9 +158,7 @@ total 143162
 129	ops/ansible/tests/test_capacity_container.py
 175	ops/ansible/tests/test_capacity_ownership.py
 257	ops/ansible/tests/test_ci_cache_retention.py
-51	ops/ansible/tests/test_ci_database_check.py
 180	ops/ansible/tests/test_ci_local_act.py
-165	ops/ansible/tests/test_ci_local_evidence.py
 352	ops/ansible/tests/test_ci_release_checks.py
 1075	ops/ansible/tests/test_ci_verified.py
 245	ops/ansible/tests/test_database_logging.py
@@ -182,16 +180,13 @@ total 143162
 288	ops/ansible/tests/test_monitoring_database.py
 347	ops/ansible/tests/test_monitoring_external.py
 875	ops/ansible/tests/test_native_security.py
-160	ops/ansible/tests/test_ops_artifact_workflow.py
 377	ops/ansible/tests/test_ops_runtime_workflow.py
-107	ops/ansible/tests/test_performance_compare_ci.py
 463	ops/ansible/tests/test_public_backup.py
 156	ops/ansible/tests/test_public_deployment.py
 803	ops/ansible/tests/test_public_reboot.py
 2018	ops/ansible/tests/test_public_release.py
 310	ops/ansible/tests/test_public_seed.py
 611	ops/ansible/tests/test_public_templates.py
-299	ops/ansible/tests/test_python_quality.py
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
@@ -200,13 +195,12 @@ total 143162
 1906	ops/ansible/tests/test_release_container_harness.py
 893	ops/ansible/tests/test_release_fetch.py
 924	ops/ansible/tests/test_release_fetch_controller.py
-183	ops/ansible/tests/test_release_fetch_runtime_workflow.py
+123	ops/ansible/tests/test_release_fetch_runtime_workflow.py
 490	ops/ansible/tests/test_release_http_policy.py
 317	ops/ansible/tests/test_release_json.py
 474	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py
 224	ops/ansible/tests/test_release_timing.py
-183	ops/ansible/tests/test_release_workflow.py
 396	ops/ansible/tests/test_restore_database.py
 230	ops/ansible/tests/test_restore_verify.py
 116	ops/ansible/tests/test_runtime_components.py
@@ -258,7 +252,7 @@ total 143162
 419	ops/ansible/tests/test_security_tools.py
 500	ops/ansible/tests/test_security_vendor.py
 1040	ops/ansible/tests/test_security_vm.py
-354	ops/ansible/tests/test_security_vm_boot.py
+320	ops/ansible/tests/test_security_vm_boot.py
 2019	ops/ansible/tests/test_security_vm_deploy.py
 1165	ops/ansible/tests/test_security_vm_deploy_injection.py
 493	ops/ansible/tests/test_security_vm_deploy_injection_client.py
@@ -276,7 +270,6 @@ total 143162
 451	ops/ansible/tests/test_security_vm_restore_inputs.py
 721	ops/ansible/tests/test_security_vm_stage.py
 523	ops/ansible/tests/test_security_vm_vps_guest.py
-86	ops/ansible/tests/test_session_soak_ci.py
 76	ops/ansible/tests/test_support.py
 450	ops/ansible/tests/test_turn_public.py
 693	ops/ansible/tests/test_vps_capacity_controller.py

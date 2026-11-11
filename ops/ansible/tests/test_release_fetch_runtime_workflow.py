@@ -1,4 +1,4 @@
-"""Protect the manual free-KVM proof's exact credential and upload boundary."""
+"""Run the manual free-KVM proof's actual acquisition supervisor against inert faults."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
-from test_support import ROOT, obj, objects, string, yaml_value
+from test_support import ROOT, objects, string, yaml_value
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -36,67 +36,7 @@ def acquisition_supervisor() -> str:
 
 
 class ReleaseFetchRuntimeWorkflowTests(unittest.TestCase):
-    """Compilation/installation stay credentialless; only a closed summary is uploaded."""
-
-    def test_manual_readonly_standard_runner_has_no_target_or_checkout_selectors(self) -> None:
-        """Keep this optional disposable proof free of release/signer authority."""
-        value = obj(yaml_value(WORKFLOW.read_text(), scalars_as_strings=True))
-        self.assertEqual(set(obj(value, "on")), {"workflow_dispatch"})
-        self.assertEqual(obj(value, "on")["workflow_dispatch"], "")
-        self.assertEqual(value["permissions"], {"contents": "read", "actions": "read"})
-        job = obj(value, "jobs", "release-fetch-runtime")
-        self.assertEqual(job["runs-on"], "ubuntu-24.04")
-        self.assertEqual(job["timeout-minutes"], "90")
-        self.assertEqual(
-            job["if"],
-            "${{ github.event_name == 'workflow_dispatch' && "
-            + "github.ref == 'refs/heads/main' && "
-            + "github.repository == 'swiftraccoon/simplestChat' }}",
-        )
-        self.assertNotIn("needs", job)
-        self.assertNotIn("env", job)
-        checkout = objects(job, "steps")[0]
-        self.assertEqual(checkout["with"], {"persist-credentials": "false"})
-
-    def test_sole_credential_leaf_runs_only_after_pinned_install_and_gnu_source_build(self) -> None:
-        """Acquisition is a cache input; both actual native branches remain in the keeper."""
-        value = yaml_value(WORKFLOW.read_text(), scalars_as_strings=True)
-        steps = objects(value, "jobs", "release-fetch-runtime", "steps")
-        token = [
-            index for index, step in enumerate(steps) if "GH_TOKEN" in obj(step.get("env", {}))
-        ]
-        self.assertEqual(len(token), 1)
-        runtime = token[0]
-        self.assertEqual(steps[runtime]["timeout-minutes"], "65")
-        self.assertEqual(steps[runtime]["env"], {"GH_TOKEN": "${{ github.token }}"})
-        before = "\n".join(string(step.get("run", "")) for step in steps[:runtime])
-        self.assertIn("--require-hashes --only-binary=:all:", before)
-        self.assertIn("build/security_tools.py install --tools gh", before)
-        self.assertIn("cargo build --locked --release --target x86_64-unknown-linux-gnu", before)
-        self.assertIn("-p simplestchat-ops --bin simplestchat-ops", before)
-        script = string(steps[runtime], "run")
-        self.assertLess(
-            script.index("security_vm_release.py"), script.index("security_vm_fetch.py")
-        )
-        self.assertNotIn("timeout ", script)
-        self.assertNotIn("${{", script)
-        self.assertNotIn("ssh ", script)
-        self.assertNotIn("curl ", script)
-
-    def test_upload_is_only_the_closed_success_summary(self) -> None:
-        """Raw captures, keys, grants and failed partial reports cannot become artifacts."""
-        value = yaml_value(WORKFLOW.read_text(), scalars_as_strings=True)
-        uploads = [
-            step
-            for step in objects(value, "jobs", "release-fetch-runtime", "steps")
-            if "upload-artifact@" in string(step.get("uses", ""))
-        ]
-        self.assertEqual(len(uploads), 1)
-        self.assertEqual(uploads[0]["if"], "${{ success() }}")
-        self.assertEqual(
-            obj(uploads[0], "with")["path"], "${{ runner.temp }}/release-fetch-runtime/summary.json"
-        )
-        self.assertEqual(obj(uploads[0], "with")["if-no-files-found"], "error")
+    """The inline supervisor keeps raw evidence private and refuses before any VM."""
 
     def test_actual_acquisition_supervisor_caps_and_closes_before_fixed_diagnostic(self) -> None:
         """Keep all raw evidence private and refuse before VM on timeout/nonzero/IO failure."""
