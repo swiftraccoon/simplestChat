@@ -46,7 +46,7 @@ pub(super) fn names(tasks: &[Value]) -> Vec<&str> {
 }
 
 /// The fixed environment of every Ops command a playbook issues.
-fn environment() -> Value {
+pub(super) fn environment() -> Value {
     json!({"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "GH_TOKEN": "", "GITHUB_TOKEN": ""})
 }
 

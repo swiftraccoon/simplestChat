@@ -3,8 +3,8 @@
 use super::failure::{Failure, Result, require};
 use crate::json::{self, Json};
 use std::io::Write;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
-use std::path::Path;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::path::{Path, PathBuf};
 
 /// Read at most `limit` bytes of one file.
 pub(crate) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
@@ -105,6 +105,16 @@ fn replace(path: &Path, bytes: &[u8], access: Option<&Access>) -> Result<()> {
     }
     std::fs::File::open(parent)?.sync_all()?;
     Ok(())
+}
+
+/// A new private directory `prefix.<unique>` in `parent`.
+pub(crate) fn private_directory(parent: &Path, prefix: &str) -> Result<PathBuf> {
+    let mut random = [0_u8; 4];
+    getrandom::fill(&mut random).map_err(|_| Failure::Os)?;
+    let unique: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+    let path = parent.join(format!("{prefix}.{unique}"));
+    std::fs::DirBuilder::new().mode(0o700).create(&path)?;
+    Ok(path)
 }
 
 /// Replace `path` with `value` as indented JSON and a final newline.

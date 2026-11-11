@@ -16,6 +16,7 @@ mod host;
 mod json;
 pub mod monitor;
 pub mod owned_process;
+pub mod reboot;
 pub mod release;
 
 /// Fixed, non-sensitive validation failures. Paths, keys and file contents never

@@ -1,6 +1,7 @@
 //! Same-process capability for the existing nonblocking workload flock and
 //! unfinished-journal gates. No path or owner bypass is public, and the only
-//! recovery is a backup owner's named takeover of its own unfinished record.
+//! recovery is a backup or reboot owner's named takeover of its own
+//! unfinished record.
 use super::{
     Result, fail,
     files::{self, Dir, Entry, Fs, ScopedFs},
@@ -8,14 +9,16 @@ use super::{
     scope::Scope,
 };
 use crate::{
+    host::boot_identity,
     json::{self, Json},
     release::workload::Lease,
 };
 use std::fs::File;
 
-/// Unfinished ownership in the shared runtime journal that a caller may take
-/// over once it holds the lock, in order to resolve it itself. The release
-/// record never yields to a takeover.
+/// Unfinished ownership a caller may take over once it holds the lock, in
+/// order to resolve it itself. The backup owners take over only the shared
+/// runtime journal, the reboot owner only the release record; each leaves
+/// the other journal held to a finalized state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Takeover<'a> {
     /// Nothing: an unfinished journal refuses.
@@ -26,25 +29,46 @@ pub enum Takeover<'a> {
     ExpiredNightly { boot: &'a str, monotonic: f64 },
     /// The offsite backup's own record.
     Offsite,
-}
-
-/// Whether `text` is a kernel boot identity: 8-4-4-4-12 lowercase hexadecimal.
-fn boot_identity(text: &str) -> bool {
-    let groups: Vec<&str> = text.split('-').collect();
-    let hexadecimal = |group: &&str| {
-        group
-            .bytes()
-            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-    };
-    groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12]) && groups.iter().all(hexadecimal)
+    /// No unfinished release record, but the caller writes its own next: a
+    /// reboot's preparation.
+    RebootPrepare,
+    /// A prepared reboot's release record, once the boot identity differs
+    /// from the one it recorded. `boot` is the current boot identity.
+    RebootResume { boot: &'a str },
+    /// A prepared reboot's release record while the recorded boot is still
+    /// the current one.
+    RebootCancel { boot: &'a str },
 }
 
 impl Takeover<'_> {
+    /// The part of this takeover that concerns the shared runtime journal.
+    fn runtime(self) -> Self {
+        match self {
+            Self::ExpiredNightly { .. } | Self::Offsite => self,
+            _ => Self::Nothing,
+        }
+    }
+
+    /// The part of this takeover that concerns the release record.
+    fn release(self) -> Self {
+        match self {
+            Self::RebootPrepare | Self::RebootResume { .. } | Self::RebootCancel { .. } => self,
+            _ => Self::Nothing,
+        }
+    }
+
     /// Whether the unfinished `record` is this caller's to resolve.
     fn admits(self, record: &Json) -> bool {
         let operation = record.get("operation").and_then(Json::string);
+        let prepared = || {
+            let awaiting = record.get("phase").and_then(Json::string) == Some("await_reboot");
+            let recorded = record.get("bootId").and_then(Json::string);
+            recorded.filter(|recorded| awaiting && boot_identity(recorded))
+        };
         match self {
-            Self::Nothing => false,
+            Self::Nothing | Self::RebootPrepare => false,
+            Self::RebootResume { boot } => prepared().is_some_and(|recorded| recorded != boot),
+            Self::RebootCancel { boot } => prepared().is_some_and(|recorded| recorded == boot),
             Self::Offsite => operation == Some("offsite_backup"),
             Self::ExpiredNightly { boot, monotonic } => {
                 let deadline = match record.get("untilMonotonic") {
@@ -206,8 +230,8 @@ impl Workload {
         }
         self.fs.access.event("locked", "")?;
         self.check()?;
-        self.journal(work, "current.json", takeover)?;
-        self.journal(self.root, "release-state.json", Takeover::Nothing)?;
+        self.journal(work, "current.json", takeover.runtime())?;
+        self.journal(self.root, "release-state.json", takeover.release())?;
         self.check()
     }
     fn journal(&mut self, parent: Dir, name: &str, takeover: Takeover<'_>) -> Result<()> {
@@ -241,8 +265,8 @@ impl Workload {
         if takeover == Takeover::Nothing {
             return Ok(());
         }
-        // A caller that may take the journal over writes its own record
-        // next, so the journal is not held to the bytes just validated.
+        // A caller that owns this journal writes its own record next, so
+        // the journal is not held to the bytes just validated.
         self.fs.release(entry)
     }
     pub(super) fn check(&self) -> Result<()> {

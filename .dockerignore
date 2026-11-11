@@ -108,6 +108,9 @@ ops/src/host/**
 !ops/src/monitor/
 ops/src/monitor/**
 !ops/src/monitor/*.rs
+!ops/src/reboot/
+ops/src/reboot/**
+!ops/src/reboot/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/

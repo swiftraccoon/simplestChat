@@ -2039,6 +2039,75 @@ downloads and journal. The isolated verification here serves the drill;
 and `restore_verify.py` stays in the tree, frozen, for the restore proofs'
 guests that still import it.
 
+## Prepared reboot
+
+The [reboot playbook](ansible/reboot.yml) runs these commands by the
+executable's installed path, each in a bounded transient unit; the
+[release guide](ansible/RELEASES.md#reboots-and-user-recovery) is the
+operator's description. Each requires root on the prepared host and holds the
+shared workload lock. None of them reboots the host, builds or pulls an image,
+creates or replaces a container, or migrates anything.
+
+```sh
+simplestchat-ops reboot prepare
+simplestchat-ops reboot resume
+simplestchat-ops reboot cancel
+```
+
+`prepare` first proves that the host is one a recovery can restore. The
+installed Compose must offer `start --wait` and `--wait-timeout`. The seven
+protected configuration files must have their owner and modes. The selected
+application image must be local, built from the selected revision and carry
+the managed execution defaults. Exactly one container of each of the three
+services must exist, run the configuration on disk and the selected image,
+and the database must be healthy. No migration container may be retained, the
+resolved project must be the managed profile with runtime migrations off and
+`unless-stopped` policies, and the application must answer ready on loopback
+and through its public origin. All of that goes into `identity.json` of a new
+private attempt `/srv/simplestchat-public/results/reboot.UNIQUE`, with the
+boot identity and with the managed relay and monitoring containers that exist
+and whether each was running.
+
+Only then does `prepare` name the attempt in
+`/srv/simplestchat-public/release-state.json` and stop the application, the
+proxy and the database in that order, the database with 60 seconds of grace
+and the others with 30. Each stop must leave the same container, not running,
+with exit code 0. The outcome is published as `await_reboot` before the
+journal admits a recovery. When a stop fails, or the command is told to stop
+while it works, it starts the three services again at once on the same boot;
+the failed stop stays the failure, and a recovery that worked finalizes the
+journal as `reboot_prepare_failed_recovered`.
+
+`resume` is admitted only when the kernel's boot identity differs from the
+recorded one, `cancel` only when it is the same. Both take the attempt only
+from the journal: it must lie in the results directory, its identity must be
+private and have the recorded SHA-256, and its outcome must still await the
+reboot. They then require the configuration files, the selection, the
+resolved project and the three containers to be the recorded ones, and every
+recorded companion to exist unchanged, before anything starts. The database
+starts first and has 180 seconds to report healthy, the application then has
+45 seconds to answer ready on loopback, and the proxy 45 seconds to answer
+through the public origin with its certificate verified. Of the companions,
+only those that were running are started again. `resume` finalizes the
+journal as `reboot_complete` and reports a passed reboot; `cancel` finalizes
+it as `reboot_cancelled` and stays a failed reboot whose services were
+recovered. A recovery that fails leaves the journal unfinished for review:
+neither command can be repeated on it.
+
+Each action prints one line, `{"action", "phase", "passed", "evidence"}`,
+once it has an attempt, also when it fails. A failure adds one line on
+standard error that names only the kind of fault; `outcome.json` in the
+attempt says what was refused. The numbered private output of every command
+stays in the attempt, a recovery's in its own `resume` or `cancel` directory.
+
+The Python helper's answers for 143 invocations in 105 scenarios are recorded
+in `ops/src/reboot/recorded_reboot.json`, each command with the answer it
+got. The test replays them request by request: every command must be the
+recorded one with its deadline, and every invocation must end as recorded and
+leave the recorded journal, identity and outcome. `reboot_public.py` itself
+stays in the tree, frozen, while the release preflight's helper digest list
+still names it.
+
 
 ## Offline server attestation preparation
 

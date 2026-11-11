@@ -959,6 +959,13 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
   -e scpub_reboot=true
 ```
 
+The playbook runs the installed Ops executable (`simplestchat-ops reboot
+prepare|resume|cancel`, described in the
+[Ops guide](../README.md#prepared-reboot)), so the host needs a signed release
+first: any `release.yml` run for a signed revision delivers the executable,
+staging alone is enough, and the playbook refuses before any effect when it is
+absent.
+
 The workflow records the running selection, stops gracefully, verifies a changed
 host boot ID, then starts the existing database, application and proxy in order.
 It also records existing managed TURN, Prometheus and node-exporter container
@@ -972,9 +979,10 @@ can restore the saved containers; it does not report a successful reboot.
 The controller must remain available through this workflow. There is no new boot
 service that silently resumes a deliberately stopped site. If the controller is
 lost after preparation, inspect the private journal and run the installed
-`reboot-public.py resume` after the boot changed, or `reboot-public.py cancel` on
-the original boot, in a bounded systemd job. The helper rejects the wrong boot
-identity, changed containers/configuration, and another unfinished operation.
+`simplestchat-ops reboot resume` after the boot changed, or `simplestchat-ops
+reboot cancel` on the original boot, in a bounded systemd job. The command
+rejects the wrong boot identity, changed containers/configuration, and another
+unfinished operation.
 Do not rerun the entire reboot playbook as a recovery shortcut.
 
 A reboot of the only host necessarily interrupts service. Updated browsers show

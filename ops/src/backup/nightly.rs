@@ -5,7 +5,7 @@
 use super::receipts;
 use crate::host::evidence::{Evidence, Streams};
 use crate::host::failure::{Failure, Result, require};
-use crate::host::{Host, state};
+use crate::host::{Host, hexadecimal, state};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -56,13 +56,6 @@ pub(super) fn stamped(name: &str) -> bool {
     let bytes = name.as_bytes();
     let digits = |range: std::ops::Range<usize>| bytes[range].iter().all(u8::is_ascii_digit);
     bytes.len() == 16 && digits(0..8) && bytes[8] == b'T' && digits(9..15) && bytes[15] == b'Z'
-}
-
-fn hexadecimal(text: &str, length: usize) -> bool {
-    text.len() == length
-        && text
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// The names in `directory`, in a fixed order.
@@ -377,17 +370,6 @@ fn nightly(host: &Host<'_>, target: &Path, days: i64, at_least: i64) -> Result<P
     published.and(removed)?;
     prune(host, target, days, at_least)?;
     Ok(dump)
-}
-
-/// The kernel's identity of the current boot.
-pub(super) fn boot(host: &Host<'_>) -> Result<String> {
-    let value = text(state::read(&host.paths.boot, 4096)?)?;
-    let value = value.trim();
-    let groups: Vec<&str> = value.split('-').collect();
-    let shaped = groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12])
-        && groups.iter().all(|group| hexadecimal(group, group.len()));
-    require(shaped, "Invalid host boot identity")?;
-    Ok(value.to_owned())
 }
 
 /// The ownership record every other operation refuses to work beside until

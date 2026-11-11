@@ -448,19 +448,6 @@ fn retrieve(
         .map(|_| ())
 }
 
-fn unique() -> Result<String> {
-    let mut random = [0_u8; 4];
-    getrandom::fill(&mut random).map_err(|_| Failure::Os)?;
-    Ok(random.iter().map(|byte| format!("{byte:02x}")).collect())
-}
-
-/// A new private directory `prefix.<unique>` in `parent`.
-fn private_directory(parent: &Path, prefix: &str) -> Result<PathBuf> {
-    let path = parent.join(format!("{prefix}.{}", unique()?));
-    std::fs::DirBuilder::new().mode(0o700).create(&path)?;
-    Ok(path)
-}
-
 /// A verified drill; also the freshness marker of the last one.
 #[derive(serde::Serialize)]
 struct Drilled<'a> {
@@ -486,7 +473,7 @@ fn drill(runner: &mut Evidence<'_>, configured: &Settings, request: &Request) ->
     let ceiling = configured.archive_mib * MIB;
     let room = host.commands.free(&runner.attempt)? > ceiling + GIB;
     require(room, "Insufficient restore download headroom")?;
-    let directory = private_directory(&runner.attempt, "download")?;
+    let directory = state::private_directory(&runner.attempt, "download")?;
     let receipt = directory.join(format!("{stamp}.receipt.json"));
     let archive = directory.join(format!("{stamp}.dump"));
     let restored = (|| -> Result<(restore::Report, String)> {
@@ -674,7 +661,7 @@ fn recover_interrupted(host: &Host<'_>) -> Result<()> {
     require(recorded, "Invalid offsite recovery attempt")?;
     state::protected(&attempts, host.owner, true, &[0o700], None)?;
     state::protected(&attempt, host.owner, true, &[0o700], None)?;
-    let mut runner = Evidence::new(host, private_directory(&attempt, "recovery")?);
+    let mut runner = Evidence::new(host, state::private_directory(&attempt, "recovery")?);
     let record = attempt.join("restore.json");
     if action == "restore" && std::fs::symlink_metadata(&record).is_ok() {
         state::protected(&record, host.owner, false, &[0o600], Some(65536))?;
@@ -744,7 +731,7 @@ pub(super) fn run(host: &Host<'_>, request: &Request) -> Result<&'static str> {
         _ => {}
     }
     state::protected(&attempts, host.owner, true, &[0o700], None)?;
-    let attempt = private_directory(&attempts, request.action.name())?;
+    let attempt = state::private_directory(&attempts, request.action.name())?;
     let mut runner = Evidence::new(host, attempt.clone());
     let mut current = Journal {
         schema_version: 1,

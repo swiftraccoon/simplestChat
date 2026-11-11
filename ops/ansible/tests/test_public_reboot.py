@@ -32,7 +32,7 @@ import release_public as public
 import test_runtime_profile as runtime_fixture
 from release_artifact import sha256_file
 from release_json import JsonObject, decode_json
-from test_support import at, obj, objects, string, strings, yaml_value
+from test_support import at, obj, string, strings, yaml_value
 
 ROOT = test_support.ROOT
 FILES = ROOT / "ops/ansible/files"
@@ -722,44 +722,7 @@ class PublicRebootTests(unittest.TestCase):
 
 @final
 class RebootPlaybookTests(unittest.TestCase):
-    """Require explicit maintenance authorization around every existing-container reboot."""
-
-    def test_explicit_authorization_and_existing_host_guards_precede_reboot(self) -> None:
-        """Explicit authorization and existing host guards precede reboot."""
-        play = obj(yaml_value((FILES.parent / "reboot.yml").read_text()), 0)
-        self.assertEqual(play["serial"], 1)
-        guard = obj(play, "pre_tasks", 0)
-        self.assertEqual(guard["tags"], ["always"])
-        self.assertIn(
-            "scpub_reboot | default(false) | bool", strings(guard, "ansible.builtin.assert", "that")
-        )
-        self.assertIn("scpub_enabled | bool", strings(guard, "ansible.builtin.assert", "that"))
-        tasks = objects(play, "tasks")
-        workflow = tasks[-1]
-        preparation = obj(workflow, "block", 0)
-        self.assertEqual(at(preparation, "ansible.builtin.command", "argv", -1), "prepare")
-        self.assertEqual(workflow["when"], "not ansible_check_mode")
-        upgrade = obj(workflow, "block", 1)
-        self.assertEqual(upgrade["ansible.builtin.include_tasks"], "tasks/docker.yml")
-        self.assertIs(obj(upgrade, "vars")["scbench_docker_defer_restart"], expr2=True)
-        self.assertEqual(upgrade["when"], "scpub_upgrade_runtime | default(false) | bool")
-        self.assertIn("ansible.builtin.reboot", obj(workflow, "block", 2))
-        self.assertEqual(
-            at(workflow, "block", 3, "ansible.builtin.include_tasks"), "tasks/runtime-verify.yml"
-        )
-        self.assertEqual(at(workflow, "block", 4, "ansible.builtin.command", "argv", -1), "resume")
-        self.assertEqual(at(workflow, "rescue", 0, "ansible.builtin.command", "argv", -1), "cancel")
-        self.assertIs(at(workflow, "rescue", 0, "failed_when"), expr2=False)
-        self.assertIn("ansible.builtin.fail", obj(workflow, "rescue", -1))
-        for task in (preparation, obj(workflow, "block", 4), obj(workflow, "rescue", 0)):
-            argv = strings(task, "ansible.builtin.command", "argv")
-            self.assertIn("--property=RuntimeMaxSec=900", argv)
-            self.assertIn("--wait", argv)
-        self.assertFalse(
-            any(
-                "ansible.builtin.apt" in task or "ansible.builtin.service" in task for task in tasks
-            )
-        )
+    """Require the runtime upgrade's inline comparison to fail closed."""
 
     def test_compose_upgrade_refuses_changed_configuration_hash_or_version(self) -> None:
         """The actual preflight compares private outputs without emitting credentials."""

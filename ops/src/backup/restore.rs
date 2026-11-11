@@ -50,18 +50,7 @@ impl Limits {
     }
 }
 
-pub(super) fn hexadecimal(text: &str, length: usize) -> bool {
-    text.len() == length
-        && text
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
-}
-
-/// Whether `text` is a content-addressed image identity.
-pub(super) fn image_identity(text: &str) -> bool {
-    text.strip_prefix("sha256:")
-        .is_some_and(|hash| hexadecimal(hash, 64))
-}
+pub(super) use crate::host::{hexadecimal, image_id as image_identity};
 
 fn text(bytes: Vec<u8>) -> Result<String> {
     String::from_utf8(bytes).map_err(|_| Failure::Value)

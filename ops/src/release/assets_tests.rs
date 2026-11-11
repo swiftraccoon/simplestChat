@@ -787,3 +787,60 @@ fn only_the_owning_backup_takes_over_its_own_unfinished_journal() {
     }
     assert_eq!(journals, 13);
 }
+
+/// The reboot owner may take over only a prepared reboot's release record: a
+/// resume once the boot identity differs from the recorded one, a
+/// cancellation while it is the same, and a preparation never. Sixty
+/// recorded pairs of journals are admitted or refused for each of the three
+/// as the Python lock decided, and none of the three yields an unfinished
+/// runtime journal. The backup owners, decided beside them, never get the
+/// release record, whatever operation it names.
+#[test]
+fn only_a_prepared_reboot_yields_the_release_record_to_its_recovery() {
+    let recorded = include_str!("../reboot/recorded_reboot.json");
+    let recorded: serde_json::Value = serde_json::from_str(recorded).unwrap();
+    let locks = recorded["locks"].as_array().unwrap();
+    assert_eq!(locks.len(), 60);
+    let mut admitted = [0, 0, 0, 0, 0];
+    for vector in locks {
+        let fixture = Fixture::new();
+        let work = fixture.path.join("run/simplestchat-bench");
+        fs::create_dir(&work).unwrap();
+        mode(&work, 0o700);
+        let state = fixture
+            .path
+            .join("srv/simplestchat-public/release-state.json");
+        let journals = [
+            (&vector["state"], state),
+            (&vector["current"], work.join("current.json")),
+        ];
+        for (text, path) in journals {
+            if let Some(text) = text.as_str() {
+                fs::write(&path, text).unwrap();
+                mode(&path, 0o600);
+            }
+        }
+        let owner = fs::metadata(&fixture.path).unwrap().uid();
+        let boot = vector["boot"].as_str().unwrap();
+        let takeovers = [
+            ("prepare", Takeover::RebootPrepare),
+            ("resume", Takeover::RebootResume { boot }),
+            ("cancel", Takeover::RebootCancel { boot }),
+            ("offsite", Takeover::Offsite),
+            // Long after the deadline every recorded nightly journal names.
+            (
+                "nightly",
+                Takeover::ExpiredNightly {
+                    boot,
+                    monotonic: 1.0e9,
+                },
+            ),
+        ];
+        for (at, (action, takeover)) in takeovers.into_iter().enumerate() {
+            let lock = Workload::fixture_for(&fixture.path, owner, takeover);
+            assert_eq!(lock.is_ok(), vector[action], "{action}: {vector}");
+            admitted[at] += usize::from(lock.is_ok());
+        }
+    }
+    assert_eq!(admitted, [6, 12, 12, 8, 8]);
+}

@@ -18,6 +18,7 @@ mod performance_compare_ci;
 mod public_deployment;
 mod public_recorded_release;
 mod python_quality;
+mod reboot;
 mod release_container_ci;
 mod release_playbook;
 mod release_workflow;

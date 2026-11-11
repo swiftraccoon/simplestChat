@@ -8,19 +8,7 @@ pub(super) enum Sample {
     Float(f64),
 }
 
-/// The shortest text that reads back as `value`, with a signed exponent of at
-/// least two digits outside the fixed-notation range.
-pub(super) fn float(value: f64) -> String {
-    let text = format!("{value:?}");
-    let Some((mantissa, exponent)) = text.split_once('e') else {
-        return text;
-    };
-    let (sign, digits) = match exponent.strip_prefix('-') {
-        Some(digits) => ('-', digits),
-        None => ('+', exponent),
-    };
-    format!("{mantissa}e{sign}{digits:0>2}")
-}
+pub(super) use crate::json::python_float as float;
 
 /// Append one sample under the fixed metric prefix, labelled only with an
 /// internally selected service name.

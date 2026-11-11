@@ -32,32 +32,25 @@
           - scpub_existing_selection.stat.mode == '0600'
         fail_msg: Prepare and deploy the public service with public.yml before using reboot.yml.
 
+    - name: Look for the installed Ops executable without following links
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: false
+      register: scpub_reboot_ops
+
+    - name: Require the Ops executable a signed release delivers
+      ansible.builtin.assert:
+        that:
+          - scpub_reboot_ops.stat.exists
+          - scpub_reboot_ops.stat.isreg
+          - scpub_reboot_ops.stat.uid == 0
+          - scpub_reboot_ops.stat.mode == '0755'
+        fail_msg: >-
+          Deliver the signed Ops executable first: run release.yml for a signed
+          revision (staging alone is enough), then repeat this playbook.
+
   tasks:
-    - name: Install the isolated reboot helper directory
-      ansible.builtin.file:
-        path: /usr/local/libexec/simplestchat-public
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Install the reboot command and shared release helpers
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-        owner: root
-        group: root
-        mode: '0644'
-      loop:
-        - bounded_process.py
-        - runtime_profile.py
-        - reboot-public.py
-        - reboot_public.py
-        - release-public.py
-        - release_public.py
-        - release_artifact.py
-        - release_json.py
-
     - name: Verify runtime upgrade compatibility before stopping any services
       ansible.builtin.include_tasks: tasks/runtime-upgrade-preflight.yml
       when:
@@ -76,10 +69,13 @@
               - --property=RuntimeMaxSec=900
               - --property=TimeoutStopSec=480
               - --wait
-              - /usr/bin/python3
-              - -B
-              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - /usr/local/libexec/simplestchat-public/simplestchat-ops
+              - reboot
               - prepare
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           changed_when: true
 
         - name: Install the reviewed runtime packages only after ordered service stops
@@ -109,10 +105,13 @@
               - --property=RuntimeMaxSec=900
               - --property=TimeoutStopSec=60
               - --wait
-              - /usr/bin/python3
-              - -B
-              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - /usr/local/libexec/simplestchat-public/simplestchat-ops
+              - reboot
               - resume
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           changed_when: true
 
       rescue:
@@ -125,10 +124,13 @@
               - --property=RuntimeMaxSec=900
               - --property=TimeoutStopSec=60
               - --wait
-              - /usr/bin/python3
-              - -B
-              - /usr/local/libexec/simplestchat-public/reboot-public.py
+              - /usr/local/libexec/simplestchat-public/simplestchat-ops
+              - reboot
               - cancel
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           register: scpub_reboot_cancellation
           changed_when: scpub_reboot_cancellation.rc | default(1) == 0
           failed_when: false

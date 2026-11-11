@@ -4,6 +4,8 @@
 pub(crate) mod command;
 pub(crate) mod evidence;
 pub(crate) mod failure;
+#[cfg(test)]
+pub(crate) mod replay;
 pub(crate) mod state;
 
 use chrono::{DateTime, Utc};
@@ -11,6 +13,27 @@ use command::{Commands, Request};
 use failure::Result;
 use std::path::PathBuf;
 use std::time::Duration;
+
+/// Whether `text` is exactly `length` lowercase hexadecimal digits.
+pub(crate) fn hexadecimal(text: &str, length: usize) -> bool {
+    text.len() == length
+        && text
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Whether `text` is a content-addressed image identity.
+pub(crate) fn image_id(text: &str) -> bool {
+    text.strip_prefix("sha256:")
+        .is_some_and(|hash| hexadecimal(hash, 64))
+}
+
+/// Whether `text` is a kernel boot identity: 8-4-4-4-12 lowercase hexadecimal.
+pub(crate) fn boot_identity(text: &str) -> bool {
+    let groups: Vec<&str> = text.split('-').collect();
+    groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12])
+        && groups.iter().all(|group| hexadecimal(group, group.len()))
+}
 
 /// Write one line; a line that cannot be written is a failure of its own.
 pub(crate) fn emit(mut stream: impl std::io::Write, line: &str) -> bool {
@@ -78,6 +101,8 @@ pub(crate) struct Paths {
     pub boot: PathBuf,
     /// The offsite backup's private settings and credentials.
     pub offsite: PathBuf,
+    /// The public project's protected configuration.
+    pub config: PathBuf,
 }
 
 impl Paths {
@@ -93,6 +118,7 @@ impl Paths {
             work: "/run/simplestchat-bench".into(),
             boot: "/proc/sys/kernel/random/boot_id".into(),
             offsite: "/etc/simplestchat-backup".into(),
+            config: "/etc/simplestchat-public".into(),
         }
     }
 }
@@ -113,6 +139,15 @@ pub(crate) const DOCKER: [&str; 3] = ["/usr/bin/docker", "--host", "unix:///var/
 pub(crate) const POSTGRES: &str = "simplestchat-public-postgres-1";
 
 impl Host<'_> {
+    /// The kernel's identity of the current boot.
+    pub(crate) fn boot(&self) -> Result<String> {
+        let bytes = state::read(&self.paths.boot, 4096)?;
+        let value = String::from_utf8(bytes).map_err(|_| failure::Failure::Value)?;
+        let value = value.trim();
+        failure::require(boot_identity(value), "Invalid host boot identity")?;
+        Ok(value.to_owned())
+    }
+
     /// GET `url` directly, without proxies, redirects or stored configuration,
     /// and return a successful body of at most `limit` bytes.
     pub(crate) fn get(&self, url: &str, limit: usize, oversized: &'static str) -> Result<Vec<u8>> {
@@ -194,6 +229,7 @@ pub(crate) mod tests {
             work: root.join("work"),
             boot: root.join("boot_id"),
             offsite: root.join("offsite"),
+            config: root.join("config"),
         }
     }
 }

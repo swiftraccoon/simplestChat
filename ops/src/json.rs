@@ -362,3 +362,127 @@ pub(crate) fn character_count(bytes: &[u8], maximum: usize) -> Result<usize, Err
     }
     Ok(text(bytes, maximum.saturating_mul(2))?.chars().count())
 }
+
+/// A finite float as Python writes it: the shortest text that reads back as
+/// the value, with a signed exponent of at least two digits outside the
+/// fixed-notation range.
+pub(crate) fn python_float(value: f64) -> String {
+    let text = format!("{value:?}");
+    let Some((mantissa, exponent)) = text.split_once('e') else {
+        return text;
+    };
+    let (sign, digits) = match exponent.strip_prefix('-') {
+        Some(digits) => ('-', digits),
+        None => ('+', exponent),
+    };
+    format!("{mantissa}e{sign}{digits:0>2}")
+}
+
+fn python_string(text: &str, output: &mut String) {
+    output.push('"');
+    for character in text.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            '\u{8}' => output.push_str("\\b"),
+            '\u{c}' => output.push_str("\\f"),
+            ' '..='~' => output.push(character),
+            other => {
+                let mut units = [0_u16; 2];
+                for unit in other.encode_utf16(&mut units) {
+                    output.push_str(&format!("\\u{unit:04x}"));
+                }
+            }
+        }
+    }
+    output.push('"');
+}
+
+fn python_value(value: &Json, sorted: bool, output: &mut String) {
+    match value {
+        Json::Object(entries, order) => {
+            output.push('{');
+            let names: Vec<&String> = if sorted {
+                entries.keys().collect()
+            } else {
+                order.iter().collect()
+            };
+            for (at, name) in names.iter().enumerate() {
+                if at > 0 {
+                    output.push_str(", ");
+                }
+                python_string(name, output);
+                output.push_str(": ");
+                if let Some(item) = entries.get(*name) {
+                    python_value(item, sorted, output);
+                }
+            }
+            output.push('}');
+        }
+        Json::Array(items) => {
+            output.push('[');
+            for (at, item) in items.iter().enumerate() {
+                if at > 0 {
+                    output.push_str(", ");
+                }
+                python_value(item, sorted, output);
+            }
+            output.push(']');
+        }
+        Json::String(text) => python_string(text, output),
+        Json::Integer(text) => output.push_str(if text == "-0" { "0" } else { text }),
+        Json::Float(text) => {
+            let number = text.parse::<f64>().expect("validated finite float");
+            output.push_str(&python_float(number));
+        }
+        Json::Bool(true) => output.push_str("true"),
+        Json::Bool(false) => output.push_str("false"),
+        Json::Null => output.push_str("null"),
+    }
+}
+
+/// The text Python's `json.dumps` writes for a decoded value: `, ` and `: `
+/// between items, everything outside printable ASCII escaped, floats in
+/// Python's spelling, and each object's keys sorted when asked, or else in
+/// the order they were read. A digest taken over this text is the one the
+/// Python helpers recorded.
+pub(crate) fn python_dump(value: &Json, sorted: bool) -> String {
+    let mut output = String::new();
+    python_value(value, sorted, &mut output);
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    /// Twelve recorded documents: nested sorting, every escape, surrogate
+    /// pairs, exponents on both sides, negative zero, a whole number beyond
+    /// any float, and a resolved project as a host spells it.
+    #[test]
+    fn sorted_dumps_and_their_digests_are_the_recorded_ones() {
+        let recorded = include_str!("reboot/recorded_reboot.json");
+        let recorded: serde_json::Value = serde_json::from_str(recorded).unwrap();
+        let vectors = recorded["canonical"].as_array().unwrap();
+        assert_eq!(vectors.len(), 12);
+        for vector in vectors {
+            let document = vector["document"].as_str().unwrap();
+            let dump = python_dump(&decode(document.as_bytes()).unwrap(), true);
+            assert_eq!(dump, vector["dump"].as_str().unwrap(), "{document}");
+            let digest: String = Sha256::digest(dump.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            assert_eq!(digest, vector["sha256"].as_str().unwrap(), "{document}");
+        }
+        let ordered = decode(br#"{"b": [1, {"z": 1.50, "a": null}], "a": "x"}"#).unwrap();
+        assert_eq!(
+            python_dump(&ordered, false),
+            r#"{"b": [1, {"z": 1.5, "a": null}], "a": "x"}"#
+        );
+    }
+}

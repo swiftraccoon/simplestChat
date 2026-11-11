@@ -226,6 +226,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
                 "       simplestchat-ops backup offsite upload|restore|recover ",
                 "[--snapshot ID] [--stamp STAMP]\n",
+                "       simplestchat-ops reboot prepare|resume|cancel\n",
             )
             .as_bytes()
         );
