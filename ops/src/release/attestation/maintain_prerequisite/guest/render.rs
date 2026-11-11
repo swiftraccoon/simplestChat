@@ -248,7 +248,7 @@ pub(super) fn render(
     let mut base = source(
         sources,
         "docker-compose.yml",
-        "d728f15a6e51f5afb6eea553178af72360feb01533ab82df288a70a32f432e27",
+        "3c9491b25a53e67124109d672b2664bc51e3a227be84a5786a471bc72cba4e5e",
     )?;
     replace(
         &mut base,
