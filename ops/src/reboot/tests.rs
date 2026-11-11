@@ -1,6 +1,7 @@
 use super::*;
 use crate::host::command::Request as Asked;
 use crate::host::command::tests::Scripted;
+use crate::host::failure::Failure;
 use crate::host::replay::{
     build, chmod, concrete, expected, held_lock, listed, normalized, placed,
 };

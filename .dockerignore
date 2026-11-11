@@ -111,6 +111,12 @@ ops/src/monitor/**
 !ops/src/reboot/
 ops/src/reboot/**
 !ops/src/reboot/*.rs
+!ops/src/turn/
+ops/src/turn/**
+!ops/src/turn/*.rs
+!ops/src/migrate/
+ops/src/migrate/**
+!ops/src/migrate/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/

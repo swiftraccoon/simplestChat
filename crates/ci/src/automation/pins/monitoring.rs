@@ -45,6 +45,21 @@ pub(super) fn names(tasks: &[Value]) -> Vec<&str> {
         .collect()
 }
 
+/// The command line a relay step computes without an address override, with
+/// an empty one, and with an address to verify the relay at.
+pub(super) fn addressed(task: &Value) -> Vec<Value> {
+    let argv = task["ansible.builtin.command"]["argv"].as_str().unwrap();
+    let argv = argv.trim().strip_prefix("{{").unwrap();
+    let argv = argv.strip_suffix("}}").unwrap();
+    let cases = [
+        json!({}),
+        json!({"scpub_turn_verify_address": ""}),
+        json!({"scpub_turn_verify_address": "192.0.2.45"}),
+    ];
+    let rendered = evaluate(&[argv], &cases);
+    rendered.into_iter().map(|mut row| row.remove(0)).collect()
+}
+
 /// The fixed environment of every Ops command a playbook issues.
 pub(super) fn environment() -> Value {
     json!({"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "GH_TOKEN": "", "GITHUB_TOKEN": ""})
@@ -70,9 +85,9 @@ pub(super) fn requirement(pre_tasks: &[Value], register: &str) -> Value {
     rules
 }
 
-/// Monitoring's own steps are Ops commands with a fixed environment, placed
-/// after the requirement; the only helper modules it still installs belong
-/// to the relay step.
+/// Monitoring's own steps, the relay's metrics among them, are Ops commands
+/// with a fixed environment, placed after the requirement; the playbook
+/// copies no helper module to the host and runs no interpreter.
 #[test]
 fn monitoring_runs_its_own_steps_through_the_installed_ops_executable() {
     let play = play(MONITORING);
@@ -119,10 +134,7 @@ fn monitoring_runs_its_own_steps_through_the_installed_ops_executable() {
             assert!(command.get(softened).is_none(), "{}", command["name"]);
         }
     }
-    let installed = named(
-        tasks,
-        "Install the reviewed monitoring statements and the relay step's helper modules",
-    );
+    let installed = named(tasks, "Install the reviewed monitoring statements");
     assert_eq!(
         installed["loop"],
         json!([
@@ -131,28 +143,37 @@ fn monitoring_runs_its_own_steps_through_the_installed_ops_executable() {
             "monitoring-external-schema.sql",
             "monitoring-external.sql",
             "monitoring-report.sql",
-            "turn_public.py",
-            "bounded_process.py",
-            "runtime_profile.py",
-            "release_public.py",
-            "release_artifact.py",
-            "release_json.py",
         ])
     );
     let text = checkout_file(MONITORING);
     assert!(!text.contains("monitoring_") && !text.contains("release_preflight"));
-    // The relay step is the one remaining interpreter call.
-    assert_eq!(text.matches("python3").count(), 1);
+    assert!(!text.contains("python") && !text.contains(".py"));
     let relay = named(
         tasks,
         "Enable native relay metrics through the reviewed relay-only transaction",
     );
-    assert!(
-        relay["ansible.builtin.command"]["argv"]
-            .as_str()
-            .unwrap()
-            .contains("python3")
+    assert_eq!(
+        addressed(relay),
+        [
+            json!([OPS, "turn", "enable-metrics"]),
+            json!([OPS, "turn", "enable-metrics"]),
+            json!([
+                OPS,
+                "turn",
+                "enable-metrics",
+                "--verify-address",
+                "192.0.2.45"
+            ]),
+        ]
     );
+    assert_eq!(relay["environment"], environment());
+    assert_eq!(
+        relay["changed_when"],
+        "'Relay metrics enabled' in scmon_turn.stdout"
+    );
+    for softened in ["failed_when", "ignore_errors", "ignore_unreachable", "when"] {
+        assert!(relay.get(softened).is_none(), "{softened}");
+    }
 }
 
 /// What each step reports as a change is the command's own answer, decided

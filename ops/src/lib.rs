@@ -14,10 +14,13 @@ pub mod distribution;
 mod files;
 mod host;
 mod json;
+pub mod migrate;
 pub mod monitor;
 pub mod owned_process;
 pub mod reboot;
 pub mod release;
+mod text;
+pub mod turn;
 
 /// Fixed, non-sensitive validation failures. Paths, keys and file contents never
 /// become error text; callers may retain private evidence separately.

@@ -385,25 +385,7 @@ fn evidence(host: &Host<'_>, lines: &mut Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// A lower-case DNS name of at least two labels ending in a letter-only one.
-pub(super) fn domain(name: &str) -> bool {
-    let labels: Vec<&str> = name.split('.').collect();
-    let alphanumeric = |byte: &u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
-    let label = |label: &&str| {
-        let bytes = label.as_bytes();
-        (1..=63).contains(&bytes.len())
-            && bytes.iter().all(|byte| alphanumeric(byte) || *byte == b'-')
-            && bytes.first().is_some_and(alphanumeric)
-            && bytes.last().is_some_and(alphanumeric)
-    };
-    let Some((last, others)) = labels.split_last() else {
-        return false;
-    };
-    !others.is_empty()
-        && others.iter().all(label)
-        && (2..=63).contains(&last.len())
-        && last.bytes().all(|byte| byte.is_ascii_lowercase())
-}
+pub(super) use crate::host::domain;
 
 /// Text at `key` of the object stored in `path`.
 pub(super) fn setting(path: &std::path::Path, key: &str) -> Result<(Json, String)> {

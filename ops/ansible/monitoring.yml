@@ -104,7 +104,7 @@
         group: '10003'
         mode: '0440'
 
-    - name: Install the reviewed monitoring statements and the relay step's helper modules
+    - name: Install the reviewed monitoring statements
       ansible.builtin.copy:
         src: "{{ item }}"
         dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
@@ -117,12 +117,6 @@
         - monitoring-external-schema.sql
         - monitoring-external.sql
         - monitoring-report.sql
-        - turn_public.py
-        - bounded_process.py
-        - runtime_profile.py
-        - release_public.py
-        - release_artifact.py
-        - release_json.py
 
     - name: Install hardened certificate refresh without replacing the public proxy
       ansible.builtin.template:
@@ -136,10 +130,13 @@
     - name: Enable native relay metrics through the reviewed relay-only transaction
       ansible.builtin.command:
         argv: >-
-          {{ ['/usr/bin/python3', '-E', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
-              'enable-metrics'] +
+          {{ ['/usr/local/libexec/simplestchat-public/simplestchat-ops', 'turn', 'enable-metrics'] +
              (['--verify-address', scpub_turn_verify_address]
               if scpub_turn_verify_address | default('') | length > 0 else []) }}
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       register: scmon_turn
       changed_when: "'Relay metrics enabled' in scmon_turn.stdout"
 

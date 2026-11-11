@@ -473,7 +473,7 @@ fn drill(runner: &mut Evidence<'_>, configured: &Settings, request: &Request) ->
     let ceiling = configured.archive_mib * MIB;
     let room = host.commands.free(&runner.attempt)? > ceiling + GIB;
     require(room, "Insufficient restore download headroom")?;
-    let directory = state::private_directory(&runner.attempt, "download")?;
+    let directory = state::private_directory(&runner.attempt, "download.")?;
     let receipt = directory.join(format!("{stamp}.receipt.json"));
     let archive = directory.join(format!("{stamp}.dump"));
     let restored = (|| -> Result<(restore::Report, String)> {
@@ -661,7 +661,7 @@ fn recover_interrupted(host: &Host<'_>) -> Result<()> {
     require(recorded, "Invalid offsite recovery attempt")?;
     state::protected(&attempts, host.owner, true, &[0o700], None)?;
     state::protected(&attempt, host.owner, true, &[0o700], None)?;
-    let mut runner = Evidence::new(host, state::private_directory(&attempt, "recovery")?);
+    let mut runner = Evidence::new(host, state::private_directory(&attempt, "recovery.")?);
     let record = attempt.join("restore.json");
     if action == "restore" && std::fs::symlink_metadata(&record).is_ok() {
         state::protected(&record, host.owner, false, &[0o600], Some(65536))?;
@@ -731,7 +731,8 @@ pub(super) fn run(host: &Host<'_>, request: &Request) -> Result<&'static str> {
         _ => {}
     }
     state::protected(&attempts, host.owner, true, &[0o700], None)?;
-    let attempt = state::private_directory(&attempts, request.action.name())?;
+    let prefix = format!("{}.", request.action.name());
+    let attempt = state::private_directory(&attempts, &prefix)?;
     let mut runner = Evidence::new(host, attempt.clone());
     let mut current = Journal {
         schema_version: 1,

@@ -107,12 +107,13 @@ fn replace(path: &Path, bytes: &[u8], access: Option<&Access>) -> Result<()> {
     Ok(())
 }
 
-/// A new private directory `prefix.<unique>` in `parent`.
+/// A new private directory in `parent` whose name is `prefix` and eight
+/// random hexadecimal digits.
 pub(crate) fn private_directory(parent: &Path, prefix: &str) -> Result<PathBuf> {
     let mut random = [0_u8; 4];
     getrandom::fill(&mut random).map_err(|_| Failure::Os)?;
     let unique: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
-    let path = parent.join(format!("{prefix}.{unique}"));
+    let path = parent.join(format!("{prefix}{unique}"));
     std::fs::DirBuilder::new().mode(0o700).create(&path)?;
     Ok(path)
 }

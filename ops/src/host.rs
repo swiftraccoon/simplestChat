@@ -4,6 +4,7 @@
 pub(crate) mod command;
 pub(crate) mod evidence;
 pub(crate) mod failure;
+pub(crate) mod fault;
 #[cfg(test)]
 pub(crate) mod replay;
 pub(crate) mod state;
@@ -33,6 +34,26 @@ pub(crate) fn boot_identity(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
     groups.iter().map(|group| group.len()).eq([8, 4, 4, 4, 12])
         && groups.iter().all(|group| hexadecimal(group, group.len()))
+}
+
+/// A lower-case DNS name of at least two labels ending in a letter-only one.
+pub(crate) fn domain(name: &str) -> bool {
+    let labels: Vec<&str> = name.split('.').collect();
+    let alphanumeric = |byte: &u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
+    let label = |label: &&str| {
+        let bytes = label.as_bytes();
+        (1..=63).contains(&bytes.len())
+            && bytes.iter().all(|byte| alphanumeric(byte) || *byte == b'-')
+            && bytes.first().is_some_and(alphanumeric)
+            && bytes.last().is_some_and(alphanumeric)
+    };
+    let Some((last, others)) = labels.split_last() else {
+        return false;
+    };
+    !others.is_empty()
+        && others.iter().all(label)
+        && (2..=63).contains(&last.len())
+        && last.bytes().all(|byte| byte.is_ascii_lowercase())
 }
 
 /// Write one line; a line that cannot be written is a failure of its own.
@@ -103,6 +124,10 @@ pub(crate) struct Paths {
     pub offsite: PathBuf,
     /// The public project's protected configuration.
     pub config: PathBuf,
+    /// The relay project's protected configuration.
+    pub relay: PathBuf,
+    /// Where a walk that follows no link starts: the machine's root.
+    pub anchor: PathBuf,
 }
 
 impl Paths {
@@ -119,6 +144,8 @@ impl Paths {
             boot: "/proc/sys/kernel/random/boot_id".into(),
             offsite: "/etc/simplestchat-backup".into(),
             config: "/etc/simplestchat-public".into(),
+            relay: "/etc/simplestchat-turn".into(),
+            anchor: "/".into(),
         }
     }
 }
@@ -230,6 +257,8 @@ pub(crate) mod tests {
             boot: root.join("boot_id"),
             offsite: root.join("offsite"),
             config: root.join("config"),
+            relay: root.join("turn"),
+            anchor: root.to_path_buf(),
         }
     }
 }

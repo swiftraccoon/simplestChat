@@ -6,20 +6,19 @@
 //! cancelled, which stays a failed reboot. No image is built or pulled, no
 //! container is created or replaced, and nothing is migrated.
 
-mod fault;
 mod profile;
 #[cfg(test)]
 mod tests;
 
 use crate::host::command::Interruptible;
-use crate::host::evidence::{Evidence, Streams};
-use crate::host::failure::Failure;
+use crate::host::evidence::Evidence;
+use crate::host::fault::{
+    DIRECTORY, Fault, KEY, Numbered, Result, VALUE, digest, field, file, object, protected,
+    require, set, string, text, timestamp, utf8,
+};
 use crate::host::{Clock, Host, Paths, System, boot_identity, emit, hexadecimal, image_id, state};
 use crate::json::{InOrder, Json, python_dump};
 use crate::release::assets::{self, Takeover, Workload};
-use fault::{Fault, KEY, Result, VALUE, require};
-use profile::{field, text};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::os::unix::fs::DirBuilderExt;
@@ -90,38 +89,8 @@ impl Action {
     }
 }
 
-/// An object whose fields keep the order they are given in.
-fn object(fields: Vec<(&str, Json)>) -> Json {
-    let order = fields.iter().map(|(name, _)| (*name).to_owned()).collect();
-    let entries = fields.into_iter();
-    let entries = entries.map(|(name, value)| (name.to_owned(), value));
-    Json::Object(entries.collect(), order)
-}
-
-fn string(value: &str) -> Json {
-    Json::String(value.to_owned())
-}
-
 fn one() -> Json {
     Json::Integer("1".to_owned())
-}
-
-/// Replace a field where it stands, or add it at the end.
-fn set(target: &mut Json, name: &str, value: Json) {
-    if let Json::Object(entries, order) = target
-        && entries.insert(name.to_owned(), value).is_none()
-    {
-        order.push(name.to_owned());
-    }
-}
-
-fn utf8(bytes: Vec<u8>) -> Result<String> {
-    String::from_utf8(bytes).map_err(|_| VALUE)
-}
-
-fn digest(bytes: &[u8]) -> String {
-    let hash = Sha256::digest(bytes);
-    hash.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// What the earlier helper's patterns took for blank: Unicode white space
@@ -130,48 +99,9 @@ fn space(character: char) -> bool {
     character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
-/// The limits one protected path is held to.
-#[derive(Clone, Copy)]
-struct Kind {
-    directory: bool,
-    mode: u32,
-    limit: Option<u64>,
-}
-
-const DIRECTORY: Kind = Kind {
-    directory: true,
-    mode: 0o700,
-    limit: None,
-};
-
-const fn file(mode: u32, limit: u64) -> Kind {
-    Kind {
-        directory: false,
-        mode,
-        limit: Some(limit),
-    }
-}
-
-/// Require an ordinary path of the host's owner, naming it in a refusal.
-fn protected(host: &Host<'_>, path: &Path, kind: Kind) -> Result<()> {
-    // A path that cannot be read at all is reported as that, by its kind.
-    std::fs::symlink_metadata(path)?;
-    let modes = [kind.mode];
-    let checked = state::protected(path, host.owner, kind.directory, &modes, kind.limit);
-    checked.map_err(|failure| match failure {
-        Failure::Refused(reason) => Fault::Refused(format!("{reason}: {}", path.display())),
-        other => Fault::from(other),
-    })
-}
-
-fn timestamp(host: &Host<'_>) -> Json {
-    let now = host.clock.now().format("%Y-%m-%dT%H:%M:%SZ");
-    Json::String(now.to_string())
-}
-
 /// The commands of one evidence directory, bound to the prepared project.
 struct Session<'a> {
-    evidence: Evidence<'a>,
+    commands: Numbered<'a>,
     host: &'a Host<'a>,
     /// Admit commands again after a termination request, so that one
     /// request stops a preparation and still lets it recover its services.
@@ -179,28 +109,12 @@ struct Session<'a> {
 }
 
 impl Session<'_> {
-    /// A command's failure in the words its evidence is found by.
-    fn fault(&self, failure: Failure) -> Fault {
-        match failure {
-            Failure::Command => {
-                let number = self.evidence.number;
-                Fault::Refused(format!(
-                    "Command {number:03} failed; inspect private output"
-                ))
-            }
-            other => Fault::from(other),
-        }
-    }
-
     fn run(&mut self, argv: &[&str], seconds: f64) -> Result<Vec<u8>> {
-        let argv = argv.iter().map(|word| (*word).to_owned()).collect();
-        let outcome = self.evidence.run(argv, seconds, Streams::default());
-        outcome.map_err(|failure| self.fault(failure))
+        self.commands.run(argv, seconds)
     }
 
     fn docker(&mut self, arguments: &[&str], seconds: f64) -> Result<Vec<u8>> {
-        let outcome = self.evidence.docker(arguments, seconds, Streams::default());
-        outcome.map_err(|failure| self.fault(failure))
+        self.commands.docker(arguments, seconds)
     }
 
     /// Every project command is bound to the prepared public project.
@@ -229,7 +143,7 @@ fn configuration(host: &Host<'_>) -> Result<Json> {
     let mut hashes = Vec::new();
     for (name, mode) in CONFIGURATION {
         let path = host.paths.config.join(name);
-        protected(host, &path, file(mode, 1024 * 1024))?;
+        protected(host.owner, &path, file(mode, 1024 * 1024))?;
         hashes.push((name, Json::String(digest(&std::fs::read(&path)?))));
     }
     Ok(object(hashes))
@@ -704,7 +618,7 @@ fn stop(session: &mut Session<'_>, attempt: &Path, saved: &Json, report: &mut Js
 /// once when a stop fails; the failed stop stays the failure.
 fn prepare(session: &mut Session<'_>, report: &mut Json) -> Result<()> {
     let host = session.host;
-    let attempt = session.evidence.attempt.clone();
+    let attempt = session.commands.0.attempt.clone();
     let saved = capture(session)?;
     state::atomic_json(&attempt.join("identity.json"), &InOrder(&saved))?;
     set(report, "bootId", field(&saved, "bootId")?.clone());
@@ -735,7 +649,7 @@ fn prepare(session: &mut Session<'_>, report: &mut Json) -> Result<()> {
 /// identity and outcome.
 fn pending(host: &Host<'_>, action: Action) -> Result<(PathBuf, Json, Json)> {
     let path = host.paths.root.join("release-state.json");
-    protected(host, &path, file(0o600, 16384))?;
+    protected(host.owner, &path, file(0o600, 16384))?;
     let record = state::decode(&std::fs::read(&path)?)?;
     record.object().ok_or(VALUE)?;
     let first =
@@ -764,9 +678,9 @@ fn pending(host: &Host<'_>, action: Action) -> Result<(PathBuf, Json, Json)> {
     });
     require(ours, "Unexpected prepared attempt path")?;
     let attempt = PathBuf::from(selected);
-    protected(host, &attempt, DIRECTORY)?;
+    protected(host.owner, &attempt, DIRECTORY)?;
     let snapshot = attempt.join("identity.json");
-    protected(host, &snapshot, file(0o600, 65536))?;
+    protected(host.owner, &snapshot, file(0o600, 65536))?;
     let bytes = std::fs::read(&snapshot)?;
     let evidence = record.get("identitySha256").ok_or(VALUE).and_then(text)?;
     let intact = hexadecimal(evidence, 64) && digest(&bytes) == evidence;
@@ -776,7 +690,7 @@ fn pending(host: &Host<'_>, action: Action) -> Result<(PathBuf, Json, Json)> {
     let matching = first(&saved) && saved.get("bootId").and_then(Json::string) == Some(recorded);
     require(matching, "Prepared identity does not match the journal")?;
     let outcome = attempt.join("outcome.json");
-    protected(host, &outcome, file(0o600, 65536))?;
+    protected(host.owner, &outcome, file(0o600, 65536))?;
     let report = state::decode(&std::fs::read(&outcome)?)?;
     report.object().ok_or(VALUE)?;
     let said = |name: &str| report.get(name).and_then(Json::string);
@@ -797,7 +711,7 @@ fn recover(
     attempt: &Path,
 ) -> Result<()> {
     let host = session.host;
-    let resumed = attempt.join("resume") == session.evidence.attempt;
+    let resumed = attempt.join("resume") == session.commands.0.attempt;
     let phase = if resumed {
         "resume_after_reboot"
     } else {
@@ -833,9 +747,9 @@ struct Opened {
 
 fn open(host: &Host<'_>, action: Action) -> Result<Opened> {
     let results = host.paths.root.join("results");
-    protected(host, &results, DIRECTORY)?;
+    protected(host.owner, &results, DIRECTORY)?;
     if action == Action::Prepare {
-        let attempt = state::private_directory(&results, "reboot")?;
+        let attempt = state::private_directory(&results, "reboot.")?;
         let report = object(vec![
             ("action", string("reboot")),
             ("startedAt", timestamp(host)),
@@ -874,7 +788,7 @@ fn transact(host: &Host<'_>, action: Action, rearm: &dyn Fn()) -> Settled {
     };
     let (attempt, mut report) = (opened.attempt, opened.report);
     let mut session = Session {
-        evidence: Evidence::new(host, opened.evidence),
+        commands: Numbered(Evidence::new(host, opened.evidence)),
         host,
         rearm,
     };

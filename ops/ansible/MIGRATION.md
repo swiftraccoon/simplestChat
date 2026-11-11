@@ -55,6 +55,17 @@ they are not silently copied to another machine.
 Prometheus time-series files remain on the retained source disk; the destination
 starts a new time-series store. Database-backed operational history is migrated.
 
+The relay, backup and monitoring playbooks run the signed Ops executable and
+refuse a host without it, and this controller does not deliver the executable
+to a fresh destination. With any of the three enabled it therefore stops at
+the first of them, after the destination is live and verified and the source
+is sealed. Until the controller delivers the executable itself, migrate with
+`scpub_turn_enabled`, `scpub_backup_enabled` and `scmon_enabled` set to `false`
+in the destination inventory. Afterwards run a signed `release.yml` for the
+migrated revision against the destination, which delivers the executable
+(staging alone is enough), set the three back and apply `turn.yml`,
+`backup.yml` and `monitoring.yml` as on any prepared host.
+
 ## Run one migration
 
 Run the focused checks relevant to the change, push the clean committed `main`

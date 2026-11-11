@@ -2,7 +2,7 @@
 //! what the resolved project may ask of it. Configuration names and values
 //! never enter a diagnostic; a mismatch is one fixed kind of fault.
 
-use super::fault::{Fault, KEY, PROFILE, Result, VALUE, require};
+use crate::host::fault::{Fault, Result, VALUE, field, require, text};
 use crate::host::image_id;
 use crate::json::Json;
 use std::collections::BTreeSet;
@@ -40,18 +40,11 @@ const SERVICE_FIELDS: [&str; 27] = [
     "working_dir",
 ];
 
+/// An execution profile that is not the managed one.
+const PROFILE: Fault = Fault::Kind("RuntimeProfileError");
+
 fn profile(condition: bool) -> Result<()> {
     if condition { Ok(()) } else { Err(PROFILE) }
-}
-
-/// A required field of an object.
-pub(super) fn field<'a>(value: &'a Json, name: &str) -> Result<&'a Json> {
-    value.object().ok_or(VALUE)?.get(name).ok_or(KEY)
-}
-
-/// A value that must be text.
-pub(super) fn text(value: &Json) -> Result<&str> {
-    value.string().ok_or(VALUE)
 }
 
 /// A field that may be absent or null; both read as nothing.

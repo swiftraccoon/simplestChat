@@ -2108,6 +2108,97 @@ leave the recorded journal, identity and outcome. `reboot_public.py` itself
 stays in the tree, frozen, while the release preflight's helper digest list
 still names it.
 
+## Relay certificate and metrics
+
+The [relay playbook](ansible/turn.yml), its hourly timer and the monitoring
+playbook run these commands by the executable's installed path; the
+[public deployment guide](ansible/PUBLIC.md#managed-turn-on-the-same-vps) is
+the operator's description. Each requires root on the prepared host and holds
+the shared workload lock; a busy lock or an unfinished journal refuses.
+
+```sh
+simplestchat-ops turn prepare-certificate
+simplestchat-ops turn refresh-certificate [--verify-address IP]
+simplestchat-ops turn enable-metrics [--verify-address IP]
+```
+
+All three first read the relay's prepared identity from the private
+`/etc/simplestchat-turn`: the hostname, the checksum-pinned coturn image, the
+digest of `turnserver.conf` and the one secret that file shares with the
+application. A file of another owner, mode or size, a configuration that
+differs from its digest, or a secret that is not the configuration's refuses
+before an attempt exists.
+
+`prepare-certificate` takes the newest certificate any issuer holds for
+exactly the hostname from the proxy's storage. It opens every directory
+without following a link, admits only files of root or the proxy that no one
+else can write, reads each once within 64 KiB, and copies the pair into a
+private directory that the proxy cannot change. There the key must belong to
+the certificate, the certificate must stay valid for another day, and the
+system's trust store must accept its chain for the hostname. The same bytes
+are then published as `tls/SHA256` of the certificate, readable by the
+relay's group only, and `tls/current` is switched to it by one rename. A
+generation that already exists must hold exactly these bytes, and a selection
+that is not a link, or an unfinished switch, refuses.
+
+`refresh-certificate` first requires exactly one running container of the
+relay project, on the pinned image and the configuration the project resolves
+to. It publishes as above, sends the relay `SIGUSR2` even when nothing
+changed, since an earlier reload may have failed, and then requires the relay
+to present exactly the published certificate over TLS 1.2 or later with a
+chain trusted for the hostname, retrying for ten seconds. `--verify-address`
+connects to that address while the name still points elsewhere; the hostname
+is still what the certificate is verified for.
+
+`enable-metrics` does nothing but verify when `turnserver.conf` already ends
+with the three reviewed options. Otherwise it refuses any other `prometheus`
+option, requires the relay binary to offer the three, keeps the previous
+configuration and identity in its attempt, appends the options, records the
+new digest and replaces only the relay, once. The replaced relay must be the
+reviewed one, present the published certificate and listen for metrics on
+loopback only with its allocation counters. Any failure restores both files
+and replaces the relay again; a request to stop the command still lets that
+rollback run.
+
+Each attempt has a directory `/srv/simplestchat-public/results/turn.UNIQUE`
+with `outcome.json` and the numbered private output of its commands. The
+command prints `Relay metrics enabled` when it changed the relay, then
+`Relay evidence:` with that directory; a failure adds one line on standard
+error that names only the kind of fault.
+
+The Python helper's answers for 150 invocations in 117 scenarios are recorded
+in `ops/src/turn/recorded_turn.json`, each command with the answer it got and
+each TLS attempt with the certificate it met. The test replays them request
+by request. The helper parsed key material and spoke TLS in its own process;
+the executable asks the system's `openssl` instead, and the test answers
+those requests from the recorded decisions. `turn_public.py` stays in the
+tree, frozen, for `turn.yml`'s activation, which replaces the application
+through the Python release helper.
+
+## Migration certificate handoff
+
+```sh
+simplestchat-ops migrate tls export OPERATION
+simplestchat-ops migrate tls import OPERATION
+```
+
+For a migration that keeps its origin, `export` writes the hostname's
+certificate, key and certificate metadata from the newest issuer into one
+private envelope `tls.json` of the migration's directory, after the same
+checks a published certificate passes; nothing else in the proxy's storage
+travels. `import` reads the envelope with exact fields and bounded sizes,
+validates the pair again, and creates the issuer's and the hostname's
+directories for the proxy below the fixed storage path. It writes only new
+files and accepts an existing subtree only when it holds exactly these three
+files with these bytes. Both require root, hold the workload lock and report
+any failure as one fixed line.
+
+The Python helper's answers for 127 invocations in 89 scenarios are recorded
+in `ops/src/migrate/recorded_tls.json` and replayed the same way.
+`migration-prepare.yml` still runs `migration_tls.py`: a fresh destination has
+no Ops executable when the certificate arrives, and `dns-handoff.yml` imports
+the module, so the command is wired with the migration controller.
+
 
 ## Offline server attestation preparation
 

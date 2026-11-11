@@ -7,12 +7,13 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-pub(crate) const TOPS: [(&str, &str); 5] = [
+pub(crate) const TOPS: [(&str, &str); 6] = [
     ("srv", "srv/simplestchat-public"),
     ("etc", "etc/simplestchat-public"),
     ("run", "run/simplestchat-bench"),
     ("offsite", "offsite"),
     ("state", "state"),
+    ("turn", "turn"),
 ];
 
 /// Where a recorded path lives under the scratch root: the recorder's
@@ -32,6 +33,29 @@ pub(crate) fn mode(entry: &Value) -> u32 {
     u32::from_str_radix(text, 8).unwrap()
 }
 
+/// A file's recorded content: its text, or one character repeated.
+pub(crate) fn content(entry: &Value) -> String {
+    let spelled = &entry["text"];
+    match spelled.as_str() {
+        Some(text) => text.to_owned(),
+        None => {
+            let count = usize::try_from(spelled["count"].as_u64().unwrap()).unwrap();
+            spelled["repeat"].as_str().unwrap().repeat(count)
+        }
+    }
+}
+
+/// Where a recorded link points: into the recorded tree, or, for a target
+/// that names no recorded directory, wherever it says.
+pub(crate) fn target(base: &Path, link: &str) -> PathBuf {
+    let top = link.split('/').next().unwrap();
+    if TOPS.iter().any(|(name, _)| *name == top) {
+        placed(base, link)
+    } else {
+        PathBuf::from(link)
+    }
+}
+
 /// Build the recorded tree, then give every entry its recorded age.
 pub(crate) fn build(base: &Path, tree: &serde_json::Map<String, Value>, epoch: i64) {
     chmod(base, 0o700);
@@ -45,14 +69,14 @@ pub(crate) fn build(base: &Path, tree: &serde_json::Map<String, Value>, epoch: i
     for (name, entry) in tree {
         let path = placed(base, name);
         if let Some(link) = entry["link"].as_str() {
-            std::os::unix::fs::symlink(placed(base, link), &path).unwrap();
+            std::os::unix::fs::symlink(target(base, link), &path).unwrap();
         } else if entry["directory"] == true {
             std::fs::DirBuilder::new()
                 .mode(0o700)
                 .create(&path)
                 .unwrap();
         } else {
-            std::fs::write(&path, entry["text"].as_str().unwrap()).unwrap();
+            std::fs::write(&path, content(entry)).unwrap();
         }
     }
     for (name, entry) in tree.iter().rev() {
@@ -101,14 +125,19 @@ pub(crate) fn listed(base: &Path) -> BTreeMap<String, (u32, String)> {
         let metadata = std::fs::symlink_metadata(at).unwrap();
         let content = if metadata.is_symlink() {
             let target = std::fs::read_link(at).unwrap();
-            let (top, fixed) = TOPS
+            let within = TOPS
                 .iter()
-                .find(|(_, fixed)| target.starts_with(base.join(fixed)))
-                .unwrap();
-            let rest = target.strip_prefix(base.join(fixed)).unwrap();
-            let rest = rest.to_str().unwrap();
-            let separator = if rest.is_empty() { "" } else { "/" };
-            format!("link:{top}{separator}{rest}")
+                .find(|(_, fixed)| target.starts_with(base.join(fixed)));
+            match within {
+                Some((top, fixed)) => {
+                    let rest = target.strip_prefix(base.join(fixed)).unwrap();
+                    let rest = rest.to_str().unwrap();
+                    let separator = if rest.is_empty() { "" } else { "/" };
+                    format!("link:{top}{separator}{rest}")
+                }
+                // A target outside the recorded directories stands as it is.
+                None => format!("link:{}", target.to_str().unwrap()),
+            }
         } else if metadata.is_dir() {
             "directory".to_owned()
         } else {
@@ -145,7 +174,7 @@ pub(crate) fn expected(tree: &serde_json::Map<String, Value>) -> BTreeMap<String
         } else if entry["directory"] == true {
             "directory".to_owned()
         } else {
-            format!("text:{}", entry["text"].as_str().unwrap())
+            format!("text:{}", content(entry))
         };
         let mode = if entry["link"].is_string() {
             0

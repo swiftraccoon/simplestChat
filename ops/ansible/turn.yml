@@ -24,15 +24,34 @@
           The managed relay requires a public IPv4 primary address; an additional IPv6
           listener is supported, but IPv6-only TURN preparation and activation are not.
 
-    - name: Verify the public host without importing installed helpers
+    - name: Look for the installed Ops executable without following links
+      tags: [always]
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: false
+      register: scpub_turn_ops
+
+    - name: Require the Ops executable a signed release delivers
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scpub_turn_ops.stat.exists
+          - scpub_turn_ops.stat.isreg
+          - scpub_turn_ops.stat.uid == 0
+          - scpub_turn_ops.stat.mode == '0755'
+        fail_msg: >-
+          Deliver the signed Ops executable first: run release.yml for a signed
+          revision (staging alone is enough), then repeat this playbook.
+
+    - name: Verify the prepared public host before any relay step
       tags: [always]
       ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -B
-          - -c
-          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
-          - '{}'
+        argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, release, preflight]
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: false
       check_mode: false
 
@@ -210,7 +229,11 @@
 
         - name: Prepare a verified copy of the current Caddy certificate
           ansible.builtin.command:
-            argv: [/usr/bin/python3, -B, /usr/local/libexec/simplestchat-public/turn_public.py, prepare-certificate]
+            argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, turn, prepare-certificate]
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           changed_when: true
 
         - name: Pull the checksum-pinned coturn image without building on the VPS
@@ -242,10 +265,13 @@
         - name: Verify trusted relay TLS before scheduling certificate maintenance
           ansible.builtin.command:
             argv: >-
-              {{ ['/usr/bin/python3', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
-                  'refresh-certificate'] +
+              {{ ['/usr/local/libexec/simplestchat-public/simplestchat-ops', 'turn', 'refresh-certificate'] +
                  (['--verify-address', scpub_turn_verify_address]
                   if scpub_turn_verify_address | default('') | length > 0 else []) }}
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           changed_when: true
 
         - name: Install hourly certificate maintenance

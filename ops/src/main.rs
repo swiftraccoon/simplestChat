@@ -55,7 +55,10 @@ const USAGE: &str = concat!(
     "       simplestchat-ops backup nightly|cleanup [--keep-days N] [--keep-at-least N]\n",
     "       simplestchat-ops backup offsite upload|restore|recover ",
     "[--snapshot ID] [--stamp STAMP]\n",
-    "       simplestchat-ops reboot prepare|resume|cancel",
+    "       simplestchat-ops reboot prepare|resume|cancel\n",
+    "       simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics ",
+    "[--verify-address IP]\n",
+    "       simplestchat-ops migrate tls export|import OPERATION",
 );
 
 fn main() -> ExitCode {
@@ -106,6 +109,8 @@ fn main() -> ExitCode {
         ("database", simplestchat_ops::monitor::run_database),
         ("backup", simplestchat_ops::backup::run),
         ("reboot", simplestchat_ops::reboot::run),
+        ("turn", simplestchat_ops::turn::run),
+        ("migrate", simplestchat_ops::migrate::run),
     ] {
         if args.first().is_some_and(|arg| arg == family) {
             let code = run(&args[1..]);

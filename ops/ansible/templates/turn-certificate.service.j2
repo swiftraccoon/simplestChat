@@ -5,7 +5,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/turn_public.py refresh-certificate
+ExecStart=/usr/local/libexec/simplestchat-public/simplestchat-ops turn refresh-certificate
 UMask=0077
 TimeoutStartSec=60
 NoNewPrivileges=true

@@ -146,6 +146,9 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops backup offsite upload|restore|recover ",
                 "[--snapshot ID] [--stamp STAMP]\n",
                 "       simplestchat-ops reboot prepare|resume|cancel\n",
+                "       simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics ",
+                "[--verify-address IP]\n",
+                "       simplestchat-ops migrate tls export|import OPERATION\n",
             )
             .as_bytes()
         );

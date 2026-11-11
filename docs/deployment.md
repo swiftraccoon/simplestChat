@@ -732,9 +732,9 @@ the original configuration during rollback. Do not manually edit the live Compos
 file to change logging: that correctly triggers the configuration-drift gate.
 There is one application replacement and no PostgreSQL or Caddy replacement.
 
-The monitoring playbook installs the reviewed `turn_public.py`, its dependencies
-and hardened certificate unit and invokes relay metrics activation. The equivalent
-manual action after installing those reviewed files is `python3 -E -B /usr/local/libexec/simplestchat-public/turn_public.py enable-metrics`.
+The monitoring playbook installs the hardened certificate unit and enables the
+relay's metrics through the installed Ops executable. The equivalent manual
+action is `/usr/local/libexec/simplestchat-public/simplestchat-ops turn enable-metrics`.
 This transaction checks the existing relay identity and binary support, backs up
 the configuration, adds only the metrics listener settings, updates its protected
 configuration digest and replaces the TURN container once. Auth, certificates and
