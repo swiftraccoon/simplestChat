@@ -43,6 +43,8 @@ ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/an
 sudo systemctl start simplestchat-image-build.service && sudo journalctl -fu simplestchat-image-build.service
 # Controller: render the configuration from the host's CPUs, memory and addresses
 ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/ansible/public.yml
+# Controller: deliver the signed Ops executable the launcher needs (stage only; see the release guide)
+ops/ansible/.venv/bin/ansible-playbook -i ops/ansible/inventory.local.yml ops/ansible/release.yml -e @routine-vars.json
 # VPS: migrate, create the owner and lobby, start the app and Caddy
 sudo systemd-run --unit=simplestchat-public-deploy --property=Type=exec --property=RuntimeMaxSec=900 --property=TimeoutStopSec=90 /usr/local/bin/simplestchat-public-deploy
 sudo journalctl -fu simplestchat-public-deploy.service

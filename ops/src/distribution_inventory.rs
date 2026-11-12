@@ -35,7 +35,7 @@ const MAX_TOTAL: u64 = 16 * MAX_FILE;
 const MAX_ENTRIES: usize = 8192;
 const MAX_NAMES: usize = 1024 * 1024;
 const MAX_DEPTH: usize = 8;
-const FIXED: [&str; 14] = [
+const FIXED: [&str; 15] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -46,6 +46,7 @@ const FIXED: [&str; 14] = [
     "crates/toolkit/Cargo.toml",
     "crates/ci/Cargo.toml",
     "crates/release/Cargo.toml",
+    "crates/lobby-seed/Cargo.toml",
     "vendor/mediasoup-0.29.0/Cargo.toml",
     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
     "load_tests/src/lib.rs",
@@ -511,7 +512,7 @@ impl Tree {
         let mut inputs: Vec<_> = self.files.iter().collect();
         inputs.sort_by(|a, b| a.path.cmp(&b.path));
         let mut digest = Sha256::new();
-        digest.update(b"simplestchat-ops-capacity-source-inventory-v2\0");
+        digest.update(b"simplestchat-ops-capacity-lobby-source-inventory-v3\0");
         digest.update((inputs.len() as u32).to_be_bytes());
         for input in inputs {
             digest.update((input.path.len() as u16).to_be_bytes());
@@ -520,7 +521,7 @@ impl Tree {
             digest.update(input.digest);
         }
         SourceInventory {
-            profile: "workspace-ops-capacity-v2",
+            profile: "workspace-ops-capacity-lobby-v3",
             sha256: digest
                 .finalize()
                 .iter()
@@ -557,7 +558,8 @@ impl Input {
     }
 }
 
-/// Hash the fixed discovery manifests/config, Ops Rust and capacity-library roots.
+/// Hash the fixed discovery manifests/config and the Ops Rust, capacity-library
+/// and lobby-seeding roots.
 /// Unselected workspace/vendor source is not a compiler-input closure. The tree
 /// retains at most 32 ancestor, 32 selected-directory and 16 regular-file owners
 /// (80), plus one enumeration cursor or visible-binding descriptor at a time.
@@ -578,6 +580,7 @@ fn collect_after(
         tree.refuse(".cargo", &["config"])?;
         tree.refuse("ops", &["build.rs", ".cargo"])?;
         tree.refuse("load_tests", &["build.rs", ".cargo"])?;
+        tree.refuse("crates/lobby-seed", &["build.rs", ".cargo"])?;
         for path in FIXED {
             tree.read(path)?;
         }
@@ -586,6 +589,7 @@ fn collect_after(
             "load_tests/src/capacity",
             "load_tests/src/capacity_run",
             "load_tests/src/owned_process",
+            "crates/lobby-seed/src",
         ] {
             tree.source(path, 0)?;
         }

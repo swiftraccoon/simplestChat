@@ -302,20 +302,21 @@ async fn issuing_for_a_missing_session_writes_nothing() {
     assert_eq!(stored(&pool, missing).await, 0);
 }
 
-/// The public lobby seeding helper (`ops/ansible/files/seed_public_room.py`)
-/// sends a sign-in token back as the bearer credential and admits only the
-/// shape this server issues. Its pattern is pinned to the constants here so a
-/// change on either side fails before a deployment's lobby phase does.
+/// The public lobby's seeding transaction (`simplestchat-lobby-seed`) sends a
+/// sign-in token back as the bearer credential and admits only the shape
+/// this server issues. Its rule is held to the constants here, so a change
+/// on either side fails before a deployment's lobby phase does.
 #[test]
-fn the_lobby_seeding_helper_admits_exactly_the_issued_token_shape() {
-    let helper = include_str!("../../ops/ansible/files/seed_public_room.py");
-    let pinned = format!("ACCESS_TOKEN = re.compile(r\"[A-Za-z0-9_-]{{{ENCODED_TOKEN_LEN}}}\")");
-    assert!(
-        helper.contains(&pinned),
-        "seed_public_room.py must admit exactly {ENCODED_TOKEN_LEN} base64url characters"
-    );
-    assert_eq!(
-        URL_SAFE_NO_PAD.encode([0_u8; TOKEN_BYTES]).len(),
-        ENCODED_TOKEN_LEN
-    );
+fn the_lobby_seeding_transaction_admits_exactly_the_issued_token_shape() {
+    use simplestchat_lobby_seed::{TOKEN_CHARACTERS, token_shape};
+    assert_eq!(TOKEN_CHARACTERS, ENCODED_TOKEN_LEN);
+    // Every character of the alphabet appears across these three tokens.
+    for byte in [0x00_u8, 0xfb, 0xff] {
+        let issued = URL_SAFE_NO_PAD.encode([byte; TOKEN_BYTES]);
+        assert_eq!(issued.len(), ENCODED_TOKEN_LEN);
+        assert!(valid_shape(&issued) && token_shape(&issued), "{byte:#04x}");
+        assert!(!token_shape(&issued[1..]) && !token_shape(&format!("{issued}A")));
+    }
+    let padded = base64::engine::general_purpose::URL_SAFE.encode([0_u8; TOKEN_BYTES]);
+    assert!(!valid_shape(&padded) && !token_shape(&padded));
 }

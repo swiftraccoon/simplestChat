@@ -1,4 +1,4 @@
-total 103860
+total 103000
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -98,8 +98,6 @@ total 103860
 232	ops/ansible/files/release_trust.py
 447	ops/ansible/files/restore_verify.py
 188	ops/ansible/files/runtime_profile.py
-7	ops/ansible/files/seed-public-room.py
-543	ops/ansible/files/seed_public_room.py
 581	ops/ansible/files/turn_public.py
 344	ops/ansible/tests/test_bounded_process.py
 188	ops/ansible/tests/test_browser_assets_command.py
@@ -117,7 +115,6 @@ total 103860
 424	ops/ansible/tests/test_public_backup.py
 766	ops/ansible/tests/test_public_reboot.py
 2018	ops/ansible/tests/test_public_release.py
-310	ops/ansible/tests/test_public_seed.py
 453	ops/ansible/tests/test_public_templates.py
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py

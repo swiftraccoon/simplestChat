@@ -67,13 +67,11 @@ pub(super) const MIGRATIONS: [&str; 38] = [
     "037_users_avatar_digest.sql",
     "038_session_access_tokens.sql",
 ];
-pub(super) const DIRECT_SOURCES: [&str; 8] = [
+pub(super) const DIRECT_SOURCES: [&str; 6] = [
     "Caddyfile",
     "docker-compose.yml",
     "ops/ansible/files/deploy-public.sh",
     "ops/ansible/files/public-compose.sh",
-    "ops/ansible/files/seed-public-room.py",
-    "ops/ansible/files/seed_public_room.py",
     "ops/ansible/files/release_json.py",
     "ops/ansible/files/runtime_profile.py",
 ];
@@ -267,12 +265,7 @@ pub(super) async fn prepare(ctx: &mut Context) -> Result<()> {
     }
     for name in guest_names() {
         let path = ctx.source_root.join(&name);
-        let mode = if name == "ops/ansible/files/seed-public-room.py" {
-            0o700
-        } else {
-            0o600
-        };
-        let index = ctx.retain(&path, 1024 * 1024, 0, mode)?;
+        let index = ctx.retain(&path, 1024 * 1024, 0, 0o600)?;
         if ctx.originals[index].sha256 != ctx.request.source_pins[&name] {
             return Err(Error::Changed);
         }

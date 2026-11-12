@@ -23,6 +23,9 @@ mod auth_session_tests;
 #[path = "account_updates_tests.rs"]
 mod account_updates_tests;
 
+#[path = "public_seed_tests.rs"]
+mod public_seed_tests;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct Manifest {
@@ -391,6 +394,10 @@ struct Fixture {
 }
 impl Fixture {
     async fn new(count: usize) -> Self {
+        Self::configured(count, &crate::config::Config::for_tests()).await
+    }
+    /// A server on the disposable database with this configuration.
+    async fn configured(count: usize, config: &crate::config::Config) -> Self {
         assert_eq!(
             std::env::var("DISPOSABLE_TEST_DATABASE").as_deref(),
             Ok("1")
@@ -421,13 +428,8 @@ impl Fixture {
             .await
             .unwrap(),
         );
-        let mut server = SignalingServer::new(
-            manager,
-            metrics,
-            Some(pool.clone()),
-            &crate::config::Config::for_tests(),
-        )
-        .unwrap();
+        let mut server =
+            SignalingServer::new(manager, metrics, Some(pool.clone()), config).unwrap();
         server.registration_enabled = false;
         server.metrics_token = Some("disposable-policy-metrics-secret-at-least-32-bytes".into());
         server.webauthn = Some(Arc::new(

@@ -10,6 +10,11 @@ config=/etc/simplestchat-public
 root=/srv/simplestchat-public
 [[ ! -L "$config" && $(stat -c '%u:%a' "$config") == 0:700 ]]
 [[ ! -L "$root" && $(stat -c '%u:%a' "$root") == 0:700 ]]
+# The lobby is seeded by the Ops executable a signed release delivers.
+ops=/usr/local/libexec/simplestchat-public/simplestchat-ops
+[[ -f "$ops" && ! -L "$ops" && $(stat -c '%u:%a' "$ops") == 0:755 ]] || {
+  echo 'Deliver the signed Ops executable first: stage a signed release, then deploy again.' >&2; exit 1;
+}
 if [[ ! -e /run/simplestchat-bench ]]; then mkdir -m 700 /run/simplestchat-bench; fi
 [[ ! -L /run/simplestchat-bench && $(stat -c '%u:%a' /run/simplestchat-bench) == 0:700 ]]
 [[ ! -L /run/simplestchat-bench/workload.lock ]]
@@ -186,7 +191,7 @@ until curl --disable --noproxy '*' --proto '=http' --fail --silent --max-time 2 
 done
 jq -e '.status == "ready"' "$attempt/application-ready.json" >/dev/null
 phase=lobby
-timeout --signal=TERM --kill-after=2s 90s python3 /usr/local/libexec/simplestchat-bench/seed-public-room.py >"$attempt/lobby.json"
+timeout --signal=TERM --kill-after=2s 90s "$ops" release seed-lobby >"$attempt/lobby.json"
 jq -e '.passed == true' "$attempt/lobby.json" >/dev/null
 phase=runtime_policy
 compose up --detach --no-build --pull never simplestchat >"$attempt/runtime-policy.log" 2>&1

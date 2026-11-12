@@ -1,0 +1,24 @@
+[package]
+name = "simplestchat-lobby-seed"
+description = "The public lobby's seeding transaction over the private loopback API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# The recorded transactions and the scripted backend that replays them, for
+# this crate's tests and a dependent's. Dependents enable it only from
+# `[dev-dependencies]`, so their normal and release builds leave it off.
+testing = []
+
+[dependencies]
+httparse = "=1.10.1"
+serde = "1.0.229"
+serde_json = "1.0.151"

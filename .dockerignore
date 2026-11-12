@@ -244,6 +244,12 @@ crates/toolkit/src/**
 !crates/toolkit/src/test_env/
 crates/toolkit/src/test_env/**
 !crates/toolkit/src/test_env/*.rs
+!crates/lobby-seed/
+crates/lobby-seed/**
+!crates/lobby-seed/Cargo.toml
+!crates/lobby-seed/src/
+crates/lobby-seed/src/**
+!crates/lobby-seed/src/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

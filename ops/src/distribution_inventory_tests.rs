@@ -18,7 +18,7 @@ fn framed_inventory_binds_sorted_names_sizes_and_original_bytes() {
     let path = root.0.join("source");
     let mut expected = fixture::populate(&path);
     expected.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut frame = b"simplestchat-ops-capacity-source-inventory-v2\0".to_vec();
+    let mut frame = b"simplestchat-ops-capacity-lobby-source-inventory-v3\0".to_vec();
     frame.extend((expected.len() as u32).to_be_bytes());
     for (name, bytes) in &expected {
         frame.extend((name.len() as u16).to_be_bytes());

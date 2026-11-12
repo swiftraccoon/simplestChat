@@ -69,7 +69,7 @@ fn nonexecuting_plan_projects_only_bounded_claims_inventory_and_unresolved_slots
     assert!(output.stderr.is_empty());
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["kind"], "ops-build-plan");
-    assert_eq!(value["inventory"]["files"], 19);
+    assert_eq!(value["inventory"]["files"], 21);
     assert_eq!(value["recipe"]["program"], "cargoExecutable");
     assert_eq!(value["recipe"]["arguments"][1]["value"], "--frozen");
     let public = String::from_utf8(output.stdout).unwrap();
@@ -122,8 +122,11 @@ fn streamed_inventory_exceeds_the_child_descriptor_limit_without_exhausting_it()
     assert!(output.status.success(), "{:?}", output.stderr);
     assert!(output.stderr.is_empty());
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(value["inventory"]["files"], 199);
-    assert_eq!(value["inventory"]["profile"], "workspace-ops-capacity-v2");
+    assert_eq!(value["inventory"]["files"], 201);
+    assert_eq!(
+        value["inventory"]["profile"],
+        "workspace-ops-capacity-lobby-v3"
+    );
     assert!(!root.0.join("source/target").exists());
 }
 

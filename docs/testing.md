@@ -312,6 +312,25 @@ database to check chat/state access during blocked SQL and publication after
 the requesting task is cancelled. It is a concurrency regression test, not a
 database-outage or throughput benchmark.
 
+### Lobby seeding against the real router
+
+`simplestchat-lobby-seed` is the transaction the host command
+`simplestchat-ops release seed-lobby` runs. Its own tests and the command's
+replay the recorded runs of the helper it replaced against a scripted loopback
+backend. The server's tests hold it to the server instead: one checks that the
+library's room request is one the server accepts whole and that the answers it
+reads are spelled as the server serializes them, and the ignored
+`the_lobby_is_seeded_once_through_the_real_router_and_then_preserved` serves
+the real router on a loopback port of the disposable database, seeds twice and
+then with a conflicting password, and checks the stored room, the absence of
+any session and the three reports.
+
+```sh
+cargo run -q -p xtask -- test-env \
+  cargo test --locked --lib the_lobby_is_seeded_once_through_the_real_router \
+  -- --include-ignored --test-threads=1
+```
+
 ### Runtime secret exposure regressions
 
 The `runtime_canary` Rust tests submit unique inert values through the real

@@ -251,6 +251,14 @@ private backend to create the owner and lobby. The launcher restores the
 inventory's registration policy before starting Caddy. Repeated deployment
 preserves existing owner credentials and lobby settings.
 
+The owner and lobby are created by the signed Ops executable
+(`simplestchat-ops release seed-lobby`, described in
+[the Ops README](../README.md#lobby-seeding)), so the launcher refuses to start,
+before it changes anything, on a host that lacks
+`/usr/local/libexec/simplestchat-public/simplestchat-ops`. Any signed
+[`release.yml` run](RELEASES.md#stage-while-chat-stays-online) delivers it;
+staging alone is enough.
+
 Owner login credentials are retained in `/etc/simplestchat-public/owner.json`,
 readable only by root (`0600`). Retrieve them privately; never paste them into
 logs, issues, or the repository. The owner email is `owner@<your-domain>`.
@@ -427,7 +435,7 @@ the release helper (`files/release_public.py`).
    deployment with the [explicit deployment command](#deploy-explicitly), as
    RELEASES.md describes; the maintenance run has already published the
    configuration and the new revision's source tree. When the fix is a file
-   that `public.yml` installs (the lobby-seeding helper was one), first stop
+   that `public.yml` installs (the launcher is one), first stop
    the project with the command below, because the failed launcher leaves
    the database running, and rerun `public.yml` with both inputs naming the
    new revision before the deployment command.

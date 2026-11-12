@@ -107,6 +107,53 @@ fn enrollment_is_private_and_inventory_policy_precedes_public_start() {
     assert!(!script.contains("docker system prune"));
 }
 
+/// The lobby is seeded by the Ops executable a signed release delivers: the
+/// launcher requires it, root-owned and not a link, before it takes the
+/// workload lock or touches anything, runs its seeding command while only
+/// the private backend is up, and accepts nothing but a passed report. The
+/// playbook installs no seeding helper.
+#[test]
+fn the_lobby_is_seeded_by_the_installed_ops_executable() {
+    let script = checkout_file(SCRIPT);
+    let at = |text: &str| script.find(text).unwrap();
+    let lines: Vec<&str> = script.lines().collect();
+    let installed = "ops=/usr/local/libexec/simplestchat-public/simplestchat-ops";
+    let required = concat!(
+        r#"[[ -f "$ops" && ! -L "$ops" && $(stat -c '%u:%a' "$ops") == 0:755 ]] || {"#,
+        "\n  echo 'Deliver the signed Ops executable first: stage a signed release, ",
+        "then deploy again.' >&2; exit 1;\n}\n"
+    );
+    assert_eq!(lines.iter().filter(|line| **line == installed).count(), 1);
+    assert!(at(installed) < at(required) && at(required) < at("exec 9<>"));
+    assert!(at(required) < at("mkdir -m 700 /run/simplestchat-bench"));
+    let seeding = concat!(
+        r#"timeout --signal=TERM --kill-after=2s 90s "$ops" release seed-lobby "#,
+        r#">"$attempt/lobby.json""#
+    );
+    let step = lines.iter().position(|line| *line == seeding).unwrap();
+    assert_eq!(lines[step - 1], "phase=lobby");
+    let accepted = r#"jq -e '.passed == true' "$attempt/lobby.json" >/dev/null"#;
+    assert_eq!(lines[step + 1], accepted);
+    assert_eq!(
+        script.matches("seed").count(),
+        2,
+        "one comment and one command"
+    );
+    let play = public();
+    let (_, install) = located(section(&play, "tasks"), |task| {
+        task["name"] == "Install the explicit deployment and Compose commands"
+    });
+    let installs = json!([
+        {"source": "public-compose.sh", "destination": "/usr/local/bin/simplestchat-public"},
+        {"source": "deploy-public.sh", "destination": "/usr/local/bin/simplestchat-public-deploy"},
+    ]);
+    assert_eq!(install["loop"], installs);
+    let text = play.to_string();
+    for retired in ["seed", "simplestchat-bench/release_json.py"] {
+        assert!(!text.contains(retired), "{retired}");
+    }
+}
+
 /// From `test_verified_artifacts_and_migrations_precede_runtime_privileges`.
 #[test]
 fn verified_artifacts_and_migrations_precede_runtime_privileges() {

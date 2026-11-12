@@ -1476,11 +1476,11 @@ mod bytecode_tests {
     }
 
     #[tokio::test]
-    async fn actual_frozen_seed_import_preserves_retained_parent_without_bytecode() {
+    async fn actual_frozen_profile_import_preserves_retained_parent_without_bytecode() {
         let end = Instant::now() + Duration::from_secs(30);
         let body_end = end - Duration::from_secs(3);
         let path = std::env::temp_dir().join(format!(
-            "maintain-seed-bytecode-{}-{}",
+            "maintain-profile-bytecode-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -1490,12 +1490,9 @@ mod bytecode_tests {
         let bench = fixture.0.join("bench");
         fs::create_dir(&bench).unwrap();
         fs::set_permissions(&bench, fs::Permissions::from_mode(0o700)).unwrap();
-        let sources = [
-            "seed-public-room.py",
-            "seed_public_room.py",
-            "release_json.py",
-        ]
-        .map(|name| {
+        // The launcher's remaining interpreted step: a profile check that
+        // imports the JSON boundary beside it.
+        let sources = ["runtime_profile.py", "release_json.py"].map(|name| {
             let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("ansible/files")
                 .join(name);
@@ -1516,8 +1513,8 @@ mod bytecode_tests {
         let python = std::env::var_os("PYTHON").unwrap_or_else(|| "/usr/bin/python3".into());
         assert!(Instant::now() < body_end);
         let child = command(python.to_str().expect("PYTHON is an interpreter path"))
-            .arg(bench.join("seed-public-room.py"))
-            .arg("--help")
+            .arg(bench.join("runtime_profile.py"))
+            .arg("image")
             .current_dir(&bench)
             .stdout(Stdio::from(logs[0].try_clone().unwrap()))
             .stderr(Stdio::from(logs[1].try_clone().unwrap()))
@@ -1553,12 +1550,8 @@ mod bytecode_tests {
         assert!(stdout.len() + stderr.len() <= 4096 && stderr.is_empty());
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&stdout).unwrap(),
-            json!({
-                "schemaVersion":1,"passed":false,"changed":false,"ownerCreated":false,
-                "roomCreated":false,"ownerFileCreated":false,"existingSettingsPreserved":false,
-                "refreshSessionRevoked":null,"failure":"arguments_not_supported",
-                "ownerCredentialFile":"/etc/simplestchat-public/owner.json"
-            })
+            // Without a configuration on standard input the check refuses.
+            json!({"passed": false, "failure": "runtime_configuration_size"})
         );
         assert!(cache_absent && sources_unchanged);
         assert_eq!(

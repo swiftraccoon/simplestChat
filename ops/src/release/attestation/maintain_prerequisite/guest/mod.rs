@@ -274,21 +274,6 @@ async fn rendered_files_for(ctx: &mut Context, image: &str, revision: &str) -> R
             0o755,
         ),
         (
-            "/usr/local/libexec/simplestchat-bench/seed-public-room.py",
-            "ops/ansible/files/seed-public-room.py",
-            0o755,
-        ),
-        (
-            "/usr/local/libexec/simplestchat-bench/seed_public_room.py",
-            "ops/ansible/files/seed_public_room.py",
-            0o644,
-        ),
-        (
-            "/usr/local/libexec/simplestchat-bench/release_json.py",
-            "ops/ansible/files/release_json.py",
-            0o644,
-        ),
-        (
             "/usr/local/libexec/simplestchat-public/runtime_profile.py",
             "ops/ansible/files/runtime_profile.py",
             0o644,

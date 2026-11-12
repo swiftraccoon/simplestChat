@@ -14,6 +14,7 @@ pub fn populate(root: &Path) -> Vec<(String, Vec<u8>)> {
         "crates/toolkit/Cargo.toml",
         "crates/ci/Cargo.toml",
         "crates/release/Cargo.toml",
+        "crates/lobby-seed/Cargo.toml",
         "vendor/mediasoup-0.29.0/Cargo.toml",
         "vendor/mediasoup-sys-0.19.0/Cargo.toml",
         "ops/src/main.rs",
@@ -23,6 +24,7 @@ pub fn populate(root: &Path) -> Vec<(String, Vec<u8>)> {
         "load_tests/src/capacity/json.rs",
         "load_tests/src/capacity_run/mod.rs",
         "load_tests/src/owned_process/mod.rs",
+        "crates/lobby-seed/src/lib.rs",
     ];
     paths
         .into_iter()

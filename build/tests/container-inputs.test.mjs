@@ -364,6 +364,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/src/migrate/private.env', 'ops/src/migrate/recorded_tls.json',
     'ops/src/migrate/recorded_inspect.json', 'ops/src/migrate/recorded_snapshot.json',
     'ops/src/migrate/recorded_data.json', 'ops/src/migrate/recorded_handoff.json',
+    'crates/lobby-seed/private.env', 'crates/lobby-seed/fixtures/recorded_seed.json',
     'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
     'ops/src/release/attestation/acquire/private.env',
     'ops/src/release/attestation/acquire/retained.json',

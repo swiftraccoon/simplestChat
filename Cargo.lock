@@ -3428,6 +3428,7 @@ dependencies = [
  "serde_json",
  "sha1 0.11.0",
  "sha2 0.11.0",
+ "simplestchat-lobby-seed",
  "sqlx",
  "syn 3.0.6",
  "thiserror 2.0.21",
@@ -3505,6 +3506,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplestchat-lobby-seed"
+version = "0.1.0"
+dependencies = [
+ "httparse",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "simplestchat-ops"
 version = "0.1.0"
 dependencies = [
@@ -3524,6 +3534,7 @@ dependencies = [
  "sha2 0.11.0",
  "signal-hook",
  "simplestchat-load-test",
+ "simplestchat-lobby-seed",
  "tar",
  "tokio",
  "x509-parser 0.18.1",

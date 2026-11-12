@@ -631,18 +631,20 @@ observation. The library separates `collect_inputs(source_root)` from the pure
 `plan(&selection, &inventory)`. `inspect` composes them. No command is started,
 toolchain resolved, registry accessed, artifact generated or candidate run.
 
-The `workspace-ops-capacity-v2` inventory selects original bytes of `Cargo.toml`,
+The `workspace-ops-capacity-lobby-v3` inventory selects original bytes of `Cargo.toml`,
 `Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the
-Ops/load-test/xtask/toolkit/CI/release manifests, the two current mediasoup
-path-patch manifests, and every regular `*.rs` under `ops/src`, the load-test
-library entry and capacity dispatcher, and Rust files under its `capacity`,
-`capacity_run` and `owned_process` directories.
+Ops/load-test/xtask/toolkit/CI/release/lobby-seed manifests, the two current
+mediasoup path-patch manifests, and every regular `*.rs` under `ops/src`, the
+load-test library entry and capacity dispatcher, Rust files under its `capacity`,
+`capacity_run` and `owned_process` directories, and those under
+`crates/lobby-seed/src`.
 This covers the current named workspace discovery manifests, not complete
 Cargo/compiler I/O closure. The tool does not interpret
 TOML, resolve changed workspace members/path patches, or read other workspace,
 vendor or registry source. A later builder must audit the complete input closure
 instead of treating this fixed selection as one. Implicit `ops/build.rs`, an
-`ops/.cargo`, `load_tests/build.rs`, `load_tests/.cargo` and legacy `.cargo/config`
+`ops/.cargo`, `load_tests/build.rs`, `load_tests/.cargo`, the same two under
+`crates/lobby-seed` and legacy `.cargo/config`
 are refused rather than silently omitted from this profile. Other unselected
 paths are not source inputs here.
 
@@ -672,7 +674,7 @@ cursor is RAII-closed internally, with no fallible close API. This detects
 observed mutation/replacement; it is neither an atomic snapshot nor a lock.
 
 The canonical SHA-256 frame is the ASCII bytes
-`simplestchat-ops-capacity-source-inventory-v2` plus NUL, a big-endian u32 file
+`simplestchat-ops-capacity-lobby-source-inventory-v3` plus NUL, a big-endian u32 file
 count, then entries sorted by relative ASCII path. Each entry is big-endian u16 path length,
 path bytes, big-endian u64 original byte count and the 32 raw bytes of that
 file's SHA-256. Names are part of the digest but stay private. Public inventory
@@ -969,7 +971,7 @@ output cannot contain one another. Duplicate/unknown fields, numeric type change
 and wrong original request bytes are refused before material or output access.
 
 The new full-tree pin profile is `ops-producer-tree-v1`, distinct from the partial
-`workspace-ops-capacity-v2` inventory. Its SHA input begins with the profile plus NUL, followed
+`workspace-ops-capacity-lobby-v3` inventory. Its SHA input begins with the profile plus NUL, followed
 by entries sorted by relative UTF-8 path, including the empty root path. Each entry
 contains a big-endian u32 path byte length, path bytes, one directory-kind byte
 (1 for directory), one executable-file-bit byte, big-endian u64 file byte count
@@ -2329,6 +2331,60 @@ scenarios, are in `ops/src/migrate/recorded_handoff.json` and replayed command
 by command, with 63 addresses at the edges of every special block as that
 program's interpreter classified them. One difference is deliberate: a command
 line of another length is a usage error.
+
+## Lobby seeding
+
+```sh
+simplestchat-ops release seed-lobby
+```
+
+The launcher runs this while only the private backend is up. It keeps a
+deployment's lobby in place: one retained owner account, and a room named
+`lobby` that is created only when that owner has none. An existing lobby is
+never changed.
+
+The command requires root and takes no argument. Under
+`/etc/simplestchat-public/seed.lock` it reads the one `ALLOWED_ORIGINS` line of
+`app.env`, which must be a literal HTTPS origin of a named host with an
+optional port, and `owner_password` from `secrets.json`, 32 to 128 printable
+ASCII bytes. The directory must be root's and writable by no one else; the two
+inputs, the lock and `owner.json` must be root's regular files of mode 0600
+with one name and at most 64 KiB, and a link is never followed. The owner is
+`owner@DOMAIN`. Its credentials are retained once in `owner.json`: written
+under a random pending name, made durable, linked into place, and never
+rewritten. An existing record must be exactly this owner, or the run stops
+with `owner_credentials_conflict`.
+
+The transaction itself is the `simplestchat-lobby-seed` library. It talks only
+to `127.0.0.1:3000`, one connection per request, never through a proxy and
+never following a redirect: sign in (a 401 registers the account, and a 409
+there is a conflict), require the answer to be this owner's with an access
+token of the issued shape and the host-only secure refresh cookie, list the
+owner's rooms, create the lobby if the list lacks it, check the new room's six
+access settings and confirm ownership by listing again, then sign out and
+require the cookie to be cleared. A step of a request waits at most 5 s,
+everything before the sign-out takes at most 55 s and the sign-out 8 s. A
+successful answer larger than 256 KiB, or one that is not a single JSON value
+without repeated keys, is refused.
+
+One line is printed whatever happens, with ten fixed keys and never a
+credential: `schemaVersion`, `passed`, `changed`, `ownerCreated`,
+`roomCreated`, `ownerFileCreated`, `existingSettingsPreserved`,
+`refreshSessionRevoked`, `failure` (a fixed code or `null`) and
+`ownerCredentialFile`. The exit status is 0 only when nothing failed and the
+session was ended.
+
+The 230 recorded runs of the Python helper this replaces are in
+`crates/lobby-seed/fixtures/recorded_seed.json`. The library replays the 185
+that reached the backend over real loopback connections, and the command
+replays all of them with their files. Fourteen end differently on purpose,
+because the earlier HTTP client and cookie jar accepted what the backend never
+sends: an account identity without its usual hyphens, a cookie lifetime given
+as a date, a clearing cookie without the secure mark, a provisional answer, a
+folded header, a head without its end, lengths that are not one plain number,
+and a body in another encoding or behind a byte order mark. A run with
+arguments is a usage error. The server's tests drive the same library against
+the real router ([testing guide](../docs/testing.md#lobby-seeding-against-the-real-router)).
 
 
 ## Offline server attestation preparation
