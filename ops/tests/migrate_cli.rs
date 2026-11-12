@@ -40,6 +40,25 @@ fn malformed_invocations_are_usage_errors_without_effects() {
         &["migrate", "freeze-source", "--req", "PRIVATE_VALUE"],
         &["migrate", "inspect-source", "--request", "PRIVATE_VALUE"],
         &["migrate", "thaw-source", "--request", "PRIVATE_VALUE"],
+        &["migrate", "handoff"],
+        &[
+            "migrate",
+            "handoff",
+            IDENTITY,
+            "8.8.8.8",
+            "1.1.1.1",
+            "PRIVATE_VALUE",
+        ],
+        &[
+            "migrate",
+            "handoff",
+            IDENTITY,
+            "8.8.8.8",
+            "1.1.1.1",
+            "chat.example.test",
+            "7200",
+            "PRIVATE_VALUE",
+        ],
         &[
             "migrate",
             "restore-target",
@@ -58,6 +77,7 @@ fn malformed_invocations_are_usage_errors_without_effects() {
             "simplestchat-ops migrate freeze-source|recover-source --request PATH",
             "simplestchat-ops migrate seal-source|finalize-source --request PATH",
             "simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH",
+            "simplestchat-ops migrate handoff OPERATION SOURCE TARGET DOMAIN 7200",
             "simplestchat-ops migrate tls export|import OPERATION",
         ] {
             assert!(text.contains(family), "{arguments:?}");
@@ -132,6 +152,34 @@ fn an_unprivileged_data_step_says_only_that_it_failed() {
             String::from_utf8(output.stderr).unwrap(),
             "{\"passed\":false,\"error\":\"migration_action_failed\"}\n",
             "{step}"
+        );
+    }
+}
+
+#[test]
+fn an_unprivileged_handoff_says_only_that_it_failed() {
+    if rustix::process::geteuid().is_root() {
+        // As root this would look at the machine's own deployment.
+        return;
+    }
+    for lifetime in ["7200", "PRIVATE_VALUE"] {
+        let words = [
+            "migrate",
+            "handoff",
+            IDENTITY,
+            "8.8.8.8",
+            "1.1.1.1",
+            "chat.example.test",
+        ];
+        let mut arguments = words.to_vec();
+        arguments.push(lifetime);
+        let output = ops(&arguments);
+        assert_eq!(output.status.code(), Some(1), "{lifetime}");
+        assert!(output.stdout.is_empty(), "{lifetime}");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "Migration DNS handoff failed; inspect the retained private evidence.\n",
+            "{lifetime}"
         );
     }
 }

@@ -152,6 +152,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops migrate freeze-source|recover-source --request PATH\n",
                 "       simplestchat-ops migrate seal-source|finalize-source --request PATH\n",
                 "       simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH\n",
+                "       simplestchat-ops migrate handoff OPERATION SOURCE TARGET DOMAIN 7200\n",
                 "       simplestchat-ops migrate tls export|import OPERATION\n",
             )
             .as_bytes()

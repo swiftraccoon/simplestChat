@@ -131,21 +131,23 @@ outcomes are retained if either final selector update fails.
 If resolvers still return the old address after the destination is healthy and
 the source is sealed, an explicitly requested temporary handoff can forward HTTP
 and HTTPS to the destination. Use the retained **source** inventory, not the
-activated destination inventory, and the exact migration operation ID:
+activated destination inventory, and the move's retained variables, which name
+the operation and the digest of the executable the move keeps on the source:
 
 ```sh
 ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
   -i ops/ansible/inventory.local.source.yml --limit public_vps \
   ops/ansible/dns-handoff.yml \
-  -e scmig_run_id=EXACT_32_HEX_OPERATION_ID \
+  -e @results/migration.ATTEMPT/variables.json \
   -e schandoff_source_ip=OLD_PUBLIC_IPV4 \
   -e schandoff_target_ip=NEW_PUBLIC_IPV4 \
   -e schandoff_domain=chat.example.com \
   -e schandoff_ttl_seconds=7200
 ```
 
-The playbook requires the original app, proxy and database to remain stopped with
-restart disabled. A separate read-only Caddy container uses a private snapshot of
+The playbook joins the bytes of that executable again and runs its `migrate
+handoff` step, which requires the original app, proxy and database to remain
+stopped with restart disabled. A separate read-only Caddy container uses a private snapshot of
 the existing hostname certificate, preserves the upstream Host and TLS SNI, and
 verifies the destination's certificate. It binds only the old IPv4 TCP ports 80
 and 443; media uses the destination addresses announced by the application.

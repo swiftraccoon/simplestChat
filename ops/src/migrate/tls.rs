@@ -59,7 +59,7 @@ fn issuer_name(value: &str) -> Result<&str> {
 
 /// The migration's private directory and the one hostname its protected
 /// request admits: the origin both hosts share.
-fn operation(site: &Site<'_>, identity: &str) -> Result<(PathBuf, String)> {
+pub(super) fn operation(site: &Site<'_>, identity: &str) -> Result<(PathBuf, String)> {
     require(hexadecimal(identity, 32), "Invalid migration identity")?;
     let (root, owner) = (&site.host.paths.root, site.host.owner);
     let migrations = root.join("migrations");
@@ -85,11 +85,11 @@ fn operation(site: &Site<'_>, identity: &str) -> Result<(PathBuf, String)> {
 }
 
 /// One hostname's three files, in the order they travel.
-type Files = Vec<(String, Vec<u8>)>;
+pub(super) type Files = Vec<(String, Vec<u8>)>;
 
 /// The newest issuer's subtree for exactly `hostname`, each file read once
 /// within its bound.
-fn snapshot(site: &Site<'_>, hostname: &str) -> Result<(String, Files)> {
+pub(super) fn snapshot(site: &Site<'_>, hostname: &str) -> Result<(String, Files)> {
     let certificates = site.certificates();
     let root = store::directory(site, &certificates)?;
     let mut newest: Option<(i128, String, Files)> = None;
@@ -121,7 +121,12 @@ fn snapshot(site: &Site<'_>, hostname: &str) -> Result<(String, Files)> {
 
 /// Validate private snapshots of the pair before anything is exported or
 /// written to the proxy's storage.
-fn validate(site: &Site<'_>, directory: &Path, hostname: &str, files: &Files) -> Result<()> {
+pub(super) fn validate(
+    site: &Site<'_>,
+    directory: &Path,
+    hostname: &str,
+    files: &Files,
+) -> Result<()> {
     let mut named: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
     named.sort_unstable();
     require(

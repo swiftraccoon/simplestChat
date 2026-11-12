@@ -1,8 +1,9 @@
 //! The migration preparation playbook's controller-local verification,
 //! read-only inspection, secret handling, certificate transfer and native
-//! signed staging. The first pins are carried over from the Python migration
-//! tests. Each pin reads the playbook offline; the selection guards are
-//! evaluated by Ansible's own assert module.
+//! signed staging, and the executable a move keeps for its data steps and
+//! its DNS handoff. The first pins are carried over from the Python
+//! migration tests. Each pin reads a playbook offline; the selection guards
+//! are evaluated by Ansible's own assert module.
 
 use super::ansible::asserted;
 use super::{document, first, located};
@@ -443,6 +444,59 @@ fn same_origin_tls_transfer_is_private_and_precedes_staging() {
         .iter()
         .filter(|task| task["when"].to_string().contains("'stage'"));
     assert_eq!(staging.count(), 1);
+}
+
+/// The bridge for cached name answers is started by the executable the move
+/// keeps on its sealed source, after its bytes were joined again there, with
+/// exactly the five values the guard admitted. Nothing is interpreted.
+#[test]
+fn the_dns_handoff_runs_the_executable_the_move_keeps() {
+    let plays = document("ops/ansible/dns-handoff.yml");
+    let plays = plays.as_array().unwrap();
+    assert_eq!(plays.len(), 1);
+    let play = &plays[0];
+    let text = play.to_string();
+    for retired in [".py", "python", "/usr/local/libexec", "import "] {
+        assert!(!text.contains(retired), "{retired}");
+    }
+    assert_eq!(play["any_errors_fatal"], true);
+    let guard = tasks(&play["pre_tasks"]);
+    assert_eq!(guard.len(), 1);
+    let rules = strings(&guard[0]["ansible.builtin.assert"]["that"]);
+    for rule in [
+        "not ansible_check_mode",
+        "ansible_play_hosts_all | length == 1",
+        "ansible_host == schandoff_source_ip",
+        "schandoff_source_ip != schandoff_target_ip",
+        "scmig_run_id is match('^[a-f0-9]{32}$')",
+        "scmig_ops_sha256 is match('^[a-f0-9]{64}$')",
+        "schandoff_ttl_seconds | int == 7200",
+    ] {
+        assert!(rules.contains(&rule), "{rule}");
+    }
+    let steps = tasks(&play["tasks"]);
+    assert_eq!(steps.len(), 2);
+    assert_eq!(
+        steps[0]["ansible.builtin.include_tasks"],
+        "tasks/migration-ops.yml"
+    );
+    assert!(steps[0].get("when").is_none());
+    let command = &steps[1];
+    assert_eq!(
+        strings(&command["ansible.builtin.command"]["argv"]),
+        [
+            KEPT,
+            "migrate",
+            "handoff",
+            "{{ scmig_run_id }}",
+            "{{ schandoff_source_ip }}",
+            "{{ schandoff_target_ip }}",
+            "{{ schandoff_domain }}",
+            "{{ schandoff_ttl_seconds }}",
+        ]
+    );
+    assert_eq!(command["changed_when"], true);
+    assert!(command.get("when").is_none());
 }
 
 /// The names of a block's tasks, in order.

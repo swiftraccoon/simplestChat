@@ -2227,7 +2227,7 @@ any failure as one fixed line.
 The Python helper's answers for 127 invocations in 89 scenarios are recorded
 in `ops/src/migrate/recorded_tls.json` and replayed the same way.
 `migration-prepare.yml` runs both commands from the executable a move keeps
-beside its request. `dns-handoff.yml` still imports the Python module.
+beside its request.
 
 ## Migration data steps
 
@@ -2295,6 +2295,40 @@ the first schema, a private mode and 16 KiB, as every other owner of it does;
 and a reviewed image that fails its review is named as that, not by which rule
 failed. `simplestchat-ci database-check migration` runs the snapshot and the
 guarded rename against real PostgreSQL.
+
+## Migration DNS handoff
+
+```sh
+simplestchat-ops migrate handoff OPERATION SOURCE TARGET DOMAIN 7200
+```
+
+After a move that keeps its hostname, cached name answers can still lead to the
+old address. `dns-handoff.yml` runs this step on the sealed source: one new,
+read-only proxy container that binds only the old address's ports 80 and 443,
+presents a private snapshot of the hostname's own certificate, and passes every
+request to the destination under the hostname's name, verifying the
+destination's certificate. Its stop, two hours later, is scheduled for exactly
+that container before it is started.
+
+The step requires root and the lifetime 7200, two different IPv4 addresses that
+are globally reachable and written in their one canonical spelling, a request
+whose two origins are both `https://DOMAIN`, and this move's own sealed or
+retired journal on the machine that sealed it. The source's application, proxy
+and database must be stopped with their restart policy off and be the
+containers the journal recorded; none of them is ever started. The proxy image
+must be one of the two the project uses, pinned by tag and digest. The
+certificate is validated as a published one is. Everything the step keeps
+(`certificate.pem`, `key.pem`, `Caddyfile`, `ownership.json` and the output of
+every command) stays in the move's `dns-handoff/` directory, and a second
+handoff of the same move is refused while that directory exists. One line is
+printed, `{"passed": true, "containerId": …, "expiresAfterSeconds": 7200}`, or,
+with exit status 1, one fixed line on standard error.
+
+The 90 recorded runs of the program the playbook carried before, in 88
+scenarios, are in `ops/src/migrate/recorded_handoff.json` and replayed command
+by command, with 63 addresses at the edges of every special block as that
+program's interpreter classified them. One difference is deliberate: a command
+line of another length is a usage error.
 
 
 ## Offline server attestation preparation

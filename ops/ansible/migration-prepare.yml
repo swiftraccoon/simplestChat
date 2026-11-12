@@ -457,9 +457,6 @@
             - release_fetch_receiver.py
             - release_trust.py
             - backup_public.py
-            - migration_snapshot.py
-            - migrate_public.py
-            - migration_tls.py
             - turn_public.py
             - force_release.py
 

@@ -359,7 +359,7 @@ pub(super) fn database_identity(session: &mut Move<'_>, database: &str) -> Resul
 }
 
 /// The machine itself, whatever names lead to it.
-fn machine(host: &Host<'_>) -> Result<String> {
+pub(super) fn machine(host: &Host<'_>) -> Result<String> {
     let recorded = utf8(std::fs::read(host.paths.anchor.join("etc/machine-id"))?)?;
     let identity = stripped(&recorded);
     require(hexadecimal(identity, 32), "invalid_machine_identity")?;

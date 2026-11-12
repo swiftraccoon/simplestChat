@@ -107,7 +107,7 @@ class MigrationPrepareTests(unittest.TestCase):
             if obj(task.get("ansible.builtin.copy", {})).get("src") == "{{ item }}"
         )
         required = release_preflight.BASE_HELPERS | release_preflight.FETCH_HELPERS
-        self.assertLessEqual(
-            required | {"migration_snapshot.py", "migrate_public.py", "backup_public.py"},
-            set(strings(install, "loop")),
-        )
+        installed = set(strings(install, "loop"))
+        self.assertLessEqual(required | {"backup_public.py"}, installed)
+        # A move's own steps are commands of the executable it keeps.
+        self.assertFalse({name for name in installed if name.startswith("migrat")})
