@@ -135,8 +135,8 @@ fn capture(session: &mut Move<'_>, details: &Json, before: &Json, database: &Jso
     no_clients(session, &identifier)?;
     let unchanged = snapshot::collect(host, &identifier)?.semantic_eq(&taken);
     require(unchanged, "source_changed_during_dump")?;
-    let secrets = host.paths.config.join("secrets.json");
-    private(host, &secrets, false, MAX_PRIVATE)?;
+    let carried = host.paths.config.join("secrets.json");
+    private(host, &carried, false, MAX_PRIVATE)?;
     let size = i64::try_from(std::fs::metadata(&dump)?.len()).map_err(|_| Failure::Value)?;
     let archive = object(vec![
         ("schemaVersion", integer(1)),
@@ -145,7 +145,7 @@ fn capture(session: &mut Move<'_>, details: &Json, before: &Json, database: &Jso
         ("bytes", integer(size)),
         ("sha256", string(&file_digest(&dump)?)),
         ("snapshotSha256", string(&file_digest(&described)?)),
-        ("secretsSha256", string(&file_digest(&secrets)?)),
+        ("secretsSha256", string(&file_digest(&carried)?)),
         ("postgresImage", field(database, "image")?.clone()),
         (
             "postgresSelector",

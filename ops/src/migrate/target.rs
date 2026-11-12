@@ -57,10 +57,10 @@ pub(super) fn verified_archive(session: &Move<'_>) -> Result<(Json, Json)> {
             archive.get("systemIdentifier"),
         );
     require(matching, "snapshot_digest_mismatch")?;
-    let secrets = host.paths.config.join("secrets.json");
-    private(host, &secrets, false, MAX_PRIVATE)?;
+    let carried = host.paths.config.join("secrets.json");
+    private(host, &carried, false, MAX_PRIVATE)?;
     let recorded = archive.get("secretsSha256").and_then(Json::string);
-    let shared = recorded == Some(file_digest(&secrets)?.as_str());
+    let shared = recorded == Some(file_digest(&carried)?.as_str());
     require(shared, "destination_secrets_differ")?;
     Ok((archive, taken))
 }
@@ -105,8 +105,8 @@ fn equal(one: &str, other: &str) -> bool {
 fn retain_owner(session: &Move<'_>) -> Result<()> {
     let host = session.host;
     let config = &host.paths.config;
-    let secrets = read_object(host, &config.join("secrets.json"), MAX_PRIVATE)?;
-    let password = text(field(&secrets, "owner_password")?)?;
+    let seeding = read_object(host, &config.join("secrets.json"), MAX_PRIVATE)?;
+    let password = text(field(&seeding, "owner_password")?)?;
     require(hexadecimal(password, 64), "invalid_owner_secret")?;
     let address = format!("owner@{}", site(&session.request.destination)?);
     let path = config.join("owner.json");
