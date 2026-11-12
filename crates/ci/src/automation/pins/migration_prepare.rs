@@ -41,9 +41,10 @@ fn uses(task: &Value, module: &str) -> bool {
 }
 
 /// Both machines are inspected by the executable this move authenticated,
-/// run from a volatile private directory before anything is installed: the
-/// source stays live, nothing is interpreted, and physical identities are
-/// compared before preparation.
+/// run from a private directory before anything is installed: the source
+/// stays live, nothing is interpreted, and physical identities are compared
+/// before preparation. The directory is on the root filesystem, because a
+/// host's `/run` forbids execution.
 #[test]
 fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receipt_local() {
     let play = play();
@@ -58,7 +59,7 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         [
             "Snapshot the authenticated executable the controller retained",
             "Require exactly the executable this move authenticated",
-            "Create a private volatile directory for the executable",
+            "Create a private directory for the executable where it can run",
             "Transfer the authenticated executable without installing it",
             "Join the transferred bytes before their first execution",
             "Require the authenticated bytes on the host",
@@ -82,7 +83,8 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         steps[0]["ansible.builtin.stat"]["path"],
         "{{ scmig_ops_executable }}"
     );
-    let scratch = json!({"state": "directory", "path": "/run", "prefix": "simplestchat-inspect-"});
+    let scratch =
+        json!({"state": "directory", "path": "/var/tmp", "prefix": "simplestchat-inspect-"});
     assert_eq!(steps[2]["ansible.builtin.tempfile"], scratch);
     let held = "{{ scmig_inspector.path }}/simplestchat-ops";
     let transfer = json!({"src": "{{ scmig_ops_executable }}", "dest": held, "owner": "root",

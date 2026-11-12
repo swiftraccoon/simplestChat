@@ -279,10 +279,11 @@
               - scmig_inspector_original.stat.checksum == scmig_ops_sha256
             fail_msg: The controller must still hold the exact executable it authenticated.
 
-        - name: Create a private volatile directory for the executable
+        # A host's /run forbids execution; /var/tmp is on its root filesystem.
+        - name: Create a private directory for the executable where it can run
           ansible.builtin.tempfile:
             state: directory
-            path: /run
+            path: /var/tmp
             prefix: simplestchat-inspect-
           register: scmig_inspector
 
@@ -351,7 +352,7 @@
           when: inventory_hostname == 'migration_source'
 
       always:
-        - name: Remove the volatile directory and the executable
+        - name: Remove the private directory and the executable
           ansible.builtin.file:
             path: "{{ scmig_inspector.path }}"
             state: absent

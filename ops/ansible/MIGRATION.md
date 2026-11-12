@@ -75,8 +75,8 @@ main-push CI run and its signed application and Ops artifacts. Its first step
 verifies the application's attestation and authenticates the Ops executable on
 the controller, before either host is contacted. Both machines are then
 inspected, read-only, by that executable: it is copied into a private directory
-under `/run`, checked against its signed digest, run uninstalled and removed
-again. Staging verifies the same application originals once more and delivers
+under `/var/tmp` (a host's `/run` forbids execution), checked against its signed
+digest, run uninstalled and removed again. Staging verifies the same application originals once more and delivers
 the executable to the destination.
 
 `--revision FULL_COMMIT` selects an ancestor application release independently
