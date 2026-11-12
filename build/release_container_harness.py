@@ -1015,7 +1015,7 @@ class Harness:
         _ = release_assets.select_version(ROOT / "browser-assets", baseline["revision"])
         for name in ("postgres-admin-password", "pg_hba.conf", "init-database.sql"):
             os.chown(CONFIG / name, 999, 999)
-        os.chown(CONFIG / "Caddyfile", 10001, 10001)
+        (CONFIG / "Caddyfile").chmod(0o644)  # root's and readable, as a prepared host keeps it
         self.certificates()
         _ = self.commands.compose("config", "--quiet")
         self.report["phase"] = "bootstrap"

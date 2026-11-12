@@ -196,12 +196,11 @@ async function browserFixture(t, options = {}) {
     },
     async (executable, args, settings) => {
       if (options.deployError) throw new Error('private child command output');
-      assert.equal(executable, '/usr/bin/python3');
-      assert.equal(args[0], '-B');
-      assert.match(args[1], /\/ops\/ansible\/files\/release-public\.py$/);
-      assert.equal(args[2], 'deploy');
+      assert.equal(executable, '/usr/local/libexec/simplestchat-public/simplestchat-ops');
+      assert.deepEqual(args.slice(0, 3), ['release', 'deploy', '--revision']);
+      assert.deepEqual(args.slice(4), ['--timeout-seconds', '900', '--finalization-seconds', '60']);
       assert.deepEqual(settings, {
-        timeout: 150_000,
+        timeout: 240_000,
         maxBuffer: 2 * 1024 * 1024,
         killSignal: 'SIGTERM',
         windowsHide: true,

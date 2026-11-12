@@ -5,6 +5,10 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 
 const revisionPattern = /^[a-f0-9]{40}$/;
+// The Ops executable where a signed release installs it on a prepared host,
+// and a deployment's whole budget with the time it reserves for its end.
+const OPS = '/usr/local/libexec/simplestchat-public/simplestchat-ops';
+const DEPLOY_BUDGET = ['--timeout-seconds', '900', '--finalization-seconds', '60'];
 
 class RolloverError extends Error {
   constructor(stage) {
@@ -84,16 +88,12 @@ async function browserDriver(browser, execute = promisify(execFile)) {
   const deploy = async (revision) => {
     assert(revisionPattern.test(revision));
     const { stdout } = await atStage('deploy-command', () =>
-      execute(
-        '/usr/bin/python3',
-        [
-          '-B',
-          path.resolve(__dirname, '../../ops/ansible/files/release-public.py'),
-          'deploy',
-          revision,
-        ],
-        { timeout: 150_000, maxBuffer: 2 * 1024 * 1024, killSignal: 'SIGTERM', windowsHide: true },
-      ),
+      execute(OPS, ['release', 'deploy', '--revision', revision, ...DEPLOY_BUDGET], {
+        timeout: 240_000,
+        maxBuffer: 2 * 1024 * 1024,
+        killSignal: 'SIGTERM',
+        windowsHide: true,
+      }),
     );
     await atStage('deploy-result', () => {
       const result = JSON.parse(stdout.trim());

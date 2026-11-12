@@ -12,6 +12,7 @@ const INTEGRATION: &str = "App-only release and rollback on a disposable host";
 const CONTROLLER: &str = "Prepare the source-built native release controller";
 const INSTALLED: &str = "Install the source-built Ops executable where a prepared host keeps it";
 const HARNESS: &str = "build/release_container_harness.py";
+const ROLLOVER_SCRIPT: &str = "web/e2e/release-assets.cjs";
 const RETENTION: &str = "Preserve sanitized release-container report";
 const LOCAL_DIAGNOSTICS: &str = "Preserve private local release-container diagnostics";
 const EXPORT: &str = "Export the tested immutable production image";
@@ -174,6 +175,21 @@ fn the_release_integration_runs_the_installed_source_built_ops_executable() {
         assert_eq!(harness.matches(line).count(), 1, "{line}");
     }
     assert!(!harness.contains("release-public.py"));
+    // The proxy's configuration is root's and readable, as a prepared host
+    // keeps it: the deployment admits no other owner for that file.
+    let proxy = "        (CONFIG / \"Caddyfile\").chmod(0o644)";
+    assert_eq!(harness.matches(proxy).count(), 1);
+    assert!(!harness.contains("os.chown(CONFIG / \"Caddyfile\""));
+    // The browser check's own two deployments are the same executable.
+    let script = checkout_file(ROLLOVER_SCRIPT);
+    for line in [
+        "const OPS = '/usr/local/libexec/simplestchat-public/simplestchat-ops';\n",
+        "const DEPLOY_BUDGET = ['--timeout-seconds', '900', '--finalization-seconds', '60'];\n",
+        "      execute(OPS, ['release', 'deploy', '--revision', revision, ...DEPLOY_BUDGET], {\n",
+    ] {
+        assert_eq!(script.matches(line).count(), 1, "{line}");
+    }
+    assert!(!script.contains("python") && !script.contains("release-public"));
 }
 
 /// From `test_existing_image_is_built_and_smoked_once_before_release_integration`.
