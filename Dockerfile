@@ -41,7 +41,7 @@ RUN npm run build
 
 # Build on the same supported Fedora release used at runtime. mediasoup-sys
 # requires a C++ toolchain and the static C/C++ runtime libraries.
-FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS builder
+FROM docker.io/library/fedora:45@sha256:a7d72ba2745b100a3351087472e5ee7b2450af7cf331e7673007e3817612839c AS builder
 ARG FEDORA_REFRESH_EPOCH
 # Relevant public reviews invalidate package caches without entering image layers.
 RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
@@ -194,7 +194,7 @@ FROM builder AS loadtest-builder
 COPY load_tests ./load_tests
 RUN cargo build --locked --release -p simplestchat-load-test --bin load_test
 
-FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS runtime-base
+FROM docker.io/library/fedora:45@sha256:a7d72ba2745b100a3351087472e5ee7b2450af7cf331e7673007e3817612839c AS runtime-base
 ARG FEDORA_REFRESH_EPOCH
 RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,target=/tmp/simplestchat-image-exceptions.json,readonly \
     --mount=type=bind,source=security/image-policy.json,target=/tmp/simplestchat-image-policy.json,readonly \
