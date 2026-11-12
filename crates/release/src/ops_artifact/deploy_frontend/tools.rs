@@ -29,8 +29,14 @@ fn index(program: Program) -> Result<usize> {
         Program::FrontendInventory => Ok(2),
         Program::FrontendAnsible => Ok(3),
         Program::FrontendCurl => Ok(4),
+        Program::FrontendDig => Ok(5),
         _ => Err(failure(1)),
     }
+}
+/// Where a role's executable is kept: the controller follows the five fixed
+/// roles, and the DNS tool, opened only when asked for, follows it.
+fn slot(role: usize) -> usize {
+    if role == 5 { 6 } else { role }
 }
 /// The outer operation supplies its original source, inventory and evidence
 /// witnesses. This is deliberately separate from executable validation and
@@ -56,7 +62,7 @@ pub(super) struct ExitObservation {
 }
 struct Context {
     root: PathBuf,
-    environments: [Environment; 5],
+    environments: [Environment; 6],
     origin: Instant,
 }
 enum Received {
@@ -277,7 +283,7 @@ fn environments(
     captured: &Environment,
     gh: &Path,
     ansible: &Path,
-) -> Result<[Environment; 5]> {
+) -> Result<[Environment; 6]> {
     let gh_dir = gh.parent().ok_or_else(|| failure(1))?;
     let ansible_dir = ansible.parent().ok_or_else(|| failure(1))?;
     let path = std::env::join_paths([
@@ -305,7 +311,7 @@ fn environments(
             base.insert(key.into(), value.clone());
         }
     }
-    let mut all: [Environment; 5] = std::array::from_fn(|_| base.clone());
+    let mut all: [Environment; 6] = std::array::from_fn(|_| base.clone());
     all[0].insert("GIT_OPTIONAL_LOCKS".into(), "0".into());
     for role in [1, 3] {
         for key in [
@@ -376,6 +382,18 @@ impl Tools {
         gh: &Path,
         controller: &Path,
     ) -> Result<Self> {
+        Self::open_with(root, environment, ansible, gh, controller, false)
+    }
+    /// The same tools, with the DNS query tool when an operation observes a
+    /// name's addresses.
+    pub fn open_with(
+        root: &Path,
+        environment: &Environment,
+        ansible: &Path,
+        gh: &Path,
+        controller: &Path,
+        dns: bool,
+    ) -> Result<Self> {
         if !root.is_absolute()
             || !ansible.is_absolute()
             || !gh.is_absolute()
@@ -398,6 +416,10 @@ impl Tools {
                     Some(path) => Executable::open(path)?,
                     None => executable::select(root, environment, OsStr::new(name))?,
                 };
+                opened.push(Arc::new(executable));
+            }
+            if dns {
+                let executable = executable::select(root, environment, OsStr::new("dig"))?;
                 opened.push(Arc::new(executable));
             }
             let gh = opened[1].selected_path()?;
@@ -447,7 +469,8 @@ impl Tools {
         for tool in &self.tools {
             tool.validate()?;
         }
-        let mut tools = vec![self.tools[role].clone()];
+        let selected = self.tools.get(slot(role)).ok_or_else(|| failure(1))?;
+        let mut tools = vec![selected.clone()];
         if role == 3 {
             tools.extend([self.tools[1].clone(), self.tools[5].clone()]);
         }

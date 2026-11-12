@@ -39,6 +39,7 @@ pub enum Program {
     FrontendInventory,
     FrontendAnsible,
     FrontendCurl,
+    FrontendDig,
     ComparisonGit,
     ComparisonCargo,
     ComparisonBenchmark,
@@ -85,6 +86,7 @@ impl Program {
             Self::FrontendInventory => "ansible-inventory",
             Self::FrontendAnsible => "ansible-playbook",
             Self::FrontendCurl => "curl",
+            Self::FrontendDig => "dig",
             Self::ComparisonGit => "git",
             Self::ComparisonCargo => "cargo",
             Self::ComparisonBenchmark => "load_test",
@@ -152,6 +154,7 @@ impl ReleaseRole {
                     | Program::FrontendInventory
                     | Program::FrontendAnsible
                     | Program::FrontendCurl
+                    | Program::FrontendDig
             ),
         }
     }

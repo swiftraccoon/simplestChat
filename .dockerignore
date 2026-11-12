@@ -355,6 +355,9 @@ crates/release/src/ops_artifact/**
 !crates/release/src/ops_artifact/deploy_frontend/
 crates/release/src/ops_artifact/deploy_frontend/**
 !crates/release/src/ops_artifact/deploy_frontend/*.rs
+!crates/release/src/ops_artifact/deploy_frontend/migrate/
+crates/release/src/ops_artifact/deploy_frontend/migrate/**
+!crates/release/src/ops_artifact/deploy_frontend/migrate/*.rs
 !crates/release/src/ops_artifact/maintain_runtime/
 crates/release/src/ops_artifact/maintain_runtime/**
 !crates/release/src/ops_artifact/maintain_runtime/*.rs

@@ -22,7 +22,6 @@ from test_support import ROOT, array, obj, objects, yaml_value
 import migration_artifact
 import migration_controller as migration
 import migration_dns
-import release_attestation
 import release_build
 import release_deploy
 import release_fetch_controller
@@ -201,6 +200,8 @@ class MigrationTests(unittest.TestCase):
             origin=TARGET_ORIGIN,
             source_origin=SOURCE_ORIGIN,
             wait_seconds=0,
+            force=True,
+            artifact_dir=str(self.root / "retained-artifact"),
         )
         self.inventories = {
             str(source): graph("192.0.2.10", "chat.example.test"),
@@ -216,15 +217,8 @@ class MigrationTests(unittest.TestCase):
             "target": {"machineId": "2" * 32, "domain": None},
         }
 
-    def execute(self, *, ci_error: bool = False, attestation_error: bool = False) -> JsonObject:
+    def execute(self) -> JsonObject:
         """Run the actual controller transaction through deterministic external boundaries."""
-        envelope: JsonObject = {"artifactId": 123, "ciRunId": 789, "revision": REVISION}
-
-        def verified(_url: str, _path: Path, value: JsonObject) -> JsonObject:
-            if attestation_error:
-                message = "fixture_attestation_failed"
-                raise ValueError(message)
-            return value
 
         def runner(output: Path | None = None) -> FakeRunner:
             return FakeRunner(self, output)
@@ -242,15 +236,10 @@ class MigrationTests(unittest.TestCase):
                 return_value=("/ansible-playbook", "/ansible-inventory", "/curl"),
             ),
             patch.object(
-                release_deploy,
-                "select_ci_artifact",
-                return_value=envelope,
-                side_effect=release_deploy.DeployError("ci_failed") if ci_error else None,
+                migration_artifact,
+                "prepare",
+                return_value=(Path(str(self.args.artifact_dir)), {}),
             ),
-            patch.object(
-                release_fetch_controller, "download_url", return_value="https://fixture.invalid"
-            ),
-            patch.object(release_attestation, "fetch_verify", side_effect=verified),
             patch.object(release_fetch_controller, "api", side_effect=api),
         ):
             previous = os.umask(0o077)
@@ -340,26 +329,12 @@ class MigrationTests(unittest.TestCase):
         self.assertGreater(seconds, 0)
         self.assertGreater(transfer.timeout, seconds + 300)
 
-    def test_ci_or_attestation_failure_precedes_all_host_calls(self) -> None:
-        """No inspection, preparation or host mutation is attempted with untrusted release bytes."""
-        for selectors in ({"ci_error": True}, {"attestation_error": True}):
-            with self.subTest(selectors=selectors):
-                report = self.execute(**selectors)
-                self.assertFalse(report["passed"])
-                self.assertEqual(self.actions, [])
-
     def test_explicit_force_stages_selected_artifact_without_ci_selection(self) -> None:
         """Unsigned selection remains explicit and cannot enter the signed transfer path."""
-        self.args.force = True
-        self.args.artifact_dir = str(self.root / "retained-artifact")
-        with patch.object(
-            migration_artifact, "prepare", return_value=(Path(self.args.artifact_dir), {})
-        ) as prepare:
-            report = self.execute(ci_error=True, attestation_error=True)
+        report = self.execute()
         self.assertTrue(report["passed"])
         self.assertFalse(report["githubAttested"])
         self.assertEqual(report["ciVerification"], "skipped-explicit-force")
-        self.assertEqual(prepare.call_count, 1)
         stage = next(
             call
             for call in self.calls
@@ -375,14 +350,19 @@ class MigrationTests(unittest.TestCase):
         self.assertNotIn("scpub_release_ci_run", extra)
 
     def test_force_and_artifact_must_be_selected_together(self) -> None:
-        """Neither an artifact path nor a force flag alone can bypass release validation."""
-        for force, artifact in ((True, None), (False, "/retained/artifact")):
+        """Neither half selects a release alone, and a signed move is the native controller's."""
+        signed = "migration_signed_release_uses_native_controller"
+        for force, artifact, code in (
+            (True, None, "migration_force_artifact_required"),
+            (False, "/retained/artifact", "migration_force_artifact_required"),
+            (False, None, signed),
+        ):
             self.args.force = force
             self.args.artifact_dir = artifact
-            with self.subTest(force=force):
+            with self.subTest(force=force, artifact=artifact):
                 report = self.execute()
                 self.assertFalse(report["passed"])
-                self.assertEqual(report["failureClass"], "migration_force_artifact_required")
+                self.assertEqual(report["failureClass"], code)
                 self.assertEqual(self.actions, [])
 
     def test_wrong_inventory_origin_and_same_address_fail_before_host_calls(self) -> None:

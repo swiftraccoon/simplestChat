@@ -217,7 +217,7 @@ fn isolated_original_owner_covers_interrupted_blocked_publication() {
         let owner = Arc::new(CompletionSignals::new().unwrap());
         let result = scope(
             start,
-            0,
+            Plan::native(start, 0),
             owner,
             |runtime, flags, _| {
                 let (reader, writer) = nix::unistd::pipe().unwrap();

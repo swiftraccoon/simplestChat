@@ -1,4 +1,4 @@
-total 110028
+total 109988
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -13,7 +13,7 @@ total 110028
 1438	build/maintain_namespace_probe_guest.py
 11	build/migrate.py
 145	build/migration_artifact.py
-873	build/migration_controller.py
+853	build/migration_controller.py
 155	build/migration_dns.py
 1022	build/native_security.py
 176	build/native_security_cache.py
@@ -124,7 +124,7 @@ total 110028
 985	ops/ansible/tests/test_migrate_public.py
 161	ops/ansible/tests/test_migration_abort.py
 229	ops/ansible/tests/test_migration_artifact.py
-782	ops/ansible/tests/test_migration_controller.py
+762	ops/ansible/tests/test_migration_controller.py
 206	ops/ansible/tests/test_migration_dns.py
 159	ops/ansible/tests/test_migration_inspect.py
 113	ops/ansible/tests/test_migration_prepare.py

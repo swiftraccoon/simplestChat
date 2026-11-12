@@ -1,0 +1,781 @@
+{
+ "addresses": [
+  {
+   "address": "192.0.2.11",
+   "refused": null,
+   "value": "192.0.2.11"
+  },
+  {
+   "address": "203.0.113.7",
+   "refused": null,
+   "value": "203.0.113.7"
+  },
+  {
+   "address": "10.0.0.5",
+   "refused": null,
+   "value": "10.0.0.5"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "127.0.0.1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "0.0.0.0"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "224.0.0.1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "169.254.1.1"
+  },
+  {
+   "address": "255.255.255.255",
+   "refused": null,
+   "value": "255.255.255.255"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "192.0.2.011"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "192.0.2"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "192.0.2.11 "
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "example.test"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": ""
+  },
+  {
+   "address": "2001:db8::11",
+   "refused": null,
+   "value": "2001:db8::11"
+  },
+  {
+   "address": "2001:db8::11",
+   "refused": null,
+   "value": "2001:0DB8:0000::0011"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "::1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "::"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "ff02::1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "fe80::1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "fe80::1%eth0"
+  },
+  {
+   "address": "192.0.2.11",
+   "refused": null,
+   "value": "::ffff:192.0.2.11"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "::ffff:127.0.0.1"
+  },
+  {
+   "address": "fec0::1",
+   "refused": null,
+   "value": "fec0::1"
+  },
+  {
+   "address": "fc00::1",
+   "refused": null,
+   "value": "fc00::1"
+  },
+  {
+   "address": null,
+   "refused": "migration_unusable_address",
+   "value": "2001:db8::11%1"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "[2001:db8::11]"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "1.2.3.4.5"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "0x7f.0.0.1"
+  },
+  {
+   "address": null,
+   "refused": "migration_literal_addresses_required",
+   "value": "3232235777"
+  }
+ ],
+ "inspections": [
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": null,
+   "rpId": "chat.example.test",
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": null,
+   "rpId": "chat.example.test",
+   "sourceHost": "chat.example.test",
+   "targetHost": "chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "11111111111111111111111111111111"
+    }
+   },
+   "refused": "migration_distinct_machines_required",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "1111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_distinct_machines_required",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "2222222222222222222222222222222G"
+    }
+   },
+   "refused": "migration_distinct_machines_required",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": 7
+    }
+   },
+   "refused": "migration_distinct_machines_required",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_distinct_machines_required",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "other.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_remote_domain_mismatch",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": null,
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_remote_domain_mismatch",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": "next.chat.example.test",
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": null,
+   "rpId": "chat.example.test",
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": "chat.example.test",
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_remote_domain_mismatch",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": "",
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_remote_domain_mismatch",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_revision",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_revision",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": null,
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_revision",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "rpId": "chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_revision",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": null,
+   "rpId": "example.test",
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "next.chat.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_passkey_domain_incompatible",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "other.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_passkey_domain_incompatible",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "at.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_passkey_domain_incompatible",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "Example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "example.test."
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "-x.example.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "example.t3st"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": null
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test"
+    },
+    "target": {
+     "domain": null,
+     "machineId": "22222222222222222222222222222222"
+    }
+   },
+   "refused": "migration_source_rp_id",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": {
+     "domain": "chat.example.test",
+     "machineId": "11111111111111111111111111111111",
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "rpId": "chat.example.test"
+    }
+   },
+   "refused": "migration_step_failed",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": {
+    "source": [],
+    "target": {}
+   },
+   "refused": "migration_step_failed",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  },
+  {
+   "inspection": [],
+   "refused": "migration_step_failed",
+   "rpId": null,
+   "sourceHost": "chat.example.test",
+   "targetHost": "next.chat.example.test"
+  }
+ ],
+ "pairs": [
+  {
+   "refused": null,
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11"
+   }
+  },
+  {
+   "refused": "migration_distinct_hosts_required",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.10",
+    "scpub_announce_ip": "192.0.2.10"
+   }
+  },
+  {
+   "refused": "migration_target_media_address_mismatch",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.12"
+   }
+  },
+  {
+   "refused": "ValueError",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11"
+   }
+  },
+  {
+   "refused": null,
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11",
+    "scpub_announce_ipv6": "2001:db8::11"
+   }
+  },
+  {
+   "refused": "migration_invalid_ipv6_address",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11",
+    "scpub_announce_ipv6": "192.0.2.11"
+   }
+  },
+  {
+   "refused": null,
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11",
+    "scpub_announce_ipv6": ""
+   }
+  },
+  {
+   "refused": "migration_unusable_address",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11",
+    "scpub_announce_ipv6": "fe80::1"
+   }
+  },
+  {
+   "refused": "migration_literal_addresses_required",
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "next.example.test",
+    "scpub_announce_ip": "192.0.2.11"
+   }
+  },
+  {
+   "refused": null,
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "::ffff:192.0.2.11",
+    "scpub_announce_ip": "192.0.2.11"
+   }
+  },
+  {
+   "refused": null,
+   "source": {
+    "ansible_host": "192.0.2.10"
+   },
+   "target": {
+    "ansible_host": "2001:db8::11",
+    "scpub_announce_ip": "2001:db8::11"
+   }
+  }
+ ]
+}

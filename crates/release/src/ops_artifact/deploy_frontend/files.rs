@@ -132,6 +132,10 @@ pub(super) struct Evidence {
 }
 impl Evidence {
     pub fn new(root: &Path, budget: &Budget) -> Result<Self> {
+        Self::named(root, budget, "deploy-rust")
+    }
+    /// A fresh private `results/<operation>.<pid>.<nanoseconds>` directory.
+    pub fn named(root: &Path, budget: &Budget, operation: &str) -> Result<Self> {
         let root_chain = Chain::open(root, budget)?;
         let result = (|| {
             match rustix::fs::mkdirat(
@@ -167,7 +171,7 @@ impl Evidence {
                 .as_nanos();
             let path = root
                 .join("results")
-                .join(format!("deploy-rust.{}.{nonce}", std::process::id()));
+                .join(format!("{operation}.{}.{nonce}", std::process::id()));
             Ok(Self {
                 run: OwnedRun::local(&path, budget)?,
                 records: BTreeMap::new(),

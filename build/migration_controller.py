@@ -1,8 +1,9 @@
-"""Move a public deployment to one empty host while preserving its data and identity.
+"""Move a public deployment to one empty host from an explicitly unsigned retained release.
 
-Both inventories and HTTPS origins must be explicit. The controller preserves
-private evidence, never builds an image or sends chat, and never automatically
-restarts the source once destination startup has been attempted.
+A signed move is `simplestchat-release migrate`. Both inventories and HTTPS
+origins must be explicit. The controller preserves private evidence, never
+builds an image or sends chat, and never automatically restarts the source
+once destination startup has been attempted.
 """
 
 from __future__ import annotations
@@ -26,11 +27,10 @@ from urllib.parse import urlsplit
 
 import migration_artifact
 import migration_dns
-import release_attestation
 import release_build as BUILD  # noqa: N812 -- Reuse the maintained release boundary.
-import release_deploy as DEPLOY  # noqa: N812 -- Reuse exact inventory and CI validation.
-import release_fetch_controller as FETCH  # noqa: N812 -- Reuse signed release selection.
-from release_json import JsonObject, integer_value, object_value, string_value
+import release_deploy as DEPLOY  # noqa: N812 -- Reuse exact inventory validation.
+import release_fetch_controller as FETCH  # noqa: N812 -- Reuse bounded JSON and API reads.
+from release_json import JsonObject, object_value, string_value
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -456,40 +456,19 @@ def release_selection(  # noqa: PLR0913 -- Keep the controller and application i
     tool_revision: str,
     revision: str,
 ) -> JsonObject:
-    """Verify one signed release or an explicitly selected retained unsigned artifact."""
-    if args.force:
-        report.update(
-            phase="force_artifact", githubAttested=False, ciVerification="skipped-explicit-force"
-        )
-        require(args.artifact_dir is not None, "migration_force_artifact_required")
-        artifact, _ = migration_artifact.prepare(
-            directory, root, tool_revision, revision, Path(str(args.artifact_dir)), args.repository
-        )
-        return {
-            "scmig_force_release": True,
-            "scmig_force_directory": str(artifact),
-            "scmig_force_request": str(directory / "force.json"),
-            "scmig_tool_revision": tool_revision,
-        }
-    report["phase"] = "ci"
-    envelope = DEPLOY.select_ci_artifact(args, revision)
-    report["phase"] = "attestation"
-    selection = FETCH.ReleaseSelection(
-        args.repository,
-        integer_value(envelope["artifactId"]),
-        revision,
-        integer_value(envelope["ciRunId"]),
-    )
-    verified = directory / "verified"
-    envelope = release_attestation.fetch_verify(FETCH.download_url(selection), verified, envelope)
-    BUILD.write_json(directory / "selection.json", envelope)
+    """Validate the explicitly selected retained unsigned artifact for staging only."""
     report.update(
-        ciRunId=envelope["ciRunId"], artifactId=envelope["artifactId"], githubAttested=True
+        phase="force_artifact", githubAttested=False, ciVerification="skipped-explicit-force"
+    )
+    require(args.artifact_dir is not None, "migration_force_artifact_required")
+    artifact, _ = migration_artifact.prepare(
+        directory, root, tool_revision, revision, Path(str(args.artifact_dir)), args.repository
     )
     return {
-        "scpub_release_artifact_id": envelope["artifactId"],
-        "scpub_release_ci_run": envelope["ciRunId"],
-        "scpub_release_verified_directory": str(verified),
+        "scmig_force_release": True,
+        "scmig_force_directory": str(artifact),
+        "scmig_force_request": str(directory / "force.json"),
+        "scmig_tool_revision": tool_revision,
     }
 
 
@@ -748,6 +727,7 @@ def execute(args: MigrationOptions, root: Path = ROOT) -> JsonObject:  # noqa: P
             forced=args.force,
         )
         require(bool(args.force) == bool(args.artifact_dir), "migration_force_artifact_required")
+        require(args.force, "migration_signed_release_uses_native_controller")
         playbook, inventory_tool, curl = controller_tools(args, root)
         environment = DEPLOY.ansible_environment(root)
         source_args = source_options(args)

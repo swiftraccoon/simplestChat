@@ -19,7 +19,7 @@ use simplestchat_ci::{
 };
 use simplestchat_toolkit::{
     owned_process::Signals,
-    tooling::{Environment, Result},
+    tooling::{Environment, Failure, Result},
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -31,22 +31,24 @@ use std::{
 const SMALL: u64 = 4 * 1024 * 1024;
 const GH_API: Duration = Duration::from_secs(20);
 #[derive(Default)]
-struct State {
-    evidence: Option<Evidence>,
-    tools: Option<Tools>,
-    inventory: Option<Original>,
-    sources: Vec<Original>,
-    git_inputs: Vec<files::GitInput>,
-    candidates: Vec<Candidate>,
+pub(super) struct State {
+    pub evidence: Option<Evidence>,
+    pub tools: Option<Tools>,
+    pub inventory: Option<Original>,
+    /// A second inventory an operation between two hosts selects from.
+    pub companion: Option<Original>,
+    pub sources: Vec<Original>,
+    pub git_inputs: Vec<files::GitInput>,
+    pub candidates: Vec<Candidate>,
     commands: usize,
     ansible_exit: Option<super::tools::ExitObservation>,
-    signals: Option<Arc<simplestchat_ops::owned_process::CompletionSignals>>,
+    pub signals: Option<Arc<simplestchat_ops::owned_process::CompletionSignals>>,
 }
-type Shared = Arc<Mutex<State>>;
-fn lock(state: &Shared) -> Result<std::sync::MutexGuard<'_, State>> {
+pub(super) type Shared = Arc<Mutex<State>>;
+pub(super) fn lock(state: &Shared) -> Result<std::sync::MutexGuard<'_, State>> {
     state.lock().map_err(|_| failure(1))
 }
-async fn stage<T: Send + 'static, E: Executor>(
+pub(super) async fn stage<T: Send + 'static, E: Executor>(
     state: &Shared,
     plan: &Plan,
     executor: &mut E,
@@ -60,12 +62,15 @@ async fn stage<T: Send + 'static, E: Executor>(
     })
     .await
 }
-fn check(state: &State, budget: &Budget, cp: &Checkpoint) -> Result<()> {
+pub(super) fn check(state: &State, budget: &Budget, cp: &Checkpoint) -> Result<()> {
     state
         .inventory
         .as_ref()
         .ok_or_else(|| failure(1))?
         .check(budget, cp)?;
+    if let Some(companion) = &state.companion {
+        companion.check(budget, cp)?;
+    }
     for source in &state.sources {
         source.check(budget, cp)?;
     }
@@ -97,7 +102,12 @@ impl super::tools::Custody for SourceCustody {
         Ok(())
     }
 }
-fn resolve(root: &Path, env: &Environment, name: &str, supplied: Option<&Path>) -> Result<PathBuf> {
+pub(super) fn resolve(
+    root: &Path,
+    env: &Environment,
+    name: &str,
+    supplied: Option<&Path>,
+) -> Result<PathBuf> {
     if let Some(path) = supplied {
         return Ok(path.into());
     }
@@ -154,12 +164,12 @@ fn prepare(
     evidence.write("request.json", &encode(&request)?, cp)?;
     Ok(evidence.path().into())
 }
-fn encode(value: &Value) -> Result<Vec<u8>> {
+pub(super) fn encode(value: &Value) -> Result<Vec<u8>> {
     let mut bytes = serde_json::to_vec(value).map_err(|_| failure(1))?;
     bytes.push(b'\n');
     Ok(bytes)
 }
-async fn call<E: Executor>(
+pub(super) async fn call<E: Executor>(
     state: &Shared,
     plan: &Plan,
     budget: &Budget,
@@ -168,12 +178,30 @@ async fn call<E: Executor>(
     program: Program,
     args: Vec<OsString>,
 ) -> Result<Vec<u8>> {
-    let timeout = match program {
+    call_within(state, plan, budget, executor, end, program, args, None).await
+}
+/// One command under the role's usual ceiling, or under the tighter or wider
+/// one an operation states for this call.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one explicit ceiling beside the shared command context"
+)]
+pub(super) async fn call_within<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+    program: Program,
+    args: Vec<OsString>,
+    ceiling: Option<Duration>,
+) -> Result<Vec<u8>> {
+    let timeout = ceiling.unwrap_or(match program {
         Program::FrontendAnsible => plan::PLAYBOOK,
         Program::FrontendCurl => Duration::from_secs(15),
         Program::FrontendGh if args.first().is_some_and(|v| v == "api") => GH_API,
         _ => plan::COMMAND,
-    };
+    });
     let grace = if program == Program::FrontendAnsible {
         plan::PLAYBOOK_GRACE
     } else {
@@ -271,10 +299,10 @@ async fn call<E: Executor>(
     }
     Ok(bytes)
 }
-fn argv(parts: &[&str]) -> Vec<OsString> {
+pub(super) fn argv(parts: &[&str]) -> Vec<OsString> {
     parts.iter().map(OsString::from).collect()
 }
-async fn git<E: Executor>(
+pub(super) async fn git<E: Executor>(
     state: &Shared,
     plan: &Plan,
     budget: &Budget,
@@ -294,7 +322,7 @@ async fn git<E: Executor>(
     .await?;
     String::from_utf8(bytes).map_err(|_| failure(1))
 }
-async fn checkout<E: Executor>(
+pub(super) async fn checkout<E: Executor>(
     state: &Shared,
     plan: &Plan,
     budget: &Budget,
@@ -331,7 +359,7 @@ async fn checkout<E: Executor>(
     .await?;
     policy::admit_revision(&head, &branch, &status, &remote)
 }
-async fn api<E: Executor>(
+pub(super) async fn api<E: Executor>(
     state: &Shared,
     plan: &Plan,
     budget: &Budget,
@@ -369,6 +397,29 @@ async fn target<E: Executor>(
     end: Instant,
     options: &Options,
 ) -> Result<Target> {
+    let host = Selector {
+        inventory: &options.inventory,
+        limit: options.limit.as_deref(),
+        origin_host: &options.origin_host,
+    };
+    selection(state, plan, budget, executor, end, host).await
+}
+/// One inventory, the exact alias chosen in it and the name its host serves.
+#[derive(Clone, Copy)]
+pub(super) struct Selector<'a> {
+    pub inventory: &'a Path,
+    pub limit: Option<&'a str>,
+    pub origin_host: &'a str,
+}
+/// Resolve the one host an inventory selects for a served name.
+pub(super) async fn selection<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+    host: Selector<'_>,
+) -> Result<Target> {
     let bytes = call(
         state,
         plan,
@@ -378,14 +429,14 @@ async fn target<E: Executor>(
         Program::FrontendInventory,
         vec![
             "-i".into(),
-            options.inventory.clone().into_os_string(),
+            host.inventory.as_os_str().to_owned(),
             "--list".into(),
         ],
     )
     .await?;
-    inventory::selected(&bytes, options.limit.as_deref(), &options.origin_host)
+    inventory::selected(&bytes, host.limit, host.origin_host)
 }
-async fn fresh_main<E: Executor>(
+pub(super) async fn fresh_main<E: Executor>(
     state: &Shared,
     plan: &Plan,
     budget: &Budget,
@@ -450,7 +501,7 @@ async fn artifact<E: Executor>(
         kind,
     )
 }
-async fn pause<E: Executor>(plan: &Plan, executor: &mut E, end: Instant) -> Result<()> {
+pub(super) async fn pause<E: Executor>(plan: &Plan, executor: &mut E, end: Instant) -> Result<()> {
     while plan.now()? < end {
         executor.ready().await?;
         tokio::time::sleep(
@@ -509,6 +560,156 @@ fn same_artifact(left: &Artifact, right: &Artifact) -> Result<()> {
         || left.zip_bytes != right.zip_bytes
         || left.zip_sha256 != right.zip_sha256
     {
+        return Err(failure(1));
+    }
+    Ok(())
+}
+/// One revision's signed coordinates: its CI run and both of its artifacts.
+#[derive(Clone)]
+pub(super) struct Signed {
+    pub run: Run,
+    pub application: Artifact,
+    pub ops: Artifact,
+}
+/// Select the one CI run of `revision`, wait at most `wait` seconds for it to
+/// succeed, and select its application and Ops artifacts.
+pub(super) async fn signed<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+    revision: &Revision,
+    wait: u64,
+) -> Result<Signed> {
+    let endpoint = format!(
+        "repos/{}/actions/workflows/ci.yml/runs?event=push&branch=main\
+        &head_sha={}&per_page=100",
+        policy::REPOSITORY,
+        revision.as_str()
+    );
+    let run = policy::runs(
+        &api(state, plan, budget, executor, end, &endpoint).await?,
+        revision,
+    )?;
+    let coordinates = SelectedRun {
+        revision,
+        run: &run,
+    };
+    wait_ci(state, plan, budget, executor, end, coordinates, wait).await?;
+    let application = artifact(
+        state,
+        plan,
+        budget,
+        executor,
+        end,
+        coordinates,
+        ArtifactKind::Application,
+    )
+    .await?;
+    let ops = artifact(
+        state,
+        plan,
+        budget,
+        executor,
+        end,
+        coordinates,
+        ArtifactKind::Ops,
+    )
+    .await?;
+    if run_status(state, plan, budget, executor, end, revision, &run).await?
+        != policy::RunProgress::Success
+    {
+        return Err(failure(1));
+    }
+    Ok(Signed {
+        run,
+        application,
+        ops,
+    })
+}
+/// Require the selected run to be successful still and both artifacts to be
+/// the ones selected.
+pub(super) async fn unchanged<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+    revision: &Revision,
+    chosen: &Signed,
+) -> Result<()> {
+    let run = &chosen.run;
+    if run_status(state, plan, budget, executor, end, revision, run).await?
+        != policy::RunProgress::Success
+    {
+        return Err(failure(1));
+    }
+    let coordinates = SelectedRun { revision, run };
+    for (kind, selected) in [
+        (ArtifactKind::Application, &chosen.application),
+        (ArtifactKind::Ops, &chosen.ops),
+    ] {
+        let current = artifact(state, plan, budget, executor, end, coordinates, kind).await?;
+        same_artifact(selected, &current)?;
+    }
+    Ok(())
+}
+/// Hold every tracked controller input of `revision` as an original and
+/// require the pinned GitHub CLI.
+pub(super) async fn custody<E: Executor>(
+    root: &Path,
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+    revision: &Revision,
+) -> Result<()> {
+    let sources = git(
+        state,
+        plan,
+        budget,
+        executor,
+        end,
+        &["ls-files", "-z", "--", "ops/ansible", "build"],
+    )
+    .await?;
+    let paths = files::source_paths(sources.as_bytes())?;
+    let worker_root = root.to_owned();
+    let worker_budget = budget.clone();
+    let worker_revision = revision.clone();
+    stage(state, plan, executor, end, move |state, cp| {
+        let mut total = 0;
+        for path in paths {
+            let (source, bytes) = Original::open(&worker_root.join(path), &worker_budget, cp)?;
+            total += bytes.len();
+            if total > 32 * 1024 * 1024 {
+                return Err(failure(1));
+            }
+            state.sources.push(source);
+        }
+        state.git_inputs =
+            files::git_identity(&worker_root, worker_revision.as_str(), &worker_budget, cp)?;
+        Ok(())
+    })
+    .await?;
+    let version = call(
+        state,
+        plan,
+        budget,
+        executor,
+        end,
+        Program::FrontendGh,
+        argv(&["--version"]),
+    )
+    .await?;
+    let first = std::str::from_utf8(&version)
+        .map_err(|_| failure(1))?
+        .lines()
+        .next()
+        .ok_or_else(|| failure(1))?;
+    if first != "gh version 2.102.0" && !first.starts_with("gh version 2.102.0 (") {
         return Err(failure(1));
     }
     Ok(())
@@ -657,107 +858,20 @@ async fn body<E: Executor>(
     {
         return Err(failure(1));
     }
-    let sources = git(
-        state,
-        plan,
-        budget,
-        executor,
-        end,
-        &["ls-files", "-z", "--", "ops/ansible", "build"],
-    )
-    .await?;
-    let paths = files::source_paths(sources.as_bytes())?;
-    let worker_root = root.to_owned();
-    let worker_budget = budget.clone();
-    let worker_revision = revision.clone();
-    stage(state, plan, executor, end, move |state, cp| {
-        let mut total = 0;
-        for path in paths {
-            let (source, bytes) = Original::open(&worker_root.join(path), &worker_budget, cp)?;
-            total += bytes.len();
-            if total > 32 * 1024 * 1024 {
-                return Err(failure(1));
-            }
-            state.sources.push(source);
-        }
-        state.git_inputs =
-            files::git_identity(&worker_root, worker_revision.as_str(), &worker_budget, cp)?;
-        Ok(())
-    })
-    .await?;
-    let version = call(
-        state,
-        plan,
-        budget,
-        executor,
-        end,
-        Program::FrontendGh,
-        argv(&["--version"]),
-    )
-    .await?;
-    let first = std::str::from_utf8(&version)
-        .map_err(|_| failure(1))?
-        .lines()
-        .next()
-        .ok_or_else(|| failure(1))?;
-    if first != "gh version 2.102.0" && !first.starts_with("gh version 2.102.0 (") {
-        return Err(failure(1));
-    }
+    custody(root, state, plan, budget, executor, end, &revision).await?;
     let selected = target(state, plan, budget, executor, end, options).await?;
     plan.complete(0, end)?;
 
     report["phase"] = json!("select");
     let end = plan.begin(1)?;
     fresh_main(state, plan, budget, executor, end, &revision).await?;
-    let endpoint = format!(
-        "repos/{}/actions/workflows/ci.yml/runs?event=push&branch=main\
-        &head_sha={}&per_page=100",
-        policy::REPOSITORY,
-        revision.as_str()
-    );
-    let run = policy::runs(
-        &api(state, plan, budget, executor, end, &endpoint).await?,
-        &revision,
-    )?;
-    let coordinates = SelectedRun {
-        revision: &revision,
-        run: &run,
-    };
-    wait_ci(
-        state,
-        plan,
-        budget,
-        executor,
-        end,
-        coordinates,
-        options.wait_seconds,
-    )
-    .await?;
-    let app = artifact(
-        state,
-        plan,
-        budget,
-        executor,
-        end,
-        coordinates,
-        ArtifactKind::Application,
-    )
-    .await?;
-    let ops = artifact(
-        state,
-        plan,
-        budget,
-        executor,
-        end,
-        coordinates,
-        ArtifactKind::Ops,
-    )
-    .await?;
-    if run_status(state, plan, budget, executor, end, &revision, &run).await?
-        != policy::RunProgress::Success
-    {
-        return Err(failure(1));
-    }
+    let wait = options.wait_seconds;
+    let chosen = signed(state, plan, budget, executor, end, &revision, wait).await?;
+    let Signed {
+        run,
+        application: app,
+        ops,
+    } = chosen.clone();
     report["ciRunId"] = json!(run.id.get());
     report["runAttempt"] = json!(run.attempt.get());
     report["applicationArtifactId"] = json!(app.id.get());
@@ -773,37 +887,7 @@ async fn body<E: Executor>(
         return Err(failure(1));
     }
     fresh_main(state, plan, budget, executor, end, &revision).await?;
-    if run_status(state, plan, budget, executor, end, &revision, &run).await?
-        != policy::RunProgress::Success
-    {
-        return Err(failure(1));
-    }
-    same_artifact(
-        &app,
-        &artifact(
-            state,
-            plan,
-            budget,
-            executor,
-            end,
-            coordinates,
-            ArtifactKind::Application,
-        )
-        .await?,
-    )?;
-    same_artifact(
-        &ops,
-        &artifact(
-            state,
-            plan,
-            budget,
-            executor,
-            end,
-            coordinates,
-            ArtifactKind::Ops,
-        )
-        .await?,
-    )?;
+    unchanged(state, plan, budget, executor, end, &revision, &chosen).await?;
     let worker_options = options.clone();
     let worker_revision = revision.clone();
     let worker_run = run.clone();
@@ -940,6 +1024,30 @@ async fn transaction_owned<E: Executor>(
         report["ansibleExit"] = json!({"status":exit.status,"settled":exit.settled,
             "bodyCompleted":exit.body_completed});
     }
+    close(
+        &state,
+        plan,
+        &budget,
+        executor,
+        report,
+        primary,
+        "candidatePassed",
+    )
+    .await
+}
+
+/// Recheck custody one last time, close the tools and retain the final report
+/// as `outcome.json`. `verdict` names the report's own success field; the
+/// first failure, earlier or here, is the one reported.
+pub(super) async fn close<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    report: Value,
+    mut primary: Option<Failure>,
+    verdict: &'static str,
+) -> Result<super::lifecycle::Completed> {
     let closed_state = state.clone();
     let mut closed_report = report.clone();
     let closed_budget = budget.clone();
@@ -969,7 +1077,7 @@ async fn transaction_owned<E: Executor>(
             keep(&mut failed, error);
         }
         if let Some(error) = &failed {
-            closed_report["candidatePassed"] = json!(false);
+            closed_report[verdict] = json!(false);
             if closed_report["failureClass"].is_null() {
                 closed_report["failureClass"] = json!(error.message);
             }
@@ -1012,7 +1120,7 @@ async fn transaction_owned<E: Executor>(
     }
     let status = primary.as_ref().map_or(0, |error| error.code);
     if let Some(error) = primary {
-        finished["candidatePassed"] = json!(false);
+        finished[verdict] = json!(false);
         if finished["failureClass"].is_null() {
             finished["failureClass"] = json!(error.message);
         }

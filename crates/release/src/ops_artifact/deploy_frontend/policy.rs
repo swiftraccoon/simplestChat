@@ -21,6 +21,15 @@ impl Revision {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+    /// An exact commit an operation names itself. That it belongs to the
+    /// published history is the caller's separate proof.
+    pub fn named(value: &str) -> Result<Self> {
+        if digest(value, 40) {
+            Ok(Self(value.into()))
+        } else {
+            Err(refusal("checkout_identity_invalid"))
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct RunId(u64);

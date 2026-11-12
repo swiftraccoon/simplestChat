@@ -8,6 +8,7 @@ mod execute;
 mod files;
 mod inventory;
 mod lifecycle;
+mod migrate;
 mod options;
 mod plan;
 mod policy;
@@ -44,7 +45,31 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> ExitCode {
             return ExitCode::from(error.code);
         }
     };
-    match lifecycle::run(root, options) {
+    let advice = "Inspect private controller evidence and the remote release journal.";
+    finished(lifecycle::run(root, options), advice)
+}
+
+/// The `migrate` command, given the arguments after its name.
+pub(super) fn migrate(root: &Path, arguments: &[String]) -> ExitCode {
+    let options = match migrate::parse(arguments) {
+        Ok(Some(options)) => options,
+        Ok(None) => {
+            print!("{}", migrate::USAGE);
+            return ExitCode::SUCCESS;
+        }
+        Err(error) => {
+            eprintln!("Invalid migration options.");
+            return ExitCode::from(error.code);
+        }
+    };
+    let advice = "Inspect private controller evidence and both hosts' migration records.";
+    finished(lifecycle::migrate(root, options), advice)
+}
+
+/// The exit status of one owned operation: its own, or the envelope's when
+/// it ended after its final fence.
+fn finished(result: Result<lifecycle::Completed>, advice: &str) -> ExitCode {
+    match result {
         Ok(completed) => {
             if completed.status != 0 {
                 ExitCode::from(completed.status)
@@ -55,10 +80,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> ExitCode {
             }
         }
         Err(error) => {
-            eprintln!(
-                "{} Inspect private controller evidence and the remote release journal.",
-                error.message
-            );
+            eprintln!("{} {advice}", error.message);
             ExitCode::from(error.code)
         }
     }

@@ -2195,9 +2195,10 @@ any failure as one fixed line.
 
 The Python helper's answers for 127 invocations in 89 scenarios are recorded
 in `ops/src/migrate/recorded_tls.json` and replayed the same way.
-`migration-prepare.yml` still runs `migration_tls.py`: a fresh destination has
-no Ops executable when the certificate arrives, and `dns-handoff.yml` imports
-the module, so the command is wired with the migration controller.
+`migration-prepare.yml` still runs `migration_tls.py`: the certificate is handed
+over while the destination is bootstrapped, before the staging step delivers
+the Ops executable, and `dns-handoff.yml` imports the module. The commands are
+wired when the migration's host steps move to the executable.
 
 
 ## Offline server attestation preparation

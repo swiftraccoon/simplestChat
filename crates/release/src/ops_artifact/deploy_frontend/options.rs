@@ -56,7 +56,7 @@ impl std::fmt::Debug for Options {
     }
 }
 
-fn path(value: &str) -> Result<PathBuf> {
+pub(super) fn path(value: &str) -> Result<PathBuf> {
     let path = Path::new(value);
     if value.len() > 4096
         || value.chars().any(char::is_control)
@@ -76,7 +76,7 @@ fn path(value: &str) -> Result<PathBuf> {
     }
 }
 
-fn number(value: &str, maximum: u64) -> Result<u64> {
+pub(super) fn number(value: &str, maximum: u64) -> Result<u64> {
     if value.is_empty()
         || (value.len() > 1 && value.starts_with('0'))
         || !value.bytes().all(|byte| byte.is_ascii_digit())
@@ -90,7 +90,7 @@ fn number(value: &str, maximum: u64) -> Result<u64> {
         .ok_or_else(|| failure(2))
 }
 
-fn alias(value: &str) -> bool {
+pub(super) fn alias(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 253
         && value.as_bytes()[0].is_ascii_alphanumeric()
@@ -113,7 +113,7 @@ fn hostname(value: &str) -> bool {
         })
 }
 
-fn origin(value: &str) -> Result<(String, String)> {
+pub(super) fn origin(value: &str) -> Result<(String, String)> {
     let authority = value.strip_prefix("https://").ok_or_else(|| failure(2))?;
     let authority = authority.strip_suffix('/').unwrap_or(authority);
     let host = match authority.split_once(':') {

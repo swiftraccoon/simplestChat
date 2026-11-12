@@ -17,12 +17,11 @@ pub(super) struct Completed {
 }
 fn scope(
     started: Instant,
-    wait: u64,
+    plan: Plan,
     owner: Arc<CompletionSignals>,
     operation: impl FnOnce(&Runtime, Arc<CompletionSignals>, &Plan) -> Result<Completed>,
     after_restore: impl FnOnce() -> Result<()>,
 ) -> Result<Completed> {
-    let plan = Plan::native(started, wait);
     let private = nix::sys::stat::Mode::from_bits_truncate(0o077);
     let previous = nix::sys::stat::umask(private);
     let mut completed = None;
@@ -90,25 +89,53 @@ fn scope(
     Ok(completed)
 }
 
+/// The caller's environment, with the one token name the GitHub CLI reads.
+fn inherited() -> Environment {
+    let mut environment: Environment = simplestchat_toolkit::tooling::inherited_env();
+    if !environment.contains_key(OsStr::new("GH_TOKEN"))
+        && let Some(token) = environment.get(OsStr::new("GITHUB_TOKEN")).cloned()
+    {
+        environment.insert("GH_TOKEN".into(), token);
+    }
+    environment
+}
+
 pub(super) fn run(root: &Path, options: Options) -> Result<Completed> {
     let started = Instant::now();
     let owner = Arc::new(CompletionSignals::new().map_err(|_| failure(1))?);
     scope(
         started,
-        options.wait_seconds,
+        Plan::native(started, options.wait_seconds),
         owner,
         |runtime, flags, plan| {
-            let mut environment: Environment = simplestchat_toolkit::tooling::inherited_env();
-            if !environment.contains_key(OsStr::new("GH_TOKEN"))
-                && let Some(token) = environment.get(OsStr::new("GITHUB_TOKEN")).cloned()
-            {
-                environment.insert("GH_TOKEN".into(), token);
-            }
             let current = std::env::current_exe().map_err(|_| failure(1))?;
             runtime.block_on(super::execute::native(
                 root.into(),
                 Arc::new(options),
-                environment,
+                inherited(),
+                current,
+                flags,
+                plan,
+            ))
+        },
+        || Ok(()),
+    )
+}
+
+/// The same owned lifecycle around a move between two hosts.
+pub(super) fn migrate(root: &Path, options: super::migrate::Options) -> Result<Completed> {
+    let started = Instant::now();
+    let owner = Arc::new(CompletionSignals::new().map_err(|_| failure(1))?);
+    scope(
+        started,
+        Plan::phased(started, super::migrate::phases(&options)),
+        owner,
+        |runtime, flags, plan| {
+            let current = std::env::current_exe().map_err(|_| failure(1))?;
+            runtime.block_on(super::migrate::native(
+                root.into(),
+                Arc::new(options),
+                inherited(),
                 current,
                 flags,
                 plan,
@@ -136,7 +163,7 @@ mod tests {
             let owner = Arc::new(CompletionSignals::new().unwrap());
             let result = scope(
                 start,
-                0,
+                Plan::native(start, 0),
                 owner,
                 |_, flags, _| {
                     if case == "borrower" {

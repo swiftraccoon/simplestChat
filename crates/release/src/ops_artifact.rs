@@ -44,6 +44,13 @@ pub(super) fn run_release_frontend(
     deploy_frontend::run(root, arguments)
 }
 
+pub(super) fn run_migration_frontend(
+    root: &std::path::Path,
+    arguments: &[String],
+) -> std::process::ExitCode {
+    deploy_frontend::migrate(root, arguments)
+}
+
 const USAGE: &str = "usage: cargo run --locked -q -p simplestchat-release -- ops-artifact \
 build|source|registry|verify-retained|acquire|export|runtime \
 --request PATH --request-sha256 SHA256\n\

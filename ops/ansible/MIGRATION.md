@@ -1,10 +1,10 @@
 # Move an existing site to a fresh VPS
 
-`build/migrate.py` moves the supported public deployment between two explicitly
-selected Debian 13 x86_64 hosts. It preserves the database and deployment secrets,
-uses a verified immutable release image, and prepares the destination
-while the source remains live. The source is stopped only for the final database
-archive and cutover. No image is built on either server.
+`simplestchat-release migrate` moves the supported public deployment between two
+explicitly selected Debian 13 x86_64 hosts. It preserves the database and
+deployment secrets, uses a verified signed release image, and prepares the
+destination while the source remains live. The source is stopped only for the
+final database archive and cutover. No image is built on either server.
 
 The destination must have no application containers or database files. Existing
 prepared configuration is accepted only for the selected destination origin, and
@@ -18,8 +18,11 @@ Keep the current source inventory and create a separate ignored destination
 inventory using the [public configuration guide](PUBLIC.md). Both must explicitly
 set `ansible_host`, `ansible_user`, an absolute `ansible_ssh_private_key_file`,
 `scpub_enabled: true` and the correct `scpub_domain`. Establish trusted key-based
-SSH access first. Non-root users need passwordless sudo. The controller requires
-Python 3.12+, the maintained Ansible environment, GitHub CLI authentication and curl.
+SSH access first. Non-root users need passwordless sudo. The controller is the
+source-built `simplestchat-release` executable; build it and select the pinned
+GitHub CLI as [RELEASES.md](RELEASES.md#prepare-the-controller-before-credentials)
+describes, before supplying credentials. It also needs the maintained Ansible
+environment and curl.
 
 Open the destination's public HTTP/media/TURN ports as described in the public
 guide. For a new hostname, point its DNS at the destination before running the
@@ -56,46 +59,58 @@ Prometheus time-series files remain on the retained source disk; the destination
 starts a new time-series store. Database-backed operational history is migrated.
 
 The relay, backup and monitoring playbooks run the signed Ops executable and
-refuse a host without it, and this controller does not deliver the executable
-to a fresh destination. With any of the three enabled it therefore stops at
-the first of them, after the destination is live and verified and the source
-is sealed. Until the controller delivers the executable itself, migrate with
-`scpub_turn_enabled`, `scpub_backup_enabled` and `scmon_enabled` set to `false`
-in the destination inventory. Afterwards run a signed `release.yml` for the
-migrated revision against the destination, which delivers the executable
-(staging alone is enough), set the three back and apply `turn.yml`,
-`backup.yml` and `monitoring.yml` as on any prepared host.
+refuse a host without it. The controller delivers that executable to the
+destination while it stages the release there, long before the source is
+stopped, so the three apply as on any prepared host.
 
 ## Run one migration
 
 Run the focused checks relevant to the change, push the clean committed `main`
 revision directly, and run this command from that same checkout. The controller
-checks that the tools match published `main`. The complete local CI gate remains
-available but is not required before every push. By default, migration requires
-successful main-push CI and verifies the release artifact's attestation before
-any remote mutation.
+checks that the tools match published `main`, and holds every tracked file under
+`ops/ansible` and `build` as an original: do not edit them while a move runs, or
+it stops at its next step. The complete local CI gate remains available but is
+not required before every push. A move requires that revision's successful
+main-push CI run and its signed application and Ops artifacts. Its first step
+verifies the application's attestation on the controller, before either host
+is contacted; staging verifies the same originals again and authenticates the
+Ops executable it delivers.
 
 `--revision FULL_COMMIT` selects an ancestor application release independently
 of the migration tools, so moving servers need not also upgrade the application.
-When explicitly authorized, `--force --artifact-dir /absolute/path/to/export`
-instead validates a retained unsigned release against that exact commit's build
-inputs and migration checksums. Both flags are required together; no image is
-built or pulled as a substitute. Evidence records skipped CI and absence of
-GitHub attestation. Artifact identity, data comparison, source sealing and
-readiness safeguards remain in effect.
+That revision needs its own successful main-push run and both signed artifacts.
 
 ```sh
-ops/ansible/.venv/bin/python build/migrate.py \
-  --repository OWNER/REPOSITORY \
-  --source-inventory ops/ansible/inventory.local.yml \
+/absolute/controller/target/native-maintenance-controller/TARGET/debug/simplestchat-release \
+  migrate \
+  --repository swiftraccoon/simplestChat \
+  --source-inventory /absolute/checkout/ops/ansible/inventory.local.yml \
   --source-origin https://chat.example.com \
   --source-limit public_vps \
-  --inventory ops/ansible/inventory.local.next.yml \
+  --inventory /absolute/checkout/ops/ansible/inventory.local.next.yml \
   --origin https://next.chat.example.com \
   --limit public_vps \
-  --activate-inventory ops/ansible/inventory.local.yml \
+  --activate-inventory /absolute/checkout/ops/ansible/inventory.local.yml \
   --update-canary
 ```
+
+Every path is absolute. `--gh` and `--ansible-playbook` select caller-trusted
+tools explicitly; `--application-artifact-dir` and `--ops-artifact-zip` supply
+[retained artifact inputs](RELEASES.md#optional-retained-artifact-inputs), which
+are verified like downloaded ones. `--wait-seconds` bounds the wait for CI
+(default 3600). The command prints one JSON report and exits zero only for a
+complete move.
+
+An explicitly authorized move of an unsigned retained release is the one case
+this controller does not handle. Until the forced release is native as well,
+`ops/ansible/.venv/bin/python build/migrate.py --force --artifact-dir
+/absolute/path/to/export` with the same selectors validates the retained release
+against that exact commit's build inputs and migration checksums and stages it
+unsigned; it refuses without both flags. No signed Ops executable exists for
+such a release, so that route delivers none: move with `scpub_turn_enabled`,
+`scpub_backup_enabled` and `scmon_enabled` set to `false`, then run a signed
+`release.yml` against the destination, set the three back and apply `turn.yml`,
+`backup.yml` and `monitoring.yml`.
 
 `--activate-inventory` optionally replaces the existing ignored source inventory
 with the verified destination configuration. Its original bytes are retained
@@ -180,18 +195,24 @@ hostname stays the same, existing session cookies retain their origin. Live call
 and chat history held only in application memory cannot migrate; they are not
 stored in the database archive.
 
-Verification makes bounded anonymous HTTPS GETs and checks the frontend revision;
-it does not send chat or create accounts. The configured media canary remains the
+Verification makes bounded anonymous HTTPS GETs of the health, readiness, home
+page, capabilities and `/app-version.json`, whose revision must be the moved one;
+it retries inside one 90-second window while the certificate is issued and does
+not send chat or create accounts. The configured media canary remains the
 separate direct-media and TURN check after switching `CANARY_ORIGIN`.
 
 ## Failure and recovery
 
 Each invocation has private controller evidence under `results/migration.*` and
 root-private host evidence under
-`/srv/simplestchat-public/migrations/<operation-id>/`. These include frozen
-inventories, exact invocation variables, original inventory bytes when requested,
-artifact selection, database archive hashes, logical snapshots and phase receipts.
-Database values, archive contents and credentials must remain private.
+`/srv/simplestchat-public/migrations/<operation-id>/`. These include the request,
+the frozen inventories every play used, each play's exact variables
+(`play-NN.json`), original inventory bytes when requested, the verified
+application's identity, every command's output, database archive hashes, logical
+snapshots and a phase receipt (`phase-NN.json`) written before each host
+operation. Database values, archive contents and credentials must remain private.
+Once both hosts are frozen in those private inventories, editing your own
+inventory files no longer affects the move.
 
 A failure before destination startup attempts to confirm its app and proxy are
 stopped, then restore the recorded source services. The source helper also attempts
@@ -202,6 +223,23 @@ when automatic recovery cannot finish. Recovery is never allowed after the sourc
 durable cutover seal: the destination may already have accepted writes even if
 the controller lost its connection. At that point repair the destination using
 the retained evidence; restarting the old source would create two divergent sites.
+
+An interrupted controller (Ctrl-C or a termination signal) starts nothing more,
+including the two recovery plays. If its `outcome.json` then reports
+`recovery: manual_recovery_required` with `sourceFreezeAttempted: true` and
+`destinationStartupAttempted: false`, wait for the remote freeze unit to settle
+and run the same two plays from the retained evidence, in this order, and the
+second only after the first succeeded:
+
+```sh
+cd /absolute/checkout
+for action in stop-target resume-source; do
+  ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
+    -i results/migration.ATTEMPT/migration-inventory.json \
+    --limit migration_source:migration_target ops/ansible/migration-data.yml \
+    -e @results/migration.ATTEMPT/variables.json -e scmig_action="$action" || break
+done
+```
 
 Successful retirement stops the old application, database and relay, disables
 their managed timers and container restarts, and retains all old volumes and
@@ -220,6 +258,9 @@ the aborted attempt. It never deletes database files or accepts a completed
 restore or any existing app/proxy container. After inspecting that result, run a
 new migration to take a fresh source archive; do not reuse the failed archive.
 
-CI runs the same controller, preflight and lifecycle tests locally and on GitHub,
-plus a disposable PostgreSQL dump/restore test that exercises row preservation,
-partitioned storage, schema/ACL drift detection and the owner-email transaction.
+CI replays recorded moves, refusals and recoveries through the controller's
+production transaction with scripted tools, evaluates the playbooks' selection
+guards with Ansible itself, and runs the host helpers' preflight and lifecycle
+tests plus a disposable PostgreSQL dump/restore test that exercises row
+preservation, partitioned storage, schema/ACL drift detection and the
+owner-email transaction. No hosted job moves a real deployment between two hosts.

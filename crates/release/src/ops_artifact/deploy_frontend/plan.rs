@@ -33,7 +33,7 @@ pub(super) struct Plan {
     pub clock: Arc<dyn Clock>,
     origin: Instant,
     last: Cell<Instant>,
-    phases: [Duration; 6],
+    phases: Vec<Duration>,
     next: Cell<usize>,
     active: Cell<Option<Instant>>,
     end: Instant,
@@ -42,9 +42,16 @@ impl Plan {
     pub fn native(start: Instant, wait: u64) -> Self {
         Self::from_start(Arc::new(NativeClock), start, wait)
     }
+    /// Another operation's own ordered phases under the same envelope.
+    pub fn phased(start: Instant, phases: Vec<Duration>) -> Self {
+        Self::with_phases(Arc::new(NativeClock), start, phases)
+    }
     fn from_start(clock: Arc<dyn Clock>, origin: Instant, wait: u64) -> Self {
         let mut phases = FIXED.map(Duration::from_secs);
         phases[1] += Duration::from_secs(wait);
+        Self::with_phases(clock, origin, phases.to_vec())
+    }
+    fn with_phases(clock: Arc<dyn Clock>, origin: Instant, phases: Vec<Duration>) -> Self {
         let total: Duration = phases.iter().copied().sum();
         Self {
             clock,
@@ -103,6 +110,20 @@ impl Plan {
         self.active.set(None);
         Ok(())
     }
+    /// Make `phase` the next one, passing over phases an operation does not
+    /// need and abandoning an unfinished one, as recovery after a failure
+    /// does. Time already spent stays spent; no earlier phase can begin.
+    pub fn advance(&self, phase: usize) -> Result<()> {
+        if phase < self.next.get() || phase >= self.phases.len() {
+            return Err(failure(1));
+        }
+        self.now()?;
+        if phase > self.next.get() {
+            self.next.set(phase);
+            self.active.set(None);
+        }
+        Ok(())
+    }
     /// One observation admits all command and finalizer debt; no later clock
     /// observation may reset the enclosing phase or give away its tail.
     pub fn dispatch(&self, end: Instant, body: Duration, grace: Duration) -> Result<Instant> {
@@ -140,6 +161,32 @@ mod tests {
         assert_eq!(plan.begin(1).unwrap_err().code, 124);
         *clock.0.lock().unwrap() = start;
         assert_eq!(plan.now().unwrap_err().code, 1);
+    }
+    #[test]
+    fn recovery_leaves_a_failed_phase_only_for_a_later_one_with_its_debt_intact() {
+        let start = Instant::now();
+        let clock = Arc::new(ClockAt(std::sync::Mutex::new(start)));
+        let seconds = |values: &[u64]| values.iter().copied().map(Duration::from_secs).collect();
+        let plan = Plan::with_phases(clock.clone(), start, seconds(&[10, 20, 30, 40]));
+        assert_eq!(plan.end(), start + Duration::from_secs(130));
+        let end = plan.begin(0).unwrap();
+        plan.complete(0, end).unwrap();
+        let failed = plan.begin(1).unwrap();
+        for refused in [0, 4] {
+            assert_eq!(plan.advance(refused).unwrap_err().code, 1, "{refused}");
+        }
+        // Naming the phase already under way changes nothing.
+        plan.advance(1).unwrap();
+        assert_eq!(plan.begin(1).unwrap(), failed);
+        // The failed phase overran its own end; the reserved recovery still fits.
+        *clock.0.lock().unwrap() = failed + Duration::from_secs(25);
+        plan.advance(3).unwrap();
+        assert_eq!(plan.begin(2).unwrap_err().code, 1);
+        assert_eq!(plan.complete(1, failed).unwrap_err().code, 1);
+        let recovery = plan.begin(3).unwrap();
+        assert_eq!(recovery, failed + Duration::from_secs(65));
+        plan.complete(3, recovery).unwrap();
+        assert_eq!(plan.advance(3).unwrap_err().code, 1);
     }
     #[test]
     fn exact_whole_command_tail_is_admitted_but_one_nanosecond_less_is_refused() {

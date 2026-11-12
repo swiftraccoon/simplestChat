@@ -3,13 +3,14 @@
 //! source-built controller `ops/ansible/RELEASES.md` documents.
 //!
 //! Its command families are `deploy` (the signed routine deployment),
-//! `verify` (signed application verification, forwarded before any UTF-8
-//! parsing), `ops-artifact` (the Ops artifact's production, retention and
+//! `migrate` (the move of a deployment to an empty host), `verify` (signed
+//! application verification, forwarded before any UTF-8 parsing),
+//! `ops-artifact` (the Ops artifact's production, retention and
 //! runtime proofs), `vps-capacity` (the private VPS capacity operation) and
 //! `bootstrap` (SSH enrollment and preparation of a private benchmark host).
 //! Every command exits non-zero on the first failure. They find their files
 //! in different places:
-//! - `deploy`, `bootstrap` and `ops-artifact maintain-runtime`,
+//! - `deploy`, `migrate`, `bootstrap` and `ops-artifact maintain-runtime`,
 //!   `maintain-host-runtime` and `deploy-runtime` use [`root`], the checkout
 //!   two levels above this crate's manifest;
 //! - `ops-artifact verify-retained`, `acquire`, `export` and `runtime`, and
@@ -38,6 +39,8 @@ Usage: cargo run --locked -q -p simplestchat-release -- <command> [ARG ...]
 Commands:
   deploy        Select signed application and Ops artifacts, deploy once and verify HTTPS;
                 prepared routine host only; see `deploy --help`.
+  migrate       Move a deployment and its data to one empty host through a signed
+                release, keeping the source until the copy is verified; see `migrate --help`.
   verify        Check explicit signed application inputs without a host; see `verify --help`.
   fetch         Verify one signed release, then have the host's installed Ops receiver
                 download it over SSH; see `fetch --help`.
@@ -84,6 +87,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     };
     match command.as_str() {
         "deploy" => Ok(ops_artifact::run_release_frontend(&root()?, rest)),
+        "migrate" => Ok(ops_artifact::run_migration_frontend(&root()?, rest)),
         "ops-artifact" => ops_artifact::run(rest),
         "vps-capacity" => run_vps_capacity(rest),
         "bootstrap" => Ok(bootstrap::run(rest, &root()?)),
