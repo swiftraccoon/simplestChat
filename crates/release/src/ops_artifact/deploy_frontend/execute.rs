@@ -1,4 +1,8 @@
 //! Select coordinates, freeze the target, invoke once and preserve remote uncertainty.
+//!
+//! The forced route replaces CI and signatures with one unsigned export of
+//! the same clean checkout: it is checked against that checkout twice, the
+//! request for it is written once, and every report says nothing attested it.
 
 use super::super::namespace::Budget;
 use super::{
@@ -29,6 +33,16 @@ use std::{
 };
 
 const SMALL: u64 = 4 * 1024 * 1024;
+/// What every report of the forced route says about verification.
+const UNVERIFIED: &str = "skipped-explicit-force";
+
+/// The name of the operation these options select.
+fn operation(options: &Options) -> &'static str {
+    match options.artifact_dir {
+        Some(_) => "forced-unsigned-deploy",
+        None => "signed-routine-deploy",
+    }
+}
 const GH_API: Duration = Duration::from_secs(20);
 #[derive(Default)]
 pub(super) struct State {
@@ -150,15 +164,19 @@ fn prepare(
     if let Some(path) = &options.ops_artifact_zip {
         state.candidates.push(Candidate::open(path, false, budget)?);
     }
+    if let Some(path) = &options.artifact_dir {
+        state.candidates.push(Candidate::open(path, true, budget)?);
+    }
     state.evidence = Some(Evidence::new(root, budget)?);
     let evidence = state.evidence.as_mut().unwrap();
     let tools = state.tools.as_ref().ok_or_else(|| failure(1))?;
-    let request = json!({"schemaVersion":1,"operation":"signed-routine-deploy",
+    let request = json!({"schemaVersion":1,"operation":operation(options),
         "repository":options.repository,"inventory":options.inventory,"origin":options.origin,
         "limit":options.limit,"waitSeconds":options.wait_seconds,
         "quietSeconds":options.quiet_seconds,
         "applicationArtifactDirectory":options.application_artifact_dir,
         "opsArtifactZip":options.ops_artifact_zip,
+        "artifactDirectory":options.artifact_dir,
         "tools":{"ansible":tools.ansible_path()?,"inventory":tools.inventory_path()?,
             "gh":tools.gh_path()?,"controller":tools.controller_path()?}});
     evidence.write("request.json", &encode(&request)?, cp)?;
@@ -693,7 +711,16 @@ pub(super) async fn custody<E: Executor>(
             files::git_identity(&worker_root, worker_revision.as_str(), &worker_budget, cp)?;
         Ok(())
     })
-    .await?;
+    .await
+}
+/// Require the one reviewed GitHub CLI before it is asked anything.
+pub(super) async fn gh_version<E: Executor>(
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    end: Instant,
+) -> Result<()> {
     let version = call(
         state,
         plan,
@@ -859,8 +886,21 @@ async fn body<E: Executor>(
         return Err(failure(1));
     }
     custody(root, state, plan, budget, executor, end, &revision).await?;
+    if options.artifact_dir.is_none() {
+        gh_version(state, plan, budget, executor, end).await?;
+    }
     let selected = target(state, plan, budget, executor, end, options).await?;
     plan.complete(0, end)?;
+    if let Some(artifact) = &options.artifact_dir {
+        let route = Forced {
+            root,
+            options,
+            artifact,
+            revision,
+            selected,
+        };
+        return forced(route, state, plan, budget, executor, report).await;
+    }
 
     report["phase"] = json!("select");
     let end = plan.begin(1)?;
@@ -951,6 +991,126 @@ async fn body<E: Executor>(
     Ok(())
 }
 
+/// What the forced route carries over from the shared first phase.
+struct Forced<'a> {
+    root: &'a Path,
+    options: &'a Arc<Options>,
+    artifact: &'a Path,
+    revision: Revision,
+    selected: Target,
+}
+
+/// Check `artifact` as an export of the checkout at `root`, and spell the
+/// request for it. A refusal is named by its fixed code.
+fn authorize(
+    root: &Path,
+    artifact: &Path,
+    options: &Options,
+    revision: &Revision,
+) -> Result<simplestchat_ops::release::admit::Authorized> {
+    let repository = &options.repository;
+    simplestchat_ops::release::admit::authorize(artifact, root, repository, revision.as_str())
+        .map_err(|code| Failure::new(1, code))
+}
+
+/// Deploy one unsigned export of this checkout: authorize it, recheck the
+/// checkout, the target and the export before the request is written, invoke
+/// the forced playbook once and run the anonymous public checks. No CI run,
+/// artifact or signature is consulted, and GitHub is never asked.
+async fn forced<E: Executor>(
+    route: Forced<'_>,
+    state: &Shared,
+    plan: &Plan,
+    budget: &Budget,
+    executor: &mut E,
+    report: &mut Value,
+) -> Result<()> {
+    let Forced {
+        root,
+        options,
+        artifact,
+        revision,
+        selected,
+    } = route;
+    report["phase"] = json!("force_artifact");
+    let end = plan.begin(1)?;
+    let worker = (root.to_owned(), artifact.to_owned(), options.clone());
+    let (worker_revision, worker_budget) = (revision.clone(), budget.clone());
+    let first = stage(state, plan, executor, end, move |state, cp| {
+        check(state, &worker_budget, cp)?;
+        authorize(&worker.0, &worker.1, &worker.2, &worker_revision)
+    })
+    .await?;
+    report["fileDigests"] = json!(first.digests);
+    plan.complete(1, end)?;
+
+    report["phase"] = json!("recheck");
+    let end = plan.begin(2)?;
+    if checkout(state, plan, budget, executor, end).await? != revision {
+        return Err(failure(1));
+    }
+    if target(state, plan, budget, executor, end, options).await? != selected {
+        return Err(failure(1));
+    }
+    let worker = (root.to_owned(), artifact.to_owned(), options.clone());
+    let (worker_revision, worker_budget) = (revision.clone(), budget.clone());
+    stage(state, plan, executor, end, move |state, cp| {
+        check(state, &worker_budget, cp)?;
+        let (root, artifact, options) = &worker;
+        // The export and the checkout are still the ones authorized.
+        let again = authorize(root, artifact, options, &worker_revision)?;
+        if again.request != first.request {
+            return Err(Failure::new(1, "force_artifact_changed"));
+        }
+        let evidence = state.evidence.as_mut().ok_or_else(|| failure(1))?;
+        let vars = json!({"scpub_force_release":true,"scpub_force_directory":artifact,
+            "scpub_force_request":evidence.path().join("force.json"),
+            "scpub_release_revision":worker_revision.as_str(),
+            "scpub_release_quiet_seconds":options.quiet_seconds});
+        evidence.write(
+            "inventory.json",
+            &encode(&json!({"benchmark_hosts":{
+            "hosts":{selected.host:selected.variables}}}))?,
+            cp,
+        )?;
+        evidence.write("vars.json", &encode(&vars)?, cp)?;
+        evidence.write("force.json", &again.request, cp)
+    })
+    .await?;
+    plan.complete(2, end)?;
+
+    report["phase"] = json!("deploy");
+    let end = plan.begin(3)?;
+    let path = lock(state)?.evidence.as_ref().unwrap().path().to_owned();
+    report["remoteOutcome"] = json!("inspect_if_interrupted");
+    call(
+        state,
+        plan,
+        budget,
+        executor,
+        end,
+        Program::FrontendAnsible,
+        vec![
+            "-i".into(),
+            path.join("inventory.json").into_os_string(),
+            root.join("ops/ansible/force-release.yml").into_os_string(),
+            "--extra-vars".into(),
+            format!("@{}", path.join("vars.json").display()).into(),
+        ],
+    )
+    .await?;
+    report["deployed"] = json!(true);
+    report["remoteOutcome"] = json!("release_succeeded");
+    plan.complete(3, end)?;
+
+    report["phase"] = json!("anonymous_verification");
+    let end = plan.begin(4)?;
+    public_checks(state, plan, budget, executor, end, options, &revision).await?;
+    plan.complete(4, end)?;
+    report["phase"] = json!("complete");
+    Ok(())
+}
+
 async fn transaction_owned<E: Executor>(
     root: PathBuf,
     options: Arc<Options>,
@@ -963,11 +1123,17 @@ async fn transaction_owned<E: Executor>(
     let budget = Budget::default();
     let state = Arc::new(Mutex::new(State::default()));
     lock(&state)?.signals = signals;
-    let mut report = json!({"schemaVersion":1,"operation":"signed-routine-deploy",
+    let mut report = json!({"schemaVersion":1,"operation":operation(&options),
         "candidatePassed":false,"deployed":false,"remoteOutcome":"not_started",
         "phase":"prepare","failureClass":null,"repository":options.repository,
         "origin":options.origin,
         "startedAt":chrono::Utc::now().to_rfc3339()});
+    if options.artifact_dir.is_some() {
+        // Said from the first report on: nothing attests what this deploys.
+        report["forced"] = json!(true);
+        report["githubAttested"] = json!(false);
+        report["ciVerification"] = json!(UNVERIFIED);
+    }
     let end = plan.begin(0)?;
     let worker_root = root.clone();
     let worker_options = options.clone();

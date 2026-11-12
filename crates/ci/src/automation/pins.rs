@@ -11,6 +11,7 @@ mod browser_assets;
 mod cache_retention_workflow;
 mod ci_database_check;
 mod ci_verified;
+mod force_release;
 mod host_playbooks;
 mod migration_prepare;
 mod monitoring;

@@ -428,9 +428,8 @@ the release helper (`files/release_public.py`).
    one runs without a JWT secret, so account sign-in is unavailable.
 6. Run [the maintenance release](RELEASES.md#schema-and-configuration-changes-the-maintenance-release)
    for the migrations with both signed artifacts from step 1. Staging delivers
-   the signed Ops executable itself, so no helper needs reconciling; the
-   `build/deploy.py --maintenance` route supplies no signed Ops inputs and
-   cannot drive this release. If its native launcher fails after the
+   the signed Ops executable itself, so no helper needs reconciling. If its
+   native launcher fails after the
    migrations, inspect the retained evidence and finish the selected
    deployment with the [explicit deployment command](#deploy-explicitly), as
    RELEASES.md describes; the maintenance run has already published the

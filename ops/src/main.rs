@@ -29,6 +29,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
     "       simplestchat-ops release maintain [OPTIONS]\n",
     "       simplestchat-ops release seed-lobby\n",
+    "       simplestchat-ops release admit-unsigned --request ABS\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
     "       simplestchat-ops release attestation verify [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
@@ -87,6 +88,13 @@ fn main() -> ExitCode {
     }
     if args.len() >= 2 && args[0] == "release" && args[1] == "seed-lobby" {
         let code = simplestchat_ops::release::seed::run(&args[2..]);
+        if code == ExitCode::from(2) {
+            eprintln!("{USAGE}");
+        }
+        return code;
+    }
+    if args.len() >= 2 && args[0] == "release" && args[1] == "admit-unsigned" {
+        let code = simplestchat_ops::release::admit::run(&args[2..]);
         if code == ExitCode::from(2) {
             eprintln!("{USAGE}");
         }

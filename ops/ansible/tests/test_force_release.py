@@ -6,14 +6,11 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 from typing import override
-from unittest.mock import patch
 
-from test_support import ROOT, yaml_value
+from test_support import ROOT
 
 # isort: split
-import force_deploy
 import force_release as force
-import release_build as build
 import release_public as release
 import test_public_release as public_tests
 from release_artifact import ArtifactError, Manifest, sha256_file
@@ -95,40 +92,6 @@ class ForceArtifactTests(unittest.TestCase):
         )
         self.request = request(self.artifact, self.inputs)
 
-    def test_local_export_is_bound_to_exact_checkout_and_preserved_as_unsigned(self) -> None:
-        """Current source hashes and migrations remain mandatory for an explicit force."""
-        directory, actual = force_deploy.prepare(
-            self.evidence,
-            self.root,
-            REVISION,
-            {
-                "artifactDirectory": str(self.artifact),
-                "repository": "owner/repo",
-                "deploy": True,
-                "quietSeconds": 0,
-            },
-        )
-        self.assertEqual(directory, self.artifact)
-        self.assertEqual(actual, self.request)
-        self.assertEqual(force.validate_artifact(directory, actual), self.manifest)
-        self.assertFalse(actual["githubAttested"])
-
-    def test_default_force_builds_off_host_through_the_existing_builder(self) -> None:
-        """No local artifact selector means a normal reviewed production build."""
-        with patch.object(build, "build_release", return_value=self.artifact) as builder:
-            _ = force_deploy.prepare(
-                self.evidence,
-                self.root,
-                REVISION,
-                {
-                    "artifactDirectory": None,
-                    "repository": "owner/repo",
-                    "deploy": True,
-                    "quietSeconds": 0,
-                },
-            )
-        builder.assert_called_once_with(self.evidence / "artifact", 3600, root=self.root)
-
     def test_authorization_cannot_claim_signed_or_successful_ci(self) -> None:
         """Only the complete explicit unsigned request is accepted."""
         for mutation in (
@@ -169,28 +132,6 @@ class ForceArtifactTests(unittest.TestCase):
             finally:
                 _ = (self.artifact / name).write_bytes(original)
 
-    def test_source_changes_and_symlinks_fail_before_remote_work(self) -> None:
-        """A digest-bearing receipt cannot replace the current checkout identity."""
-        _ = (self.root / "Cargo.lock").write_text("changed")
-        with self.assertRaises(release.ReleaseError):
-            _ = force_deploy.prepare(
-                self.evidence,
-                self.root,
-                REVISION,
-                {
-                    "artifactDirectory": str(self.artifact),
-                    "repository": "owner/repo",
-                    "deploy": True,
-                    "quietSeconds": 0,
-                },
-            )
-        original = self.artifact / "outcome.json"
-        target = self.artifact / "real-outcome.json"
-        _ = original.rename(target)
-        original.symlink_to(target)
-        with self.assertRaises(release.ReleaseError):
-            _ = force.file_hashes(self.artifact)
-
     def test_wrong_runtime_image_is_rejected_even_with_matching_transfer_hashes(self) -> None:
         """Unsigned admission still requires the production image's non-root identity."""
         image_archive(self.artifact / "image.tar", user="0:0")
@@ -199,28 +140,6 @@ class ForceArtifactTests(unittest.TestCase):
         self.request["fileDigests"] = force.file_hashes(self.artifact)
         with self.assertRaises(ArtifactError):
             _ = force.validate_artifact(self.artifact, self.request)
-
-    def test_changed_migrations_or_checkout_cannot_be_admitted(self) -> None:
-        """A stale export cannot substitute its source ledger or a previous clean revision."""
-        write_json(self.evidence / "force.json", self.request)
-        with (
-            patch.object(build, "clean_revision", return_value="b" * 40),
-            self.assertRaises(build.BuildError),
-        ):
-            force_deploy.verify(self.artifact, self.evidence / "force.json", self.root, REVISION)
-        _ = (self.root / "migrations/001_fixture.sql").write_text("SELECT 2;\n")
-        with self.assertRaisesRegex(build.BuildError, "force_migrations_differ_from_source"):
-            _ = force_deploy.prepare(
-                self.evidence,
-                self.root,
-                REVISION,
-                {
-                    "artifactDirectory": str(self.artifact),
-                    "repository": "owner/repo",
-                    "deploy": True,
-                    "quietSeconds": 0,
-                },
-            )
 
 
 class ForceRuntimeTests(unittest.TestCase):
@@ -342,25 +261,6 @@ class ForceRuntimeTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(self.fixture.runner.app_image, NEW_IMAGE)
         self.assertEqual((self.fixture.directory / "force.json").read_bytes(), first)
-
-
-class ForcePlaybookTests(unittest.TestCase):
-    """Check the maintained playbook's ordering and explicit authorization boundary."""
-
-    def test_force_revalidates_before_remote_preflight_and_never_calls_signed_receiver(
-        self,
-    ) -> None:
-        """Unsigned input has a distinct admission path with the shared runtime checks."""
-        value = yaml_value((ROOT / "ops/ansible/force-release.yml").read_text())
-        play = object_value(value[0]) if isinstance(value, list) else {}
-        source = json.dumps(play)
-        self.assertIn("scpub_force_release is sameas true", source)
-        self.assertLess(source.index("force_deploy.verify"), source.index("release_preflight.py"))
-        self.assertIn("force_release.py", source)
-        self.assertIn("--force", source)
-        self.assertNotIn("fetch-release.py", source)
-        self.assertNotIn("public-smoke", source)
-        self.assertNotIn("prune", source)
 
 
 if __name__ == "__main__":

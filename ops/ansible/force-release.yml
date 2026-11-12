@@ -6,18 +6,6 @@
   serial: 1
   vars:
     ansible_pipelining: true
-    scpub_force_helpers:
-      - bounded_process.py
-      - runtime_profile.py
-      - release-public.py
-      - release_public.py
-      - release_artifact.py
-      - release_assets.py
-      - browser_assets.py
-      - release_json.py
-      - reboot-public.py
-      - reboot_public.py
-      - force_release.py
   pre_tasks:
     - name: Require explicit force authorization and one prepared public host
       ansible.builtin.assert:
@@ -31,46 +19,44 @@
           - scpub_release_revision is match('^[a-f0-9]{40}$')
           - scpub_force_directory is match('^/')
           - scpub_force_request is match('^/')
+          - scpub_release_quiet_seconds | int >= 0
+          - scpub_release_quiet_seconds | int <= 600
           - scpub_release_artifact_id is not defined
           - scpub_release_ci_run is not defined
-        fail_msg: Use build/deploy.py --force with one prepared inventory host and an exact local artifact.
+        fail_msg: >-
+          Use simplestchat-release deploy --force with one prepared inventory
+          host and an exact local export.
 
-    - name: Reverify the exact controller artifact and clean source before remote operations
+    - name: Look for the installed Ops executable without following links
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: false
+      register: scpub_force_installed
+
+    - name: Require the Ops executable a signed release delivers
+      ansible.builtin.assert:
+        that:
+          - scpub_force_installed.stat.exists
+          - scpub_force_installed.stat.isreg
+          - scpub_force_installed.stat.uid == 0
+          - scpub_force_installed.stat.mode == '0755'
+        fail_msg: >-
+          Deliver the signed Ops executable first: run release.yml for a signed
+          revision (staging alone is enough), then repeat this playbook.
+
+    - name: Verify the prepared host through the installed Ops executable
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
       ansible.builtin.command:
         argv:
-          - "{{ ansible_playbook_python }}"
-          - -B
-          - -c
-          - >-
-            import sys; from pathlib import Path;
-            root=Path(sys.argv[1]);
-            sys.path[:0]=[str(root/'build'),str(root/'ops/ansible/files')];
-            import force_deploy;
-            force_deploy.verify(Path(sys.argv[2]),Path(sys.argv[3]),root,sys.argv[4])
-          - "{{ (playbook_dir ~ '/../..') | realpath }}"
-          - "{{ scpub_force_directory }}"
-          - "{{ scpub_force_request }}"
-          - "{{ scpub_release_revision }}"
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      timeout: 300
-
-    - name: Assemble the complete reviewed helper hashes
-      ansible.builtin.set_fact:
-        scpub_force_hashes: >-
-          {{ scpub_force_hashes | default({}) | combine({item:
-            lookup('ansible.builtin.file', playbook_dir ~ '/files/' ~ item, rstrip=false) | hash('sha256')}) }}
-      loop: "{{ scpub_force_helpers }}"
-
-    - name: Verify the prepared host and complete release helper identity
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -B
-          - -c
-          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/release_preflight.py', rstrip=false) }}"
-          - "{{ (scpub_force_hashes if scpub_release_prepared | default(true) | bool else {}) | to_json }}"
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
+          - preflight
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       register: scpub_force_preflight
       changed_when: false
       timeout: 60
@@ -82,25 +68,6 @@
           - (scpub_force_preflight.stdout | from_json).runId is match('^[a-f0-9]{32}$')
 
   tasks:
-    - name: Install the isolated release helper directory when explicitly requested
-      ansible.builtin.file:
-        path: /usr/local/libexec/simplestchat-public
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-      when: not (scpub_release_prepared | default(true) | bool)
-
-    - name: Install the complete reviewed force and release helpers
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-        owner: root
-        group: root
-        mode: '0644'
-      loop: "{{ scpub_force_helpers }}"
-      when: not (scpub_release_prepared | default(true) | bool)
-
     - name: Create private storage without overwriting a retained release
       ansible.builtin.file:
         path: "{{ item }}"
@@ -113,7 +80,7 @@
         - "{{ scpub_root }}/forced"
         - "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}"
 
-    - name: Transfer only the four validated build artifact files
+    - name: Transfer only the four exported build artifact files
       ansible.builtin.copy:
         src: "{{ scpub_force_directory }}/{{ item }}"
         dest: "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/{{ item }}"
@@ -132,19 +99,80 @@
         mode: '0600'
         force: false
 
-    - name: Stage or deploy once through the ordinary locked release primitives
+    # Admission checks the transferred bytes against the request and retains
+    # them; it verifies no signature and says so in its record.
+    - name: Admit the unsigned artifact through the installed Ops executable
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
       ansible.builtin.command:
         argv:
           - systemd-run
           - "--unit=simplestchat-force-{{ (scpub_force_preflight.stdout | from_json).runId }}"
           - --property=Type=exec
+          - --property=RuntimeMaxSec=900
+          - --property=TimeoutStopSec=60
+          - --wait
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
+          - admit-unsigned
+          - --request
+          - "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/force.json"
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
+      changed_when: true
+
+    - name: Import and verify the image while the public service remains running
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-stage-{{ scpub_release_revision[:12] }}-{{ (scpub_force_preflight.stdout | from_json).runId }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=600
+          - --property=TimeoutStopSec=60
+          - --wait
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
+          - stage
+          - --revision
+          - "{{ scpub_release_revision }}"
+          - --timeout-seconds
+          - '600'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
+      changed_when: true
+
+    - name: Replace only the application through the ordinary deployment
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-release-{{ scpub_release_revision[:12] }}-{{ (scpub_force_preflight.stdout | from_json).runId }}"
+          - --property=Type=exec
           - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=240
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/force_release.py
-          - --force
-          - --request
-          - "{{ scpub_root }}/forced/{{ (scpub_force_preflight.stdout | from_json).runId }}/force.json"
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
+          - deploy
+          - --revision
+          - "{{ scpub_release_revision }}"
+          - --quiet-seconds
+          - "{{ scpub_release_quiet_seconds }}"
+          - --timeout-seconds
+          - '1800'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: true

@@ -23,7 +23,6 @@ from pathlib import Path
 from types import FrameType
 from urllib.parse import urlsplit
 
-import force_deploy
 import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_fetch_controller as FETCH  # noqa: N812 -- Keep established helper aliases.
@@ -59,8 +58,6 @@ class DeployOptions(argparse.Namespace):
     maintenance: bool = False
     browser_assets_upgrade: bool = False
     ansible_playbook: str | None = None
-    force: bool = False
-    artifact_dir: str | None = None
     public_chat_smoke: bool = False
 
 
@@ -79,14 +76,6 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     _ = parser.add_argument("--origin", required=True)
     _ = parser.add_argument("--limit", help="Exact inventory hostname; patterns are not supported")
     _ = parser.add_argument("--room", default="lobby")
-    _ = parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Explicitly deploy an unsigned off-host build without waiting for CI",
-    )
-    _ = parser.add_argument(
-        "--artifact-dir", help="With --force, reuse an exact-HEAD local build/export directory"
-    )
     _ = parser.add_argument(
         "--public-chat-smoke",
         action="store_true",
@@ -128,14 +117,6 @@ def options(argv: list[str] | None = None) -> DeployOptions:
         not args.browser_assets_upgrade or args.maintenance,
         "browser_assets_upgrade_requires_maintenance",
     )
-    require(args.force or args.artifact_dir is None, "artifact_directory_requires_force")
-    if args.artifact_dir is not None:
-        artifact = Path(args.artifact_dir).expanduser().absolute()
-        require(
-            not artifact.is_symlink() and artifact.is_dir() and artifact.resolve() == artifact,
-            "invalid_artifact_directory",
-        )
-        args.artifact_dir = str(artifact)
     require(
         re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", args.repository
@@ -382,9 +363,7 @@ def run_playbook(
         env=target.environment,
         # Migration transfer runs two bounded 1800-second units sequentially,
         # with additional time for archive transport and source recovery.
-        timeout={"release.yml": 4500, "force-release.yml": 4500, "migration-data.yml": 5400}.get(
-            name, 2400
-        ),
+        timeout={"release.yml": 4500, "migration-data.yml": 5400}.get(name, 2400),
         capture=False,
     )
 
@@ -430,31 +409,9 @@ def anonymous_verification(runner: BUILD.Runner, curl: str, root: Path, origin: 
 
 
 def select_artifact(
-    args: DeployOptions, directory: Path, root: Path, revision: str, report: JsonObject
+    args: DeployOptions, directory: Path, revision: str, report: JsonObject
 ) -> tuple[str, JsonObject]:
-    """Keep unsigned authorization separate from the unchanged signed artifact flow."""
-    if args.force:
-        report.update(
-            phase="force_artifact", githubAttested=False, ciVerification="skipped-explicit-force"
-        )
-        artifact, request = force_deploy.prepare(
-            directory,
-            root,
-            revision,
-            {
-                "artifactDirectory": args.artifact_dir,
-                "repository": args.repository,
-                "deploy": not args.maintenance,
-                "quietSeconds": args.quiet_seconds,
-            },
-        )
-        report["fileDigests"] = request["fileDigests"]
-        return "force-release.yml", {
-            "scpub_force_release": True,
-            "scpub_force_directory": str(artifact),
-            "scpub_force_request": str(directory / "force.json"),
-            "scpub_release_revision": revision,
-        }
+    """Select the signed artifact of this revision's CI and verify its attestation."""
     report["phase"] = "ci"
     envelope = select_ci_artifact(args, revision)
     report["phase"] = "attestation"
@@ -495,14 +452,12 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         "remoteOutcome": "not_started",
         "failureClass": None,
         "startedAt": datetime.now(UTC).isoformat(),
-        "forced": args.force,
         "verification": "public-chat-smoke" if args.public_chat_smoke else "anonymous-http",
     }
     directory = None
     started = time.monotonic()
     try:
         inspector = BUILD.Runner()
-        require(args.force or args.artifact_dir is None, "artifact_directory_requires_force")
         revision = checkout_identity(inspector, root, args.repository)
         report.update(repository=args.repository, revision=revision)
         playbook, inventory_tool, verifier = controller_tools(args, root)
@@ -525,15 +480,7 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         directory = Path(tempfile.mkdtemp(prefix="deploy.", dir=parent))
         report["evidence"] = str(directory)
         runner = BUILD.Runner(directory)
-        if args.force and args.maintenance:
-            status, remote_main = runner.run(
-                ["git", "ls-remote", "origin", "refs/heads/main"], cwd=root, allow_failure=True
-            )
-            require(
-                status == 0 and remote_main.split() == [revision, "refs/heads/main"],
-                "force_maintenance_requires_published_main",
-            )
-        release_playbook, artifact_extra = select_artifact(args, directory, root, revision, report)
+        release_playbook, artifact_extra = select_artifact(args, directory, revision, report)
         require(
             selected_host(args, inventory_tool, root, environment) == target,
             "inventory_target_changed",
@@ -639,11 +586,6 @@ def main(argv: list[str] | None = None) -> int:
             print(  # noqa: T201 -- Intentional CLI status output.
                 "No push CI exists for this clean HEAD on main. "
                 + "Push the reviewed commit explicitly, then rerun."
-            )
-        elif report["failureClass"] == "force_maintenance_requires_published_main":
-            print(  # noqa: T201 -- Intentional CLI status output.
-                "Force maintenance requires clean HEAD to match published origin/main "
-                + "because the host fetches its source. App-only force does not require a push."
             )
         else:
             print(  # noqa: T201 -- Intentional CLI status output.

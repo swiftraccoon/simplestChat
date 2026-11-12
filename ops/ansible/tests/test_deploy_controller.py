@@ -22,7 +22,6 @@ from test_support import ROOT
 
 # Bootstrap flat checkout imports before loading helpers.
 # isort: split
-import force_deploy
 import release_attestation
 import release_build as BUILD  # noqa: N812 -- Keep established helper aliases.
 import release_deploy as DEPLOY  # noqa: N812 -- Keep established helper aliases.
@@ -648,14 +647,6 @@ class DeployTests(unittest.TestCase):
             all(command[command.index("--request") + 1] == "GET" for command in requests)
         )
 
-    def test_artifact_directory_without_force_is_refused_before_commands(self) -> None:
-        """An artifact path alone cannot opt an ordinary deployment out of signed CI."""
-        self.args.artifact_dir = str(self.root)
-        report, api = self.execute()
-        self.assertEqual(report["failureClass"], "artifact_directory_requires_force")
-        self.assertEqual(self.calls, [])
-        api.assert_not_called()
-
     def test_cli_defaults_never_authorize_unsigned_input_or_chat_messages(self) -> None:
         """Force and public-message verification require their separate explicit flags."""
         arguments = [
@@ -667,12 +658,7 @@ class DeployTests(unittest.TestCase):
             "https://chat.example.test",
         ]
         default = DEPLOY.options(arguments)
-        self.assertFalse(default.force or default.public_chat_smoke)
-        selected = DEPLOY.options([*arguments, "--force", "--artifact-dir", str(self.root)])
-        self.assertTrue(selected.force)
-        self.assertFalse(selected.public_chat_smoke)
-        with self.assertRaisesRegex(DEPLOY.DeployError, "artifact_directory_requires_force"):
-            _ = DEPLOY.options([*arguments, "--artifact-dir", str(self.root)])
+        self.assertFalse(default.public_chat_smoke)
 
     def test_failed_anonymous_readiness_preserves_successful_release_without_retry(self) -> None:
         """Public verification cannot silently pass or trigger another application restart."""
@@ -683,83 +669,6 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(report["failureClass"], "public_http_verification_failed")
         self.assertEqual(len(self.deployments()), 1)
         self.assertEqual(self.smokes(), [])
-
-    def test_force_skips_ci_and_attestation_but_preserves_frozen_target_and_verification(
-        self,
-    ) -> None:
-        """An explicit unsigned release uses one force playbook and honest evidence."""
-        self.args.force = True
-        self.args.public_chat_smoke = False
-        self.remote_main = (0, "")
-        with patch.object(
-            force_deploy,
-            "prepare",
-            return_value=(
-                self.root / "artifact",
-                {"fileDigests": {"image.tar": "b" * 64}},
-            ),
-        ) as prepare:
-            report, api = self.execute(attestation_error=AssertionError("attestation was called"))
-        self.assertTrue(report["passed"] and report["forced"])
-        self.assertIs(report["githubAttested"], expr2=False)
-        self.assertEqual(report["ciVerification"], "skipped-explicit-force")
-        self.assertNotIn("ciRunId", report)
-        api.assert_not_called()
-        prepare.assert_called_once()
-        self.assertEqual(len(self.deployments()), 1)
-        command = self.deployments()[0][0]
-        self.assertTrue(any(value.endswith("/force-release.yml") for value in command))
-        extra = object_value(decode_json(command[command.index("--extra-vars") + 1]))
-        self.assertIs(extra["scpub_force_release"], expr2=True)
-        self.assertNotIn("scpub_release_ci_run", extra)
-        self.assertEqual(self.revision_reads, 2)
-        self.assertEqual(self.inventory_reads, 2)
-
-    def test_force_maintenance_rejects_unpublished_head_before_build_or_host_actions(self) -> None:
-        """A maintenance source fetch must be possible before building or staging its image."""
-        self.args.force = self.args.maintenance = True
-        for result in ((0, "b" * 40 + "\trefs/heads/main"), (0, ""), (128, "unavailable")):
-            self.remote_main = result
-            with self.subTest(result=result), patch.object(force_deploy, "prepare") as prepare:
-                report, api = self.execute()
-                self.assertFalse(report["passed"])
-                self.assertEqual(
-                    report["failureClass"], "force_maintenance_requires_published_main"
-                )
-                self.assertEqual(report["remoteOutcome"], "not_started")
-                self.assertEqual(self.deployments(), [])
-                prepare.assert_not_called()
-                api.assert_not_called()
-
-    def test_force_maintenance_stages_then_uses_explicit_maintenance(self) -> None:
-        """Force does not silently promote app-only replacement into schema maintenance."""
-        self.args.force = self.args.maintenance = True
-        with patch.object(
-            force_deploy,
-            "prepare",
-            return_value=(
-                self.root / "artifact",
-                {"fileDigests": {}},
-            ),
-        ) as prepare:
-            report, api = self.execute()
-        self.assertTrue(report["passed"])
-        self.assertIn(
-            ["git", "ls-remote", "origin", "refs/heads/main"], [call[0] for call in self.calls]
-        )
-        api.assert_not_called()
-        self.assertEqual(len(self.deployments()), 2)
-        prepare.assert_called_once_with(
-            Path(string_value(report["evidence"])),
-            self.root,
-            REVISION,
-            {
-                "artifactDirectory": None,
-                "repository": "owner/repo",
-                "deploy": False,
-                "quietSeconds": 600,
-            },
-        )
 
 
 if __name__ == "__main__":

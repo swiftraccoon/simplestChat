@@ -244,6 +244,36 @@ fn first_and_repeat_are_complete_and_keep_the_original_stage_record() {
     assert_eq!(before.unwrap(), after.unwrap());
     assert_eq!(roles, [(Role::Inspect, false)]);
 }
+/// A release an explicit unsigned admission retained is staged like any
+/// other: its two files have a second name in the operation's own directory,
+/// and the build evidence and the request lie beside them.
+#[test]
+fn an_admitted_unsigned_release_is_staged_with_its_second_names_and_evidence() {
+    let data = Data::new();
+    let release = data.access.root.join("releases").join("a".repeat(40));
+    let forced = data.access.root.join("forced");
+    let operation_directory = forced.join("f".repeat(32));
+    for path in [&forced, &operation_directory] {
+        fs::DirBuilder::new().mode(0o700).create(path).unwrap();
+    }
+    for name in ["image.tar", "release.json"] {
+        fs::hard_link(release.join(name), operation_directory.join(name)).unwrap();
+    }
+    for name in ["source.json", "outcome.json", "force.json"] {
+        write(&operation_directory.join(name), b"{}\n", 0o600).unwrap();
+        fs::hard_link(operation_directory.join(name), release.join(name)).unwrap();
+    }
+    let mut daemon = Daemon::new(&data);
+    let observed = operation(&data, &mut daemon);
+    let staged = release.join("staged.json").is_file();
+    let names = fs::read_dir(&release).unwrap().count();
+    drop(data);
+    assert!(observed.outcome.passed);
+    assert_eq!(observed.cause, None);
+    assert!(observed.lock_released);
+    assert!(staged);
+    assert_eq!(names, 6);
+}
 #[test]
 fn known_validator_cleanup_is_distinct_from_an_unknown_create_effect() {
     let data = Data::new();

@@ -1,4 +1,5 @@
 //! Release metadata contracts; none of these checks authenticate signatures.
+pub mod admit;
 pub mod archive;
 pub mod assets;
 pub mod manifest;

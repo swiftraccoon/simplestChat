@@ -430,7 +430,7 @@ class VerifiedCacheTests(unittest.TestCase):
             "ops/ansible/files/release_public.py",
             "ops/ansible/templates/public-app.env.j2",
             "build/security_image.py",
-            "build/deploy.py",
+            "build/release_deploy.py",
             ".github/workflows/ci.yml",
             "security/image-policy.json",
             "Dockerfile",

@@ -244,13 +244,11 @@ branch requires its own current-head authentication and actual caller evidence.
 
 This is a breaking routine caller change. `release.yml` still stages by default,
 but explicit deployment now requires both signed application and Ops coordinates.
-The frozen `build/deploy.py` / `build/release_deploy.py` ordinary signed route
-cannot supply them and is no longer a supported routine entry point. The Rust
-frontend above supplies the complete current
+The Rust frontend above supplies the complete current
 selection and caller operation; the direct interface below selects all inputs
 explicitly and remains available for staging and reviewed operator use.
-The [explicit force app-only route](#explicit-force-deployment) retains its
-existing entry point and does not use this signed Ops bootstrap.
+The [explicit force app-only route](#explicit-force-deployment) is the same
+frontend with `--force` and does not use this signed Ops bootstrap.
 
 First [build the trusted controller before credentials](#prepare-the-controller-before-credentials).
 Use the pinned Python/Ansible environment, the selected authenticated GitHub CLI
@@ -399,43 +397,52 @@ A failed public check does not change the native attempt's recorded outcome.
 
 ## Explicit force deployment
 
-When the operator explicitly requests deployment without waiting for CI, use:
+When the operator explicitly requests deployment without waiting for CI, build
+the export of the clean current commit and name it to the controller:
 
 ```sh
-python3 build/deploy.py \
-  --inventory ops/ansible/inventory.local.yml \
-  --repository OWNER/REPOSITORY \
+cargo run --locked -q -p simplestchat-ops -- release build --output "$PWD/results/YOUR-RELEASE"
+target/native-maintenance-controller/aarch64-apple-darwin/debug/simplestchat-release deploy \
+  --inventory "$PWD/ops/ansible/inventory.local.yml" \
+  --repository swiftraccoon/simplestChat \
   --origin https://chat.example.com \
-  --force --quiet-seconds 0
+  --force --artifact-dir "$PWD/results/YOUR-RELEASE" --quiet-seconds 0
 ```
 
-`--force` builds the clean current commit off-host through the existing production
-Dockerfile and `build/build-release.py` implementation. Docker/Buildx must already
-be available on the controller; the command does not start a VM or install tools.
-It uses the builder's caches and bounded one-hour build/export deadline. To reuse
-an already built exact-HEAD export, add `--artifact-dir results/YOUR-RELEASE`.
-That option is rejected without `--force`. On first use or after reviewed helper
-changes, add `--install-helpers` to install the complete force helper set.
+`release build` is the same production build and export CI runs; Docker/Buildx
+must already be available on the controller. `--force` and `--artifact-dir` are
+accepted only together, and not beside `--wait-seconds`,
+`--application-artifact-dir` or `--ops-artifact-zip`. The controller never asks
+GitHub anything on this route; the GitHub CLI must still be installed, because
+the controller admits one fixed set of tools.
 
-Force skips CI waiting and GitHub attestation verification only. A clean checkout,
-matching repository/revision, source input and migration hashes, successful build
-evidence, archive digest, production image identity, and packaged migrations are
-still required. The host rechecks the transferred bytes and uses the same workload
-lock, checked backup, readiness, application rollback, and database/proxy continuity
-checks. Schema and configuration changes require the separate
+Force skips CI waiting and GitHub attestation verification only. A clean
+checkout on `main`, the matching revision, the checkout's own source input and
+migration hashes, successful build evidence, the archive digest, the production
+image identity and the packaged migrations are still required: the controller
+checks the export against the checkout, rechecks both right before it calls
+`force-release.yml`, and the host rechecks the transferred bytes against the
+request before it retains them
+([admission](../README.md#unsigned-release-admission)). Staging and deployment
+are then the ordinary `release stage` and `release deploy` units, with the same
+workload lock, checked backup, readiness, application rollback and
+database/proxy continuity checks. App-only `--force` supports unpushed commits.
+No failed operation is retried automatically.
+
+The host must already hold a signed Ops executable from an earlier signed
+release: admission, staging and deployment run through it, and a forced release
+cannot deliver a new one. Schema and configuration changes require the separate
 [direct maintenance workflow](#schema-and-configuration-changes-the-maintenance-release),
-which requires a signed Ops artifact. The frozen wrapper
-`--force --maintenance` route does not supply its required inputs.
-App-only `--force` supports unpushed commits. No failed operation is retried
-automatically.
+which requires a signed Ops artifact; there is no forced maintenance.
 
-Controller and host outcomes record `forced: true`, `githubAttested: false`, and
-`ciVerification: skipped-explicit-force`. This does not certify CI, image scanning,
-or signature verification. The host retains the authorization and exact build
-evidence alongside the canonical release and in its private operation directory.
+Controller and host records say `forced: true`, `githubAttested: false` and
+`ciVerification: skipped-explicit-force`. This does not certify CI, image
+scanning or signature verification. The host retains the request and the exact
+build evidence beside the release and in its private operation directory.
 Existing release bytes are immutable: a different local or CI build of the same
-revision is refused. Use a new reviewed commit for a later differing signed build;
-never overwrite retained artifacts or relabel the forced deployment as signed.
+revision is refused. Use a new reviewed commit for a later differing signed
+build; never overwrite retained artifacts or relabel the forced deployment as
+signed.
 
 ## Trusted artifact requirements
 
@@ -616,12 +623,10 @@ an already provisioned public host. Run one release, helper update or maintenanc
 operation at a time. Deployment identity changes still require the separate
 [public deployment workflow](PUBLIC.md).
 
-This is a breaking maintenance caller change. The frozen `build/deploy.py` /
-`build/release_deploy.py` wrapper supplies none of the new Ops inputs; its
-`--maintenance` and `--force --maintenance` routes cannot drive this contract.
-Use the direct playbooks below. [Routine signed app-only deployment](#routine-update-use-the-image-ci-tested)
-also uses direct typed Ansible; explicit force app-only releases keep their
-existing entry point. This maintenance path requires a
+This is a breaking maintenance caller change: use the direct playbooks below.
+[Routine signed app-only deployment](#routine-update-use-the-image-ci-tested)
+also uses direct typed Ansible, and there is no forced maintenance. This
+maintenance path requires a
 signed Ops artifact and has no unsigned force bootstrap fallback. Existing
 Python remains in application staging, Ansible and the retained helpers.
 
@@ -809,8 +814,8 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
   -e @maintenance-vars.json
 ```
 
-`scpub_release_deploy: false` is the existing stage-only interface; there is no
-`build/deploy.py --stage-only` option. The release playbook independently verifies
+`scpub_release_deploy: false` is the stage-only interface. The release playbook
+independently verifies
 the selected application artifact and its exact CI provenance, delivers the
 signed Ops executable and stages through it without stopping chat. A successful
 stage does not run maintenance.

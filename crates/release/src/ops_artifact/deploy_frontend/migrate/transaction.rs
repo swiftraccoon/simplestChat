@@ -605,6 +605,7 @@ async fn preflight<E: Executor>(
         ignored(cx, executor, end, utf8(path)?, refused).await?;
     }
     execute::custody(root, state, plan, budget, executor, end, &tools).await?;
+    execute::gh_version(state, plan, budget, executor, end).await?;
     let [old, new] = selectors(options);
     let source = selection(state, plan, budget, executor, end, old).await?;
     let target = selection(state, plan, budget, executor, end, new).await?;

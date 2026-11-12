@@ -2387,6 +2387,65 @@ arguments is a usage error. The server's tests drive the same library against
 the real router ([testing guide](../docs/testing.md#lobby-seeding-against-the-real-router)).
 
 
+## Unsigned release admission
+
+```sh
+simplestchat-ops release admit-unsigned --request /srv/simplestchat-public/forced/RUN/force.json
+```
+
+This is the host's half of an [explicitly forced release](ansible/RELEASES.md#explicit-force-deployment):
+it retains one release export that no signature covers, where the ordinary
+`release stage` and `release deploy` commands read it. It verifies no
+signature, loads no image and changes no running service, and its record says
+that nothing attested the bytes.
+
+The command requires root and takes exactly one request, as `--request PATH`
+or `--request=PATH`; anything else is a usage error, status 2. The request must
+be `force.json` in a directory named by 32 lowercase hexadecimal digits under
+`/srv/simplestchat-public/forced`. The root, that store and the directory must
+be root's, mode 0700 and reached through no link; `image.tar`, `release.json`,
+`source.json`, `outcome.json` and the request must be root's regular files of
+mode 0600, the archive at most 8 GiB and the others at most 1 MiB.
+
+The request is one JSON object with exactly nine fields: `schemaVersion` 1,
+`operation` `force-release`, `forced` true, `githubAttested` false,
+`ciVerification` `skipped-explicit-force`, a `repository` (owner and name), a
+full `revision`, `fileDigests` for exactly the four exported files and
+`sourceInputsSha256` for exactly `Dockerfile`, `.dockerignore`, `Cargo.lock`,
+`web/package-lock.json` and `build/pip-constraints.txt`. A request that claims
+an attestation or a passed verification, or carries anything more, is refused.
+
+Under the workload lock, and only when no release or runtime journal is
+unfinished, the command creates `results/force.NAME`, requires each exported
+file to have the requested digest, `source.json` to be exactly the requested
+revision and source inputs, `outcome.json` to be a passed build of that
+revision without an error, `release.json` to be a valid manifest of that
+revision, and the archive to be the image that manifest describes. It then
+links the four files and the request into `releases/REVISION`. Bytes already
+retained there are never replaced: they must be the same bytes, and an earlier
+request stays the retained one. `results/force.NAME/outcome.json` records
+`action` `force-admit`, the revision, repository and digests, `forced: true`,
+`githubAttested: false`, `ciVerification`, `passed` and the phase; an admitted
+run prints the same record as one line. Any refusal prints
+`{"passed":false,"failure":"force_release_failed"}` on standard error and
+exits 1.
+
+The controller's half is the library function `release::admit::authorize`,
+which `simplestchat-release deploy --force` calls twice before it contacts a
+host: the export must be a passed build of the clean checkout at its revision,
+with the checkout's own five source inputs and the same migration versions and
+SHA-384 digests as the manifest. It follows no link and writes the request the
+host admits.
+
+The 216 recorded runs of the Python host helper and the 69 recorded
+preparations of its controller half are in `ops/src/release/recorded_admit.json`
+and `recorded_authorize.json`; the tests replay all of them on the recorded
+files, and compare each resulting tree, shared inode and retained record. The
+native request has no `deploy` or `quietSeconds` field: the playbook decides
+both, as it does for a signed release. One preparation ends differently on
+purpose, because the helper read a source input through a link.
+
+
 ## Offline server attestation preparation
 
 `simplestchat-ops release attestation prepare` consumes the existing unsigned

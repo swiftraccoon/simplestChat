@@ -1,4 +1,5 @@
-//! Pure argument admission for the complete signed deployment frontend.
+//! Pure argument admission for the complete deployment frontend: the signed
+//! route, and the explicitly forced one for an unsigned local export.
 //! Paths select data and tools; the runtime owner must retain and validate their
 //! actual filesystem identities. Parsing starts no I/O, process or network work.
 
@@ -18,12 +19,24 @@ pub(super) const USAGE: &str = concat!(
     "  --ansible-playbook ABS          caller-trusted Ansible executable\n",
     "  --gh ABS                        caller-trusted GitHub CLI executable\n",
     "  --application-artifact-dir ABS  original application ZIP and ten members\n",
-    "  --ops-artifact-zip ABS          original Ops ZIP candidate bytes\n\n",
+    "  --ops-artifact-zip ABS          original Ops ZIP candidate bytes\n",
+    "  --force                         deploy an unsigned local export; no CI wait\n",
+    "  --artifact-dir ABS              with --force: the export of this checkout\n\n",
     "Build this controller before supplying credentials. The complete operation ",
     "requires a clean published main revision and current signed artifacts.\n",
+    "--force replaces both with one export of the clean checkout made by ",
+    "simplestchat-ops release build; nothing attests it and the reports say so.\n",
 );
 
-const VALUE_FLAGS: [&str; 10] = [
+/// The flag that asks for the unsigned route; it takes no value.
+const FORCE: &str = "--force";
+/// What selects signed inputs, and so has no place beside `--force`.
+const SIGNED_ONLY: [&str; 3] = [
+    "--wait-seconds",
+    "--application-artifact-dir",
+    "--ops-artifact-zip",
+];
+const VALUE_FLAGS: [&str; 11] = [
     "--inventory",
     "--repository",
     "--origin",
@@ -34,6 +47,7 @@ const VALUE_FLAGS: [&str; 10] = [
     "--gh",
     "--application-artifact-dir",
     "--ops-artifact-zip",
+    "--artifact-dir",
 ];
 
 pub(super) struct Options {
@@ -48,6 +62,8 @@ pub(super) struct Options {
     pub gh: Option<PathBuf>,
     pub application_artifact_dir: Option<PathBuf>,
     pub ops_artifact_zip: Option<PathBuf>,
+    /// The unsigned export to deploy, which is what selects the forced route.
+    pub artifact_dir: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for Options {
@@ -156,11 +172,25 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
     let mut values = BTreeMap::new();
     let mut remaining = arguments.iter();
     while let Some(flag) = remaining.next() {
-        if !seen.insert(flag.as_str()) || !VALUE_FLAGS.contains(&flag.as_str()) {
+        if !seen.insert(flag.as_str()) {
+            return Err(failure(2));
+        }
+        if flag == FORCE {
+            continue;
+        }
+        if !VALUE_FLAGS.contains(&flag.as_str()) {
             return Err(failure(2));
         }
         let value = remaining.next().ok_or_else(|| failure(2))?;
         values.insert(flag.as_str(), value.as_str());
+    }
+    // The flag and the export select the unsigned route only together, and
+    // nothing that selects signed inputs may stand beside them.
+    let forced = seen.contains(FORCE);
+    if forced != values.contains_key("--artifact-dir")
+        || (forced && SIGNED_ONLY.iter().any(|flag| values.contains_key(flag)))
+    {
+        return Err(failure(2));
     }
     let required = |flag| values.get(flag).copied().ok_or_else(|| failure(2));
     let optional_path = |flag| values.get(flag).map(|value| path(value)).transpose();
@@ -181,7 +211,9 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
         limit: limit.map(str::to_owned),
         wait_seconds: values
             .get("--wait-seconds")
-            .map_or(Ok(3600), |value| number(value, 7200))?,
+            .map_or(Ok(if forced { 0 } else { 3600 }), |value| {
+                number(value, 7200)
+            })?,
         quiet_seconds: values
             .get("--quiet-seconds")
             .map_or(Ok(600), |value| number(value, 600))?,
@@ -189,6 +221,7 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
         gh: optional_path("--gh")?,
         application_artifact_dir: optional_path("--application-artifact-dir")?,
         ops_artifact_zip: optional_path("--ops-artifact-zip")?,
+        artifact_dir: optional_path("--artifact-dir")?,
     }))
 }
 

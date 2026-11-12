@@ -45,6 +45,28 @@ enum Case {
     PostAnsibleAttemptDrift,
     PublicWrongRevision,
     PublicHttpFailure,
+    Forced,
+    ForcedSourceDrift,
+    ForcedExportSwap,
+    ForcedAnsibleFailure,
+    ForcedHeadDrift,
+    ForcedInventoryDrift,
+    ForcedDirectorySwap,
+}
+impl Case {
+    /// Whether the unsigned route is under test.
+    fn forced(self) -> bool {
+        matches!(
+            self,
+            Self::Forced
+                | Self::ForcedSourceDrift
+                | Self::ForcedExportSwap
+                | Self::ForcedAnsibleFailure
+                | Self::ForcedHeadDrift
+                | Self::ForcedInventoryDrift
+                | Self::ForcedDirectorySwap
+        )
+    }
 }
 
 fn json_bytes(value: Value) -> Vec<u8> {
@@ -88,8 +110,35 @@ fn artifact_record(ops: bool, changed: bool) -> Value {
 struct Fixture {
     root: PathBuf,
     environment: Environment,
+    /// The unsigned export the forced route is given, when it is under test.
+    export: Option<PathBuf>,
 }
 impl Fixture {
+    /// A checkout with the five source inputs and one migration, and a
+    /// valid private export of it beside the evidence store.
+    fn forced() -> Self {
+        let mut fixture = Self::new();
+        let planted = fixture.root.join("planted");
+        fs::create_dir(&planted).unwrap();
+        simplestchat_ops::release::admit::fixture::plant(&planted);
+        for name in [
+            "Dockerfile",
+            ".dockerignore",
+            "Cargo.lock",
+            "web/package-lock.json",
+            "build/pip-constraints.txt",
+            "migrations/001_fixture.sql",
+        ] {
+            let path = fixture.root.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::rename(planted.join("checkout").join(name), path).unwrap();
+        }
+        let export = fixture.root.join("export");
+        fs::rename(planted.join("artifact"), &export).unwrap();
+        fs::remove_dir_all(planted).unwrap();
+        fixture.export = Some(export);
+        fixture
+    }
     fn new() -> Self {
         let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "deploy-workflow-{}-{}",
@@ -145,10 +194,36 @@ impl Fixture {
             ("PYTHONPATH".into(), "PRIVATE_IMPORTS".into()),
             ("ANSIBLE_HOST_KEY_CHECKING".into(), "False".into()),
         ]);
-        Self { root, environment }
+        Self {
+            root,
+            environment,
+            export: None,
+        }
     }
     fn options(&self) -> Arc<Options> {
         let text = |path: PathBuf| path.to_str().unwrap().to_owned();
+        if let Some(export) = &self.export {
+            let arguments = [
+                "--inventory".into(),
+                text(self.root.join("inventory.json")),
+                "--repository".into(),
+                policy::REPOSITORY.into(),
+                "--origin".into(),
+                "https://chat.example.test".into(),
+                "--limit".into(),
+                "public_vps".into(),
+                "--quiet-seconds".into(),
+                "30".into(),
+                "--ansible-playbook".into(),
+                text(self.root.join("bin/ansible-playbook")),
+                "--gh".into(),
+                text(self.root.join("bin/gh")),
+                "--force".into(),
+                "--artifact-dir".into(),
+                text(export.clone()),
+            ];
+            return Arc::new(super::super::options::parse(&arguments).unwrap().unwrap());
+        }
         let arguments = vec![
             "--inventory".into(),
             text(self.root.join("inventory.json")),
@@ -248,9 +323,33 @@ impl Fake {
             Program::FrontendGit => match text.as_slice() {
                 ["rev-parse", "HEAD"] => {
                     self.heads += 1;
+                    // Between the authorization and the recheck: the checkout
+                    // or the export is no longer what was authorized.
+                    if self.heads == 2 && self.case == Case::ForcedDirectorySwap {
+                        // The same bytes under the same name, in another directory.
+                        let (export, aside) = (self.root.join("export"), self.root.join("aside"));
+                        fs::rename(&export, &aside).unwrap();
+                        fs::create_dir(&export).unwrap();
+                        fs::set_permissions(&export, fs::Permissions::from_mode(0o700)).unwrap();
+                        for entry in fs::read_dir(&aside).unwrap() {
+                            let name = entry.unwrap().file_name();
+                            fs::copy(aside.join(&name), export.join(&name)).unwrap();
+                        }
+                    }
+                    if self.heads == 2 && self.case == Case::ForcedSourceDrift {
+                        fs::write(self.root.join("Cargo.lock"), b"changed\n").unwrap();
+                    }
+                    if self.heads == 2 && self.case == Case::ForcedExportSwap {
+                        let passed = json!({"schemaVersion":1,"revision":"a".repeat(40),
+                            "passed":true,"error":null,"note":"another passed build"});
+                        fs::write(self.root.join("export/outcome.json"), json_bytes(passed))
+                            .unwrap();
+                    }
                     format!(
                         "{}\n",
-                        if self.case == Case::HeadDrift && self.heads == 2 {
+                        if matches!(self.case, Case::HeadDrift | Case::ForcedHeadDrift)
+                            && self.heads == 2
+                        {
                             "b".repeat(40)
                         } else {
                             "a".repeat(40)
@@ -274,6 +373,9 @@ impl Fake {
                 }
                 _ => panic!("unexpected inert Git command"),
             },
+            Program::FrontendGh if self.case.forced() => {
+                panic!("the unsigned route asks GitHub nothing")
+            }
             Program::FrontendGh if text == ["--version"] => {
                 b"gh version 2.102.0 (inert fixture)\n".to_vec()
             }
@@ -335,7 +437,8 @@ impl Fake {
                 assert_eq!(text[2], "--list");
                 self.inventories += 1;
                 json_bytes(inventory_record(
-                    self.case == Case::InventoryDrift && self.inventories == 2,
+                    matches!(self.case, Case::InventoryDrift | Case::ForcedInventoryDrift)
+                        && self.inventories == 2,
                 ))
             }
             Program::FrontendAnsible => {
@@ -371,7 +474,8 @@ impl Fake {
             }
             _ => panic!("unexpected inert workflow role"),
         };
-        let status = if self.case == Case::AnsibleFailure && program == Program::FrontendAnsible {
+        let failing = matches!(self.case, Case::AnsibleFailure | Case::ForcedAnsibleFailure);
+        let status = if failing && program == Program::FrontendAnsible {
             23
         } else if self.case == Case::PublicHttpFailure
             && program == Program::FrontendCurl
@@ -783,4 +887,184 @@ fn public_reply_requires_exact_status_typed_unique_fields_revision_and_html() {
     }
     assert!(public_reply(&vec![b'x'; 1024 * 1024 + 5], "/", &revision).is_err());
     assert!(public_reply(b"\xff\n200", "/", &revision).is_err());
+}
+
+/// What the forced route's playbook was given, read as the playbook would.
+fn forced_request(vars: &Value) -> Value {
+    let path = PathBuf::from(vars["scpub_force_request"].as_str().unwrap());
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o7777,
+        0o600
+    );
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn a_forced_deployment_authorizes_one_unsigned_export_without_asking_github() {
+    let fixture = Fixture::forced();
+    let (result, fake, report) = fixture.run(Case::Forced).await;
+    let completed = result.unwrap();
+    assert_eq!(completed.status, 0);
+    assert_eq!(completed.summary, report);
+    assert_eq!(report["operation"], "forced-unsigned-deploy");
+    assert_eq!(report["candidatePassed"], true);
+    assert_eq!(report["deployed"], true);
+    assert_eq!(report["phase"], "complete");
+    assert_eq!(report["remoteOutcome"], "release_succeeded");
+    // Nothing attested these bytes, and every report says so.
+    assert_eq!(report["forced"], true);
+    assert_eq!(report["githubAttested"], false);
+    assert_eq!(report["ciVerification"], "skipped-explicit-force");
+    for absent in [
+        "ciRunId",
+        "runAttempt",
+        "applicationArtifactId",
+        "opsArtifactId",
+    ] {
+        assert!(report.get(absent).is_none(), "{absent}");
+    }
+    assert_eq!(fake.count(Program::FrontendGh), 0);
+    assert_eq!(fake.count(Program::FrontendAnsible), 1);
+    assert_eq!(fake.count(Program::FrontendCurl), 4);
+    let position = |wanted| {
+        fake.calls
+            .iter()
+            .position(|(program, _)| *program == wanted)
+    };
+    let ansible = position(Program::FrontendAnsible).unwrap();
+    assert!(ansible < position(Program::FrontendCurl).unwrap());
+    assert_eq!(
+        fake.calls[ansible].1[2],
+        fixture
+            .root
+            .join("ops/ansible/force-release.yml")
+            .into_os_string()
+    );
+    let vars = fake.vars.clone().unwrap();
+    let export = fixture.root.join("export");
+    assert_eq!(
+        vars,
+        json!({"scpub_force_release":true,"scpub_force_directory":export,
+            "scpub_force_request":fixture.evidence().join("force.json"),
+            "scpub_release_revision":"a".repeat(40),"scpub_release_quiet_seconds":30})
+    );
+    let request = forced_request(&vars);
+    assert_eq!(request["forced"], true);
+    assert_eq!(request["githubAttested"], false);
+    assert_eq!(request["ciVerification"], "skipped-explicit-force");
+    assert_eq!(request["repository"], policy::REPOSITORY);
+    assert_eq!(request["revision"], "a".repeat(40));
+    assert_eq!(request["fileDigests"], report["fileDigests"]);
+    assert_eq!(report["fileDigests"].as_object().unwrap().len(), 4);
+    assert_eq!(
+        fake.frozen.unwrap(),
+        json!({"benchmark_hosts":{"hosts":{
+        "public_vps":inventory_record(false)["_meta"]["hostvars"]["public_vps"].clone()}}})
+    );
+    let retained: Value =
+        serde_json::from_slice(&fs::read(fixture.evidence().join("request.json")).unwrap())
+            .unwrap();
+    assert_eq!(retained["operation"], "forced-unsigned-deploy");
+    assert_eq!(retained["artifactDirectory"], json!(export));
+    assert_eq!(retained["waitSeconds"], 0);
+    assert!(!serde_json::to_string(&report).unwrap().contains(PRIVATE));
+}
+
+/// An export that is not a passed build of this checkout, or stops being the
+/// one that was authorized, never reaches a host: no playbook runs and no
+/// public check is made, and the report names why.
+#[tokio::test]
+async fn a_forced_deployment_refuses_an_export_that_is_not_this_checkouts_before_any_host() {
+    let failed = json!({"schemaVersion":1,"revision":"a".repeat(40),"passed":false,"error":"x"});
+    for (case, spoiled, class) in [
+        (Case::Forced, Some("outcome.json"), "force_build_not_passed"),
+        (Case::Forced, Some("image.tar"), "ArtifactError"),
+        (
+            Case::ForcedSourceDrift,
+            None,
+            "force_source_evidence_mismatch",
+        ),
+        (Case::ForcedExportSwap, None, "force_artifact_changed"),
+    ] {
+        let fixture = Fixture::forced();
+        match spoiled {
+            Some("outcome.json") => {
+                fs::write(
+                    fixture.root.join("export/outcome.json"),
+                    json_bytes(failed.clone()),
+                )
+                .unwrap();
+            }
+            Some(name) => {
+                // Other bytes of the same size: no image the manifest describes.
+                let path = fixture.root.join("export").join(name);
+                let length = fs::metadata(&path).unwrap().len();
+                fs::write(&path, vec![b'x'; usize::try_from(length).unwrap()]).unwrap();
+            }
+            None => {}
+        }
+        let (result, fake, report) = fixture.run(case).await;
+        let context = format!("{case:?} {spoiled:?}");
+        assert_eq!(result.unwrap().status, 1, "{context}");
+        assert_eq!(report["failureClass"], class, "{context}");
+        assert_eq!(report["candidatePassed"], false, "{context}");
+        assert_eq!(report["deployed"], false, "{context}");
+        assert_eq!(report["remoteOutcome"], "not_started", "{context}");
+        assert_eq!(report["githubAttested"], false, "{context}");
+        for program in [
+            Program::FrontendGh,
+            Program::FrontendAnsible,
+            Program::FrontendCurl,
+        ] {
+            assert_eq!(fake.count(program), 0, "{context}");
+        }
+        assert!(!fixture.evidence().join("force.json").exists(), "{context}");
+    }
+}
+
+/// A failed forced playbook is a failed deployment: nothing is verified in
+/// public afterwards and nothing is reported as deployed.
+#[tokio::test]
+async fn a_failed_forced_playbook_is_never_reported_as_deployed() {
+    let fixture = Fixture::forced();
+    let (result, fake, report) = fixture.run(Case::ForcedAnsibleFailure).await;
+    assert_ne!(result.unwrap().status, 0);
+    assert_eq!(report["candidatePassed"], false);
+    assert_eq!(report["deployed"], false);
+    assert_eq!(report["forced"], true);
+    assert_eq!(fake.count(Program::FrontendAnsible), 1);
+    assert_eq!(fake.count(Program::FrontendCurl), 0);
+    assert_eq!(fake.count(Program::FrontendGh), 0);
+}
+
+/// Between the authorization and the playbook the checkout, the selected
+/// host and the export's own directory must stay what they were: a change
+/// of any stops before a host is contacted.
+#[tokio::test]
+async fn a_forced_deployment_stops_when_its_checkout_target_or_export_directory_changes() {
+    for case in [
+        Case::ForcedHeadDrift,
+        Case::ForcedInventoryDrift,
+        Case::ForcedDirectorySwap,
+    ] {
+        let fixture = Fixture::forced();
+        let (result, fake, report) = fixture.run(case).await;
+        assert_eq!(result.unwrap().status, 1, "{case:?}");
+        assert_eq!(report["candidatePassed"], false, "{case:?}");
+        assert_eq!(report["deployed"], false, "{case:?}");
+        assert_eq!(report["phase"], "recheck", "{case:?}");
+        assert_eq!(
+            report["fileDigests"].as_object().unwrap().len(),
+            4,
+            "{case:?}"
+        );
+        for program in [
+            Program::FrontendGh,
+            Program::FrontendAnsible,
+            Program::FrontendCurl,
+        ] {
+            assert_eq!(fake.count(program), 0, "{case:?}");
+        }
+        assert!(!fixture.evidence().join("force.json").exists(), "{case:?}");
+    }
 }

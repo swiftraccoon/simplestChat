@@ -53,6 +53,72 @@ fn required_inputs_have_explicit_defaults_without_filesystem_admission() {
     assert!(options.gh.is_none());
     assert!(options.application_artifact_dir.is_none());
     assert!(options.ops_artifact_zip.is_none());
+    assert!(options.artifact_dir.is_none());
+}
+
+/// The unsigned route is asked for twice over: the flag and the export it
+/// may deploy. It waits for no CI and takes no signed candidate.
+#[test]
+fn an_unsigned_export_is_selected_only_by_the_flag_and_its_directory_together() {
+    let forced = |extra: &[&str]| {
+        let mut arguments = base();
+        arguments.extend(extra.iter().map(|word| (*word).to_owned()));
+        arguments
+    };
+    let export = "/private/results/export";
+    for arguments in [
+        forced(&["--force", "--artifact-dir", export]),
+        forced(&["--artifact-dir", export, "--force"]),
+    ] {
+        let options = admitted(&arguments);
+        assert_eq!(options.artifact_dir.as_deref(), Some(Path::new(export)));
+        assert_eq!(options.wait_seconds, 0);
+        assert_eq!(options.quiet_seconds, 600);
+    }
+    let every = forced(&[
+        "--force",
+        "--artifact-dir",
+        export,
+        "--limit",
+        "public_vps",
+        "--quiet-seconds",
+        "0",
+        "--ansible-playbook",
+        "/private/tools/ansible-playbook",
+        "--gh",
+        "/private/tools/gh",
+    ]);
+    let options = admitted(&every);
+    assert_eq!(options.quiet_seconds, 0);
+    assert_eq!(options.limit.as_deref(), Some("public_vps"));
+    for arguments in [
+        forced(&["--force"]),
+        forced(&["--artifact-dir", export]),
+        forced(&["--force", "--force", "--artifact-dir", export]),
+        forced(&["--force", "--artifact-dir"]),
+        forced(&["--force", "--artifact-dir", "results/export"]),
+        forced(&["--force", "--artifact-dir", "/private/results/../export"]),
+        forced(&["--force=true", "--artifact-dir", export]),
+        forced(&["--force", "true", "--artifact-dir", export]),
+        forced(&["--force", "--artifact-dir", export, "--wait-seconds", "0"]),
+        forced(&[
+            "--force",
+            "--artifact-dir",
+            export,
+            "--application-artifact-dir",
+            export,
+        ]),
+        forced(&[
+            "--force",
+            "--artifact-dir",
+            export,
+            "--ops-artifact-zip",
+            "/private/ops.zip",
+        ]),
+        forced(&["--force", "--artifact-dir", export, "--maintenance"]),
+    ] {
+        refused(&arguments);
+    }
 }
 
 #[test]
