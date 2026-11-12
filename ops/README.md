@@ -2539,6 +2539,17 @@ end differently on purpose: a migration numbered zero or named only by its
 number, and a row whose version carries a sign or leading zeros, which the
 migration tool never produces.
 
+The same rules judge a project inside the executable: an app-only deployment
+and a maintenance judge both services before and after they select an image,
+a reboot judges the application alone, and staging and the reboot judge the
+names an image declares. There the validator was called in process and its
+callers saw a refusal by kind: a requirement that is not met, a field that is
+not there, or a value of the wrong shape, where the command answers the last
+two with one code. `recorded_profile_inprocess.json` holds what the validator
+raised for every object document of the command's recording, for the
+application alone and with the migration service, at the fixed socket
+directory and at another: 575 judgements, replayed by kind and code.
+
 
 ## Offline server attestation preparation
 

@@ -25,7 +25,7 @@ use crate::release::manifest::Manifest;
 use options::Options;
 use serde_json::json;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     ffi::OsString,
     io::{self, Write},
     os::unix::fs::MetadataExt,
@@ -829,22 +829,12 @@ impl State {
             .get("envNames")
             .and_then(Json::array)
             .ok_or(Cause::Policy)?;
-        let mut names = BTreeSet::new();
-        for name in env {
-            let name = name.string().ok_or(Cause::Policy)?;
-            if !names.insert(name) {
-                return self.policy(owner, "runtime_environment_duplicate");
-            }
-            if name.is_empty()
-                || !name.bytes().enumerate().all(|(i, b)| {
-                    b == b'_' || b.is_ascii_alphabetic() || (i > 0 && b.is_ascii_digit())
-                })
-                || name.starts_with("LD_")
-                || name.starts_with("OPENSSL_")
-                || ["GLIBC_TUNABLES", "GCONV_PATH", "LOCPATH"].contains(&name)
-            {
-                return self.policy(owner, "runtime_environment_override");
-            }
+        let names: Option<Vec<&str>> = env.iter().map(Json::string).collect();
+        let names = names.ok_or(Cause::Policy)?;
+        // The launcher's own rule for the names an image declares.
+        let judged = crate::release::profile::environment_names(&names);
+        if let Err(crate::release::profile::Refusal::Code(code)) = judged {
+            return self.policy(owner, code);
         }
         if archive.is_some_and(|archive| !archive.accepts_runtime_id(identifier)) {
             return self.policy(owner, "Imported image differs from verified archive graph");

@@ -244,6 +244,41 @@ fn first_and_repeat_are_complete_and_keep_the_original_stage_record() {
     assert_eq!(before.unwrap(), after.unwrap());
     assert_eq!(roles, [(Role::Inspect, false)]);
 }
+/// The names an image declares are judged by the launcher's own rule and
+/// refused by its codes: a repeated name before any other name is looked
+/// at, then a name that is no plain identifier or is a loader, a
+/// crypto-provider or a locale-module override.
+#[test]
+fn an_image_environment_is_refused_by_the_launchers_rule_for_names() {
+    let refused = [
+        (
+            json!(["PATH", "LD_PRELOAD"]),
+            "runtime_environment_override",
+        ),
+        (json!(["PATH", "1BAD"]), "runtime_environment_override"),
+        (json!(["GCONV_PATH"]), "runtime_environment_override"),
+        (json!(["PATH", "PATH"]), "runtime_environment_duplicate"),
+        (
+            json!(["LD_PRELOAD", "PATH", "PATH"]),
+            "runtime_environment_duplicate",
+        ),
+    ];
+    for (names, failure) in refused {
+        let data = Data::new();
+        let mut daemon = Daemon::new(&data);
+        daemon.image["envNames"] = names;
+        let observed = operation(&data, &mut daemon);
+        assert!(!observed.outcome.passed, "{failure}");
+        let report: serde_json::Value = serde_json::from_slice(&observed.outcome.bytes).unwrap();
+        assert_eq!(report["failure"], failure);
+        assert!(observed.lock_released);
+    }
+    let data = Data::new();
+    let mut daemon = Daemon::new(&data);
+    daemon.image["envNames"] = json!(["PATH", "_PRIVATE1"]);
+    assert!(operation(&data, &mut daemon).outcome.passed);
+}
+
 /// A release an explicit unsigned admission retained is staged like any
 /// other: its two files have a second name in the operation's own directory,
 /// and the build evidence and the request lie beside them.

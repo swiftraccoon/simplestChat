@@ -1,7 +1,7 @@
 //! Original rendered runtime/configuration policy; no YAML parser or secret output.
 
 use crate::json::Json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 pub(super) type Result<T> = std::result::Result<T, &'static str>;
 pub(super) fn ensure(value: bool, message: &'static str) -> Result<()> {
@@ -57,133 +57,16 @@ pub(super) fn image_id(value: &str) -> bool {
         .strip_prefix("sha256:")
         .is_some_and(|value| exact_hex(value, 64))
 }
-fn null_or_empty(value: Option<&Json>) -> bool {
-    matches!(value, None | Some(Json::Null))
-        || value.and_then(Json::array).is_some_and(<[Json]>::is_empty)
-}
-fn strings(value: Option<&Json>, expected: &[&str]) -> bool {
-    value.and_then(Json::array).is_some_and(|values| {
-        values.len() == expected.len()
-            && values
-                .iter()
-                .zip(expected)
-                .all(|(value, expected)| value.string() == Some(*expected))
-    })
-}
-fn environment_names<'a>(names: impl Iterator<Item = &'a str>) -> Result<()> {
-    let mut seen = BTreeSet::new();
-    for name in names {
-        ensure(seen.insert(name), "RuntimeProfileError")?;
-        ensure(
-            !name.is_empty()
-                && name.bytes().enumerate().all(|(at, byte)| {
-                    byte == b'_' || byte.is_ascii_alphabetic() || at > 0 && byte.is_ascii_digit()
-                })
-                && !name.starts_with("LD_")
-                && !name.starts_with("OPENSSL_")
-                && !["GLIBC_TUNABLES", "GCONV_PATH", "LOCPATH"].contains(&name),
-            "RuntimeProfileError",
-        )?;
-    }
-    Ok(())
-}
+/// Require the application and the migration service of a resolved model
+/// to run `image` as shipped. The rules are the launcher's own; a refusal
+/// is named here as the release engine named it.
 pub(super) fn compose(config: &Json, socket: &str, image: &str) -> Result<()> {
-    const FIELDS: &[&str] = &[
-        "build",
-        "cap_drop",
-        "command",
-        "cpus",
-        "depends_on",
-        "entrypoint",
-        "environment",
-        "healthcheck",
-        "image",
-        "init",
-        "labels",
-        "logging",
-        "mem_limit",
-        "network_mode",
-        "networks",
-        "pids_limit",
-        "ports",
-        "profiles",
-        "read_only",
-        "restart",
-        "security_opt",
-        "stop_grace_period",
-        "tmpfs",
-        "ulimits",
-        "user",
-        "volumes",
-        "working_dir",
-    ];
-    ensure(image_id(image), "RuntimeProfileError")?;
-    let services = member(config, "services")?;
-    for name in ["simplestchat", "migrate"] {
-        let service = member(services, name)?;
-        let fields = object(service)?;
-        ensure(
-            text(service, "image")? == image
-                && fields.keys().all(|key| FIELDS.contains(&key.as_str())),
-            "RuntimeProfileError",
-        )?;
-        ensure(
-            text(service, "user")? == "10001:10001"
-                && (matches!(service.get("working_dir"), None | Some(Json::Null))
-                    || service.get("working_dir").and_then(Json::string) == Some("/app")),
-            "RuntimeProfileError",
-        )?;
-        ensure(
-            (matches!(service.get("command"), None | Some(Json::Null))
-                || strings(service.get("command"), &["/app/simplestChat"]))
-                && null_or_empty(service.get("entrypoint"))
-                && matches!(service.get("healthcheck"), None | Some(Json::Null)),
-            "RuntimeProfileError",
-        )?;
-        ensure(
-            service.get("read_only").and_then(Json::boolean) == Some(true)
-                && service.get("init").and_then(Json::boolean) == Some(true)
-                && strings(service.get("cap_drop"), &["ALL"])
-                && strings(service.get("security_opt"), &["no-new-privileges:true"]),
-            "RuntimeProfileError",
-        )?;
-        let environment = object(member(service, "environment")?)?;
-        environment_names(environment.keys().map(String::as_str))?;
-        ensure(
-            environment.values().all(|value| value.string().is_some())
-                && environment.get("RUN_MIGRATIONS").and_then(Json::string)
-                    == Some(if name == "migrate" { "true" } else { "false" }),
-            "RuntimeProfileError",
-        )?;
-        let mounts = array(member(service, "volumes")?)?;
-        ensure(mounts.len() == 1, "RuntimeProfileError")?;
-        let mount = &mounts[0];
-        ensure(
-            object(mount)?.keys().all(|name| {
-                ["type", "source", "target", "read_only", "bind"].contains(&name.as_str())
-            }) && text(mount, "type")? == "bind"
-                && text(mount, "source")? == socket
-                && text(mount, "target")? == "/run/simplestchat-postgres"
-                && mount.get("read_only").and_then(Json::boolean) == Some(true),
-            "RuntimeProfileError",
-        )?;
-        if let Some(bind) = mount.get("bind") {
-            ensure(
-                bind.object().is_some_and(BTreeMap::is_empty)
-                    || bind.semantic_eq(&fixed(serde_json::json!({"create_host_path":true}))?),
-                "RuntimeProfileError",
-            )?;
-        }
-        let tmpfs = format!(
-            "/tmp:rw,nosuid,nodev,noexec,size={},mode=1777",
-            if name == "migrate" { "32m" } else { "64m" }
-        );
-        ensure(
-            strings(service.get("tmpfs"), &[&tmpfs]),
-            "RuntimeProfileError",
-        )?;
-    }
-    Ok(())
+    use crate::release::profile::{self, Refusal};
+    profile::compose(config, socket, image, true).map_err(|refusal| match refusal {
+        Refusal::Code(_) => "RuntimeProfileError",
+        Refusal::Key => "KeyError",
+        Refusal::Value => "ValueError",
+    })
 }
 pub(super) fn browser_mount(proxy: &Json, store: &str) -> std::result::Result<(), String> {
     let empty = Json::Array(Vec::new());
@@ -311,6 +194,117 @@ pub(super) fn metrics_integer(value: &str) -> Option<Json> {
     } else {
         significant.into()
     }))
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A resolved project whose two managed services run `image` as shipped.
+    fn project(image: &str, sockets: &str) -> serde_json::Value {
+        let service = |migration: bool| {
+            let (switch, size) = if migration {
+                ("true", "32m")
+            } else {
+                ("false", "64m")
+            };
+            json!({"image":image,"user":"10001:10001","read_only":true,"init":true,
+                "cap_drop":["ALL"],"security_opt":["no-new-privileges:true"],
+                "environment":{"RUN_MIGRATIONS":switch},
+                "volumes":[{"type":"bind","source":sockets,
+                    "target":"/run/simplestchat-postgres","read_only":true}],
+                "tmpfs":[format!("/tmp:rw,nosuid,nodev,noexec,size={size},mode=1777")]})
+        };
+        json!({"services":{"simplestchat":service(false),"migrate":service(true)}})
+    }
+
+    /// A deployment judges the application and the migration service by
+    /// the launcher's rules, at its own socket directory, and names a
+    /// refusal as the release engine did: by the kind of the fault.
+    #[test]
+    fn a_project_is_judged_by_the_launchers_rules_and_refused_by_kind() {
+        let image = format!("sha256:{}", "a".repeat(64));
+        let sockets = "/srv/fixture/postgres-socket";
+        let judged = |change: &dyn Fn(&mut serde_json::Value)| {
+            let mut model = project(&image, sockets);
+            change(&mut model);
+            compose(&fixed(model).unwrap(), sockets, &image)
+        };
+        assert_eq!(judged(&|_| ()), Ok(()));
+        let unmet: [&dyn Fn(&mut serde_json::Value); 5] = [
+            &|model| {
+                drop(
+                    model["services"]["simplestchat"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("image"),
+                )
+            },
+            &|model| {
+                drop(
+                    model["services"]["simplestchat"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("user"),
+                )
+            },
+            &|model| model["services"]["migrate"]["read_only"] = json!(false),
+            &|model| model["services"]["migrate"]["environment"]["RUN_MIGRATIONS"] = json!("false"),
+            &|model| {
+                model["services"]["simplestchat"]["volumes"][0]["source"] = json!("/srv/other")
+            },
+        ];
+        for change in unmet {
+            assert_eq!(judged(change), Err("RuntimeProfileError"));
+        }
+        let absent: [&dyn Fn(&mut serde_json::Value); 4] = [
+            &|model| drop(model.as_object_mut().unwrap().remove("services")),
+            &|model| drop(model["services"].as_object_mut().unwrap().remove("migrate")),
+            &|model| {
+                drop(
+                    model["services"]["simplestchat"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("environment"),
+                )
+            },
+            &|model| {
+                drop(
+                    model["services"]["migrate"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("volumes"),
+                )
+            },
+        ];
+        for change in absent {
+            assert_eq!(judged(change), Err("KeyError"));
+        }
+        let shaped: [&dyn Fn(&mut serde_json::Value); 3] = [
+            &|model| model["services"] = json!([]),
+            &|model| model["services"]["simplestchat"] = json!("service"),
+            &|model| model["services"]["migrate"]["volumes"] = json!({}),
+        ];
+        for change in shaped {
+            assert_eq!(judged(change), Err("ValueError"));
+        }
+        // The services are looked for before the image is judged.
+        let model = fixed(project(&image, sockets)).unwrap();
+        assert_eq!(
+            compose(&model, sockets, "latest"),
+            Err("RuntimeProfileError")
+        );
+        assert_eq!(
+            compose(&fixed(json!({})).unwrap(), sockets, "latest"),
+            Err("KeyError")
+        );
+        // Another socket directory is another deployment's.
+        assert_eq!(
+            compose(&model, "/srv/other/postgres-socket", &image),
+            Err("RuntimeProfileError")
+        );
+    }
 }
 
 #[cfg(test)]

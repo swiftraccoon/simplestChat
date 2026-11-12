@@ -1,0 +1,4891 @@
+{
+ "comment": "What the validator raises in process for the documents of recorded_profile.json; see the replay test.",
+ "judged": [
+  {
+   "case": "the managed services pass",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "the managed services pass",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "the managed services pass",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "the managed services pass",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "the image's defaults pass",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "the image identity may be joined to its option",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "the image identity may be joined to its option",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "the image identity may be joined to its option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "the image identity may be joined to its option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a short identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a short identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a short identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a short identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a long identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a long identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a long identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a long identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an upper-case identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an upper-case identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an upper-case identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an upper-case identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an identity without its algorithm selects no image",
+   "code": "runtime_image_selection",
+   "image": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an identity without its algorithm selects no image",
+   "code": "runtime_image_selection",
+   "image": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an identity without its algorithm selects no image",
+   "code": "runtime_image_selection",
+   "image": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an identity without its algorithm selects no image",
+   "code": "runtime_image_selection",
+   "image": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a tag selects no image",
+   "code": "runtime_image_selection",
+   "image": "simplestchat-release/production:latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a tag selects no image",
+   "code": "runtime_image_selection",
+   "image": "simplestchat-release/production:latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a tag selects no image",
+   "code": "runtime_image_selection",
+   "image": "simplestchat-release/production:latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a tag selects no image",
+   "code": "runtime_image_selection",
+   "image": "simplestchat-release/production:latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an identity with a line end selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an identity with a line end selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an identity with a line end selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an identity with a line end selects no image",
+   "code": "runtime_image_selection",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an empty identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an empty identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "an empty identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "an empty identity selects no image",
+   "code": "runtime_image_selection",
+   "image": "",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "another image than the services' is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "another image than the services' is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "another image than the services' is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "another image than the services' is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a document of exactly two mebibytes passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a document of exactly two mebibytes passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a document of exactly two mebibytes passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a document of exactly two mebibytes passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a byte-order mark is skipped",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image whose User is variant 0 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose User is variant 1 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose User is variant 2 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose User is variant 3 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose User is variant 4 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image without User is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose WorkingDir is variant 0 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose WorkingDir is variant 1 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose WorkingDir is variant 2 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose WorkingDir is variant 3 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image without WorkingDir is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Cmd is variant 0 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Cmd is variant 1 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Cmd is variant 2 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Cmd is variant 3 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Cmd is variant 4 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image without Cmd is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Entrypoint is variant 0 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Entrypoint is variant 1 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Entrypoint is variant 2 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Entrypoint is variant 3 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Entrypoint is variant 4 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image without Entrypoint passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image whose Healthcheck is variant 0 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Healthcheck is variant 1 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Healthcheck is variant 2 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Healthcheck is variant 3 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image whose Healthcheck is variant 4 is refused",
+   "code": "runtime_image_execution",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with an empty entrypoint passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image with a null health check passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image without an environment is refused",
+   "kind": "image",
+   "raised": "KeyError"
+  },
+  {
+   "case": "an image with a null environment is refused",
+   "kind": "image",
+   "raised": "ValueError"
+  },
+  {
+   "case": "an image with an environment that is an object is refused",
+   "kind": "image",
+   "raised": "ValueError"
+  },
+  {
+   "case": "an image with a numeric environment entry is refused",
+   "kind": "image",
+   "raised": "ValueError"
+  },
+  {
+   "case": "an image with an entry that assigns nothing is refused",
+   "code": "runtime_environment_assignment",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with an empty entry is refused",
+   "code": "runtime_environment_assignment",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a repeated name is refused",
+   "code": "runtime_environment_duplicate",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a loader override is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with an empty loader override is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a crypto-provider override is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with allocator tunables is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a conversion-module path is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a locale path is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a name starting with a digit is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a name holding a hyphen is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with an empty name is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a name holding a blank is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a non-ASCII name is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with a name ending in a line end is refused",
+   "code": "runtime_environment_override",
+   "kind": "image",
+   "raised": "RuntimeProfileError"
+  },
+  {
+   "case": "an image with an empty environment passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image with a lower-case loader-like name passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image with a name that only contains a forbidden one passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "an image with an underscore name passes",
+   "kind": "image",
+   "raised": null
+  },
+  {
+   "case": "simplestchat on another image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat on another image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat on another image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat on another image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a lifecycle hook is refused",
+   "code": "runtime_compose_fields",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a lifecycle hook is refused",
+   "code": "runtime_compose_fields",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a lifecycle hook is refused",
+   "code": "runtime_compose_fields",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a lifecycle hook is refused",
+   "code": "runtime_compose_fields",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat as root is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat as root is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat as root is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat as root is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat writable is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat writable is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat writable is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat writable is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's migration switch is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's migration switch is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's migration switch is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's migration switch is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's temporary size is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's temporary size is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's temporary size is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with the other service's temporary size is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "simplestchat with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate on another image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate on another image is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate on another image is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate on another image is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with a lifecycle hook is refused",
+   "code": "runtime_compose_fields",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with a lifecycle hook is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with a lifecycle hook is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with a lifecycle hook is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate as root is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate as root is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate as root is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate as root is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate writable is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate writable is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate writable is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate writable is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's migration switch is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's migration switch is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's migration switch is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's migration switch is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's temporary size is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's temporary size is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's temporary size is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with the other service's temporary size is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with a second mount is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "migrate with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "migrate with a second mount is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field build is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field build is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field build is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field build is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field cpus is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field cpus is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field cpus is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field cpus is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field depends_on is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field depends_on is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field depends_on is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field depends_on is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field healthcheck is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field healthcheck is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field healthcheck is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field healthcheck is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field labels is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field labels is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field labels is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field labels is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field logging is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field logging is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field logging is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field logging is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field mem_limit is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field mem_limit is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field mem_limit is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field mem_limit is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field network_mode is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field network_mode is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field network_mode is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field network_mode is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field ports is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field ports is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field ports is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field ports is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field profiles is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field profiles is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field profiles is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field profiles is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field stop_grace_period is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field stop_grace_period is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field stop_grace_period is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field stop_grace_period is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field ulimits is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field ulimits is admitted",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a known field ulimits is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a known field ulimits is admitted",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose user is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose working directory is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose command is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose entrypoint is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 0 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 1 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 2 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 3 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose health check is variant 4 is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose read-only flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose init flag is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 4 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 4 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 4 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose dropped capabilities is variant 4 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 0 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 1 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 2 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose security options is variant 3 is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 0 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 0 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 0 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 0 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 3 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 3 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 3 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 3 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 4 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 4 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 4 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 4 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 5 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 5 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 5 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 5 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 6 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 6 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 6 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 6 is refused",
+   "code": "runtime_environment_override",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 7 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 7 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 7 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose environment is variant 7 is refused",
+   "code": "runtime_compose_environment",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 1 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 2 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 3 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 3 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 3 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose mounts is variant 3 is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 0 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 0 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 0 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 1 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 1 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 1 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 1 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 2 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 2 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 2 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 2 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 3 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 3 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 3 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 3 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 4 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 4 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 4 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 4 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 5 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 5 is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 5 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service whose temporary filesystem is variant 5 is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without image is refused",
+   "code": "runtime_compose_image",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without user is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without user is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without user is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without user is refused",
+   "code": "runtime_compose_execution",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without read_only is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without read_only is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without read_only is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without read_only is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without init is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without init is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without init is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without init is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without cap_drop is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without cap_drop is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without cap_drop is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without cap_drop is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without security_opt is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without security_opt is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without security_opt is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without security_opt is refused",
+   "code": "runtime_compose_isolation",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without environment is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without environment is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without environment is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without environment is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without volumes is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without volumes is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without volumes is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without volumes is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without tmpfs is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without tmpfs is refused",
+   "code": "runtime_compose_tmpfs",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without tmpfs is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without tmpfs is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without working_dir passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without working_dir passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without working_dir passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without working_dir passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without command passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without command passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without command passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without command passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without entrypoint passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without entrypoint passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service without entrypoint passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service without entrypoint passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service with an empty entrypoint passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service with an empty entrypoint passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service with an empty entrypoint passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service with an empty entrypoint passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service with a null health check passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service with a null health check passes",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a service with a null health check passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a service with a null health check passes",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount of another type",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount of another type",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount of another type",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount of another type",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount from another source",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount from another source",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount from another source",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount from another source",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount from a source with a trailing separator",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount from a source with a trailing separator",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount from a source with a trailing separator",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount from a source with a trailing separator",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount to another target",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount to another target",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount to another target",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount to another target",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount that is writable",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount that is writable",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount that is writable",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount that is writable",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a consistency option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a consistency option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a consistency option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a consistency option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with other bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with other bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with other bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with other bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a false create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a false create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a false create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a false create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric create flag",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric create flag",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a numeric create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a fractional create flag",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a fractional create flag",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a fractional create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a fractional create flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a null bind option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a null bind option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with a null bind option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with a null bind option",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with empty bind options",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with empty bind options",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount with empty bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount with empty bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount without bind options",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount without bind options",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount without bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount without bind options",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount without its read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount without its read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a mount without its read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a mount without its read-only flag",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without services is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without services is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without services is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without services is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose services are a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose services are a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose services are a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose services are a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without the application is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without the application is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without the application is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without the application is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without the migration service is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without the migration service is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model without the migration service is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model without the migration service is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose application is a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose application is a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose application is a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose application is a list is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "ValueError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose migration service is null is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "ValueError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose migration service is null is refused",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": null,
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a model whose migration service is null is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a model whose migration service is null is refused",
+   "code": "runtime_compose_mounts",
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a wrong image identity is named before a wrong service",
+   "code": "runtime_image_selection",
+   "image": "latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a wrong image identity is named before a wrong service",
+   "code": "runtime_image_selection",
+   "image": "latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "a wrong image identity is named before a wrong service",
+   "code": "runtime_image_selection",
+   "image": "latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "a wrong image identity is named before a wrong service",
+   "code": "runtime_image_selection",
+   "image": "latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "RuntimeProfileError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "missing services are named before a wrong image identity",
+   "image": "latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "missing services are named before a wrong image identity",
+   "image": "latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/simplestchat-public/postgres-socket"
+  },
+  {
+   "case": "missing services are named before a wrong image identity",
+   "image": "latest",
+   "kind": "compose",
+   "migration": true,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  },
+  {
+   "case": "missing services are named before a wrong image identity",
+   "image": "latest",
+   "kind": "compose",
+   "migration": false,
+   "raised": "KeyError",
+   "socket": "/srv/other/postgres-socket"
+  }
+ ]
+}

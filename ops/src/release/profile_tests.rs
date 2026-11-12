@@ -50,6 +50,61 @@ fn every_recorded_judgement_is_replayed() {
     assert_eq!((held, refused, usage, misuse), (33, 161, 5, 3));
 }
 
+/// Five hundred and seventy-five judgements of the Python validator called
+/// in process, as the release engine and the reboot helper called it: every
+/// object document of the command-line recording, for the application alone
+/// and with the migration service, at the fixed socket directory and at
+/// another. Each is refused for the recorded reason: a fixed code, a field
+/// that is not there or a value of the wrong shape.
+#[test]
+fn every_recorded_in_process_judgement_is_replayed() {
+    let documents: Value = serde_json::from_str(include_str!("recorded_profile.json")).unwrap();
+    let documents = documents["cases"].as_array().unwrap();
+    let recorded = include_str!("recorded_profile_inprocess.json");
+    let recorded: Value = serde_json::from_str(recorded).unwrap();
+    let judged = recorded["judged"].as_array().unwrap();
+    assert_eq!(judged.len(), 575);
+    let (mut held, mut coded, mut absent, mut shaped) = (0, 0, 0, 0);
+    for item in judged {
+        let name = item["case"].as_str().unwrap();
+        let mut named = documents.iter().filter(|case| case["name"] == name);
+        let case = named.next().unwrap_or_else(|| panic!("{name}"));
+        assert!(named.next().is_none(), "{name}");
+        let document = json::decode_limited(&input(&case["input"]), MAX_CONFIGURATION).unwrap();
+        let answer = match item["kind"].as_str().unwrap() {
+            "image" => image(&document),
+            _ => {
+                let sockets = item["socket"].as_str().unwrap();
+                let selected = item["image"].as_str().unwrap();
+                let migration = item["migration"].as_bool().unwrap();
+                compose(&document, sockets, selected, migration)
+            }
+        };
+        let expected = match item["raised"].as_str() {
+            None => Ok(()),
+            Some("RuntimeProfileError") => {
+                let code = item["code"].as_str().unwrap();
+                // The answer's own code, when it is the recorded one.
+                Err(match answer {
+                    Err(Refusal::Code(said)) if said == code => Refusal::Code(said),
+                    _ => Refusal::Code("another code"),
+                })
+            }
+            Some("KeyError") => Err(Refusal::Key),
+            Some("ValueError") => Err(Refusal::Value),
+            Some(other) => panic!("{name}: {other}"),
+        };
+        assert_eq!(answer, expected, "{name}: {item}");
+        match answer {
+            Ok(()) => held += 1,
+            Err(Refusal::Code(_)) => coded += 1,
+            Err(Refusal::Key) => absent += 1,
+            Err(Refusal::Value) => shaped += 1,
+        }
+    }
+    assert_eq!((held, coded, absent, shaped), (66, 451, 22, 36));
+}
+
 /// The fields a service may carry are the reviewed ones, each named once.
 #[test]
 fn the_reviewed_service_fields_are_distinct() {
