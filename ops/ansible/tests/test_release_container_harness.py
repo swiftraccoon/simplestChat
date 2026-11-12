@@ -219,10 +219,11 @@ def outcome_command(
     """Bind a release response to one loop case without dynamically typed callbacks."""
 
     def invoke(args: list[str], **kwargs: Unpack[CommandOptions]) -> TextResult:
+        limits = ["--timeout-seconds", "900", "--finalization-seconds", "60"]
         testcase.assertEqual(
-            args[-3:], [str(harness_module.FILES / "release-public.py"), "deploy", REVISION]
+            args, [harness_module.OPS, "release", "deploy", "--revision", REVISION, *limits]
         )
-        testcase.assertEqual(kwargs, {"timeout": 180, "success": False})
+        testcase.assertEqual(kwargs, {"timeout": 240, "success": False})
         attempt = root / "results" / "release.owned"
         attempt.mkdir()
         _ = (attempt / "outcome.json").write_text(json.dumps(outcome), encoding="utf-8")
@@ -1005,7 +1006,7 @@ class HarnessEvidenceTests(HarnessTestCase):
                     if execution_passes
                     else {
                         "number": 7,
-                        "operation": "release-public.py deploy",
+                        "operation": "simplestchat-ops release deploy",
                         "exitStatus": 1,
                     }
                 )
@@ -1060,7 +1061,7 @@ class HarnessValidatorDiagnosticTests(HarnessTestCase):
         harness.commands = FakeCommands()
         harness.commands.last_failure = {
             "number": 56,
-            "operation": "release-public.py stage",
+            "operation": "simplestchat-ops release stage",
             "exitStatus": 1,
         }
         attempt = harness.private / "release-attempt"
@@ -1400,14 +1401,8 @@ class HarnessCommandTests(HarnessTestCase):
                 "docker image inspect",
             ),
             (
-                [
-                    sys.executable,
-                    "-B",
-                    str(harness_module.FILES / "release-public.py"),
-                    "deploy",
-                    REVISION,
-                ],
-                "release-public.py deploy",
+                [harness_module.OPS, "release", "deploy", "--revision", REVISION],
+                "simplestchat-ops release deploy",
             ),
         ]
         for index, (arguments, operation) in enumerate(cases):

@@ -1152,6 +1152,15 @@ jobs:
             cargo build --locked -p simplestchat-ci --features release-http-policy \
               --target-dir "$RUNNER_TEMP/release-http-policy-build"
 
+      # The release checks run the Ops executable by the path a signed release
+      # installs it at on a prepared host; here it is this job's own build.
+      - name: Install the source-built Ops executable where a prepared host keeps it
+        timeout-minutes: 1
+        run: |
+          sudo install -D -o root -g root -m 0755 \
+            "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" \
+            /usr/local/libexec/simplestchat-public/simplestchat-ops
+
       - name: App-only release and rollback on a disposable host
         timeout-minutes: 20
         env:

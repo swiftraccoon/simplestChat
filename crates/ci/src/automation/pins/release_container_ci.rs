@@ -9,6 +9,9 @@ const COMPOSE_TOOL: &str = "Install checksum-pinned production Compose";
 const PREPARE: &str = "Install isolated release-container checks";
 const PREPARE_START: &str = "Start the isolated release-container controller build";
 const INTEGRATION: &str = "App-only release and rollback on a disposable host";
+const CONTROLLER: &str = "Prepare the source-built native release controller";
+const INSTALLED: &str = "Install the source-built Ops executable where a prepared host keeps it";
+const HARNESS: &str = "build/release_container_harness.py";
 const RETENTION: &str = "Preserve sanitized release-container report";
 const LOCAL_DIAGNOSTICS: &str = "Preserve private local release-container diagnostics";
 const EXPORT: &str = "Export the tested immutable production image";
@@ -125,6 +128,43 @@ fn fresh_host_and_job_deadline_include_the_existing_build() {
     assert_eq!(job["timeout-minutes"], 95);
     assert!(lacks(job, &["container", "services", "continue-on-error"]));
     assert_eq!(job["env"]["PRODUCTION_IMAGE"], "simplestchat-ci:production");
+}
+
+/// The release integration runs the Ops executable this job built, by the
+/// path a signed release installs it at on a prepared host: root's, mode
+/// 0755, installed once, unconditionally, after it is built and before the
+/// integration. The harness names that path and no interpreter-run release
+/// helper.
+#[test]
+fn the_release_integration_runs_the_installed_source_built_ops_executable() {
+    let deployment = Deployment::read();
+    assert!(deployment.ordered(&[CONTROLLER, BUILD, INSTALLED, INTEGRATION]));
+    assert_eq!(deployment.at(INSTALLED) + 1, deployment.at(INTEGRATION));
+    let built = concat!(
+        "cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \\\n",
+        "  --target-dir \"$RUNNER_TEMP/release-builder-build\"",
+    );
+    assert!(script(deployment.step(CONTROLLER)).contains(built));
+    let installed = deployment.step(INSTALLED);
+    assert_eq!(
+        installed["run"],
+        concat!(
+            "sudo install -D -o root -g root -m 0755 \\\n",
+            "  \"$RUNNER_TEMP/release-builder-build/release/simplestchat-ops\" \\\n",
+            "  /usr/local/libexec/simplestchat-public/simplestchat-ops\n",
+        )
+    );
+    assert_eq!(installed["timeout-minutes"], 1);
+    assert!(lacks(
+        installed,
+        &["if", "continue-on-error", "env", "shell"]
+    ));
+    let harness = checkout_file(HARNESS);
+    let path = "OPS = \"/usr/local/libexec/simplestchat-public/simplestchat-ops\"\n";
+    assert_eq!(harness.matches(path).count(), 1);
+    let invocation = "[OPS, \"release\", action, \"--revision\", candidate[\"revision\"], *limits]";
+    assert_eq!(harness.matches(invocation).count(), 1);
+    assert!(!harness.contains("release-public.py"));
 }
 
 /// From `test_existing_image_is_built_and_smoked_once_before_release_integration`.

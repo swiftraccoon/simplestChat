@@ -1560,9 +1560,13 @@ processes cover cancellation, timeout, overflow, original-seal mutation and
 all-attempt retirement. They never contact a Docker daemon or TLS endpoint.
 
 CI also runs `build/test-release-container.py` against that existing production
-image, using the real release helper and public deployment templates. It checks
-a successful replacement, failed candidate startup and rollback while requiring
-PostgreSQL and Caddy to stay running.
+image, using the public deployment templates and the Ops executable the same job
+built, installed where a signed release puts it on a prepared host
+(`/usr/local/libexec/simplestchat-public/simplestchat-ops`). Every stage and
+deployment of the check is `simplestchat-ops release stage|deploy` by that path.
+It checks a successful replacement, failed candidate startup and rollback while
+requiring PostgreSQL and Caddy to stay running. One case still calls the Python
+release helper in process: the same-image restart with the relay's settings.
 
 The same hosted fixture holds two Chromium documents across upgrade and rollback.
 Each first imports its edition-specific deferred chunk only after the selected
@@ -1641,9 +1645,13 @@ Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,
 remains Linux/AMD64; an ARM64 fixture host needs AMD64 emulation. Use the CI-pinned
 Node/npm installation, install `web/e2e` with `npm ci --ignore-scripts`, and install
 its pinned Chromium with `npm --prefix web/e2e exec -- playwright install --with-deps chromium`.
-Pass both executable paths explicitly across `sudo`:
+Build the Ops executable and install it at its production path first, then pass
+both browser paths explicitly across `sudo`:
 
 ```sh
+cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops
+sudo install -D -o root -g root -m 0755 target/release/simplestchat-ops \
+  /usr/local/libexec/simplestchat-public/simplestchat-ops
 release_node="$(command -v node)"
 release_chromium="$(node -e 'process.stdout.write(require("./web/e2e/node_modules/playwright").chromium.executablePath())')"
 sudo ops/ansible/.venv/bin/python -B build/test-release-container.py \

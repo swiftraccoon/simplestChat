@@ -1,11 +1,10 @@
-"""Exercise the unchanged release CLI on a fresh disposable Linux Docker host.
+"""Exercise the installed Ops release commands on a fresh disposable Linux Docker host.
 
-Requires root and explicit --disposable-host. Never use this on the public VPS.
-The fixture occupies the production paths only after proving they do not exist,
-and refuses any existing container. Services publish only to loopback. Private
-fixture files and images remain for inspection; only verified owned containers,
-their network and the fixture CA trust entry are removed. report.json is the
-only artifact suitable for CI upload. No reboot or physical media is exercised.
+Requires root and explicit --disposable-host. Never use this on the public VPS. The fixture
+occupies the production paths only after proving them absent, and refuses any existing container.
+Services publish only to loopback. Private fixture files and images remain for inspection; only
+verified owned containers, their network and the fixture CA trust entry are removed. report.json is
+the only artifact suitable for CI upload. No reboot or physical media is exercised.
 """
 
 from __future__ import annotations
@@ -52,7 +51,7 @@ if TYPE_CHECKING:
     from typing import BinaryIO
 
 PROJECT = Path(__file__).resolve().parents[1]
-FILES = PROJECT / "ops/ansible/files"
+OPS = "/usr/local/libexec/simplestchat-public/simplestchat-ops"
 
 CONFIG, ROOT, WORK = release.CONFIG, release.ROOT, release.WORK
 FIXED_PATHS = (CONFIG, ROOT, WORK, Path("/srv/simplestchat-bench"))
@@ -368,8 +367,8 @@ class Commands:
                 operation = "docker " + verb
                 if verb in ("image", "network", "buildx"):
                     operation += " " + args[len(release.DOCKER) + 1]
-            elif str(FILES / "release-public.py") in args:
-                operation = "release-public.py " + args[-2]
+            elif args[0] == OPS:
+                operation = "simplestchat-ops release " + args[2]
             self.last_failure = {
                 "number": self.sequence,
                 "operation": operation,
@@ -1277,9 +1276,10 @@ class Harness:
     ) -> tuple[Path, JsonObject]:
         """Run one real release attempt and preserve its original, identity-bound result."""
         before = set((ROOT / "results").glob("release.*"))
+        limits = ["--timeout-seconds", "900", "--finalization-seconds", "60"]
         command = self.commands.run(
-            [sys.executable, "-B", str(FILES / "release-public.py"), action, candidate["revision"]],
-            timeout=180,
+            [OPS, "release", action, "--revision", candidate["revision"], *limits],
+            timeout=240,
             success=False,
         )
         attempts = set((ROOT / "results").glob("release.*")) - before

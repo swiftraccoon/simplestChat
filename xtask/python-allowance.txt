@@ -1,4 +1,4 @@
-total 101034
+total 101029
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -115,7 +115,7 @@ total 101034
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
 400	ops/ansible/tests/test_release_container_fixture.py
-1906	ops/ansible/tests/test_release_container_harness.py
+1901	ops/ansible/tests/test_release_container_harness.py
 93	ops/ansible/tests/test_release_container_policy.py
 893	ops/ansible/tests/test_release_fetch.py
 924	ops/ansible/tests/test_release_fetch_controller.py
