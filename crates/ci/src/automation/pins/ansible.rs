@@ -130,6 +130,16 @@ pub(super) fn render(
     vars_file: &str,
     overrides: &Value,
 ) -> BTreeMap<String, String> {
+    rendered(names, &[vars_file], overrides)
+}
+
+/// Render templates with exactly `variables`, as a host that has those
+/// values renders them; a value a template needs and is not given fails.
+pub(super) fn render_with(names: &[&str], variables: &Value) -> BTreeMap<String, String> {
+    rendered(names, &[], variables)
+}
+
+fn rendered(names: &[&str], vars_files: &[&str], overrides: &Value) -> BTreeMap<String, String> {
     let source = root().join("ops/ansible/templates");
     let tasks = json!([{
         "ansible.builtin.template": {
@@ -139,7 +149,7 @@ pub(super) fn render(
         },
         "loop": names,
     }]);
-    let scratch = play(&tasks, overrides, &[vars_file]);
+    let scratch = play(&tasks, overrides, vars_files);
     let rendered = |name: &&str| {
         let text = std::fs::read_to_string(scratch.path().join(name)).unwrap();
         ((*name).to_owned(), text)

@@ -55,41 +55,21 @@
       changed_when: false
       check_mode: false
 
-    - name: Require reviewed installed helpers and the selected relay identity before activation
+    - name: Read the selected relay identity before activation
       tags: [always]
       when: scpub_turn_activate | bool
-      ansible.builtin.command:
-        argv:
-          - /usr/bin/python3
-          - -c
-          - |
-            import hashlib, json, stat, sys
-            from pathlib import Path
-            expected = json.loads(sys.argv[1])
-            for name, digest in expected.items():
-                path = Path('/usr/local/libexec/simplestchat-public') / name
-                metadata = path.lstat()
-                if not (stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0):
-                    raise SystemExit('Operational precondition failed')
-                if not (stat.S_IMODE(metadata.st_mode) == 0o644):
-                    raise SystemExit('Operational precondition failed')
-                if not (hashlib.sha256(path.read_bytes()).hexdigest() == digest):
-                    raise SystemExit('Installed relay helpers differ')
-            selected = json.loads(Path('/etc/simplestchat-turn/settings.json').read_text())
-            if not ({key: selected[key] for key in ('domain', 'image')} == json.loads(sys.argv[2])):
-                raise SystemExit('Selected relay identity differs')
-          - >-
-            {{ {
-              'turn_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/turn_public.py', rstrip=false) | hash('sha256'),
-              'bounded_process.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/bounded_process.py', rstrip=false) | hash('sha256'),
-              'runtime_profile.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/runtime_profile.py', rstrip=false) | hash('sha256'),
-              'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
-              'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
-              'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256')
-            } | to_json }}
-          - "{{ {'domain': scpub_domain, 'image': scpub_turn_image} | to_json }}"
-      changed_when: false
-      check_mode: false
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-turn/settings.json
+      register: scpub_turn_selected
+
+    - name: Require the selected relay identity before activation
+      tags: [always]
+      when: scpub_turn_activate | bool
+      ansible.builtin.assert:
+        that:
+          - (scpub_turn_selected.content | b64decode | from_json).domain == scpub_domain
+          - (scpub_turn_selected.content | b64decode | from_json).image == scpub_turn_image
+        fail_msg: Selected relay identity differs
 
   tasks:
     - name: Prepare the separately owned relay without advertising it to clients
@@ -212,21 +192,6 @@
             group: root
             mode: '0600'
 
-        - name: Install the reviewed relay and release implementations
-          ansible.builtin.copy:
-            src: "{{ item }}"
-            dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
-            owner: root
-            group: root
-            mode: '0644'
-          loop:
-            - bounded_process.py
-            - runtime_profile.py
-            - turn_public.py
-            - release_public.py
-            - release_artifact.py
-            - release_json.py
-
         - name: Prepare a verified copy of the current Caddy certificate
           ansible.builtin.command:
             argv: [/usr/local/libexec/simplestchat-public/simplestchat-ops, turn, prepare-certificate]
@@ -290,15 +255,21 @@
             enabled: true
             state: started
 
+    # The certificate is refreshed and the relay verified first; the
+    # application is then restarted as the release it already runs, with its
+    # backup, its bounded wait for rooms to empty and its one rollback.
     - name: Activate the externally verified relay with bounded application rollback
       when: scpub_turn_activate | bool
       ansible.builtin.command:
         argv: >-
           {{ ['systemd-run', '--wait', '--collect', '--unit=simplestchat-turn-activate',
-              '--property=Type=exec', '--property=RuntimeMaxSec=900', '--property=TimeoutStopSec=90',
-              '/usr/bin/python3', '-B', '/usr/local/libexec/simplestchat-public/turn_public.py',
-              'activate'] +
+              '--property=Type=exec', '--property=RuntimeMaxSec=1980', '--property=TimeoutStopSec=240',
+              '/usr/local/libexec/simplestchat-public/simplestchat-ops', 'turn', 'activate'] +
              (['--verify-address', scpub_turn_verify_address]
               if scpub_turn_verify_address | default('') | length > 0 else []) }}
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: true
-      timeout: 1050
+      timeout: 2280

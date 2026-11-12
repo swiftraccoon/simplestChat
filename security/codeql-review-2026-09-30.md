@@ -1493,3 +1493,31 @@ remediate. The native probe hands the handshake to the host's
 
 No query, path or test is excluded and no remote alert state changed; hosted
 ingestion remains a separate required check.
+
+## Retired: the Python relay helper (2026-11-12)
+
+`ops/ansible/files/turn_public.py` and `ops/ansible/tests/test_turn_public.py`
+are deleted: the installed Ops executable prepares and refreshes the relay's
+certificate, enables its metrics and activates it
+(`simplestchat-ops turn ...`), and the relay playbook copies no helper module
+to a host. The test's template checks moved to the Rust pins beside the
+playbook's.
+
+Alert 26's fix-pending record (`py/insecure-protocol` at line 298 of the
+helper, the relay verification's default context, whose next line already
+required TLS 1.2) keeps its 2026-09-30 observation in the review JSON, as
+alerts 24 and 25 do. It has no exception and no expiry, and with the file gone
+there is no source left to remediate. The native verification hands the
+handshake to the host's `openssl s_client` with `-no_tls1 -no_tls1_1`,
+hostname verification and `-verify_return_error`.
+
+Alerts 19 to 23 (`py/clear-text-storage-sensitive-data` in the test, five
+writes of public repeated-character TURN values into a temporary directory)
+keep their false-positive records in the review JSON and their exceptions in
+`security/exceptions.json`: the reviewed alert set binds each of them to a
+permitted exception, and an exact-path record for a deleted file can match
+nothing. The native tests build the same public fixture values with
+`"a".repeat(64)` in scratch directories they remove.
+
+No query, path or test is excluded and no remote alert state changed; hosted
+ingestion remains a separate required check.

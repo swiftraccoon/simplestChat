@@ -1288,9 +1288,20 @@ pub(super) fn lifecycle(
     whole: Duration,
     operation: impl FnOnce() -> (bool, Option<Owner>),
 ) -> ExitCode {
-    let Some(end) = started.checked_add(whole) else {
-        return ExitCode::from(2);
-    };
+    match settled(started, whole, operation) {
+        None => ExitCode::from(2),
+        Some(true) => ExitCode::SUCCESS,
+        Some(false) => ExitCode::FAILURE,
+    }
+}
+/// Whether one bounded operation passed, closed everything it owned and
+/// ended inside its whole budget; nothing for a budget no clock can hold.
+pub(super) fn settled(
+    started: Instant,
+    whole: Duration,
+    operation: impl FnOnce() -> (bool, Option<Owner>),
+) -> Option<bool> {
+    let end = started.checked_add(whole)?;
     let mask = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
     let (passed, owner) = operation();
     nix::sys::stat::umask(mask);
@@ -1304,11 +1315,7 @@ pub(super) fn lifecycle(
         }
         None => completed,
     };
-    if passed && finished.is_ok() && completed < end {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    }
+    Some(passed && finished.is_ok() && completed < end)
 }
 /// Stage one received immutable image on the fixed prepared Linux host.
 ///

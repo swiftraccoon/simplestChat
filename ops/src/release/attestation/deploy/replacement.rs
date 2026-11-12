@@ -88,7 +88,20 @@ impl State {
             .await;
         self.commands = self.stage.command_count();
         checked?;
-        if maintenance.is_none() {
+        if options.relay.is_some() {
+            // The caller named the selected release before this operation
+            // held the lock; another release may have been selected since.
+            // Both images were just inspected as their revisions', so the
+            // same image is the same release.
+            let selected = old_image == new_image;
+            self.policy(
+                owner,
+                ensure(
+                    selected,
+                    "Relay activation restarts only the selected release",
+                ),
+            )?;
+        } else if maintenance.is_none() {
             self.policy(
                 owner,
                 ensure(old_image != new_image, "This image is already selected"),
@@ -285,7 +298,8 @@ impl State {
             }
             selected
         } else {
-            self.candidate(access, &old, &new_image, owner, executor)
+            let relay = options.relay.as_ref();
+            self.candidate(access, &old, &new_image, relay, owner, executor)
                 .await?
         };
         let images = if old_revision == options.revision {

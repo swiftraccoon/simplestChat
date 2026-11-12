@@ -323,12 +323,13 @@ and sends SIGUSR2; active allocations are retained. Configuration preparation
 requires the relay to be stopped, but the application and HTTPS remain running.
 Serialize this operation with releases and other host maintenance.
 
-The certificate steps and the timer run the installed Ops executable
-(`simplestchat-ops turn prepare-certificate|refresh-certificate`, described in
-the [Ops guide](../README.md#relay-certificate-and-metrics)), so the host needs
-a signed release first: any `release.yml` run for a signed revision delivers
-the executable, staging alone is enough, and the playbook refuses before any
-effect when it is absent.
+The certificate steps, the timer and the activation run the installed Ops
+executable (`simplestchat-ops turn prepare-certificate|refresh-certificate|activate`,
+described in the [Ops guide](../README.md#relay-certificate-metrics-and-activation)),
+so the host needs a signed release first: any `release.yml` run for a signed
+revision delivers the executable, staging alone is enough, and the playbook
+refuses before any effect when it is absent. The playbook copies no helper
+module to the host.
 
 Verify authenticated allocations externally over UDP, TCP and trusted TLS, then
 enable the relay for clients:
@@ -339,13 +340,20 @@ ANSIBLE_CONFIG=ops/ansible/ansible.cfg ops/ansible/.venv/bin/ansible-playbook \
   -e scpub_turn_activate=true
 ```
 
-Activation waits up to ten minutes for active rooms, then backs up the database
+Activation first refreshes the certificate and requires the relay to present
+it. It then waits up to ten minutes for active rooms, backs up the database
 and replaces only the application with the **same image**, adding the three
-reviewed TURN environment values. PostgreSQL and Caddy stay running. It uses the
-release journal, readiness checks and bounded rollback, and retains evidence in
-`/srv/simplestchat-public/results/turn.*`. Inspect its `outcome.json`; starting a
-systemd unit is not proof of success. Repeated activation of the same settings
-does not restart the app. Secret rotation is separate maintenance.
+reviewed TURN environment values. PostgreSQL and Caddy stay running. The
+replacement is the ordinary app-only deployment of the selected release, with
+its release journal, readiness checks and bounded rollback. The step may run
+for up to 33 minutes, most of it the wait for rooms and the time reserved for
+a rollback. Evidence is retained in two directories:
+`/srv/simplestchat-public/results/turn.*` for the relay check and the verdict
+of the whole activation, and `results/release.*` for the replacement, whose
+`outcome.json` says `"action": "activate"`. Inspect both; starting a systemd
+unit is not proof of success. Repeated activation of the same settings does
+not restart the app. An environment that already has any `TURN_` line that
+differs is refused: secret rotation is separate maintenance.
 
 The relay permits four allocations per credential; its total allocation quota
 defaults to `MAX_CONNECTIONS`. The default per-session ceiling is 500,000

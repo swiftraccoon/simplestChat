@@ -13,6 +13,9 @@ pub(super) mod maintenance;
 mod maintenance_effect_tests;
 #[path = "maintenance_selection.rs"]
 mod maintenance_selection;
+#[cfg(test)]
+#[path = "relay_effect_tests.rs"]
+mod relay_effect_tests;
 #[path = "replacement.rs"]
 mod replacement;
 #[path = "retention.rs"]
@@ -29,7 +32,7 @@ use super::super::{
     stage,
 };
 use super::{
-    Access, Bulk, CommandOutput, Executor, Invocation, Options, Outcome, Role, budget,
+    Access, Bulk, CommandOutput, Executor, Invocation, Options, Outcome, Relay, Role, budget,
     policy::{self, *},
     records::{self, Record, Records},
     rollback_diagnostic::{Boundary, Stage, Trace},
@@ -227,6 +230,8 @@ struct State {
     maintenance_git: Option<std::path::PathBuf>,
     maintenance_source: Option<std::path::PathBuf>,
     maintenance_evidence: Option<maintenance::Evidence>,
+    /// Where the public origin is reached instead of where its name resolves.
+    address: Option<std::net::IpAddr>,
     #[cfg(test)]
     fault: Option<super::files::Fault>,
 }
@@ -259,6 +264,7 @@ impl State {
             maintenance_git: None,
             maintenance_source: None,
             maintenance_evidence: None,
+            address: None,
             #[cfg(test)]
             fault: access.fault,
         }
@@ -790,7 +796,13 @@ pub(super) async fn execute(
     _started: Instant,
 ) -> Outcome {
     let mut state = State::new(access);
-    let mut report = json!({"action":"deploy","revision":options.revision,
+    state.address = options.relay.as_ref().and_then(|relay| relay.address);
+    let action = if options.relay.is_some() {
+        "activate"
+    } else {
+        "deploy"
+    };
+    let mut report = json!({"action":action,"revision":options.revision,
         "startedAt":timestamp(),"passed":false,"phase":"stage"});
     let operation: Result<()> = async {
         let manifest = state

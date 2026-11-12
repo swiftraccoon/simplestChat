@@ -231,7 +231,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops backup offsite upload|restore|recover ",
                 "[--snapshot ID] [--stamp STAMP]\n",
                 "       simplestchat-ops reboot prepare|resume|cancel\n",
-                "       simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics ",
+                "       simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics|activate ",
                 "[--verify-address IP]\n",
                 "       simplestchat-ops migrate inspect source|target ORIGIN\n",
                 "       simplestchat-ops migrate freeze-source|recover-source --request PATH\n",

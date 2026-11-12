@@ -403,5 +403,7 @@ fn embedded_interpreter_checks_fail_closed_without_assertions() {
             checked += 1;
         }
     }
-    assert!(checked > 20, "{checked}");
+    // The embedded checks that remain, in four playbooks. The number only
+    // goes down: a new check belongs in the Ops executable.
+    assert_eq!(checked, 20);
 }

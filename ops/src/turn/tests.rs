@@ -271,22 +271,45 @@ pub(crate) fn unrecorded(
     }
 }
 
-/// One hundred and seventeen recorded scenarios of the Python helper, replayed
-/// request by request: every command the Rust issues must be the recorded
-/// one with its deadline and its place in the evidence, and receives the
-/// recorded answer; every TLS attempt must go where the recorded one went
-/// and meets the certificate that one met. Each invocation ends as
-/// recorded, prints the recorded lines and failure kind, and leaves the
-/// recorded generations, selection, configuration and outcome.
-#[test]
-fn every_recorded_relay_invocation_is_replayed_request_by_request() {
-    let recorded: Value = serde_json::from_str(include_str!("recorded_turn.json")).unwrap();
+/// What a replayed recording came to.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Replayed {
+    scenarios: usize,
+    invocations: usize,
+    /// Restarts of the application the helper asked for.
+    restarts: usize,
+    /// Restarts the recorder's host refused although its environment
+    /// admitted the relay's settings.
+    failed: usize,
+    /// Restarts refused because a relay setting was already there.
+    configured: usize,
+}
+
+/// Whether nothing holds the workload lock of the scratch host.
+fn unlocked(base: &Path) -> bool {
+    let lock = std::fs::File::open(base.join("run/simplestchat-bench/workload.lock")).unwrap();
+    let exclusive = rustix::fs::FlockOperation::NonBlockingLockExclusive;
+    rustix::fs::flock(&lock, exclusive).is_ok()
+}
+
+/// Replay every scenario of a recording of the Python helper request by
+/// request: every command the Rust issues must be the recorded one with its
+/// deadline and its place in the evidence, and receives the recorded
+/// answer; every TLS attempt must go where the recorded one went and meets
+/// the certificate that one met; every restart of the application must be
+/// the recorded one, asked for with the workload lock given up and nothing
+/// retained yet. Each invocation ends as recorded, prints the recorded
+/// lines and failure kind, and leaves the recorded generations, selection,
+/// configuration and outcome.
+fn replayed(recorded: &Value) -> Replayed {
     let scenarios = recorded["scenarios"].as_array().unwrap();
-    assert_eq!(scenarios.len(), 117);
+    let mut tally = Replayed {
+        scenarios: scenarios.len(),
+        ..Replayed::default()
+    };
     let epoch = recorded["epoch"].as_i64().unwrap();
     let uid = rustix::process::geteuid().as_raw();
     let (proxy_group, relay_group) = groups();
-    let mut invocations = 0;
     for scenario in scenarios {
         let name = scenario["name"].as_str().unwrap();
         let scratch = Scratch::new();
@@ -302,7 +325,7 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
             random: &RANDOM,
         };
         for step in scenario["steps"].as_array().unwrap() {
-            invocations += 1;
+            tally.invocations += 1;
             let words = step["arguments"].as_array().unwrap().iter();
             let words: Vec<OsString> = words.map(|word| word.as_str().unwrap().into()).collect();
             let status = step["status"].as_i64().unwrap();
@@ -321,6 +344,7 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
             let calls = step["calls"].as_array().unwrap();
             let attempts = step["tls"].as_array().unwrap();
             let (position, handshakes) = (Cell::new(0_usize), Cell::new(0_usize));
+            let evidence: RefCell<Option<PathBuf>> = RefCell::new(None);
             let commands = Scripted::new(|asked: &Asked<'_>| {
                 let handshake = |arguments: &[&str]| {
                     let attempt = attempts.get(handshakes.get());
@@ -362,6 +386,10 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
                 }
                 let call = calls.get(position.get());
                 let call = call.unwrap_or_else(|| panic!("{context}: unrecorded {:?}", asked.argv));
+                // The recorder changed its host while this command ran.
+                if step["during"]["call"] == position.get() {
+                    run.alter(&step["during"], epoch);
+                }
                 position.set(position.get() + 1);
                 let line = recorded["commandLines"][index(&call["argv"])]
                     .as_array()
@@ -374,9 +402,10 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
                 assert_eq!(asked.ceiling, Some(2 * 1024 * 1024), "{context}");
                 assert!(asked.input.is_none() && asked.source.is_none(), "{context}");
                 let kept = asked.archive.unwrap();
-                let evidence = kept.parent().unwrap().strip_prefix(base).unwrap();
-                let evidence = run.recorded(evidence.to_str().unwrap());
-                assert_eq!(evidence, call["attempt"].as_str().unwrap(), "{context}");
+                *evidence.borrow_mut() = Some(kept.parent().unwrap().to_owned());
+                let attempt = kept.parent().unwrap().strip_prefix(base).unwrap();
+                let attempt = run.recorded(attempt.to_str().unwrap());
+                assert_eq!(attempt, call["attempt"].as_str().unwrap(), "{context}");
                 let file = kept.file_name().unwrap().to_str().unwrap();
                 assert_eq!(file, format!("{:03}.stdout", position.get()), "{context}");
                 // As on a host, both files exist from before the command starts.
@@ -418,10 +447,54 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
             };
             let holder = (step["busy"] == true).then(|| held_lock(base));
             let privileged = step["euid"] == 0;
-            let (said, outcome) = execute(&site, &request, privileged, |takeover| {
-                Workload::fixture_for(base, uid, takeover)
-            });
+            let none = Vec::new();
+            let restarts = step["deploys"].as_array().unwrap_or(&none);
+            let (restarted, refused) = (Cell::new(0_usize), Cell::new((0_usize, 0_usize)));
+            let restart = |replacement: &Replacement| {
+                let asked = restarts.get(restarted.get());
+                let asked = asked.unwrap_or_else(|| panic!("{context}: an unrecorded restart"));
+                restarted.set(restarted.get() + 1);
+                assert_eq!(asked["revision"], replacement.revision, "{context}");
+                assert_eq!(asked["options"]["quiet_seconds"], 600, "{context}");
+                let address = replacement.relay.address.map(|address| address.to_string());
+                let address = address.map_or(Value::Null, Value::String);
+                assert_eq!(asked["options"]["verify_address"], address, "{context}");
+                let settings = replacement.relay.settings().unwrap();
+                let told: BTreeMap<&str, &str> = settings
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str()))
+                    .collect();
+                assert_eq!(asked["environment"], serde_json::json!(told), "{context}");
+                let selected = std::fs::read(host.paths.config.join("images.json")).unwrap();
+                let selected: Value = serde_json::from_slice(&selected).unwrap();
+                assert_eq!(asked["selected"], selected, "{context}");
+                // The replacement takes the lock for itself, and what the
+                // activation retains says how the replacement ended.
+                assert!(unlocked(base), "{context}");
+                let evidence = evidence.borrow().clone().unwrap();
+                assert!(!evidence.join("outcome.json").exists(), "{context}");
+                let environment = std::fs::read(host.paths.config.join("app.env")).unwrap();
+                let environment = String::from_utf8(environment).unwrap();
+                let (failed, configured) = refused.get();
+                match replacement.relay.appended(&environment) {
+                    Err(refusal) => {
+                        refused.set((failed, configured + 1));
+                        Err(Fault::Refused(refusal.to_owned()))
+                    }
+                    Ok(_) if status == 1 => {
+                        refused.set((failed + 1, configured));
+                        Err(Fault::Refused("Application replacement failed".to_owned()))
+                    }
+                    Ok(_) => Ok(()),
+                }
+            };
+            let lock = |takeover: Takeover<'_>| Workload::fixture_for(base, uid, takeover);
+            let (said, outcome) = execute(&site, &request, privileged, lock, restart);
             drop(holder);
+            assert_eq!(restarted.get(), restarts.len(), "{context}");
+            tally.restarts += restarted.get();
+            tally.failed += refused.get().0;
+            tally.configured += refused.get().1;
             let context = format!("{context}: {outcome:?}");
             assert_eq!(i64::from(outcome.is_err()), status, "{context}");
             assert_eq!(
@@ -446,5 +519,39 @@ fn every_recorded_relay_invocation_is_replayed_request_by_request() {
             assert_eq!(rearmed.get(), usize::from(rolled), "{context}");
         }
     }
-    assert_eq!(invocations, 150);
+    tally
+}
+
+/// One hundred and seventeen recorded scenarios of preparing, refreshing
+/// and giving the relay its metrics, none of which restarts the
+/// application.
+#[test]
+fn every_recorded_relay_invocation_is_replayed_request_by_request() {
+    let recorded: Value = serde_json::from_str(include_str!("recorded_turn.json")).unwrap();
+    let expected = Replayed {
+        scenarios: 117,
+        invocations: 150,
+        ..Replayed::default()
+    };
+    assert_eq!(replayed(&recorded), expected);
+}
+
+/// Fifty-eight recorded activations. An application that already has the
+/// relay's settings is only checked, at the address override when one is
+/// given; any other is restarted as its selected release with exactly the
+/// three settings, unless the selection or its retained manifest is not
+/// what it must be; a restart is refused for an environment that already
+/// has any relay line. The secret is read again after the relay was
+/// verified: five scenarios change it while the relay is told to reload.
+#[test]
+fn every_recorded_activation_is_replayed_request_by_request() {
+    let recorded: Value = serde_json::from_str(include_str!("recorded_activate.json")).unwrap();
+    let expected = Replayed {
+        scenarios: 58,
+        invocations: 115,
+        restarts: 15,
+        failed: 1,
+        configured: 7,
+    };
+    assert_eq!(replayed(&recorded), expected);
 }

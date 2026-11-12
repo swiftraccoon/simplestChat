@@ -14,9 +14,9 @@ use std::{
     rc::Rc,
 };
 
-const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const OLD_REVISION: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const DUMP: &[u8] = b"PGDMP-synthetic-maintenance-listed-backup";
+pub(super) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub(super) const OLD_REVISION: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+pub(super) const DUMP: &[u8] = b"PGDMP-synthetic-maintenance-listed-backup";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fault {
@@ -33,16 +33,16 @@ enum Fault {
     Receipt,
 }
 
-fn id(byte: char) -> String {
+pub(super) fn id(byte: char) -> String {
     byte.to_string().repeat(64)
 }
-fn old_image() -> String {
+pub(super) fn old_image() -> String {
     format!("sha256:{}", id('b'))
 }
-fn digest(bytes: &[u8]) -> String {
+pub(super) fn digest(bytes: &[u8]) -> String {
     super::super::super::files::hex(&Sha256::digest(bytes))
 }
-fn write(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
+pub(super) fn write(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -56,7 +56,7 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
     let closed = nix::unistd::close(file).map_err(io::Error::from);
     result.and(closed)
 }
-fn lock_available(path: &Path) -> io::Result<bool> {
+pub(super) fn lock_available(path: &Path) -> io::Result<bool> {
     let file = OpenOptions::new().read(true).write(true).open(path)?;
     let acquired = rustix::fs::flock(&file, rustix::fs::FlockOperation::NonBlockingLockExclusive);
     let result = match acquired {
@@ -74,7 +74,7 @@ fn release(lease: Lease) -> bool {
     let closed = file.is_some_and(|file| nix::unistd::close(file).is_ok());
     unlocked.is_ok() && closed
 }
-fn migration_rows(values: &BTreeMap<String, String>, packaged: bool) -> Vec<u8> {
+pub(super) fn migration_rows(values: &BTreeMap<String, String>, packaged: bool) -> Vec<u8> {
     values
         .iter()
         .map(|(version, checksum)| {
@@ -87,7 +87,7 @@ fn migration_rows(values: &BTreeMap<String, String>, packaged: bool) -> Vec<u8> 
         .collect::<String>()
         .into_bytes()
 }
-fn asset_tar() -> Vec<u8> {
+pub(super) fn asset_tar() -> Vec<u8> {
     let bytes = b"synthetic-browser-asset";
     let mut builder = tar::Builder::new(Vec::new());
     let mut header = tar::Header::new_gnu();

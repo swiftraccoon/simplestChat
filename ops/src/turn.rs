@@ -2,8 +2,12 @@
 //! project that never owns the database or the proxy. A certificate is
 //! published as an immutable generation of validated bytes and the relay is
 //! told to reload it, which keeps relayed calls; enabling metrics replaces
-//! only the relay, once, with a bounded rollback.
+//! only the relay, once, with a bounded rollback. Activation tells the
+//! application of the relay: after the certificate is refreshed and the
+//! workload lock released, the application is restarted as the release it
+//! already runs, through the bounded application replacement.
 
+mod activate;
 mod publish;
 mod relay;
 mod settings;
@@ -21,6 +25,7 @@ use crate::host::state::{self, Access};
 use crate::host::{Host, Paths, System, emit};
 use crate::json::{InOrder, Json};
 use crate::release::assets::{self, Takeover, Workload};
+use activate::Replacement;
 pub(crate) use publish::Disposable;
 use relay::METRICS_OPTIONS;
 use std::ffi::OsString;
@@ -50,6 +55,7 @@ enum Action {
     Prepare,
     Refresh,
     Metrics,
+    Activate,
 }
 
 impl Action {
@@ -58,6 +64,7 @@ impl Action {
             Self::Prepare => "prepare-certificate",
             Self::Refresh => "refresh-certificate",
             Self::Metrics => "enable-metrics",
+            Self::Activate => "activate",
         }
     }
 }
@@ -177,8 +184,15 @@ fn enable(
 /// What a transaction leaves the caller: what to print, and how it ended.
 type Settled = (String, Result<()>);
 
-/// One transaction under the held workload lock.
-fn transact(site: &Site<'_>, action: Action, address: Option<IpAddr>) -> Settled {
+/// One transaction under the held workload lock. An activation that has to
+/// restart the application hands that over through `replace`, which gives
+/// the lock up first; what follows it only records how the restart ended.
+fn transact(
+    site: &Site<'_>,
+    action: Action,
+    address: Option<IpAddr>,
+    replace: &mut dyn FnMut(&Replacement) -> Result<()>,
+) -> Settled {
     let host = site.host;
     let opened = (|| {
         let hostname = settings::settings(site)?.domain;
@@ -196,27 +210,31 @@ fn transact(site: &Site<'_>, action: Action, address: Option<IpAddr>) -> Settled
         ("passed", Json::Bool(false)),
     ]);
     let mut runner = Numbered(Evidence::new(host, attempt.clone()));
-    let (field, changed) = match action {
-        Action::Metrics => (
-            "metricsChanged",
-            enable(site, &mut runner, &hostname, address),
-        ),
-        Action::Prepare => (
-            "certificateChanged",
-            publish::publish(site, &mut runner, &hostname),
-        ),
-        Action::Refresh => (
-            "certificateChanged",
-            refresh(site, &mut runner, &hostname, address),
-        ),
-    };
     let mut said = String::new();
-    if let Ok(changed) = &changed {
-        set(&mut report, field, Json::Bool(*changed));
-        set(&mut report, "passed", Json::Bool(true));
-        if *changed && action == Action::Metrics {
+    let changed = (|| {
+        let changed = match action {
+            Action::Metrics => enable(site, &mut runner, &hostname, address)?,
+            Action::Prepare => publish::publish(site, &mut runner, &hostname)?,
+            Action::Refresh | Action::Activate => refresh(site, &mut runner, &hostname, address)?,
+        };
+        let field = match action {
+            Action::Metrics => "metricsChanged",
+            _ => "certificateChanged",
+        };
+        set(&mut report, field, Json::Bool(changed));
+        if changed && action == Action::Metrics {
             said.push_str("Relay metrics enabled\n");
         }
+        if action == Action::Activate {
+            let decided = activate::decide(site, &mut runner, &hostname, address, &mut report)?;
+            if let Some(replacement) = decided {
+                replace(&replacement)?;
+            }
+        }
+        Ok(())
+    })();
+    if changed.is_ok() {
+        set(&mut report, "passed", Json::Bool(true));
     }
     set(&mut report, "finishedAt", timestamp(host));
     let written = state::atomic_json(&attempt.join("outcome.json"), &InOrder(&report));
@@ -224,16 +242,19 @@ fn transact(site: &Site<'_>, action: Action, address: Option<IpAddr>) -> Settled
         return (said, Err(Fault::from(failure)));
     }
     said.push_str(&format!("Relay evidence: {}\n", attempt.display()));
-    (said, changed.map(|_| ()))
+    (said, changed)
 }
 
 /// Run one action: admit the request and the caller, take the workload lock
-/// through `lock`, and release it whatever happens under it.
+/// through `lock`, and release it whatever happens under it. `restart`
+/// restarts the application for an activation, after the lock is released:
+/// the replacement takes the lock for itself.
 fn execute(
     site: &Site<'_>,
     request: &Request,
     privileged: bool,
     lock: impl FnOnce(Takeover<'_>) -> std::result::Result<Workload, assets::Failure>,
+    restart: impl FnOnce(&Replacement) -> Result<()>,
 ) -> Settled {
     let admitted = (|| {
         let address = request.address.as_deref().map(str::parse::<IpAddr>);
@@ -257,8 +278,19 @@ fn execute(
         }
         Err(_) => return (String::new(), Err(Fault::Refused(UNFINISHED.to_owned()))),
     };
-    let (said, outcome) = transact(site, request.action, address);
-    let released = workload.finish().map_err(|_| Fault::Kind("OSError"));
+    let (mut held, mut restart) = (Some(workload), Some(restart));
+    let release = |held: &mut Option<Workload>| {
+        let finished = held.take().map_or(Ok(()), Workload::finish);
+        finished.map_err(|_| Fault::Kind("OSError"))
+    };
+    let mut replace = |replacement: &Replacement| {
+        release(&mut held)?;
+        restart
+            .take()
+            .map_or(Ok(()), |restart| restart(replacement))
+    };
+    let (said, outcome) = transact(site, request.action, address, &mut replace);
+    let released = release(&mut held);
     (said, outcome.and(released))
 }
 
@@ -277,7 +309,12 @@ fn parse(arguments: &[OsString]) -> Option<Request> {
         match value {
             Some(value) if address.is_none() => address = Some(value.to_owned()),
             None if action.is_none() && !word.starts_with('-') => {
-                let known = [Action::Prepare, Action::Refresh, Action::Metrics];
+                let known = [
+                    Action::Prepare,
+                    Action::Refresh,
+                    Action::Metrics,
+                    Action::Activate,
+                ];
                 action = Some(known.into_iter().find(|known| known.name() == word)?);
             }
             _ => return None,
@@ -296,8 +333,8 @@ fn complaint(fault: &Fault) -> String {
     format!("Relay operation failed ({kind}); inspect private evidence.\n")
 }
 
-/// Run `turn prepare-certificate|refresh-certificate|enable-metrics` on the
-/// prepared host. A syntax error returns 2 before any effect; what a
+/// Run `turn prepare-certificate|refresh-certificate|enable-metrics|activate`
+/// on the prepared host. A syntax error returns 2 before any effect; what a
 /// transaction has to say is printed also when it failed.
 pub fn run(arguments: &[OsString]) -> ExitCode {
     let Some(request) = parse(arguments) else {
@@ -328,8 +365,16 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
         rearm: &rearm,
     };
     let privileged = rustix::process::geteuid().is_root();
+    let restart = |replacement: &Replacement| {
+        // The replacement answers termination requests itself from here on;
+        // one that arrived before it began stops the activation instead.
+        require(!stop.load(Ordering::SeqCst), commands.refusal)?;
+        let Replacement { revision, relay } = replacement;
+        let restarted = crate::release::deploy::activate(revision, relay.clone());
+        require(restarted, "Application replacement failed")
+    };
     let (said, outcome) = if handled {
-        execute(&site, &request, privileged, Workload::acquire_for)
+        execute(&site, &request, privileged, Workload::acquire_for, restart)
     } else {
         (String::new(), Err(Fault::Kind("OSError")))
     };

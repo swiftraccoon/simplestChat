@@ -3,7 +3,7 @@
 use std::process::{Command, Output};
 
 const FAMILY: &str = concat!(
-    "simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics ",
+    "simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics|activate ",
     "[--verify-address IP]",
 );
 
@@ -18,7 +18,9 @@ fn ops(arguments: &[&str]) -> Output {
 fn malformed_invocations_are_usage_errors_without_effects() {
     for arguments in [
         &["turn"][..],
-        &["turn", "activate"],
+        &["turn", "ACTIVATE"],
+        &["turn", "activate", "now"],
+        &["turn", "activate", "--revision", "PRIVATE_VALUE"],
         &["turn", "certificate"],
         &["turn", "PREPARE-CERTIFICATE"],
         &["turn", "prepare-certificate", "PRIVATE_VALUE"],
@@ -72,6 +74,10 @@ fn refused_requests_get_one_fixed_line_that_names_only_the_kind() {
             &["turn", "--verify-address=192.0.2.300", "enable-metrics"],
             "ValueError",
         ),
+        (
+            &["turn", "activate", "--verify-address", "PRIVATE.example"],
+            "ValueError",
+        ),
     ];
     if !rustix::process::geteuid().is_root() {
         // As root these would act on the machine's own fixed paths.
@@ -80,6 +86,11 @@ fn refused_requests_get_one_fixed_line_that_names_only_the_kind() {
             (&["turn", "refresh-certificate"], "ReleaseError"),
             (
                 &["turn", "enable-metrics", "--verify-address=2001:db8::45"],
+                "ReleaseError",
+            ),
+            (&["turn", "activate"], "ReleaseError"),
+            (
+                &["turn", "activate", "--verify-address=192.0.2.45"],
                 "ReleaseError",
             ),
         ]);

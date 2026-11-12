@@ -457,7 +457,6 @@
             - release_fetch_receiver.py
             - release_trust.py
             - backup_public.py
-            - turn_public.py
             - force_release.py
 
         - name: Bind a new private migration request without replacing prior evidence

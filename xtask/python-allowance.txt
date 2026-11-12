@@ -1,4 +1,4 @@
-total 102065
+total 101034
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -95,7 +95,6 @@ total 102065
 232	ops/ansible/files/release_trust.py
 447	ops/ansible/files/restore_verify.py
 188	ops/ansible/files/runtime_profile.py
-581	ops/ansible/files/turn_public.py
 344	ops/ansible/tests/test_bounded_process.py
 188	ops/ansible/tests/test_browser_assets_command.py
 536	ops/ansible/tests/test_caddy_materials.py
@@ -194,7 +193,6 @@ total 102065
 721	ops/ansible/tests/test_security_vm_stage.py
 523	ops/ansible/tests/test_security_vm_vps_guest.py
 75	ops/ansible/tests/test_support.py
-450	ops/ansible/tests/test_turn_public.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py
 6	typings/ansible/parsing/dataloader.pyi
 22	typings/ansible/plugins/callback/__init__.pyi

@@ -2110,7 +2110,7 @@ leave the recorded journal, identity and outcome. `reboot_public.py` itself
 stays in the tree, frozen, while the release preflight's helper digest list
 still names it.
 
-## Relay certificate and metrics
+## Relay certificate, metrics and activation
 
 The [relay playbook](ansible/turn.yml), its hourly timer and the monitoring
 playbook run these commands by the executable's installed path; the
@@ -2122,9 +2122,10 @@ the shared workload lock; a busy lock or an unfinished journal refuses.
 simplestchat-ops turn prepare-certificate
 simplestchat-ops turn refresh-certificate [--verify-address IP]
 simplestchat-ops turn enable-metrics [--verify-address IP]
+simplestchat-ops turn activate [--verify-address IP]
 ```
 
-All three first read the relay's prepared identity from the private
+All four first read the relay's prepared identity from the private
 `/etc/simplestchat-turn`: the hostname, the checksum-pinned coturn image, the
 digest of `turnserver.conf` and the one secret that file shares with the
 application. A file of another owner, mode or size, a configuration that
@@ -2173,9 +2174,55 @@ in `ops/src/turn/recorded_turn.json`, each command with the answer it got and
 each TLS attempt with the certificate it met. The test replays them request
 by request. The helper parsed key material and spoke TLS in its own process;
 the executable asks the system's `openssl` instead, and the test answers
-those requests from the recorded decisions. `turn_public.py` stays in the
-tree, frozen, for `turn.yml`'s activation, which replaces the application
-through the Python release helper.
+those requests from the recorded decisions.
+
+`activate` tells the application of the relay. It first does everything
+`refresh-certificate` does, so the relay is running, reviewed and presenting
+the published certificate. It then reads the shared secret again and the
+application's `app.env`. An application whose environment already has
+exactly the relay's three settings is only checked: its one container must
+be running normally with the configuration the project resolves to, and it
+must answer as ready at `https://HOSTNAME/ready` within three seconds, at
+`--verify-address` when one is given. The outcome then says
+`alreadyConfigured`.
+
+```text
+TURN_URLS=turn:HOSTNAME:3478?transport=udp,turn:HOSTNAME:3478?transport=tcp,turns:HOSTNAME:5349?transport=tcp
+TURN_SECRET=<the 64 hexadecimal characters of /etc/simplestchat-turn/secret>
+TURN_TTL=86400
+```
+
+Any other application is restarted as the release it already runs. The
+selection in `images.json` must name a full revision whose retained
+`release.json` is a valid manifest of that revision. The command then gives
+up the workload lock and runs the whole
+[app-only deployment](#native-application-only-host-deployment) of that release in its relay
+form, which takes the lock for itself: the release that is selected then
+must still be the one named, the environment must have no line of any of the
+three names (a setting that is there is never rotated by a restart), the
+three lines are appended, and the project previewed with that environment
+must say exactly what the running one says plus the three settings. Rooms
+are given up to ten minutes to empty, the database is backed up and listed,
+and only the application is stopped and started; a restart that is not ready
+is rolled back to the environment without the relay. Every probe of the
+public origin goes to `--verify-address` when one is given, with the
+certificate still verified for the hostname. Another operation can take the
+lock between the two halves; the restart then refuses and the activation is
+repeated.
+
+The restart prints its own report and retains its evidence as a deployment
+does, under `results/release.UNIQUE` with `"action": "activate"`. The relay
+attempt's `outcome.json` is written after the restart ended and says whether
+the whole activation passed, with `revision` for a restart or
+`alreadyConfigured`.
+
+The Python helper's answers for 115 invocations in 58 activation scenarios
+are recorded in `ops/src/turn/recorded_activate.json` with every restart it
+asked its release engine for; five of them change the secret while the relay
+is told to reload. The test replays them request by request and requires
+each restart to be the recorded one, asked for with the lock given up. The
+relay form of the deployment is exercised over real files with a scripted
+daemon in `ops/src/release/attestation/deploy/relay_effect_tests.rs`.
 
 ## Migration inspection
 

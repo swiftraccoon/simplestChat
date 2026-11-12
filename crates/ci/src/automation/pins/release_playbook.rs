@@ -175,7 +175,7 @@ fn routine_release_installs_no_helper_and_always_ensures_release_storage() {
 }
 
 /// Standard base64 with padding, as Ansible's slurp reports file content.
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut text = String::new();
     for chunk in bytes.chunks(3) {

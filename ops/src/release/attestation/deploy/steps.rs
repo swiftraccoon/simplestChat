@@ -36,24 +36,35 @@ impl State {
             .ok_or(Cause::Deadline)?;
         let _ceiling = budget::ready_ceiling(start, Duration::from_secs(seconds))?;
         let url = format!("{}/ready", origin.unwrap_or("http://127.0.0.1:3000"));
+        // Only the public origin is ever reached at an address of the
+        // caller's choosing; its certificate is still verified by its name.
+        let name = origin.and_then(|origin| origin.strip_prefix("https://"));
+        let destination = name.zip(self.address).map(|(name, address)| match address {
+            std::net::IpAddr::V6(address) => format!("{name}:443:[{address}]"),
+            std::net::IpAddr::V4(address) => format!("{name}:443:{address}"),
+        });
+        let mut probe = vec![
+            "--disable",
+            "--noproxy",
+            "*",
+            "--proto",
+            if origin.is_some() { "=https" } else { "=http" },
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "2",
+        ];
+        if let Some(destination) = &destination {
+            probe.extend(["--resolve", destination]);
+        }
+        probe.push(&url);
         loop {
             let output = self
                 .command(
                     access,
                     Role::Ready,
-                    argv(&[
-                        "--disable",
-                        "--noproxy",
-                        "*",
-                        "--proto",
-                        if origin.is_some() { "=https" } else { "=http" },
-                        "--fail",
-                        "--silent",
-                        "--show-error",
-                        "--max-time",
-                        "2",
-                        &url,
-                    ]),
+                    argv(&probe),
                     CommandIo::ordinary(recovery),
                     owner,
                     executor,
@@ -309,6 +320,7 @@ impl State {
         access: &Access,
         old: &Json,
         new_image: &str,
+        relay: Option<&Relay>,
         owner: &mut Owner,
         executor: &mut impl Executor,
     ) -> Result<(Vec<u8>, Vec<u8>)> {
@@ -402,6 +414,43 @@ impl State {
             owner,
             false,
         )?;
+        let mut environment = environment;
+        let settings = match relay {
+            Some(relay) => {
+                environment = self.policy(owner, relay.appended(&environment))?;
+                relay.settings()
+            }
+            None => None,
+        };
+        if settings.is_some() {
+            self.atomic(
+                &attempt,
+                "candidate.env",
+                environment.as_bytes(),
+                owner,
+                false,
+            )?;
+            // The preview alone reads the candidate environment as the
+            // application's; the installed project keeps naming `app.env`.
+            self.policy(
+                owner,
+                ensure(
+                    compose.matches("- ./app.env").count() == 1,
+                    "Unexpected application env_file selection",
+                ),
+            )?;
+            let path = attempt.path().join("candidate.env");
+            let path = path.to_str().ok_or(Cause::Input)?;
+            let text = self.policy(owner, raw_text(&preview))?;
+            let rendered = text.replace("- ./app.env", &format!("- \"{path}\""));
+            self.atomic(
+                &attempt,
+                "candidate-compose.yml",
+                rendered.as_bytes(),
+                owner,
+                false,
+            )?;
+        }
         let after_data = self
             .compose(
                 access,
@@ -414,7 +463,10 @@ impl State {
             .await?;
         let after = self.policy(owner, decode(&after_data))?;
         self.policy(owner, policy::compose(&after, socket, new_image))?;
-        let expected = self.policy(owner, expected_selection(&before, new_image, changed))?;
+        let mut expected = self.policy(owner, expected_selection(&before, new_image, changed))?;
+        if let Some(settings) = &settings {
+            self.policy(owner, advertised(&mut expected, settings))?;
+        }
         self.policy(
             owner,
             ensure(
@@ -424,6 +476,23 @@ impl State {
         )?;
         Ok((preview, environment.into_bytes()))
     }
+}
+
+/// What the rendered application also says once it reads the candidate
+/// environment: the relay's three settings. The image is the selected one
+/// on both sides of a relay restart.
+fn advertised(expected: &mut Json, settings: &[(&str, String); 3]) -> policy::Result<()> {
+    let services = object_mut(expected)?
+        .get_mut("services")
+        .ok_or("KeyError")?;
+    let application = object_mut(services)?.get_mut("simplestchat");
+    let application = object_mut(application.ok_or("KeyError")?)?;
+    let environment = application.get_mut("environment").ok_or("KeyError")?;
+    let environment = object_mut(environment)?;
+    for (name, value) in settings {
+        environment.insert((*name).to_owned(), Json::String(value.clone()));
+    }
+    Ok(())
 }
 
 pub(super) fn expected_selection(

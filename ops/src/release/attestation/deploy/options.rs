@@ -55,6 +55,7 @@ impl Options {
             quiet_seconds,
             whole,
             reserve,
+            relay: None,
         })
     }
 }

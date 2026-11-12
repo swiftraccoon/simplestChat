@@ -102,7 +102,8 @@ pub(crate) fn build(base: &Path, tree: &serde_json::Map<String, Value>, epoch: i
     }
 }
 
-/// The workload lock as another operation that created it holds it.
+/// The workload lock as another operation holds it, created when no
+/// earlier operation left it.
 pub(crate) fn held_lock(base: &Path) -> std::fs::File {
     let work = base.join("run/simplestchat-bench");
     if !work.exists() {
@@ -112,7 +113,7 @@ pub(crate) fn held_lock(base: &Path) -> std::fs::File {
             .unwrap();
     }
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true).mode(0o600);
+    options.write(true).create(true).truncate(false).mode(0o600);
     let lock = options.open(work.join("workload.lock")).unwrap();
     let exclusive = rustix::fs::FlockOperation::NonBlockingLockExclusive;
     rustix::fs::flock(&lock, exclusive).unwrap();

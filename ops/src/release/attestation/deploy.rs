@@ -27,6 +27,69 @@ pub(super) struct Options {
     pub quiet_seconds: u64,
     pub whole: Duration,
     pub reserve: Duration,
+    /// Restart the release that is already selected, told of the relay.
+    pub relay: Option<Relay>,
+}
+impl Options {
+    /// A restart of the selected release told of `relay`: rooms are given
+    /// ten minutes to empty, inside the longest whole budget.
+    fn relayed(revision: &str, relay: Relay) -> Self {
+        Self {
+            revision: revision.to_owned(),
+            quiet_seconds: 600,
+            whole: budget::MAX_WHOLE,
+            reserve: Duration::from_secs(60),
+            relay: Some(relay),
+        }
+    }
+}
+/// The verified relay an application is told of when it is restarted as the
+/// release it already runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Relay {
+    pub domain: String,
+    pub secret: String,
+    /// Where the public origin is reached instead of where its name resolves.
+    pub address: Option<std::net::IpAddr>,
+}
+impl Relay {
+    /// The three settings the application reads the relay by, in the order
+    /// they are appended to its environment; nothing for a hostname or a
+    /// secret that could carry anything else into that file.
+    pub(crate) fn settings(&self) -> Option<[(&'static str, String); 3]> {
+        let domain = &self.domain;
+        let admitted = crate::host::domain(domain) && crate::host::hexadecimal(&self.secret, 64);
+        admitted.then(|| {
+            let addresses = format!(
+                "turn:{domain}:3478?transport=udp,turn:{domain}:3478?transport=tcp,\
+                 turns:{domain}:5349?transport=tcp"
+            );
+            [
+                ("TURN_URLS", addresses),
+                ("TURN_SECRET", self.secret.clone()),
+                ("TURN_TTL", "86400".to_owned()),
+            ]
+        })
+    }
+
+    /// `environment` with the three settings appended. One that already
+    /// has a line of any of the three names is refused: a setting that is
+    /// there is never rotated by a restart.
+    pub(crate) fn appended(&self, environment: &str) -> Result<String, &'static str> {
+        let settings = self.settings();
+        let settings = settings.ok_or("Invalid managed TURN configuration")?;
+        let configured = crate::text::python_lines(environment).any(|line| {
+            let named = line.split_once('=').map_or(line, |(name, _)| name);
+            settings.iter().any(|(name, _)| *name == named)
+        });
+        if configured {
+            return Err("TURN is already configured; rotation requires separate maintenance");
+        }
+        let lines = settings
+            .iter()
+            .map(|(name, value)| format!("{name}={value}\n"));
+        Ok(environment.to_owned() + &lines.collect::<String>())
+    }
 }
 pub(super) struct Access {
     pub root: PathBuf,
@@ -184,7 +247,28 @@ pub fn run(arguments: &[OsString]) -> std::process::ExitCode {
             return ExitCode::from(2);
         }
     };
-    super::stage::lifecycle(started, options.whole, || {
+    match operate(started, &options) {
+        None => ExitCode::from(2),
+        Some(true) => ExitCode::SUCCESS,
+        Some(false) => ExitCode::FAILURE,
+    }
+}
+
+/// Restart the application as the release it already runs, told of the
+/// verified relay: the whole app-only deployment of that release, with its
+/// backup, its bounded wait for rooms to empty and its one rollback. The
+/// report is printed as a deployment's is. Returns whether it passed.
+///
+/// # Panics
+///
+/// As [`run`], this must be called outside an entered Tokio runtime.
+pub(crate) fn activate(revision: &str, relay: Relay) -> bool {
+    operate(Instant::now(), &Options::relayed(revision, relay)) == Some(true)
+}
+
+/// One whole deployment on the fixed host inside its own budget.
+fn operate(started: Instant, options: &Options) -> Option<bool> {
+    super::stage::settled(started, options.whole, || {
         let mut owner = match Owner::new(started, options.whole, options.reserve) {
             Ok(value) => value,
             Err(_) => return (false, None),
@@ -206,7 +290,7 @@ pub fn run(arguments: &[OsString]) -> std::process::ExitCode {
             }
         };
         let outcome = runtime.block_on(execute(
-            &options,
+            options,
             &Access::fixed(),
             &mut owner,
             &mut process::Native,

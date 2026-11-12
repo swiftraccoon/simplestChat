@@ -401,6 +401,7 @@ pub(in crate::release::attestation) async fn execute(
             quiet_seconds: 0,
             whole: options.whole,
             reserve: options.reserve,
+            relay: None,
         };
         let selection = state
             .selection(
