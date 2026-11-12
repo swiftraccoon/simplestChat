@@ -7,7 +7,9 @@ use super::failure::{Failure, Result, require};
 use super::{DOCKER, Host};
 use std::path::{Path, PathBuf};
 
-const ENVIRONMENT: [(&str, &str); 2] = [("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), ("LC_ALL", "C")];
+/// The environment of every command that leaves evidence.
+pub(crate) const ENVIRONMENT: [(&str, &str); 2] =
+    [("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), ("LC_ALL", "C")];
 const MAX_INSPECTION_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const ARCHIVE_RESERVE_BYTES: u64 = 1024 * 1024 * 1024;

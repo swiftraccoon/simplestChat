@@ -2226,10 +2226,75 @@ any failure as one fixed line.
 
 The Python helper's answers for 127 invocations in 89 scenarios are recorded
 in `ops/src/migrate/recorded_tls.json` and replayed the same way.
-`migration-prepare.yml` still runs `migration_tls.py`: the certificate is handed
-over while the destination is bootstrapped, before the staging step delivers
-the Ops executable, and `dns-handoff.yml` imports the module. The commands are
-wired when the migration's host steps move to the executable.
+`migration-prepare.yml` runs both commands from the executable a move keeps
+beside its request. `dns-handoff.yml` still imports the Python module.
+
+## Migration data steps
+
+```sh
+simplestchat-ops migrate freeze-source|recover-source --request PATH
+simplestchat-ops migrate seal-source|finalize-source --request PATH
+simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH
+```
+
+A move's data is handled by seven steps, each run as root on one of its two
+machines with the move's request,
+`/srv/simplestchat-public/migrations/<operation-id>/request.json`: four fields
+that name the operation, both canonical origins and the release. The playbooks
+run them from the authenticated executable kept beside that request, never from
+an installed one, so a source keeps the release it has.
+
+A step holds the machine's workload lock and admits an unfinished release record
+only when it is this move's own. It records each phase first in
+`release-state.json`, which every release on the machine consults, then in the
+move's `migration.json`; keeps the output of every command it runs in a new
+private directory of the move; and prints one line: `{"passed": true, "action":
+…, "operationId": …, "phase": …, "result": …}`, or, with exit status 1,
+`{"passed":false,"error":"migration_action_failed"}` on standard error. Why a
+step failed stays on the machine.
+
+`freeze-source` proves the running deployment and its pinned database image,
+records the managed units, stops them, the application and the proxy, takes a
+snapshot of the quiet database, writes a bounded archive and proves with a
+second snapshot that nothing changed while it was written. A freeze that fails
+after it began starts the recorded services again before it reports its own
+failure. `recover-source` does the same for a frozen source and only proves a
+recovered one. `seal-source` verifies the archive and the unchanged database
+once more, records the seal, then disables the managed timers and every restart
+policy and stops the three containers; from the recorded seal on, no step
+starts the source again. `finalize-source` also stops the relay and monitoring
+containers that exist. Every volume is kept.
+
+`restore-target` verifies the transferred archive, snapshot and secrets, starts
+only the database, requires it empty, of another cluster, the same version and
+the pinned image, restores, and requires the restored snapshot to equal the
+source's in everything but the cluster's identity. When the site's name
+changes, one guarded statement renames the managed owner inside exactly that
+cluster, and the result must differ from the restored snapshot by exactly the
+digest the stream predicted. `verify-target` proves, before the cutover, the
+same release, a stopped application and unchanged data; it records nothing.
+`abort-target` gives up a restore that did not finish: only while no
+application container was ever created, and by moving the failed database
+directory into the move's directory as `retained-postgres`.
+
+A snapshot is taken through one bounded client session in one read-only
+transaction: every physical table read with `ONLY`, partition leaves included,
+reduced to a row count and a digest while it streams, with every sequence's
+state, the migration ledger and a digest of the schema's description. No row
+reaches a file, a log or more of the process than the line being hashed.
+
+The Python helper's 618 invocations in 394 scenarios are recorded in
+`ops/src/migrate/recorded_data.json` and replayed command by command, with the
+files each step leaves; its snapshot's statements and conclusions for 120
+scripted clients are in `ops/src/migrate/recorded_snapshot.json`. Deliberate
+differences: a command line of another shape is a usage error, where the helper
+also took `--request=PATH`, the option before the step and a shortened option;
+the helper's own `inspect-source` and `inspect-target` actions, which no
+playbook ran, are not steps; the workload lock holds the two shared journals to
+the first schema, a private mode and 16 KiB, as every other owner of it does;
+and a reviewed image that fails its review is named as that, not by which rule
+failed. `simplestchat-ci database-check migration` runs the snapshot and the
+guarded rename against real PostgreSQL.
 
 
 ## Offline server attestation preparation

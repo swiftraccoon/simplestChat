@@ -1,0 +1,22 @@
+---
+# The executable a move authenticated on the controller and keeps beside its
+# request on each machine. Every step joins its bytes again before running it.
+- name: Join the bytes of this move's executable before they run
+  ansible.builtin.stat:
+    path: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+    follow: false
+    get_checksum: true
+    checksum_algorithm: sha256
+  register: scmig_ops_kept
+
+- name: Require the executable this move authenticated
+  ansible.builtin.assert:
+    that:
+      - scmig_ops_sha256 is match('^[a-f0-9]{64}$')
+      - scmig_ops_kept.stat.isreg | default(false)
+      - not (scmig_ops_kept.stat.islnk | default(false))
+      - scmig_ops_kept.stat.uid == 0
+      - scmig_ops_kept.stat.mode == '0700'
+      - scmig_ops_kept.stat.nlink == 1
+      - scmig_ops_kept.stat.checksum == scmig_ops_sha256
+    fail_msg: Prepare the move again; its authenticated executable is not what this machine holds.

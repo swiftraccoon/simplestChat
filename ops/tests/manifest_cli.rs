@@ -149,6 +149,9 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops turn prepare-certificate|refresh-certificate|enable-metrics ",
                 "[--verify-address IP]\n",
                 "       simplestchat-ops migrate inspect source|target ORIGIN\n",
+                "       simplestchat-ops migrate freeze-source|recover-source --request PATH\n",
+                "       simplestchat-ops migrate seal-source|finalize-source --request PATH\n",
+                "       simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH\n",
                 "       simplestchat-ops migrate tls export|import OPERATION\n",
             )
             .as_bytes()

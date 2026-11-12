@@ -788,6 +788,66 @@ fn only_the_owning_backup_takes_over_its_own_unfinished_journal() {
     assert_eq!(journals, 13);
 }
 
+/// A move between two machines may take over only the release record of
+/// exactly its own request, in any phase, and never an unfinished runtime
+/// journal. Thirty-two recorded pairs of journals are admitted or refused
+/// as the migration helper's own lock decided.
+#[test]
+fn only_a_moves_own_record_yields_the_release_record_to_its_steps() {
+    let recorded = include_str!("../migrate/recorded_data.json");
+    let recorded: serde_json::Value = serde_json::from_str(recorded).unwrap();
+    let locks = recorded["locks"].as_array().unwrap();
+    assert_eq!(locks.len(), 32);
+    let request = "https://old.example.test https://new.example.test";
+    let (source, destination) = request.split_once(' ').unwrap();
+    let (operation, revision) = ("a".repeat(32), "b".repeat(40));
+    let takeover = Takeover::Migration {
+        operation: &operation,
+        source,
+        destination,
+        revision: &revision,
+    };
+    let mut admitted = 0;
+    for vector in locks {
+        let fixture = Fixture::new();
+        let work = fixture.path.join("run/simplestchat-bench");
+        fs::create_dir(&work).unwrap();
+        mode(&work, 0o700);
+        let state = fixture
+            .path
+            .join("srv/simplestchat-public/release-state.json");
+        let journals = [
+            (&vector["state"], state),
+            (&vector["current"], work.join("current.json")),
+        ];
+        for (text, path) in journals {
+            if let Some(text) = text.as_str() {
+                fs::write(&path, text).unwrap();
+                mode(&path, 0o600);
+            }
+        }
+        let owner = fs::metadata(&fixture.path).unwrap().uid();
+        let lock = Workload::fixture_for(&fixture.path, owner, takeover);
+        assert_eq!(lock.is_ok(), vector["admitted"], "{vector}");
+        admitted += usize::from(lock.is_ok());
+        // No other owner is given a move's unfinished record.
+        if vector["name"] == "this move's unfinished record" {
+            let boot = "11111111-1111-1111-1111-111111111111";
+            for other in [
+                Takeover::Nothing,
+                Takeover::Offsite,
+                Takeover::RebootPrepare,
+                Takeover::RebootResume { boot },
+                Takeover::RebootCancel { boot },
+            ] {
+                let lock = Workload::fixture_for(&fixture.path, owner, other);
+                assert!(lock.is_err(), "{other:?}");
+            }
+        }
+    }
+    assert_eq!(admitted, 8);
+}
+
 /// The reboot owner may take over only a prepared reboot's release record: a
 /// resume once the boot identity differs from the recorded one, a
 /// cancellation while it is the same, and a preparation never. Sixty

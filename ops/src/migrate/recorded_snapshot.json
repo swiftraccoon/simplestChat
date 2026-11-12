@@ -1,0 +1,4599 @@
+{
+ "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+ "argv": [
+  "/usr/bin/docker",
+  "--host",
+  "unix:///var/run/docker.sock",
+  "exec",
+  "--interactive",
+  "--user",
+  "999:999",
+  "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "psql",
+  "--no-psqlrc",
+  "--quiet",
+  "--tuples-only",
+  "--no-align",
+  "--set",
+  "ON_ERROR_STOP=on",
+  "--pset",
+  "pager=off",
+  "--host",
+  "/run/simplestchat-postgres",
+  "--username",
+  "postgres",
+  "--dbname",
+  "simplestchat"
+ ],
+ "environment": {
+  "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+  "LC_ALL": "C"
+ },
+ "bounds": {
+  "line": 4194304,
+  "section": 268435456,
+  "metadata": 16777216,
+  "total": 536870912
+ },
+ "relations": 512,
+ "identifierBytes": 63,
+ "querySeconds": 40,
+ "wholeSeconds": 300,
+ "socket": "/run/simplestchat-postgres",
+ "setup": "\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSET LOCAL statement_timeout='30s';\nSET LOCAL lock_timeout='3s';\nSET LOCAL idle_in_transaction_session_timeout='45s';\nSET LOCAL application_name='simplestchat-migration-readonly-snapshot';\nSET LOCAL timezone='UTC';\nSET LOCAL datestyle='ISO, YMD';\nSET LOCAL intervalstyle='postgres';\nSET LOCAL extra_float_digits=3;\nSET LOCAL bytea_output='hex';\nSET LOCAL search_path=pg_catalog;\nSET LOCAL client_encoding='UTF8';\nSET LOCAL work_mem='8MB';\nSET LOCAL temp_file_limit='256MB';\n",
+ "catalog": "\nSELECT jsonb_build_object(\n 'database',current_database(),\n 'serverVersion',current_setting('server_version_num'),\n 'databaseEncoding',current_setting('server_encoding'),\n 'readOnly',current_setting('transaction_read_only'),\n 'isolation',current_setting('transaction_isolation'),\n 'systemIdentifier', (pg_control_system()).system_identifier::text,\n 'tables',COALESCE((\n   SELECT jsonb_agg(jsonb_build_object('schema',n.nspname,'name',c.relname,\n     'kind',c.relkind,'isPartition',c.relispartition)\n     ORDER BY n.nspname COLLATE \"C\", c.relname COLLATE \"C\")\n   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n   WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema' AND c.relkind IN ('r','p')\n ),'[]'::jsonb),\n 'sequences',COALESCE((\n   SELECT jsonb_agg(jsonb_build_object('schema',n.nspname,'name',c.relname)\n     ORDER BY n.nspname COLLATE \"C\",c.relname COLLATE \"C\")\n   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n   WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema' AND c.relkind='S'\n ),'[]'::jsonb)\n);\n",
+ "metadata": "\nCOPY (\nWITH relations AS (\n SELECT c.*, n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\n WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema' AND c.relkind IN ('r','p','S')\n), records AS (\n SELECT jsonb_build_object('type','schema','name',n.nspname,\n   'owner',pg_get_userbyid(n.nspowner),'acl',\n   (SELECT jsonb_agg(a::text ORDER BY a::text COLLATE \"C\")\n     FROM unnest(COALESCE(n.nspacl,acldefault('n',n.nspowner))) a)) AS value\n FROM pg_namespace n WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'\n UNION ALL\n SELECT jsonb_build_object('type','relation','schema',r.nspname,'name',r.relname,\n   'kind',r.relkind,'persistence',r.relpersistence,'owner',pg_get_userbyid(r.relowner),\n   'rowSecurity',r.relrowsecurity,'forceRowSecurity',r.relforcerowsecurity,\n   'replicaIdentity',r.relreplident,'partitioned',r.relispartition,\n   'partitionBound',pg_get_expr(r.relpartbound,r.oid,true),\n   'partitionKey',CASE WHEN r.relkind='p' THEN pg_get_partkeydef(r.oid) END,\n   'parents',(SELECT jsonb_agg(jsonb_build_array(pn.nspname,p.relname)\n       ORDER BY i.inhseqno) FROM pg_inherits i JOIN pg_class p ON p.oid=i.inhparent\n       JOIN pg_namespace pn ON pn.oid=p.relnamespace WHERE i.inhrelid=r.oid),\n   'acl',(SELECT jsonb_agg(a::text ORDER BY a::text COLLATE \"C\")\n     FROM unnest(COALESCE(r.relacl,acldefault(\n       (CASE WHEN r.relkind='S' THEN 's' ELSE 'r' END)::\"char\",r.relowner))) a),\n   'options',(SELECT jsonb_agg(o ORDER BY o COLLATE \"C\") FROM unnest(r.reloptions) o))\n FROM relations r\n UNION ALL\n SELECT jsonb_build_object('type','column','schema',r.nspname,'relation',r.relname,\n   'name',a.attname,'position',row_number() OVER (PARTITION BY r.oid ORDER BY a.attnum),\n   'dataType',format_type(a.atttypid,a.atttypmod),'notNull',a.attnotnull,\n   'identity',a.attidentity,'generated',a.attgenerated,\n   'storage',a.attstorage,'compression',a.attcompression,\n   'collation',CASE WHEN a.attcollation<>0 THEN\n       jsonb_build_array(cn.nspname,co.collname) END,\n   'default',pg_get_expr(d.adbin,d.adrelid,true),\n   'acl',(SELECT jsonb_agg(x::text ORDER BY x::text COLLATE \"C\")\n     FROM unnest(COALESCE(a.attacl,acldefault('c',r.relowner))) x))\n FROM relations r JOIN pg_attribute a ON a.attrelid=r.oid\n LEFT JOIN pg_attrdef d ON d.adrelid=r.oid AND d.adnum=a.attnum\n LEFT JOIN pg_collation co ON co.oid=a.attcollation\n LEFT JOIN pg_namespace cn ON cn.oid=co.collnamespace\n WHERE a.attnum>0 AND NOT a.attisdropped\n UNION ALL\n SELECT jsonb_build_object('type','constraint','schema',r.nspname,'relation',r.relname,\n   'name',c.conname,'definition',CASE WHEN c.contype='c' AND d.definition ~\n '^CHECK \\([a-z_][a-z0-9_]*::text = ANY \\(ARRAY\\[''[a-z_][a-z0-9_]*''::character varying(, ''[a-z_][a-z0-9_]*''::character varying)*\\]::text\\[\\]\\)\\)$'\n THEN replace(replace(d.definition,'::character varying','::character varying::text'),\n              ']::text[]))',']))')\n ELSE d.definition END,\n   'validated',c.convalidated,'deferrable',c.condeferrable,'deferred',c.condeferred)\n FROM relations r JOIN pg_constraint c ON c.conrelid=r.oid\n CROSS JOIN LATERAL (SELECT pg_get_constraintdef(c.oid,true) AS definition) d\n UNION ALL\n SELECT jsonb_build_object('type','index','schema',r.nspname,'relation',r.relname,\n   'name',ci.relname,'definition',pg_get_indexdef(i.indexrelid),\n   'valid',i.indisvalid,'ready',i.indisready,'live',i.indislive,\n   'unique',i.indisunique,'primary',i.indisprimary)\n FROM relations r JOIN pg_index i ON i.indrelid=r.oid\n JOIN pg_class ci ON ci.oid=i.indexrelid\n UNION ALL\n SELECT jsonb_build_object('type','trigger','schema',r.nspname,'relation',r.relname,\n   'name',t.tgname,'definition',pg_get_triggerdef(t.oid,true),'enabled',t.tgenabled)\n FROM relations r JOIN pg_trigger t ON t.tgrelid=r.oid WHERE NOT t.tgisinternal\n UNION ALL\n SELECT jsonb_build_object('type','policy','schema',r.nspname,'relation',r.relname,\n   'name',p.polname,'command',p.polcmd,'permissive',p.polpermissive,\n   'roles',(SELECT jsonb_agg(CASE WHEN role=0 THEN 'PUBLIC' ELSE pg_get_userbyid(role) END\n       ORDER BY CASE WHEN role=0 THEN 'PUBLIC' ELSE pg_get_userbyid(role) END)\n       FROM unnest(p.polroles) role),\n   'using',pg_get_expr(p.polqual,p.polrelid,true),\n   'check',pg_get_expr(p.polwithcheck,p.polrelid,true))\n FROM relations r JOIN pg_policy p ON p.polrelid=r.oid\n UNION ALL\n SELECT jsonb_build_object('type','sequenceDefinition','schema',r.nspname,'name',r.relname,\n   'dataType',format_type(s.seqtypid,NULL),'start',s.seqstart,'increment',s.seqincrement,\n   'maximum',s.seqmax,'minimum',s.seqmin,'cache',s.seqcache,'cycle',s.seqcycle,\n   'ownedBy',(SELECT jsonb_agg(jsonb_build_array(pn.nspname,p.relname,a.attname,d.deptype)\n       ORDER BY pn.nspname COLLATE \"C\",p.relname COLLATE \"C\",a.attname COLLATE \"C\")\n     FROM pg_depend d JOIN pg_class p ON p.oid=d.refobjid\n     JOIN pg_namespace pn ON pn.oid=p.relnamespace\n     JOIN pg_attribute a ON a.attrelid=p.oid AND a.attnum=d.refobjsubid\n     WHERE d.classid='pg_class'::regclass AND d.objid=r.oid\n       AND d.refclassid='pg_class'::regclass AND d.deptype IN ('a','i')))\n FROM relations r JOIN pg_sequence s ON s.seqrelid=r.oid\n UNION ALL\n SELECT jsonb_build_object('type','extension','name',e.extname,'version',e.extversion,\n   'schema',n.nspname,'owner',pg_get_userbyid(e.extowner))\n FROM pg_extension e JOIN pg_namespace n ON n.oid=e.extnamespace\n UNION ALL\n SELECT jsonb_build_object('type','databasePermissions','owner',pg_get_userbyid(d.datdba),\n   'acl',(SELECT jsonb_agg(a::text ORDER BY a::text COLLATE \"C\")\n     FROM unnest(COALESCE(d.datacl,acldefault('d',d.datdba))) a))\n FROM pg_database d WHERE d.datname=current_database()\n UNION ALL\n SELECT jsonb_build_object('type','defaultPrivileges','owner',pg_get_userbyid(d.defaclrole),\n   'schema',n.nspname,'kind',d.defaclobjtype,\n   'acl',(SELECT jsonb_agg(a::text ORDER BY a::text COLLATE \"C\") FROM unnest(d.defaclacl) a))\n FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace\n UNION ALL\n SELECT jsonb_build_object('type','routine','schema',n.nspname,'name',p.proname,\n   'arguments',pg_get_function_identity_arguments(p.oid),'definition',pg_get_functiondef(p.oid),\n   'owner',pg_get_userbyid(p.proowner),\n   'acl',(SELECT jsonb_agg(a::text ORDER BY a::text COLLATE \"C\")\n     FROM unnest(COALESCE(p.proacl,acldefault('f',p.proowner))) a))\n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace\n WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema' AND p.prokind IN ('f','p')\n   AND NOT EXISTS(SELECT FROM pg_depend d WHERE d.classid='pg_proc'::regclass\n                  AND d.objid=p.oid AND d.deptype='e')\n UNION ALL\n SELECT jsonb_build_object('type','runtimeRole','name',r.rolname,'superuser',r.rolsuper,\n   'inherit',r.rolinherit,'createRole',r.rolcreaterole,'createDatabase',r.rolcreatedb,\n   'login',r.rolcanlogin,'replication',r.rolreplication,'bypassRls',r.rolbypassrls,\n   'connectionLimit',r.rolconnlimit,'validUntil',r.rolvaliduntil,\n   'configuration',(SELECT jsonb_agg(x ORDER BY x COLLATE \"C\") FROM unnest(r.rolconfig) x))\n FROM pg_roles r WHERE r.rolname IN ('simplestchat_app','simplestchat_migrate')\n)\nSELECT value::text FROM records ORDER BY value::text COLLATE \"C\"\n) TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n",
+ "constraintDefinition": "CASE WHEN c.contype='c' AND d.definition ~\n '^CHECK \\([a-z_][a-z0-9_]*::text = ANY \\(ARRAY\\[''[a-z_][a-z0-9_]*''::character varying(, ''[a-z_][a-z0-9_]*''::character varying)*\\]::text\\[\\]\\)\\)$'\n THEN replace(replace(d.definition,'::character varying','::character varying::text'),\n              ']::text[]))',']))')\n ELSE d.definition END",
+ "scenarios": [
+  {
+   "name": "a database with a partitioned table, two sequences and two applied migrations",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"_sqlx_migrations\", \"schema\": \"public\", \"isPartition\": false}, {\"kind\": \"p\", \"name\": \"messages\", \"schema\": \"public\", \"isPartition\": false}, {\"kind\": \"r\", \"name\": \"messages_2026_11\", \"schema\": \"public\", \"isPartition\": true}, {\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"neg_seq\", \"schema\": \"public\"}, {\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"version\": 1}\n{\"version\": 2}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 9, \"body\": \"hello\"}\n"
+      }
+     ],
+     "pieces": 3
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ],
+     "pieces": 1
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": false, \"lastValue\": \"-5\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"41\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"_sqlx_migrations\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 2, \"copyBytes\": 30, \"sha256\": \"edeb0e0c228d712fa77dcea700301fcf7b2f745b28edcd67ff4376540f6e68d8\"}, {\"kind\": \"p\", \"name\": \"messages\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 0, \"copyBytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}, {\"kind\": \"r\", \"name\": \"messages_2026_11\", \"schema\": \"public\", \"isPartition\": true, \"rows\": 1, \"copyBytes\": 27, \"sha256\": \"e010c1593c5f708740ebc9390a13908c1b6b4020eb88e7a1b6e3e5086c85af42\"}, {\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 2, \"copyBytes\": 82, \"sha256\": \"105eec8fabef67ef83b441af81cad0a47ab24eaa919a025079106475083fc04a\"}], \"sequences\": [{\"name\": \"neg_seq\", \"schema\": \"public\", \"isCalled\": false, \"lastValue\": \"-5\"}, {\"name\": \"rooms_seq\", \"schema\": \"public\", \"isCalled\": true, \"lastValue\": \"41\"}], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 5}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"_sqlx_migrations\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"messages\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"messages_2026_11\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"neg_seq\";\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "one table and no sequence",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 2, \"copyBytes\": 82, \"sha256\": \"105eec8fabef67ef83b441af81cad0a47ab24eaa919a025079106475083fc04a\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 2}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "names that need quoting and a name of exactly sixty-three bytes",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"we\\\"ird\\\"\", \"schema\": \"Sch ema\", \"isPartition\": false}, {\"kind\": \"r\", \"name\": \"éééééééééééééééééééééééééééééééa\", \"schema\": \"public\", \"isPartition\": false}, {\"kind\": \"r\", \"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"we\\\"ird\\\"\", \"schema\": \"Sch ema\", \"isPartition\": false, \"rows\": 2, \"copyBytes\": 82, \"sha256\": \"105eec8fabef67ef83b441af81cad0a47ab24eaa919a025079106475083fc04a\"}, {\"kind\": \"r\", \"name\": \"\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9\\u00e9a\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 0, \"copyBytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}, {\"kind\": \"r\", \"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 1, \"copyBytes\": 3, \"sha256\": \"ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 3}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"Sch ema\".\"we\"\"ird\"\"\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"éééééééééééééééééééééééééééééééa\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog entry that already carries the fields a digest adds",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": \"claimed\", \"extra\": [1, 2.5, null]}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 2, \"extra\": [1, 2.5, null], \"copyBytes\": 82, \"sha256\": \"105eec8fabef67ef83b441af81cad0a47ab24eaa919a025079106475083fc04a\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 2}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a setup that prints something",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": "SET\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "unexpected_transaction_output"
+   },
+   "asked": [
+    "<SETUP>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog of another database",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"postgres\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "database_identity"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog without a database name",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "database_identity"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a transaction that is not read-only",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"off\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "transaction_not_readonly"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a weaker isolation level",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"read committed\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "transaction_isolation"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "another database encoding",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"LATIN1\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "database_encoding"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a cluster identity that is not a number",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"12a\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "system_identity"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an empty cluster identity",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "system_identity"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a cluster identity that is not text",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": 7412345678901234567}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog without a cluster identity",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog that is a list",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog of two lines",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "json_result_shape"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog of no line",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "json_result_shape"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog that is not JSON",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "ERROR:  permission denied\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "JSONDecodeError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog with a repeated field",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"database\": \"simplestchat\", \"database\": \"simplestchat\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "DuplicateJsonError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog without tables",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "table_count"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog that lists no tables field",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a tables field that is not a list",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": {\"public\": \"users\"}, \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "exactly as many tables as a snapshot covers, the first one unreadable",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": ["
+      },
+      {
+       "repeat": "{\"kind\": \"r\", \"name\": \"\", \"schema\": \"public\", \"isPartition\": false}, ",
+       "count": 511
+      },
+      {
+       "text": "{\"kind\": \"r\", \"name\": \"\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "more tables than a snapshot covers",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": ["
+      },
+      {
+       "repeat": "{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}, ",
+       "count": 512
+      },
+      {
+       "text": "{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "table_count"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table entry that is not an object",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [\"users\"], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table in a schema without a name",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table name of sixty-four bytes",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table name of sixty-four bytes in fewer characters",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"éééééééééééééééééééééééééééééééé\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table name holding a zero byte",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"a\\u0000b\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table without a name",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"schema\": \"public\"}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table name that is not text",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": 5, \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog without a sequences field",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "exactly as many sequences as a snapshot covers, the first one unreadable",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": ["
+      },
+      {
+       "repeat": "{\"name\": \"\", \"schema\": \"public\"}, ",
+       "count": 511
+      },
+      {
+       "text": "{\"name\": \"\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_identifier"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "more sequences than a snapshot covers",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": ["
+      },
+      {
+       "repeat": "{\"name\": \"s\", \"schema\": \"public\"}, ",
+       "count": 512
+      },
+      {
+       "text": "{\"name\": \"s\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_count"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence value with a letter",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"4x\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_value"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an empty sequence value",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_value"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence value that is only a sign",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"-\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_value"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence value with a plus sign",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"+5\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_value"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence value with two signs",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"--5\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_value"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence value that is a number",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": 41}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence without a value",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence whose called flag is text",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": \"true\", \"lastValue\": \"41\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_called"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence whose called flag is a number",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": 1, \"lastValue\": \"41\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "sequence_called"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence without a called flag",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"lastValue\": \"41\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence answered in two lines",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"41\"}\n{\"isCalled\": true, \"lastValue\": \"41\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "json_result_shape"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a sequence answer that is a list",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[1]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an empty migration ledger",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "ledger_shape"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration version with a letter",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"1a\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "ledger_version"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration that failed",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": false, \"version\": \"2\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "migration_failed"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration without a success field",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"version\": \"1\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "migration_failed"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration whose success is a number",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": 1, \"version\": \"1\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "migration_failed"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration checksum one digit short",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"1\", \"checksum\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "ledger_checksum"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration checksum in capitals",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"1\", \"checksum\": \"ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "ledger_checksum"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration without a version",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration without a checksum",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"1\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "KeyError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration version that is a number",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": 1, \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration ledger that is an object",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"version\": \"1\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration entry that is not an object",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[\"1\"]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "kind": "ValueError"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration ledger exactly at its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "["
+      },
+      {
+       "repeat": "{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, ",
+       "count": 511
+      },
+      {
+       "text": "{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": {
+    "bytes": 82525,
+    "sha256": "48815397306bf2c719ba4647190914d975a1a7d27fb0e3bee8b566d19c4737aa"
+   },
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a migration ledger beyond its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "["
+      },
+      {
+       "repeat": "{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, ",
+       "count": 512
+      },
+      {
+       "text": "{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}]\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "ledger_shape"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a rollback that prints something",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "ROLLBACK\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "unexpected_transaction_output"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a schema description exactly at its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 2, \"copyBytes\": 82, \"sha256\": \"105eec8fabef67ef83b441af81cad0a47ab24eaa919a025079106475083fc04a\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 1, \"copyBytes\": 80, \"sha256\": \"8b6741f9eefa5d3b3a4ee3b1cc5ae9f5efc9a1512822ee04f462db18c861a0b2\"}, \"totalPhysicalRows\": 2}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a schema description one byte over its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\nmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "section_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a line exactly at its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 1, \"copyBytes\": 600, \"sha256\": \"ee73f84083da5b89f32bc36beb365145d1e035130f5bafd4826744a2ecbfef16\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 1}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a line one byte over its bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n"
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "row_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an unfinished line beyond anything a line may be",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "repeat": "r",
+       "count": 66137
+      }
+     ],
+     "end": "silent"
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "row_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an unfinished line still within what may arrive, then the end of the output",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "repeat": "r",
+       "count": 66136
+      }
+     ],
+     "end": "close"
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "postgres_output_closed"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": null,
+   "started": true
+  },
+  {
+   "name": "a table exactly at the bound of one statement",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "repeat": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n",
+       "count": 8
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"name\": \"public\", \"type\": \"schema\"}\n{\"name\": \"users\", \"type\": \"relation\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 8, \"copyBytes\": 4096, \"sha256\": \"741bf47303779a1f346efccc17cd54ee70f5ff56b74a0aa9df3b4da9afc183b3\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 2, \"copyBytes\": 75, \"sha256\": \"6465411d2f17242ce4b06d41a3f7bb548dccc1fbf8b6e58bd671f336cb0d2757\"}, \"totalPhysicalRows\": 8}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a table one line over the bound of one statement",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "repeat": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n",
+       "count": 8
+      },
+      {
+       "text": "\n"
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "section_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a catalog value spread over more lines than one value may fill",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [{\"name\": \"rooms_seq\", \"schema\": \"public\"}], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@old.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"isCalled\": true, \"lastValue\": \"444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444\"}\n{\"isCalled\": true, \"lastValue\": \"444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444\"}\n"
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 65536
+   },
+   "dump": null,
+   "failure": {
+    "refused": "section_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT jsonb_build_object('lastValue',last_value::text,'isCalled',is_called) FROM \"public\".\"rooms_seq\";\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a session exactly at its whole bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 900
+   },
+   "dump": "{\"schemaVersion\": 1, \"passed\": true, \"database\": \"simplestchat\", \"postgresVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\", \"rowScope\": \"ONLY-each-relation-including-partition-leaves\", \"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false, \"rows\": 1, \"copyBytes\": 220, \"sha256\": \"dbfe8ff31752c0459ca1859b4e5d5f8842d07a3cd8b5c34d26aff59d5f7165b3\"}], \"sequences\": [], \"migrationLedger\": [{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}], \"schemaMetadata\": {\"rows\": 1, \"copyBytes\": 79, \"sha256\": \"d2807a2e727126a509ccab6033461b467ffcda0d1eb77eac057305c2351b2b43\"}, \"totalPhysicalRows\": 1}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>",
+    "ROLLBACK;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a session one byte over its whole bound",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "[{\"success\": true, \"version\": \"20260101000000\", \"checksum\": \"abababababababababababababababababababababababababababababababababababababababababababababababab\"}, {\"success\": true, \"version\": \"20260202000000\", \"checksum\": \"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\"}]\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "bounds": {
+    "line": 600,
+    "section": 4096,
+    "metadata": 80,
+    "total": 900
+   },
+   "dump": null,
+   "failure": {
+    "refused": "snapshot_byte_limit"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n",
+    "SELECT COALESCE(jsonb_agg(jsonb_build_object(\n 'version',version::text,'success',success,'checksum',encode(checksum,'hex'))\n ORDER BY version),'[]'::jsonb) FROM public._sqlx_migrations;\n\\echo <MARKER>\n",
+    "<METADATA>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "output after the end marker",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ],
+     "end": "trailing"
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "unexpected_output_after_marker"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a client that closes its output in the middle of a statement",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1}\n"
+      }
+     ],
+     "end": "close"
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "postgres_output_closed"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": null,
+   "started": true
+  },
+  {
+   "name": "a client that falls silent",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"tables\": [{\"kind\": \"r\", \"name\": \"users\", \"schema\": \"public\", \"isPartition\": false}], \"database\": \"simplestchat\", \"readOnly\": \"on\", \"isolation\": \"repeatable read\", \"sequences\": [], \"serverVersion\": \"180001\", \"databaseEncoding\": \"UTF8\", \"systemIdentifier\": \"7412345678901234567\"}\n"
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1}\n"
+      }
+     ],
+     "end": "silent"
+    }
+   ],
+   "clock": "query",
+   "dump": null,
+   "failure": {
+    "refused": "postgres_query_deadline"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>",
+    "COPY (SELECT to_jsonb(t)::text FROM ONLY \"public\".\"users\" AS t ORDER BY to_jsonb(t)::text COLLATE \"C\") TO STDOUT WITH (FORMAT text, ENCODING 'UTF8');\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a session whose whole time is already spent",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "clock": "whole",
+   "dump": null,
+   "failure": {
+    "refused": "postgres_input_deadline"
+   },
+   "asked": [],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a client that exits while something keeps its output open",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [],
+     "end": "orphan"
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "postgres_session_exited"
+   },
+   "asked": [
+    "<SETUP>",
+    "<CATALOG>"
+   ],
+   "farewell": null,
+   "started": true
+  },
+  {
+   "name": "a client that exits between two statements",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [
+    {
+     "parts": [],
+     "leaves": true
+    }
+   ],
+   "settle": true,
+   "dump": null,
+   "failure": {
+    "refused": "postgres_session_exited"
+   },
+   "asked": [
+    "<SETUP>"
+   ],
+   "farewell": null,
+   "started": true
+  },
+  {
+   "name": "a client that exits before the first statement",
+   "function": "collect",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [],
+   "exitsAtOnce": true,
+   "settle": true,
+   "dump": null,
+   "failure": {
+    "refused": "postgres_session_exited"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": true
+  },
+  {
+   "name": "a container named by sixty-three digits",
+   "function": "collect",
+   "container": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_database_container"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a container named in capitals",
+   "function": "collect",
+   "container": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_database_container"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a container named by its name",
+   "function": "collect",
+   "container": "simplestchat-public-postgres-1",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_database_container"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a container named by sixty-five digits",
+   "function": "collect",
+   "container": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_database_container"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "the owner renamed to another site",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.example.test",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": "{\"id\": 1, \"email\": \"owner@new.example.test\"}\n{\"id\": 2, \"email\": \"b@example.test\"}\n"
+      }
+     ]
+    }
+   ],
+   "dump": "{\"rows\": 2, \"copyBytes\": 82, \"sha256\": \"4c65d877285a93244dd207433f0122f19536e59fca262dbe4d394ae25a8a38ec\"}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "COPY (\nSELECT value::text FROM (\n SELECT CASE WHEN t.email='owner@old.example.test'\n THEN to_jsonb(t)||jsonb_build_object('email','owner@new.example.test')\n ELSE to_jsonb(t) END AS value FROM ONLY public.users t\n) rewritten ORDER BY value::text COLLATE \"C\"\n) TO STDOUT WITH(FORMAT text,ENCODING 'UTF8');\n\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "the owner of a deep host name",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@a.b-c.d0.example",
+   "new": "owner@xyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    },
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"rows\": 0, \"copyBytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
+   "failure": null,
+   "asked": [
+    "<SETUP>",
+    "COPY (\nSELECT value::text FROM (\n SELECT CASE WHEN t.email='owner@a.b-c.d0.example'\n THEN to_jsonb(t)||jsonb_build_object('email','owner@xyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.example')\n ELSE to_jsonb(t) END AS value FROM ONLY public.users t\n) rewritten ORDER BY value::text COLLATE \"C\"\n) TO STDOUT WITH(FORMAT text,ENCODING 'UTF8');\n\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a setup that prints something before the owner is read",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.example.test",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": "BEGIN\n"
+      }
+     ]
+    }
+   ],
+   "dump": null,
+   "failure": {
+    "refused": "unexpected_transaction_output"
+   },
+   "asked": [
+    "<SETUP>"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "an old owner in capitals",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@OLD.example.test",
+   "new": "owner@new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "an old address that is not the managed owner",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "admin@old.example.test",
+   "new": "owner@new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "an old owner on a single label",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@localhost",
+   "new": "owner@new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "an old owner whose name ends in a dot",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test.",
+   "new": "owner@new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "an old owner with a quote",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old'.example.test",
+   "new": "owner@new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner whose label starts with a hyphen",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@-new.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner whose label ends with a hyphen",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new-.example.test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner with a label of sixty-four characters",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.example",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner whose last label has a digit",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.example.t3st",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner whose last label is one letter",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.example.t",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner whose last label is sixty-four letters",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner with an empty label",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new..test",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner with a trailing line break",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@new.example.test\n",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a new owner without a host",
+   "function": "renamed_users",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "old": "owner@old.example.test",
+   "new": "owner@",
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "invalid_managed_owner_email"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "records that arrive one byte at a time",
+   "function": "digest",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "statement": "fixture statement;",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": "{\"private\":\"fixture-only\"}\n{\"number\":2}\n"
+      }
+     ],
+     "pieces": 1
+    }
+   ],
+   "dump": "{\"rows\": 2, \"copyBytes\": 40, \"sha256\": \"ee911c6bac6200a944e25b58816dbbb049c364e0cefb35f0151e8f6e9007b93f\"}",
+   "failure": null,
+   "asked": [
+    "fixture statement;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a statement that prints nothing",
+   "function": "digest",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "statement": "fixture statement;",
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"rows\": 0, \"copyBytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
+   "failure": null,
+   "asked": [
+    "fixture statement;\n\\echo <MARKER>\n"
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a statement exactly as long as one may be",
+   "function": "digest",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "statement": {
+    "repeat": "s",
+    "count": 131003
+   },
+   "answers": [
+    {
+     "parts": [
+      {
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "dump": "{\"rows\": 0, \"copyBytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
+   "failure": null,
+   "asked": [
+    {
+     "repeat": "s",
+     "count": 131003
+    }
+   ],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "a statement one byte longer than one may be",
+   "function": "digest",
+   "container": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "statement": {
+    "repeat": "s",
+    "count": 131004
+   },
+   "answers": [],
+   "dump": null,
+   "failure": {
+    "refused": "sql_limit"
+   },
+   "asked": [],
+   "farewell": "ROLLBACK;\n\\quit\n",
+   "started": true
+  },
+  {
+   "name": "two clusters holding the same database",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": null,
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "the same fields in another order",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "totalPhysicalRows": 2,
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "systemIdentifier": "222",
+    "database": "simplestchat",
+    "passed": true,
+    "schemaVersion": 1
+   },
+   "dump": null,
+   "failure": null,
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "the same cluster on both sides",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "same_database_cluster"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "no cluster identity on either side",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "same_database_cluster"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a cluster identity on one side only",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": null,
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a source that did not pass",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": false,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "snapshot_not_passed"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a destination that did not pass",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": false,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "snapshot_not_passed"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a destination whose verdict is a number",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": 1,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "snapshot_not_passed"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a destination without a verdict",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "snapshot_not_passed"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "one row more on the destination",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 3
+   },
+   "dump": null,
+   "failure": {
+    "refused": "database_snapshot_mismatch"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "another table digest",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "database_snapshot_mismatch"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "one field more on the destination",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2,
+    "extra": null
+   },
+   "dump": null,
+   "failure": {
+    "refused": "database_snapshot_mismatch"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "one field fewer on the destination",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": {
+    "refused": "database_snapshot_mismatch"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a count written as a decimal",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2.0
+   },
+   "dump": null,
+   "failure": null,
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "a count written as text",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "222",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": "2"
+   },
+   "dump": null,
+   "failure": {
+    "refused": "database_snapshot_mismatch"
+   },
+   "asked": [],
+   "farewell": null,
+   "started": false
+  },
+  {
+   "name": "cluster identities that differ only in type",
+   "function": "equivalent",
+   "source": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": "111",
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "destination": {
+    "schemaVersion": 1,
+    "passed": true,
+    "database": "simplestchat",
+    "systemIdentifier": 111,
+    "tables": [
+     {
+      "schema": "public",
+      "name": "users",
+      "rows": 2,
+      "copyBytes": 10,
+      "sha256": "abababababababababababababababababababababababababababababababab"
+     }
+    ],
+    "totalPhysicalRows": 2
+   },
+   "dump": null,
+   "failure": null,
+   "asked": [],
+   "farewell": null,
+   "started": false
+  }
+ ]
+}

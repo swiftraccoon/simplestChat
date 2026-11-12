@@ -725,8 +725,11 @@ cargo run --locked -q -p simplestchat-ci -- database-check migration
 The monitoring check runs the three tests in `ops/src/monitor/database_tests.rs`
 by their exact names (`cargo test -p simplestchat-ops --lib -- --ignored --exact`)
 with `MONITORING_DATABASE_CHECK=1`; without that selector, as in a workspace
-`--include-ignored` run, they return at once. The restore and migration checks
-retain their Python test patterns. The restore step first pulls the
+`--include-ignored` run, they return at once. The migration check runs the two
+tests in `ops/src/migrate/snapshot_database_tests.rs` the same way, selected by
+`MIGRATION_DATABASE_CHECK=1`: the snapshot through a real client session, a
+real dump and restore, and the guarded owner rename. The restore check retains
+its Python test pattern. The restore step first pulls the
 same digest-pinned PostgreSQL 18.6 image and retains `RESTORE_CONTAINER_E2E=1` in
 the workflow. Discovery runs literal `pg_config --bindir` with a 30-second outer
 bound and 4096-byte stdout ceiling, admits one existing absolute directory, and

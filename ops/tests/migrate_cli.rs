@@ -1,6 +1,6 @@
 //! The migration commands refuse malformed invocations and unprivileged
-//! callers before touching anything. The certificate handoff never says why;
-//! the inspection prints one fixed code.
+//! callers before touching anything. The certificate handoff and the data
+//! steps never say why; the inspection prints one fixed code.
 use std::process::{Command, Output};
 
 const IDENTITY: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -33,6 +33,20 @@ fn malformed_invocations_are_usage_errors_without_effects() {
             "PRIVATE_VALUE",
         ],
         &["migrate", "review", "source", "https://chat.example.test"],
+        &["migrate", "freeze-source"],
+        &["migrate", "freeze-source", "--request"],
+        &["migrate", "freeze-source", "--request=PRIVATE_VALUE"],
+        &["migrate", "--request", "PRIVATE_VALUE", "freeze-source"],
+        &["migrate", "freeze-source", "--req", "PRIVATE_VALUE"],
+        &["migrate", "inspect-source", "--request", "PRIVATE_VALUE"],
+        &["migrate", "thaw-source", "--request", "PRIVATE_VALUE"],
+        &[
+            "migrate",
+            "restore-target",
+            "--request",
+            "PRIVATE_VALUE",
+            "PRIVATE_VALUE",
+        ],
     ] {
         let output = ops(arguments);
         assert_eq!(output.status.code(), Some(2), "{arguments:?}");
@@ -41,6 +55,9 @@ fn malformed_invocations_are_usage_errors_without_effects() {
         assert!(!text.contains("PRIVATE"), "{arguments:?}");
         for family in [
             "simplestchat-ops migrate inspect source|target ORIGIN",
+            "simplestchat-ops migrate freeze-source|recover-source --request PATH",
+            "simplestchat-ops migrate seal-source|finalize-source --request PATH",
+            "simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH",
             "simplestchat-ops migrate tls export|import OPERATION",
         ] {
             assert!(text.contains(family), "{arguments:?}");
@@ -88,6 +105,33 @@ fn an_unprivileged_caller_gets_one_fixed_line() {
             String::from_utf8(output.stderr).unwrap(),
             "Migration TLS handoff failed; private certificate state was preserved.\n",
             "{arguments:?}"
+        );
+    }
+}
+
+#[test]
+fn an_unprivileged_data_step_says_only_that_it_failed() {
+    if rustix::process::geteuid().is_root() {
+        // As root these would act on the machine's own deployment.
+        return;
+    }
+    for step in [
+        "freeze-source",
+        "recover-source",
+        "seal-source",
+        "finalize-source",
+        "restore-target",
+        "verify-target",
+        "abort-target",
+    ] {
+        let request = "/srv/simplestchat-public/migrations/PRIVATE_VALUE/request.json";
+        let output = ops(&["migrate", step, "--request", request]);
+        assert_eq!(output.status.code(), Some(1), "{step}");
+        assert!(output.stdout.is_empty(), "{step}");
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "{\"passed\":false,\"error\":\"migration_action_failed\"}\n",
+            "{step}"
         );
     }
 }

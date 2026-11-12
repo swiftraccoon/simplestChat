@@ -64,6 +64,20 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
         "monitor::database_tests::external_history_keeps_gaps_privacy_and_retention_through_partial_recovery",
         "monitor::database_tests::incident_lifecycle_replay_privileges_and_retention",
     ];
+    let migration = [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "simplestchat-ops",
+        "--lib",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "migrate::snapshot::database_tests::only_the_lossless_enum_cast_relocation_is_made_canonical",
+        "migrate::snapshot::database_tests::a_real_restore_keeps_rows_partitions_grants_and_the_schema_digest",
+    ];
     for (check, command, selected) in [
         (
             Check::Monitoring,
@@ -71,14 +85,24 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
             true,
         ),
         (Check::Restore, suite("test_restore_database.py"), false),
-        (Check::Migration, suite("test_migrate_public.py"), false),
+        (
+            Check::Migration,
+            migration.map(str::to_owned).to_vec(),
+            true,
+        ),
     ] {
         assert_eq!(check.command(), command);
         let mut owned = environment.clone();
         check.select(&mut owned);
-        let selector = owned.get(OsStr::new("MONITORING_DATABASE_CHECK"));
-        let selector = selector.map(|value| value.to_str().unwrap());
-        assert_eq!(selector, selected.then_some("1"), "{check:?}");
+        // Each check selects only its own tests.
+        for (other, name) in [
+            (Check::Monitoring, "MONITORING_DATABASE_CHECK"),
+            (Check::Migration, "MIGRATION_DATABASE_CHECK"),
+        ] {
+            let selector = owned.get(OsStr::new(name));
+            let selector = selector.map(|value| value.to_str().unwrap());
+            assert_eq!(selector, (check == other).then_some("1"), "{check:?}");
+        }
         assert_eq!(owned.len(), environment.len() + usize::from(selected));
         let mut executor = Fake {
             commands: vec![],
@@ -330,35 +354,52 @@ async fn failed_restore_discovery_does_not_hide_its_status_after_successful_pull
     assert_eq!(executor.commands[1].program, Program::PgConfig);
 }
 
-/// The monitoring check names its tests exactly, so each must exist, ignored
-/// and selected by the owner's variable: a renamed or unselected test would
-/// otherwise be filtered out and the check would pass having run nothing.
+/// Each owned check names every database test of its module, exactly: a
+/// test missing from the list would never run, and a name that matched
+/// nothing would be filtered out and the check would pass having run
+/// nothing.
 #[test]
-fn the_monitoring_check_names_exactly_the_owned_database_tests() {
+fn the_owned_checks_name_exactly_their_database_tests() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent);
-    let source = root.unwrap().join("ops/src/monitor/database_tests.rs");
-    let source = std::fs::read_to_string(source).unwrap();
-    let mut declared = Vec::new();
-    let mut lines = source.lines();
-    while let Some(line) = lines.next() {
-        if line != "#[test]" {
-            continue;
+    for (check, file, module, selector, count) in [
+        (
+            Check::Monitoring,
+            "ops/src/monitor/database_tests.rs",
+            "monitor::database_tests",
+            "MONITORING_DATABASE_CHECK",
+            3,
+        ),
+        (
+            Check::Migration,
+            "ops/src/migrate/snapshot_database_tests.rs",
+            "migrate::snapshot::database_tests",
+            "MIGRATION_DATABASE_CHECK",
+            2,
+        ),
+    ] {
+        let source = std::fs::read_to_string(root.unwrap().join(file)).unwrap();
+        let mut declared = Vec::new();
+        let mut lines = source.lines();
+        while let Some(line) = lines.next() {
+            if line != "#[test]" {
+                continue;
+            }
+            let ignored = lines.next().unwrap();
+            assert!(ignored.starts_with("#[ignore = \""), "{ignored}");
+            let function = lines.next().unwrap().strip_prefix("fn ").unwrap();
+            let name = function.strip_suffix("() {").unwrap();
+            assert_eq!(
+                lines.next(),
+                Some("    let Some(url) = database() else { return };")
+            );
+            declared.push(format!("{module}::{name}"));
         }
-        let ignored = lines.next().unwrap();
-        assert!(ignored.starts_with("#[ignore = \""), "{ignored}");
-        let function = lines.next().unwrap().strip_prefix("fn ").unwrap();
-        let name = function.strip_suffix("() {").unwrap();
-        assert_eq!(
-            lines.next(),
-            Some("    let Some(url) = database() else { return };")
-        );
-        declared.push(format!("monitor::database_tests::{name}"));
+        assert_eq!(source.matches("#[test]").count(), declared.len());
+        let command = check.command();
+        assert_eq!(command[10..], declared);
+        assert_eq!(declared.len(), count);
+        assert!(source.contains(&format!("const SELECTOR: &str = \"{selector}\";")));
     }
-    assert_eq!(source.matches("#[test]").count(), declared.len());
-    let command = Check::Monitoring.command();
-    assert_eq!(command[10..], declared);
-    assert_eq!(declared.len(), 3);
-    assert!(source.contains("const SELECTOR: &str = \"MONITORING_DATABASE_CHECK\";"));
 }

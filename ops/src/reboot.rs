@@ -10,6 +10,8 @@ mod profile;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use profile::image_identity;
+
 use crate::host::command::Interruptible;
 use crate::host::evidence::Evidence;
 use crate::host::fault::{
@@ -57,7 +59,8 @@ const CONTAINER_FORMAT: &str = concat!(
     r#"{"id":{{json .Id}},"image":{{json .Image}},"state":{{json .State}},"#,
     r#""configHash":{{json (index .Config.Labels "com.docker.compose.config-hash")}}}"#,
 );
-const IMAGE_FORMAT: &str = concat!(
+/// What an image inspection must say for its identity to be judged.
+pub(crate) const IMAGE_FORMAT: &str = concat!(
     r#"{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},"#,
     r#""user":{{json .Config.User}},"labels":{{json .Config.Labels}},"#,
     r#""cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}},"#,

@@ -2,6 +2,7 @@
 //! and the fixed directories of one deployment. Tests substitute each.
 
 pub(crate) mod command;
+pub(crate) mod dialogue;
 pub(crate) mod evidence;
 pub(crate) mod failure;
 pub(crate) mod fault;

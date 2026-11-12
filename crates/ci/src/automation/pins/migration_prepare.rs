@@ -49,16 +49,32 @@ fn uses(task: &Value, module: &str) -> bool {
 fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receipt_local() {
     let play = play();
     let all = tasks(&play["tasks"]);
-    let inspection = first(all, |task| {
+    let (held_at, holding) = located(all, |task| {
+        task["name"] == "Hold the executable this move authenticated before it reaches either host"
+    });
+    assert_eq!(holding["when"], "scmig_action in ['inspect', 'bootstrap']");
+    let retained = tasks(&holding["block"]);
+    assert_eq!(
+        names(retained),
+        [
+            "Snapshot the authenticated executable the controller retained",
+            "Require exactly the executable this move authenticated",
+        ]
+    );
+    let (inspected_at, inspection) = located(all, |task| {
         task["name"] == "Inspect both selected machines without changing services or stored files"
     });
+    let (bootstrapped_at, _) = located(all, |task| {
+        task["when"]
+            .to_string()
+            .contains("scmig_action == 'bootstrap'")
+    });
+    assert!(held_at < inspected_at && held_at < bootstrapped_at);
     assert_eq!(inspection["when"], "scmig_action == 'inspect'");
     let steps = tasks(&inspection["block"]);
     assert_eq!(
         names(steps),
         [
-            "Snapshot the authenticated executable the controller retained",
-            "Require exactly the executable this move authenticated",
             "Create a private directory for the executable where it can run",
             "Transfer the authenticated executable without installing it",
             "Join the transferred bytes before their first execution",
@@ -78,20 +94,20 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         assert!(!text.contains(retired), "{retired}");
     }
     let local = |task: &Value| task["delegate_to"] == "localhost" && task["become"] == false;
-    assert!(local(&steps[0]));
+    assert!(local(&retained[0]));
     assert_eq!(
-        steps[0]["ansible.builtin.stat"]["path"],
+        retained[0]["ansible.builtin.stat"]["path"],
         "{{ scmig_ops_executable }}"
     );
     let scratch =
         json!({"state": "directory", "path": "/var/tmp", "prefix": "simplestchat-inspect-"});
-    assert_eq!(steps[2]["ansible.builtin.tempfile"], scratch);
+    assert_eq!(steps[0]["ansible.builtin.tempfile"], scratch);
     let held = "{{ scmig_inspector.path }}/simplestchat-ops";
     let transfer = json!({"src": "{{ scmig_ops_executable }}", "dest": held, "owner": "root",
         "group": "root", "mode": "0700", "force": false});
-    assert_eq!(steps[3]["ansible.builtin.copy"], transfer);
-    assert_eq!(steps[4]["ansible.builtin.stat"]["path"], held);
-    let command = &steps[6];
+    assert_eq!(steps[1]["ansible.builtin.copy"], transfer);
+    assert_eq!(steps[2]["ansible.builtin.stat"]["path"], held);
+    let command = &steps[4];
     let role = "{{ 'source' if inventory_hostname == 'migration_source' else 'target' }}";
     let origin = concat!(
         "{{ scmig_source_origin if inventory_hostname == 'migration_source' ",
@@ -109,12 +125,12 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         (&json!(false), &json!(60))
     );
     assert_eq!(command["register"], "scmig_inspected");
-    for step in &steps[1..8] {
+    for step in &steps[..6] {
         assert!(step.get("delegate_to").is_none(), "{}", step["name"]);
     }
-    let rules = strings(&steps[7]["ansible.builtin.assert"]["that"]).join(" ");
+    let rules = strings(&steps[5]["ansible.builtin.assert"]["that"]).join(" ");
     assert!(rules.contains("machineId !="));
-    let receipt = &steps[8];
+    let receipt = &steps[6];
     assert!(local(receipt));
     assert_eq!(receipt["ansible.builtin.copy"]["mode"], "0600");
     assert_eq!(receipt["ansible.builtin.copy"]["force"], false);
@@ -184,7 +200,7 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         ),
     ];
     let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
-    let verdicts = asserted(&steps[1]["ansible.builtin.assert"]["that"], &variables);
+    let verdicts = asserted(&retained[1]["ansible.builtin.assert"]["that"], &variables);
     for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
         assert_eq!(accepted, expected, "{case}");
     }
@@ -206,10 +222,141 @@ fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receip
         ),
     ];
     let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
-    let verdicts = asserted(&steps[5]["ansible.builtin.assert"]["that"], &variables);
+    let verdicts = asserted(&steps[3]["ansible.builtin.assert"]["that"], &variables);
     for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
         assert_eq!(accepted, expected, "{case}");
     }
+}
+
+/// Where a move keeps its authenticated executable on each machine.
+const KEPT: &str = "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops";
+
+/// Preparation leaves the authenticated executable beside the request on
+/// both machines, never replacing bytes that are already there, and joins
+/// them before anything runs them. A source keeps its installed release.
+#[test]
+fn bootstrap_keeps_the_authenticated_executable_beside_the_request_on_both_machines() {
+    let play = play();
+    let steps = block(&play, "bootstrap");
+    let (bound, _) = located(steps, |task| {
+        task["name"] == "Bind a new private migration request without replacing prior evidence"
+    });
+    let kept = &steps[bound + 1];
+    assert_eq!(
+        kept["name"],
+        "Keep the authenticated executable beside the request of this move"
+    );
+    let copy = json!({"src": "{{ scmig_ops_executable }}", "dest": KEPT, "owner": "root",
+        "group": "root", "mode": "0700", "force": false});
+    assert_eq!(kept["ansible.builtin.copy"], copy);
+    assert!(kept.get("when").is_none() && kept.get("delegate_to").is_none());
+    let joined = &steps[bound + 2];
+    assert_eq!(
+        joined["ansible.builtin.include_tasks"],
+        "tasks/migration-ops.yml"
+    );
+    assert!(joined.get("when").is_none());
+    // The shared check, as Ansible evaluates it.
+    let check = document("ops/ansible/tasks/migration-ops.yml");
+    let check = tasks(&check);
+    assert_eq!(check.len(), 2);
+    let stat = json!({"path": KEPT, "follow": false, "get_checksum": true,
+        "checksum_algorithm": "sha256"});
+    assert_eq!(check[0]["ansible.builtin.stat"], stat);
+    assert_eq!(check[0]["register"], "scmig_ops_kept");
+    let digest = "e".repeat(64);
+    let case = |pin: &str, change: &dyn Fn(&mut Value)| {
+        let mut stat = json!({"isreg": true, "islnk": false, "nlink": 1, "uid": 0,
+            "mode": "0700", "checksum": digest});
+        change(&mut stat);
+        json!({"scmig_ops_sha256": pin, "scmig_ops_kept": {"stat": stat}})
+    };
+    let cases = [
+        (case(&digest, &|_| {}), true),
+        (case("E", &|stat| stat["checksum"] = json!("E")), false),
+        (
+            case(&digest, &|stat| stat["checksum"] = json!("f".repeat(64))),
+            false,
+        ),
+        (case(&digest, &|stat| stat["uid"] = json!(1000)), false),
+        (case(&digest, &|stat| stat["mode"] = json!("0755")), false),
+        (case(&digest, &|stat| stat["nlink"] = json!(2)), false),
+        (case(&digest, &|stat| stat["islnk"] = json!(true)), false),
+        (case(&digest, &|stat| stat["isreg"] = json!(false)), false),
+    ];
+    let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
+    let verdicts = asserted(&check[1]["ansible.builtin.assert"]["that"], &variables);
+    for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
+        assert_eq!(accepted, expected, "{case}");
+    }
+}
+
+/// Every data step of a move runs the executable the move keeps, with the
+/// step and the request it names, after its bytes were joined again on that
+/// machine. Nothing is interpreted, and the bounded units stay as they were.
+#[test]
+fn every_data_step_runs_the_executable_the_move_keeps() {
+    let plays = document("ops/ansible/migration-data.yml");
+    let plays = plays.as_array().unwrap();
+    let request = "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json";
+    let text = Value::from(plays.clone()).to_string();
+    for retired in [".py", "python", "/usr/local/libexec"] {
+        assert!(!text.contains(retired), "{retired}");
+    }
+    let mut steps = Vec::new();
+    for play in &plays[1..] {
+        let tasks = tasks(&play["tasks"]);
+        let mut joined: Option<&Value> = None;
+        for task in tasks {
+            if task.get("ansible.builtin.include_tasks").is_some() {
+                assert_eq!(
+                    task["ansible.builtin.include_tasks"],
+                    "tasks/migration-ops.yml"
+                );
+                joined = Some(&task["when"]);
+                continue;
+            }
+            let Some(argv) = task["ansible.builtin.command"]["argv"].as_array() else {
+                continue;
+            };
+            // Another command of the play may count in numbers.
+            let word = |word: &Value| {
+                word.as_str()
+                    .map_or_else(|| word.to_string(), str::to_owned)
+            };
+            let argv: Vec<String> = argv.iter().map(word).collect();
+            let Some(at) = argv.iter().position(|word| word == KEPT) else {
+                continue;
+            };
+            assert_eq!(argv[at + 1], "migrate");
+            assert_eq!(argv[at + 3..], ["--request", request]);
+            // The check came first in this play, for at least this action.
+            let condition = task["when"].as_str().unwrap();
+            let checked = joined.unwrap_or_else(|| panic!("{}", task["name"]));
+            let actions = condition.split('\'').skip(1).step_by(2);
+            for action in actions {
+                assert!(checked.to_string().contains(action), "{}", task["name"]);
+            }
+            let bounded = argv[0] == "systemd-run";
+            steps.push((
+                play["hosts"].as_str().unwrap(),
+                argv[at + 2].clone(),
+                bounded,
+            ));
+        }
+    }
+    let on = |hosts: &'static str, step: &str, bounded: bool| (hosts, step.to_owned(), bounded);
+    let either = "{{ 'recover-source' if scmig_action == 'resume-source' else 'finalize-source' }}";
+    assert_eq!(
+        steps,
+        [
+            on("migration_target", "verify-target", false),
+            on("migration_source", "freeze-source", true),
+            on("migration_source", "seal-source", false),
+            on("migration_target", "restore-target", true),
+            on("migration_source", either, true),
+        ]
+    );
 }
 
 /// From `test_secret_copy_requires_exact_digest_without_owner_or_secret_logging`:
@@ -273,8 +420,12 @@ fn same_origin_tls_transfer_is_private_and_precedes_staging() {
     let last = &steps[steps.len() - 1];
     assert_eq!(steps[0]["when"], "inventory_hostname == 'migration_source'");
     assert_eq!(last["when"], "inventory_hostname == 'migration_target'");
-    assert!(strings(&steps[0]["ansible.builtin.command"]["argv"]).contains(&"export"));
-    assert!(strings(&last["ansible.builtin.command"]["argv"]).contains(&"import"));
+    for (step, action) in [(&steps[0], "export"), (last, "import")] {
+        assert_eq!(
+            strings(&step["ansible.builtin.command"]["argv"]),
+            [KEPT, "migrate", "tls", action, "{{ scmig_run_id }}"]
+        );
+    }
     let copy = first(steps, |step| uses(step, "ansible.builtin.copy"));
     assert_eq!(copy["ansible.builtin.copy"]["force"], false);
     assert_eq!(copy["ansible.builtin.copy"]["mode"], "0600");

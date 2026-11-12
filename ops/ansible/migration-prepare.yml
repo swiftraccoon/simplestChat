@@ -255,8 +255,8 @@
     # Neither host has a trusted executable of this revision yet, and nothing may
     # be installed before both are known. The authenticated one is therefore run
     # from a volatile private directory and removed again.
-    - name: Inspect both selected machines without changing services or stored files
-      when: scmig_action == 'inspect'
+    - name: Hold the executable this move authenticated before it reaches either host
+      when: scmig_action in ['inspect', 'bootstrap']
       block:
         - name: Snapshot the authenticated executable the controller retained
           ansible.builtin.stat:
@@ -279,6 +279,9 @@
               - scmig_inspector_original.stat.checksum == scmig_ops_sha256
             fail_msg: The controller must still hold the exact executable it authenticated.
 
+    - name: Inspect both selected machines without changing services or stored files
+      when: scmig_action == 'inspect'
+      block:
         # A host's /run forbids execution; /var/tmp is on its root filesystem.
         - name: Create a private directory for the executable where it can run
           ansible.builtin.tempfile:
@@ -472,6 +475,20 @@
             mode: '0600'
             force: false
 
+        # Every later step of the move runs these bytes and no installed
+        # helper: a source keeps whatever release it has installed.
+        - name: Keep the authenticated executable beside the request of this move
+          ansible.builtin.copy:
+            src: "{{ scmig_ops_executable }}"
+            dest: "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+            owner: root
+            group: root
+            mode: '0700'
+            force: false
+
+        - name: Require the authenticated bytes beside the request
+          ansible.builtin.include_tasks: tasks/migration-ops.yml
+
         - name: Inspect source secrets without returning their contents
           ansible.builtin.stat:
             path: /etc/simplestchat-public/secrets.json
@@ -599,9 +616,9 @@
         - name: Export only the validated source hostname certificate and metadata
           ansible.builtin.command:
             argv:
-              - /usr/bin/python3
-              - -B
-              - /usr/local/libexec/simplestchat-public/migration_tls.py
+              - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+              - migrate
+              - tls
               - export
               - "{{ scmig_run_id }}"
           when: inventory_hostname == 'migration_source'
@@ -641,9 +658,9 @@
         - name: Validate and install the exact hostname subtree without replacing existing bytes
           ansible.builtin.command:
             argv:
-              - /usr/bin/python3
-              - -B
-              - /usr/local/libexec/simplestchat-public/migration_tls.py
+              - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+              - migrate
+              - tls
               - import
               - "{{ scmig_run_id }}"
           when: inventory_hostname == 'migration_target'

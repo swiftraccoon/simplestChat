@@ -1,7 +1,7 @@
 //! Fixed disposable PostgreSQL checks with an explicit captured environment.
 //!
-//! The monitoring statements are tested by the Ops crate beside the recorder
-//! that issues them; the restore and migration suites are still Python.
+//! The monitoring statements and the migration snapshot are tested by the Ops
+//! crate beside the code that issues them; the restore suite is still Python.
 //! Preparation owns only its CLI groups; the same PostgreSQL harness owns the
 //! new cluster.
 
@@ -62,43 +62,54 @@ impl Check {
             ];
             fixed.map(str::to_owned).to_vec()
         };
+        // These tests live in the Ops crate beside the code that issues the
+        // statements. Each is named exactly: a filter that matched nothing
+        // would pass having run nothing.
+        let owned = |module: &str, names: &[&str]| {
+            let mut command = [
+                "cargo",
+                "test",
+                "--locked",
+                "-p",
+                "simplestchat-ops",
+                "--lib",
+                "--",
+                "--ignored",
+                "--exact",
+                "--test-threads=1",
+            ]
+            .map(str::to_owned)
+            .to_vec();
+            command.extend(names.iter().map(|name| format!("{module}::{name}")));
+            command
+        };
         match self {
-            // The statements' tests live beside the recorder that issues
-            // them. Each is named exactly: a filter that matched nothing
-            // would pass having run nothing.
-            Self::Monitoring => {
-                let mut command = [
-                    "cargo",
-                    "test",
-                    "--locked",
-                    "-p",
-                    "simplestchat-ops",
-                    "--lib",
-                    "--",
-                    "--ignored",
-                    "--exact",
-                    "--test-threads=1",
-                ]
-                .map(str::to_owned)
-                .to_vec();
-                for name in [
+            Self::Monitoring => owned(
+                "monitor::database_tests",
+                &[
                     "an_ambiguous_committed_response_retains_the_outage_after_recovery",
                     "external_history_keeps_gaps_privacy_and_retention_through_partial_recovery",
                     "incident_lifecycle_replay_privileges_and_retention",
-                ] {
-                    command.push(format!("monitor::database_tests::{name}"));
-                }
-                command
-            }
+                ],
+            ),
             Self::Restore => suite("test_restore_database.py"),
-            Self::Migration => suite("test_migrate_public.py"),
+            Self::Migration => owned(
+                "migrate::snapshot::database_tests",
+                &[
+                    "only_the_lossless_enum_cast_relocation_is_made_canonical",
+                    "a_real_restore_keeps_rows_partitions_grants_and_the_schema_digest",
+                ],
+            ),
         }
     }
     /// Select the tests that run only inside this check's own cluster.
     fn select(self, environment: &mut Environment) {
-        if self == Self::Monitoring {
-            environment.insert("MONITORING_DATABASE_CHECK".into(), "1".into());
-        }
+        let selector = match self {
+            Self::Monitoring => "MONITORING_DATABASE_CHECK",
+            Self::Migration => "MIGRATION_DATABASE_CHECK",
+            Self::Restore => return,
+        };
+        environment.insert(selector.into(), "1".into());
     }
 }
 

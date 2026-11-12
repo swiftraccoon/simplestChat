@@ -13,6 +13,7 @@ use crate::host::failure::{Failure, Result, require};
 use crate::host::{Host, Paths, System, emit};
 use crate::release::assets::{self, Takeover, Workload};
 use nightly::{Action, Request};
+pub(crate) use nightly::{digest as file_digest, dump_database, headroom, publish};
 use std::ffi::OsString;
 use std::process::ExitCode;
 use std::sync::Arc;

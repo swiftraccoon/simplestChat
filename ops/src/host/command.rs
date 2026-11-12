@@ -2,6 +2,7 @@
 //! output. The child leads its own process group, which is killed and reaped
 //! when the deadline passes; nothing it printed is kept after a failure.
 
+use super::dialogue::{self, Dialogue};
 use super::failure::{Failure, Result, require};
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
@@ -42,11 +43,34 @@ pub(crate) trait Commands {
     /// Standard output of a command that exited with status zero in time.
     fn run(&self, request: &Request<'_>) -> Result<Vec<u8>>;
 
+    /// Like `run`, for a command whose exit status is part of its answer:
+    /// whether it exited with status zero, and what it printed either way.
+    /// A machine that cannot tell reports an unsuccessful command as having
+    /// printed nothing.
+    fn attempt(&self, request: &Request<'_>) -> Result<(bool, Vec<u8>)> {
+        match self.run(request) {
+            Ok(output) => Ok((true, output)),
+            Err(Failure::Command) => Ok((false, Vec::new())),
+            Err(failure) => Err(failure),
+        }
+    }
+
     /// Bytes an unprivileged writer may still use on the filesystem holding
     /// `path`.
     fn free(&self, path: &std::path::Path) -> Result<u64> {
         let usage = rustix::fs::statvfs(path).map_err(|_| Failure::Os)?;
         Ok(usage.f_bavail.saturating_mul(usage.f_frsize))
+    }
+
+    /// Start a child that is spoken to in turns, under exactly
+    /// `environment`. A machine that holds no conversations refuses.
+    fn converse<'a>(
+        &'a self,
+        argv: &[String],
+        environment: &[(&str, &str)],
+    ) -> Result<Box<dyn Dialogue + 'a>> {
+        let _ = (argv, environment);
+        Err(Failure::Command)
     }
 }
 
@@ -130,7 +154,20 @@ impl Request<'_> {
 
 impl Commands for Local {
     fn run(&self, request: &Request<'_>) -> Result<Vec<u8>> {
+        succeeded(execute(request, None)?)
+    }
+
+    fn attempt(&self, request: &Request<'_>) -> Result<(bool, Vec<u8>)> {
         execute(request, None)
+    }
+
+    fn converse<'a>(
+        &'a self,
+        argv: &[String],
+        environment: &[(&str, &str)],
+    ) -> Result<Box<dyn Dialogue + 'a>> {
+        let child = dialogue::open(argv, environment, None, dialogue::GRACE)?;
+        Ok(Box::new(child))
     }
 }
 
@@ -145,15 +182,40 @@ pub(crate) struct Interruptible<'a> {
 
 impl Commands for Interruptible<'_> {
     fn run(&self, request: &Request<'_>) -> Result<Vec<u8>> {
+        self.attempt(request).and_then(succeeded)
+    }
+
+    fn attempt(&self, request: &Request<'_>) -> Result<(bool, Vec<u8>)> {
         require(!self.stop.load(Ordering::SeqCst), self.refusal)?;
         let outcome = execute(request, Some(self.stop));
         require(!self.stop.load(Ordering::SeqCst), self.refusal)?;
         outcome
     }
+
+    fn converse<'a>(
+        &'a self,
+        argv: &[String],
+        environment: &[(&str, &str)],
+    ) -> Result<Box<dyn Dialogue + 'a>> {
+        require(!self.stop.load(Ordering::SeqCst), self.refusal)?;
+        let stop = Some((self.stop, self.refusal));
+        let child = dialogue::open(argv, environment, stop, dialogue::GRACE)?;
+        Ok(Box::new(child))
+    }
 }
 
-/// Run one request on this machine, watching `stop` while it runs.
-fn execute(request: &Request<'_>, stop: Option<&AtomicBool>) -> Result<Vec<u8>> {
+/// The output of a command that succeeded.
+fn succeeded((success, output): (bool, Vec<u8>)) -> Result<Vec<u8>> {
+    if success {
+        Ok(output)
+    } else {
+        Err(Failure::Command)
+    }
+}
+
+/// Run one request on this machine, watching `stop` while it runs: whether
+/// the command exited with status zero, and its bounded standard output.
+fn execute(request: &Request<'_>, stop: Option<&AtomicBool>) -> Result<(bool, Vec<u8>)> {
     let (program, arguments) = request.argv.split_first().ok_or(Failure::Command)?;
     let input = match (request.source, request.input) {
         (Some(path), _) => Stdio::from(std::fs::File::open(path)?),
@@ -233,16 +295,18 @@ fn execute(request: &Request<'_>, stop: Option<&AtomicBool>) -> Result<Vec<u8>> 
         !noisy.load(Ordering::SeqCst),
         "command_stderr_limit_exceeded",
     )?;
-    match status {
-        None => return Err(Failure::Timeout),
-        Some(status) if !status.success() => return Err(Failure::Command),
-        Some(_) => {}
+    let Some(status) = status else {
+        return Err(Failure::Timeout);
+    };
+    if !status.success() && total > request.limit {
+        // What a failed command said beyond the limit is not an answer.
+        return Err(Failure::Command);
     }
     require(total <= request.limit, request.oversized)?;
     for file in archive.iter().chain(&evidence) {
         file.sync_all()?;
     }
-    Ok(kept)
+    Ok((status.success(), kept))
 }
 
 #[cfg(test)]
@@ -357,6 +421,101 @@ pub(crate) mod tests {
         let argv = vec!["/nonexistent/simplestchat-tool".into()];
         let missing = Local.run(&Request::fixed(argv, 1.0, 1, "Oversized test response"));
         assert_eq!(missing, Err(Failure::Command));
+    }
+
+    /// The local machine holds conversations; an interruptible one refuses a
+    /// new conversation and every further turn once its stop is raised, and
+    /// a machine that holds none refuses outright.
+    #[test]
+    fn conversations_start_locally_and_stop_with_the_interruption() {
+        use super::dialogue::Heard;
+        let argv = ["/bin/sh", "-c", "echo \"$MARK\"; cat"].map(str::to_owned);
+        let environment = [("PATH", "/usr/bin:/bin"), ("MARK", "fixed")];
+        let within = Duration::from_secs(2);
+        let mut child = Local.converse(&argv, &environment).unwrap();
+        assert_eq!(child.hear(within), Ok(Heard::Bytes(b"fixed\n".to_vec())));
+        child.send(b"word\n", within).unwrap();
+        assert_eq!(child.hear(within), Ok(Heard::Bytes(b"word\n".to_vec())));
+        child.end(b"");
+        let stop = AtomicBool::new(false);
+        let (stop, refusal) = (&stop, "stopped_by_signal");
+        let machine = Interruptible { stop, refusal };
+        let mut child = machine.converse(&argv, &environment).unwrap();
+        assert_eq!(child.hear(within), Ok(Heard::Bytes(b"fixed\n".to_vec())));
+        stop.store(true, Ordering::SeqCst);
+        let refused = Failure::Refused("stopped_by_signal");
+        assert_eq!(child.send(b"word\n", within), Err(refused.clone()));
+        child.end(b"");
+        assert_eq!(machine.converse(&argv, &environment).err(), Some(refused));
+        let scripted = Scripted::new(|_: &Request<'_>| Ok(Vec::new()));
+        let refused = scripted.converse(&argv, &environment).err();
+        assert_eq!(refused, Some(Failure::Command));
+    }
+
+    /// A command whose status is part of its answer keeps what it printed
+    /// when it fails; a deadline, a missing program and an interruption stay
+    /// failures.
+    #[test]
+    fn an_attempt_reports_the_status_with_the_output() {
+        let attempt = |script: &str, seconds: f64| {
+            let argv = vec!["/bin/sh".into(), "-c".into(), script.into()];
+            Local.attempt(&Request::fixed(argv, seconds, 8, "Oversized test response"))
+        };
+        assert_eq!(attempt("printf said", 5.0), Ok((true, b"said".to_vec())));
+        assert_eq!(
+            attempt("printf said; exit 4", 5.0),
+            Ok((false, b"said".to_vec()))
+        );
+        assert_eq!(
+            attempt("printf 123456789", 5.0),
+            Err(Failure::Refused("Oversized test response"))
+        );
+        assert_eq!(
+            attempt("printf 123456789; exit 1", 5.0),
+            Err(Failure::Command)
+        );
+        assert_eq!(attempt("sleep 30", 0.2), Err(Failure::Timeout));
+        let argv = vec!["/nonexistent/simplestchat-tool".into()];
+        let missing = Local.attempt(&Request::fixed(argv, 1.0, 1, "Oversized test response"));
+        assert_eq!(missing, Err(Failure::Command));
+        let stop = AtomicBool::new(false);
+        let (stop, refusal) = (&stop, "stopped_by_signal");
+        let machine = Interruptible { stop, refusal };
+        let argv = || vec!["/bin/sh".into(), "-c".into(), "printf said; exit 4".into()];
+        let request = Request::fixed(argv(), 5.0, 8, "Oversized test response");
+        assert_eq!(machine.attempt(&request), Ok((false, b"said".to_vec())));
+        assert_eq!(machine.run(&request), Err(Failure::Command));
+        stop.store(true, Ordering::SeqCst);
+        assert_eq!(machine.attempt(&request), Err(Failure::Refused(refusal)));
+        // Once stopped, a command is not even started.
+        let scratch = crate::host::state::tests::Scratch::new();
+        let made = scratch.path().join("made");
+        let script = format!("touch {}", made.to_str().unwrap());
+        let touching = vec!["/bin/sh".into(), "-c".into(), script];
+        // The file that would keep its output is made before a child is:
+        // its absence shows that nothing was started at all.
+        let kept = scratch.path().join("kept");
+        let touch = Request {
+            archive: Some(&kept),
+            ceiling: Some(8),
+            ..Request::fixed(touching, 5.0, 8, "Oversized test response")
+        };
+        assert_eq!(machine.attempt(&touch), Err(Failure::Refused(refusal)));
+        assert_eq!(machine.run(&touch), Err(Failure::Refused(refusal)));
+        assert!(!made.exists() && !kept.exists());
+        stop.store(false, Ordering::SeqCst);
+        assert_eq!(machine.attempt(&touch), Ok((true, Vec::new())));
+        assert!(made.exists() && kept.exists());
+        // A machine that only runs commands reports a failed one as silent.
+        let scripted = Scripted::new(|request: &Request<'_>| match request.seconds {
+            seconds if seconds > 4.0 => Err(Failure::Command),
+            seconds if seconds > 2.0 => Err(Failure::Timeout),
+            _ => Ok(b"said".to_vec()),
+        });
+        let asked = |seconds| Request::fixed(argv(), seconds, 8, "Oversized test response");
+        assert_eq!(scripted.attempt(&asked(5.0)), Ok((false, Vec::new())));
+        assert_eq!(scripted.attempt(&asked(3.0)), Err(Failure::Timeout));
+        assert_eq!(scripted.attempt(&asked(1.0)), Ok((true, b"said".to_vec())));
     }
 
     /// A bounded archive receives its output through the runner: exactly the

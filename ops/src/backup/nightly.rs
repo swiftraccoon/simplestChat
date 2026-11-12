@@ -144,7 +144,7 @@ fn text(bytes: Vec<u8>) -> Result<String> {
 }
 
 /// Require room for twice the current database and a gibibyte beside it.
-fn headroom(runner: &mut Evidence<'_>, database: &str) -> Result<()> {
+pub(crate) fn headroom(runner: &mut Evidence<'_>, database: &str) -> Result<()> {
     let arguments = [
         "exec",
         "--user",
@@ -218,7 +218,11 @@ fn ledger(runner: &mut Evidence<'_>, database: &str) -> Result<Vec<(String, Stri
 
 /// Dump with a daemon-side lifetime shorter than the wait for it, and list
 /// the archive before anything may name it.
-fn dump_database(runner: &mut Evidence<'_>, database: &str, partial: &Path) -> Result<()> {
+pub(crate) fn dump_database(
+    runner: &mut Evidence<'_>,
+    database: &str,
+    partial: &Path,
+) -> Result<()> {
     let bounded = ["timeout", "--signal=TERM", "--kill-after=2s"];
     let mut dump = vec!["exec", "--user", "999:999", database];
     dump.extend(bounded);
@@ -254,7 +258,7 @@ fn dump_database(runner: &mut Evidence<'_>, database: &str, partial: &Path) -> R
 }
 
 /// Flush the complete archive before its name, or any receipt, can exist.
-fn publish(partial: &Path, destination: &Path) -> Result<()> {
+pub(crate) fn publish(partial: &Path, destination: &Path) -> Result<()> {
     let together = partial.parent() == destination.parent();
     require(together, "Backup publication must stay on one filesystem")?;
     let absent = std::fs::symlink_metadata(destination).is_err();
@@ -278,7 +282,8 @@ fn publish(partial: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-fn digest(path: &Path) -> Result<String> {
+/// The SHA-256 of a file of any size, in lowercase hexadecimal.
+pub(crate) fn digest(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut chunk = vec![0_u8; 1024 * 1024];

@@ -93,7 +93,7 @@ pub(super) fn environment_names(names: &[&str]) -> Result<()> {
 
 /// Require the inspected image to be the reviewed runtime of `revision` and
 /// return its identity.
-pub(super) fn image_identity(inspected: &Json, revision: &str) -> Result<String> {
+pub(crate) fn image_identity(inspected: &Json, revision: &str) -> Result<String> {
     inspected.object().ok_or(VALUE)?;
     let identifier = text(field(inspected, "id")?)?;
     require(

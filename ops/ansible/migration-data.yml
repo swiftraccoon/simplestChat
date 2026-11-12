@@ -25,12 +25,15 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
+    - name: Require this move's authenticated executable before any step runs it
+      ansible.builtin.include_tasks: tasks/migration-ops.yml
+      when: scmig_action == 'launch'
+
     - name: Require the verified restored destination to remain stopped and unchanged
       ansible.builtin.command:
         argv:
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/migrate_public.py
+          - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+          - migrate
           - verify-target
           - --request
           - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"
@@ -43,6 +46,10 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
+    - name: Require this move's authenticated executable before any step runs it
+      ansible.builtin.include_tasks: tasks/migration-ops.yml
+      when: scmig_action in ['transfer', 'launch']
+
     - name: Quiesce source writers and create a verified private database archive
       ansible.builtin.command:
         argv:
@@ -52,9 +59,8 @@
           - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=600
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/migrate_public.py
+          - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+          - migrate
           - freeze-source
           - --request
           - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"
@@ -92,9 +98,8 @@
     - name: Permanently prevent automatic source recovery before destination can accept writes
       ansible.builtin.command:
         argv:
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/migrate_public.py
+          - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+          - migrate
           - seal-source
           - --request
           - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"
@@ -107,6 +112,10 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
+    - name: Require this move's authenticated executable before any step runs it
+      ansible.builtin.include_tasks: tasks/migration-ops.yml
+      when: scmig_action == 'transfer'
+
     - name: Copy only the verified private migration archive and evidence
       ansible.builtin.copy:
         src: "{{ scmig_evidence }}/source/{{ item }}"
@@ -128,9 +137,8 @@
           - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=60
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/migrate_public.py
+          - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+          - migrate
           - restore-target
           - --request
           - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"
@@ -170,6 +178,10 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
+    - name: Require this move's authenticated executable before any step runs it
+      ansible.builtin.include_tasks: tasks/migration-ops.yml
+      when: scmig_action in ['resume-source', 'finalize-source']
+
     - name: Run the bounded source lifecycle action with its durable phase guard
       ansible.builtin.command:
         argv:
@@ -179,9 +191,8 @@
           - --property=RuntimeMaxSec=600
           - --property=TimeoutStopSec=60
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/migrate_public.py
+          - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/simplestchat-ops"
+          - migrate
           - "{{ 'recover-source' if scmig_action == 'resume-source' else 'finalize-source' }}"
           - --request
           - "/srv/simplestchat-public/migrations/{{ scmig_run_id }}/request.json"

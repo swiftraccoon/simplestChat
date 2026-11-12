@@ -1,7 +1,7 @@
 //! Same-process capability for the existing nonblocking workload flock and
 //! unfinished-journal gates. No path or owner bypass is public, and the only
-//! recovery is a backup or reboot owner's named takeover of its own
-//! unfinished record.
+//! recovery is a backup, reboot or migration owner's named takeover of its
+//! own unfinished record.
 use super::{
     Result, fail,
     files::{self, Dir, Entry, Fs, ScopedFs},
@@ -38,6 +38,14 @@ pub enum Takeover<'a> {
     /// A prepared reboot's release record while the recorded boot is still
     /// the current one.
     RebootCancel { boot: &'a str },
+    /// The release record of exactly this move between two machines, which
+    /// each of the move's steps continues.
+    Migration {
+        operation: &'a str,
+        source: &'a str,
+        destination: &'a str,
+        revision: &'a str,
+    },
 }
 
 impl Takeover<'_> {
@@ -52,7 +60,10 @@ impl Takeover<'_> {
     /// The part of this takeover that concerns the release record.
     fn release(self) -> Self {
         match self {
-            Self::RebootPrepare | Self::RebootResume { .. } | Self::RebootCancel { .. } => self,
+            Self::RebootPrepare
+            | Self::RebootResume { .. }
+            | Self::RebootCancel { .. }
+            | Self::Migration { .. } => self,
             _ => Self::Nothing,
         }
     }
@@ -70,6 +81,24 @@ impl Takeover<'_> {
             Self::RebootResume { boot } => prepared().is_some_and(|recorded| recorded != boot),
             Self::RebootCancel { boot } => prepared().is_some_and(|recorded| recorded == boot),
             Self::Offsite => operation == Some("offsite_backup"),
+            Self::Migration {
+                operation: identity,
+                source,
+                destination,
+                revision,
+            } => {
+                let request = record.get("request").and_then(Json::object);
+                let named = |name: &str, expected: &str| {
+                    let value = request.and_then(|request| request.get(name));
+                    value.and_then(Json::string) == Some(expected)
+                };
+                operation == Some("server_migration")
+                    && request.is_some_and(|request| request.len() == 4)
+                    && named("operationId", identity)
+                    && named("sourceOrigin", source)
+                    && named("destinationOrigin", destination)
+                    && named("targetRevision", revision)
+            }
             Self::ExpiredNightly { boot, monotonic } => {
                 let deadline = match record.get("untilMonotonic") {
                     Some(value @ (Json::Integer(_) | Json::Float(_))) => value.number(),

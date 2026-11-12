@@ -76,8 +76,14 @@ verifies the application's attestation and authenticates the Ops executable on
 the controller, before either host is contacted. Both machines are then
 inspected, read-only, by that executable: it is copied into a private directory
 under `/var/tmp` (a host's `/run` forbids execution), checked against its signed
-digest, run uninstalled and removed again. Staging verifies the same application originals once more and delivers
-the executable to the destination.
+digest, run uninstalled and removed again. Preparation then leaves the same
+bytes beside the move's request on both machines, as
+`/srv/simplestchat-public/migrations/<operation-id>/simplestchat-ops`, and every
+later step of the move runs them only after joining them against that digest
+again: freezing, restoring, verifying, sealing, recovering and retiring, and the
+certificate handoff of a kept hostname. A source keeps the release it has
+installed. Staging verifies the same application originals once more and
+installs the executable on the destination.
 
 `--revision FULL_COMMIT` selects an ancestor application release independently
 of the migration tools, so moving servers need not also upgrade the application.
@@ -213,8 +219,8 @@ Once both hosts are frozen in those private inventories, editing your own
 inventory files no longer affects the move.
 
 A failure before destination startup attempts to confirm its app and proxy are
-stopped, then restore the recorded source services. The source helper also attempts
-this recovery if archive creation fails. A disconnected controller can leave its
+stopped, then restore the recorded source services. The freeze step itself also
+attempts this recovery if archive creation fails. A disconnected controller can leave its
 bounded remote freeze unit running; the workload lock then refuses concurrent
 recovery until that unit settles. The outcome explicitly reports manual recovery
 when automatic recovery cannot finish. Recovery is never allowed after the source's
@@ -247,9 +253,12 @@ both host journals before any explicit recovery action. Never remove a journal
 to bypass an unfinished operation.
 
 If restoration failed before the destination app or proxy was ever created and
-source recovery succeeded, the host helper's explicit `abort-target --request
-/srv/simplestchat-public/migrations/<operation-id>/request.json` action retains
-the failed PostgreSQL directory inside that attempt as `retained-postgres`.
+source recovery succeeded, the explicit step
+`/srv/simplestchat-public/migrations/<operation-id>/simplestchat-ops migrate
+abort-target --request
+/srv/simplestchat-public/migrations/<operation-id>/request.json`, run as root on
+the destination, retains the failed PostgreSQL directory inside that attempt as
+`retained-postgres`.
 It checks the unfinished destination journal, unchanged configuration and owned
 database mount, stops and removes only that PostgreSQL container, then finalizes
 the aborted attempt. It never deletes database files or accepts a completed
@@ -258,7 +267,8 @@ new migration to take a fresh source archive; do not reuse the failed archive.
 
 CI replays recorded moves, refusals and recoveries through the controller's
 production transaction with scripted tools, evaluates the playbooks' selection
-guards with Ansible itself, and runs the host helpers' preflight and lifecycle
-tests plus a disposable PostgreSQL dump/restore test that exercises row
-preservation, partitioned storage, schema/ACL drift detection and the
-owner-email transaction. No hosted job moves a real deployment between two hosts.
+guards with Ansible itself, replays every recorded invocation of the earlier
+host helper against the executable's own steps, and runs the snapshot against a
+disposable PostgreSQL: a real dump and restore that exercises row preservation,
+partitioned storage, schema and grant drift and the owner's rename. No hosted job
+moves a real deployment between two hosts.
