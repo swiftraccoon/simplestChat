@@ -119,6 +119,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release maintain [OPTIONS]\n",
                 "       simplestchat-ops release seed-lobby\n",
                 "       simplestchat-ops release admit-unsigned --request ABS\n",
+                "       simplestchat-ops release profile image|compose --image-id ID\n",
+                "       simplestchat-ops release ledger --revision REV --ledger PATH\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",

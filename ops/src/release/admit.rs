@@ -339,7 +339,7 @@ fn admit(host: &Host<'_>, directory: &Path, request: &Request, started: String) 
 
 /// The version and SHA-384 of every migration a checkout carries, as a
 /// release manifest lists them.
-fn migrations(checkout: &Path) -> Result<BTreeMap<String, String>> {
+pub(crate) fn migrations(checkout: &Path) -> Result<BTreeMap<String, String>> {
     let directory = checkout.join("migrations");
     // A checkout without the directory carries none.
     let entries = std::fs::read_dir(&directory).into_iter().flatten();

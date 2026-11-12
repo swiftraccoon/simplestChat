@@ -86,8 +86,6 @@ pub(super) fn guest_sources() -> BTreeSet<String> {
         "docker-compose.yml",
         "ops/ansible/files/deploy-public.sh",
         "ops/ansible/files/public-compose.sh",
-        "ops/ansible/files/release_json.py",
-        "ops/ansible/files/runtime_profile.py",
     ] {
         names.insert(name.into());
     }

@@ -4,6 +4,7 @@ pub mod archive;
 pub mod assets;
 pub mod manifest;
 pub mod preflight;
+pub mod profile;
 pub mod trust;
 
 pub mod build;
@@ -13,6 +14,8 @@ pub mod attestation;
 pub mod verify;
 
 pub mod fetch;
+
+pub mod ledger;
 
 pub mod receive;
 

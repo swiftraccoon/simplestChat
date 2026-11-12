@@ -756,18 +756,18 @@ fn native_catalog_keeps_the_frozen_guest_roster_and_thirty_eight_migrations() {
     ));
     // Every name of this roster was a literal of the Python guest it
     // replaced; the digest freezes the roster as it was last compared,
-    // less the two files of the lobby-seeding helper the launcher no
-    // longer runs.
+    // less the two files of the lobby-seeding helper and the two of the
+    // runtime-profile validator the launcher no longer runs.
     let roster = catalog::guest_sources().into_iter().collect::<Vec<_>>();
     assert_eq!(
         files::hex(&Sha256::digest(roster.join("\n"))),
-        "1434074bb8cd696d16e2f64ea22d1bba7e04c9ba3cd88f320bb50a57c8adb06d"
+        "c741d8374e9a9c0b49394f8f630c85cac90510beeea02f2f9c2fee5b30043145"
     );
     for (name, _) in catalog::OPS_CASES {
         assert!(ops.contains(&format!("\"{name}\"")));
     }
     assert_eq!(catalog::MIGRATIONS.len(), 38);
-    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::guest_sources().len(), 50);
     assert_eq!(catalog::HELPERS.len(), 15);
     for old_proof in [
         "build/security_vm_stage_guest.py",
@@ -841,7 +841,7 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
     ] {
         assert!(sources.contains(file), "{file}");
     }
-    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::guest_sources().len(), 50);
     assert_eq!(catalog::HELPERS.len(), 15);
     assert!(
         !catalog::guest_sources()

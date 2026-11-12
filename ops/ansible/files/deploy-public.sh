@@ -103,9 +103,8 @@ source_root="/srv/simplestchat-bench/sources/$revision"
 [[ -z $(git -C "$source_root" status --porcelain --untracked-files=all) ]]
 # Reject execution, loader and mount overrides before starting any application.
 # The validator emits only a fixed receipt; resolved secrets stay in the pipe.
-profile=/usr/local/libexec/simplestchat-public/runtime_profile.py
-compose --profile maintenance config --format json | timeout 15s python3 "$profile" compose --image-id "$server_image" >"$attempt/runtime-compose.json"
-docker_owned image inspect --format '{{json .Config}}' "$server_image" | timeout 15s python3 "$profile" image >"$attempt/runtime-image.json"
+compose --profile maintenance config --format json | timeout 15s "$ops" release profile compose --image-id "$server_image" >"$attempt/runtime-compose.json"
+docker_owned image inspect --format '{{json .Config}}' "$server_image" | timeout 15s "$ops" release profile image >"$attempt/runtime-image.json"
 
 phase=proxy_validation
 printf '%s\n' "$validation_name" >"$attempt/validation-name.txt"
@@ -155,22 +154,7 @@ done
 jq -e '.status == "ready"' "$attempt/migration-ready.json" >/dev/null
 psql_owned --tuples-only --no-align --field-separator ' ' \
   --command "SELECT version, success, encode(checksum, 'hex') FROM public._sqlx_migrations ORDER BY version" >"$attempt/migration-ledger.txt"
-python3 - "$revision" "$attempt/migration-ledger.txt" <<'PY'
-import hashlib
-from pathlib import Path
-import sys
-source = Path('/srv/simplestchat-bench/sources') / sys.argv[1] / 'migrations'
-expected = {int(path.name.split('_')[0]): hashlib.sha384(path.read_bytes()).hexdigest() for path in source.glob('*.sql')}
-actual = {}
-for line in Path(sys.argv[2]).read_text().splitlines():
-    version, success, checksum = line.split()
-    if not (success == 't' and int(version) not in actual):
-        raise SystemExit('Operational precondition failed')
-    actual[int(version)] = checksum
-if not (expected and actual == expected):
-    raise SystemExit('Migration ledger differs from the verified source image')
-print('Packaged migration checksums match.')
-PY
+"$ops" release ledger --revision "$revision" --ledger "$attempt/migration-ledger.txt"
 compose --profile maintenance stop --timeout 30 migrate >"$attempt/migration-stop.log" 2>&1
 docker_owned inspect --format '{{json .State}}' "$migration_id" >"$attempt/migration-state.json"
 jq -e '.Running == false and .ExitCode == 0 and .OOMKilled == false and .Error == ""' "$attempt/migration-state.json" >/dev/null

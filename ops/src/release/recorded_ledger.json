@@ -1,0 +1,348 @@
+{
+ "cases": [
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "the ledger of the source's migrations matches",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "rows in another order match",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7",
+   "name": "a ledger without a final line end matches",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\r\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\r\n",
+   "name": "rows ended by a carriage return and line feed match",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 \t t \t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 \t t \t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "fields apart by tabs and blanks match",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "other files beside the migrations do not matter",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "001_initial.sql.orig": "y",
+    "002_more.sql": "SELECT 2;\n",
+    "003_LATER.SQL": "z",
+    "README.md": "x"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "one migration and its row match",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 f 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "a migration that did not succeed is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Operational precondition failed",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 true 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "a success spelled out is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Operational precondition failed",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a version recorded twice is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Operational precondition failed",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t d752c2c51fba0e29aa190570a9d4253e44077a058d3297fa3a5630d5bd012622f97c28acaed313b5c83bb990caa7da85\n",
+   "name": "another checksum differs",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095D8D7876CA8E842F34296CA645C83E0F7B50F048C99DB4B2FF4DA659267AFC4EF3E994F3D74E18C741165D931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "an upper-case checksum differs",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration the ledger lacks differs",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "a row the source lacks differs",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n"
+   },
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "",
+   "name": "an empty ledger differs",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "",
+   "name": "no migration and no row differ",
+   "source": {},
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n",
+   "name": "a source without a migrations directory differs",
+   "source": null,
+   "status": 1,
+   "stderr": "Migration ledger differs from the verified source image",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n2 t 1f7e22c7c0ea23f18eaa40e47945a71f2cb479fba2257126cc756c7c3df72785d5106cb6eaf17f3144abe02570d1d7a7\n\n",
+   "name": "a blank row is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t\n",
+   "name": "a row of two fields is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931 x\n",
+   "name": "a row of four fields is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "one t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a version that is no number is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": "ff31207420",
+   "ledger": null,
+   "name": "a ledger that is not text is refused",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n",
+    "002_more.sql": "SELECT 2;\n"
+   },
+   "status": 1,
+   "stderr": "UnicodeDecodeError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration without a number is refused",
+   "source": {
+    "initial.sql": "SELECT 1;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration named with a hyphen is refused",
+   "source": {
+    "001-initial.sql": "SELECT 1;\n"
+   },
+   "status": 1,
+   "stderr": "ValueError",
+   "stdout": ""
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration with leading zeros is one version",
+   "source": {
+    "0001_initial.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "0 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration numbered zero",
+   "source": {
+    "000_zero.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "+1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a row whose version has a sign",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "001 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a row whose version has leading zeros",
+   "source": {
+    "001_initial.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  },
+  {
+   "hex": null,
+   "ledger": "1 t 24454095d8d7876ca8e842f34296ca645c83e0f7b50f048c99db4b2ff4da659267afc4ef3e994f3d74e18c741165d931\n",
+   "name": "a migration whose name is only its number and an underscore",
+   "source": {
+    "001_.sql": "SELECT 1;\n"
+   },
+   "status": 0,
+   "stderr": "",
+   "stdout": "Packaged migration checksums match.\n"
+  }
+ ],
+ "comment": "Recorded from the launcher's inline ledger comparison; see the replay test.",
+ "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "stricter": [
+  "a migration numbered zero",
+  "a row whose version has a sign",
+  "a row whose version has leading zeros",
+  "a migration whose name is only its number and an underscore"
+ ]
+}

@@ -2446,6 +2446,53 @@ both, as it does for a signed release. One preparation ends differently on
 purpose, because the helper read a source input through a link.
 
 
+## Runtime profile and migration ledger
+
+```sh
+docker image inspect --format '{{json .Config}}' IMAGE | simplestchat-ops release profile image
+docker compose config --format json | simplestchat-ops release profile compose --image-id IMAGE
+simplestchat-ops release ledger --revision REVISION --ledger /path/to/ledger.txt
+```
+
+The maintenance launcher runs these three before it starts or keeps anything
+of a new revision. Each prints one fixed line and never a name or value of
+what it was given.
+
+`release profile` reads one JSON object of at most 2 MiB from standard input
+and answers `{"passed": true}` with status 0, or
+`{"passed": false, "failure": "CODE"}` with status 1. `image` requires the
+image's own defaults: user `10001:10001`, working directory `/app`, the server
+as its only command, no entrypoint and no health check, and an environment of
+distinct plain names. `compose` requires the `simplestchat` and `migrate`
+services of a resolved model to run exactly the named image with only the
+reviewed service fields, that user and command, a read-only root with an init
+process, every capability dropped and `no-new-privileges`, text values, the
+migration switch of each role, the one read-only bind mount of
+`/srv/simplestchat-public/postgres-socket` and the bounded temporary
+filesystem of each role. In both, a name that starts with `LD_` or `OPENSSL_`,
+or is `GLIBC_TUNABLES`, `GCONV_PATH` or `LOCPATH`, is refused even when empty.
+Other services and unknown top-level fields are not judged. The command line
+is exactly `image`, `compose --image-id ID` or `compose --image-id=ID`;
+anything else is a usage error, status 2, before anything is read.
+
+`release ledger` compares the ledger the database printed, one
+`version success checksum` row per line, with the migrations of the verified
+checkout under `/srv/simplestchat-bench/sources/REVISION`: every row must
+have succeeded, and the rows must be exactly that checkout's
+`NUMBER_name.sql` files with their SHA-384 digests. It prints
+`Packaged migration checksums match.` and returns 0, or names on standard
+error that a precondition failed or that the ledger differs, and returns 1.
+The revision is a full commit identity.
+
+The 202 recorded runs of the Python validator and the 29 of the launcher's
+former inline comparison are in `ops/src/release/recorded_profile.json` and
+`recorded_ledger.json`; the tests replay them byte for byte. Three ways of
+asking that the validator answered are usage errors here, and four ledgers
+end differently on purpose: a migration numbered zero or named only by its
+number, and a row whose version carries a sign or leading zeros, which the
+migration tool never produces.
+
+
 ## Offline server attestation preparation
 
 `simplestchat-ops release attestation prepare` consumes the existing unsigned

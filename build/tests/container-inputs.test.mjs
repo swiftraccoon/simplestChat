@@ -356,6 +356,7 @@ test('context excludes local-only descendants while retaining production inputs'
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
     'ops/src/release/recorded_admit.json', 'ops/src/release/recorded_authorize.json',
+    'ops/src/release/recorded_profile.json', 'ops/src/release/recorded_ledger.json',
     'ops/src/capacity_vps/private.env', 'ops/src/capacity_vps/retained/artifact.zip',
     'ops/src/backup/private.env', 'ops/src/backup/recorded_nightly.json',
     'ops/src/host/private.env',

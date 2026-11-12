@@ -7,6 +7,10 @@ use serde_json::{Value, json};
 use std::process::Command;
 
 const SCRIPT: &str = "ops/ansible/files/deploy-public.sh";
+/// The launcher's comparison of the database's migration ledger with the
+/// verified source checkout.
+const LEDGER: &str =
+    r#""$ops" release ledger --revision "$revision" --ledger "$attempt/migration-ledger.txt""#;
 
 /// The single play of the public playbook.
 fn public() -> Value {
@@ -107,6 +111,38 @@ fn enrollment_is_private_and_inventory_policy_precedes_public_start() {
     assert!(!script.contains("docker system prune"));
 }
 
+/// The launcher judges the runtime profile of the resolved model and of the
+/// image, and the database's migration ledger, through the same installed
+/// executable: two receipts before anything is validated or started, and
+/// the ledger exactly as the database printed it. It runs no interpreter of
+/// its own.
+#[test]
+fn the_launcher_judges_profile_and_ledger_through_the_installed_ops_executable() {
+    let script = checkout_file(SCRIPT);
+    let lines: Vec<&str> = script.lines().collect();
+    let position = |line: &str| {
+        let found = lines.iter().position(|found| *found == line);
+        found.unwrap_or_else(|| panic!("{line}"))
+    };
+    let compose = concat!(
+        r#"compose --profile maintenance config --format json | timeout 15s "$ops" "#,
+        r#"release profile compose --image-id "$server_image" >"$attempt/runtime-compose.json""#
+    );
+    let image = concat!(
+        r#"docker_owned image inspect --format '{{json .Config}}' "$server_image" | "#,
+        r#"timeout 15s "$ops" release profile image >"$attempt/runtime-image.json""#
+    );
+    // Both receipts are written before anything is validated or started.
+    assert_eq!(position(image), position(compose) + 1);
+    assert!(position(image) < position("phase=proxy_validation"));
+    // The ledger is the one the database printed on the line before.
+    let printed = lines[position(LEDGER) - 1];
+    assert!(printed.ends_with(r#"ORDER BY version" >"$attempt/migration-ledger.txt""#));
+    assert!(script.find("ops=/usr/local/libexec").unwrap() < script.find(compose).unwrap());
+    assert_eq!(script.matches(r#""$ops" release "#).count(), 4);
+    assert!(!script.contains("python"));
+}
+
 /// The lobby is seeded by the Ops executable a signed release delivers: the
 /// launcher requires it, root-owned and not a link, before it takes the
 /// workload lock or touches anything, runs its seeding command while only
@@ -163,8 +199,7 @@ fn verified_artifacts_and_migrations_precede_runtime_privileges() {
         "git -C \"$source_root\" status --porcelain --untracked-files=all",
         "org.opencontainers.image.revision",
         "--cap-drop ALL --cap-add NET_BIND_SERVICE",
-        "hashlib.sha384",
-        "actual == expected",
+        LEDGER,
         "has_table_privilege('simplestchat_app','public._sqlx_migrations'",
     ] {
         assert!(script.contains(text), "{text}");
@@ -172,7 +207,7 @@ fn verified_artifacts_and_migrations_precede_runtime_privileges() {
     for proof in ["runtime-compose.json", "runtime-image.json"] {
         assert!(at(proof) < at("phase=proxy_validation"), "{proof}");
     }
-    assert!(at("actual == expected") < at("\"$config/runtime-grants.sql\""));
+    assert!(at(LEDGER) < at("\"$config/runtime-grants.sql\""));
     assert!(at(".ExitCode == 0") < at("docker_owned rm \"$migration_id\""));
 }
 

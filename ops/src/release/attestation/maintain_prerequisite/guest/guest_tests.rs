@@ -25,7 +25,7 @@ fn exact_request_keeps_fifty_two_sources_fifteen_helpers_and_original_caps() {
     let value = request_value();
     let request = Request::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 18);
-    assert_eq!(request.source_pins.len(), 52);
+    assert_eq!(request.source_pins.len(), 50);
     assert_eq!(request.helper_pins.len(), 15);
     for (pointer, bad) in [
         ("/schemaVersion", json!(true)),

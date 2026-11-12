@@ -67,13 +67,11 @@ pub(super) const MIGRATIONS: [&str; 38] = [
     "037_users_avatar_digest.sql",
     "038_session_access_tokens.sql",
 ];
-pub(super) const DIRECT_SOURCES: [&str; 6] = [
+pub(super) const DIRECT_SOURCES: [&str; 4] = [
     "Caddyfile",
     "docker-compose.yml",
     "ops/ansible/files/deploy-public.sh",
     "ops/ansible/files/public-compose.sh",
-    "ops/ansible/files/release_json.py",
-    "ops/ansible/files/runtime_profile.py",
 ];
 pub(super) const TEMPLATES: [&str; 8] = [
     "app.env",

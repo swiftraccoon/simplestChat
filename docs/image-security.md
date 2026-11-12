@@ -143,8 +143,10 @@ static OpenSSL 4.1.0 with shared libraries, dynamic loading and engines disabled
 while retaining built-in providers, including legacy algorithms;
 no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
 hooks; identical bytes for every present standard-directory candidate of each
-approved dependency; and the exact files/DNS NSS configuration. Image defaults
-and managed deployment settings use the same `runtime_profile.py` validator.
+approved dependency; and the exact files/DNS NSS configuration. The image audit
+checks the image's defaults with `runtime_profile.py`; a launcher checks the
+image and its resolved deployment settings against the same rules with
+[`simplestchat-ops release profile`](../ops/README.md#runtime-profile-and-migration-ledger).
 The source review in `security/runtime-source-review.json` pins complete source
 trees, dependency/native manifests and profile bytes, expires on a fixed date,
 and requires explicit re-review after changes. The gate does not regenerate or

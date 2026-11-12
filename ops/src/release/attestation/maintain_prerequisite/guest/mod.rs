@@ -273,16 +273,6 @@ async fn rendered_files_for(ctx: &mut Context, image: &str, revision: &str) -> R
             "ops/ansible/files/public-compose.sh",
             0o755,
         ),
-        (
-            "/usr/local/libexec/simplestchat-public/runtime_profile.py",
-            "ops/ansible/files/runtime_profile.py",
-            0o644,
-        ),
-        (
-            "/usr/local/libexec/simplestchat-public/release_json.py",
-            "ops/ansible/files/release_json.py",
-            0o644,
-        ),
     ] {
         let bytes = ctx.sources.get(source).ok_or(Error::Input)?;
         if Path::new(target).starts_with(LIBRARY) && std::fs::symlink_metadata(target).is_ok() {
