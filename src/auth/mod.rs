@@ -7,6 +7,7 @@ pub(crate) mod notifications;
 pub(crate) mod passkeys;
 pub(crate) mod password;
 pub(crate) mod password_policy;
+pub(crate) mod recovery_issuance;
 pub(crate) mod routes;
 pub(crate) mod session;
 pub(crate) mod sessions;

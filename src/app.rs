@@ -13,6 +13,7 @@ use crate::{
     signaling::{BROWSER_BUNDLE, SignalingServer},
 };
 use anyhow::Result;
+use std::ffi::OsString;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,11 +37,56 @@ async fn shutdown_signal() -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn main() -> Result<()> {
+/// The addresses of `issue-account-recovery --email ADDRESS [--email ADDRESS]...`,
+/// or nothing for any other command line.
+fn recovery_accounts(arguments: &[OsString]) -> Option<Vec<String>> {
+    let (command, pairs) = arguments.split_first()?;
+    if command != "issue-account-recovery" || pairs.is_empty() || pairs.len() % 2 != 0 {
+        return None;
+    }
+    let mut addresses = Vec::new();
+    for pair in pairs.chunks(2) {
+        if pair[0] != "--email" {
+            return None;
+        }
+        addresses.push(pair[1].to_str()?.to_owned());
+    }
+    Some(addresses)
+}
+
+/// Initialize the named accounts' recovery keys with this deployment's own
+/// database settings. The keys are the only output; one fixed line on
+/// standard error says how the run ended.
+fn issue_account_recovery(emails: &[String]) -> Result<std::process::ExitCode> {
+    use crate::auth::recovery_issuance::{Refusal, ending, issue, selection};
+    let config = Config::from_env()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let outcome = runtime.block_on(async {
+        // An invalid selection never reaches the database.
+        selection(emails).map_err(Refusal::Selection)?;
+        let pool = db::connect(&config.database).await.ok().flatten();
+        let pool = pool.ok_or(Refusal::Unchanged)?;
+        issue(&pool, emails, &mut std::io::stdout()).await
+    });
+    runtime.shutdown_timeout(Duration::from_secs(1));
+    let (line, code) = ending(&outcome);
+    eprintln!("{line}");
+    Ok(std::process::ExitCode::from(code))
+}
+
+pub fn main() -> Result<std::process::ExitCode> {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if let Some(emails) = recovery_accounts(&arguments) {
+        return issue_account_recovery(&emails);
+    }
     anyhow::ensure!(
         arguments.is_empty() || arguments == ["--check-config"],
-        "Usage: simplestChat [--check-config]"
+        concat!(
+            "Usage: simplestChat [--check-config]\n",
+            "       simplestChat issue-account-recovery --email ADDRESS [--email ADDRESS]..."
+        )
     );
     // Every setting is read and validated before native workers, migrations or
     // listeners can have side effects. Secrets never appear in the output.
@@ -54,7 +100,7 @@ pub fn main() -> Result<()> {
                 "scope": "every setting parsed and validated; no listener, worker, database or relay is exercised"
             })
         );
-        return Ok(());
+        return Ok(std::process::ExitCode::SUCCESS);
     }
     // Unlike the implicit Tokio main teardown, this cannot wait indefinitely
     // for an already-running blocking password job after drain times out.
@@ -63,7 +109,7 @@ pub fn main() -> Result<()> {
         .build()?;
     let result = runtime.block_on(run(config));
     runtime.shutdown_timeout(Duration::from_secs(1));
-    result
+    result.map(|()| std::process::ExitCode::SUCCESS)
 }
 
 async fn run(config: Config) -> Result<()> {

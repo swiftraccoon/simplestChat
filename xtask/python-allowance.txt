@@ -1,4 +1,4 @@
-total 103000
+total 102386
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -8,7 +8,6 @@ total 103000
 11	build/deploy.py
 11	build/fetch-release.py
 61	build/force_deploy.py
-265	build/issue_account_recovery.py
 621	build/maintain_namespace_probe.py
 1438	build/maintain_namespace_probe_guest.py
 1022	build/native_security.py
@@ -108,7 +107,6 @@ total 103000
 1073	ops/ansible/tests/test_ci_verified.py
 766	ops/ansible/tests/test_deploy_controller.py
 367	ops/ansible/tests/test_force_release.py
-349	ops/ansible/tests/test_issue_account_recovery.py
 431	ops/ansible/tests/test_maintain_namespace_probe.py
 113	ops/ansible/tests/test_migration_prepare.py
 875	ops/ansible/tests/test_native_security.py

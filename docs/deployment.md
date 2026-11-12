@@ -885,60 +885,68 @@ to replace credentials or issue a new recovery key.
 
 ### Administrator initialization of missing recovery keys
 
-`build/issue_account_recovery.py` is a privileged operator action for an account
-owner who has explicitly authorized recovery and whose identity the administrator
-has established independently. Knowing an email address is not authorization.
-Use it only on the explicitly selected prepared host and PostgreSQL container;
-there is no public administrator recovery endpoint. It initializes only missing
-keys and refuses to replace an existing recovery key.
+`simplestChat issue-account-recovery` is a privileged operator action for an
+account owner who has explicitly authorized recovery and whose identity the
+administrator has established independently. Knowing an email address is not
+authorization. It is a mode of the server binary, run where the database is,
+with the deployment's own database settings; there is no public administrator
+recovery endpoint. It initializes only missing keys and refuses to replace an
+existing recovery key.
 
-Prepare a new private local directory and supply each exact, lowercase account
-email, the absolute private SSH identity path, and the full 64-character database
-container ID already established for that host:
+Prepare a new private local directory and name each exact, lowercase account
+email. On the prepared host the application container already holds the
+binary and its settings:
 
 ```sh
 mkdir -m 700 "$HOME/account-recovery"
-python3 build/issue_account_recovery.py \
-  --host chat.example.com \
-  --identity "$HOME/.ssh/deployment" \
-  --container '<full-64-character-postgresql-container-id>' \
-  --email owner@example.com \
-  --output "$HOME/account-recovery/keys.json"
+ssh -T deployment-host \
+  sudo docker exec -i simplestchat-public-simplestchat-1 \
+  /app/simplestChat issue-account-recovery --email owner@example.com \
+  > "$HOME/account-recovery/keys.json"
 ```
 
-Repeat `--email` to initialize several accounts atomically. SSH uses root, the
-explicit identity, and existing verified host keys; unknown host keys and
-interactive authentication fail. The output parent must already belong to the
-caller with no group or world permissions. Symlink parents and existing output
-files are rejected. The helper writes an exclusive mode-`0600` JSON file, flushes
-the file and directory to disk, then sends only email addresses and SHA-256
-digests through SSH standard input. Raw keys never enter command arguments,
-remote SQL, terminal output, or diagnostic logs.
+Repeat `--email` to initialize up to twenty accounts atomically. An address is
+at most 255 bytes, lower case, with one `@` and no blank or control character,
+and no address may be named twice; anything else is refused before the
+database is contacted. Standard output carries only the keys, as
+`{"accounts": [{"email": ..., "recoveryKey": ...}]}`; redirect it to a private
+file and never to a terminal or log. The keys are written out completely
+before the database is asked to store their SHA-256 digests, so a lost answer
+cannot leave an account with a key nobody holds. Raw keys never enter command
+arguments, SQL or diagnostics.
 
-Every requested account must exist and have no saved recovery hash. The
-transaction locks rows in stable ID order, checks its exact update count before
-commit, and changes only the recovery hash and update timestamp. Passwords,
-passkeys and sessions remain intact. The terminal reports only
-`account_recovery_issued` after commit is confirmed. Deliver the saved keys to
-their verified owners through a private channel; use the existing recovery flow
-to establish a working sign-in method.
+Every requested account must exist and have no saved recovery hash. One
+transaction locks the rows in stable ID order, requires that exact set, and
+checks its update count before commit; it changes only the recovery hash and
+update timestamp. Passwords, passkeys and sessions remain intact. One fixed
+line on standard error says how the run ended:
 
-Keep the private file if any command fails, including a timeout or lost SSH
-response: the database may already have committed. Do not rerun automatically
-or overwrite that file. An administrator must compare its locally computed key
-digests with the exact accounts through a read-only database check before
-deciding how to proceed. The helper has no replacement or retry mode.
+- `account_recovery_issued` (exit status 0): the commit is confirmed. Deliver
+  the saved keys to their verified owners through a private channel; use the
+  existing recovery flow to establish a working sign-in method.
+- `account_recovery_refused_nothing_changed` (status 1): the selection was
+  invalid, the database could not be used, an account is missing or already
+  has a key, or the update did not reach every account. Nothing was stored;
+  discard any keys that were written out.
+- `account_recovery_unconfirmed_keep_the_keys_no_automatic_retry` (status 1):
+  the commit's outcome is unknown. Keep the private file: the database may
+  already have committed. An administrator must compare the SHA-256 digests of
+  the saved keys with the exact accounts through a read-only database check
+  before deciding how to proceed.
 
-Run its focused tests with the PostgreSQL tools from the
-[database test setup](testing.md) on `PATH`:
+The command has no replacement or retry mode. Run its tests with the
+PostgreSQL tools from the [database test setup](testing.md) on `PATH`:
 
 ```sh
-cargo run -q -p xtask -- test-postgres ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p test_issue_account_recovery.py -v
+cargo run -q -p xtask -- test-env \
+  cargo test --locked --lib recovery_issuance -- --include-ignored --test-threads=1
+cargo run -q -p xtask -- test-env \
+  cargo test --locked --test recovery_cli -- --include-ignored --test-threads=1
 ```
 
-Six tests cover local validation, private-file durability and transport failures.
-The three SQL tests exercise successful initialization and transaction rollback
-inside the wrapper's owned database. They explicitly skip without
-`DISPOSABLE_TEST_DATABASE=1`, which the wrapper sets with its disposable database
-URL; ordinary unwrapped unittest discovery does not run those SQL cases.
+Two offline tests hold the selection rule to 51 recorded judgments of the
+helper this replaced and the written document to the stored digests; two more
+run the real binary against malformed command lines, invalid selections and an
+unreachable database. Five database tests cover successful initialization,
+refusal unless every account is eligible, rollback of an update that misses an
+account, a commit that fails, and the binary end to end.

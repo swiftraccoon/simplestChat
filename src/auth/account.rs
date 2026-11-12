@@ -951,7 +951,7 @@ pub(super) fn generate_recovery_key() -> Result<String, AuthError> {
     ))
 }
 
-fn recovery_hash(key: &str) -> Result<String, AuthError> {
+pub(super) fn recovery_hash(key: &str) -> Result<String, AuthError> {
     let encoded = key
         .strip_prefix(RECOVERY_PREFIX)
         .ok_or(AuthError::InvalidCredentials)?;
