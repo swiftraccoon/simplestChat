@@ -1,4 +1,4 @@
-use super::{policy, run};
+use super::{policy, refusal, run};
 use serde_json::Value;
 use simplestchat_toolkit::tooling::Environment;
 use std::{ffi::OsStr, fs, path::Path, process::ExitCode};
@@ -76,8 +76,11 @@ fn root_hosted_noble_admission_excludes_local_and_ambiguous_contexts() {
 fn exact_priorities_prefer_https_and_preserve_every_original_mirror() {
     assert_eq!(policy::BEFORE.len(), 144);
     assert_eq!(policy::AFTER.len(), 144);
-    assert!(policy::admit(policy::BEFORE).unwrap());
-    assert!(!policy::admit(policy::AFTER).unwrap());
+    assert_eq!(
+        policy::admit(policy::BEFORE).unwrap().as_deref(),
+        Some(policy::AFTER)
+    );
+    assert_eq!(policy::admit(policy::AFTER).unwrap(), None);
     let before = entries(policy::BEFORE);
     let after = entries(policy::AFTER);
     assert_eq!(
@@ -116,6 +119,139 @@ fn unknown_or_ambiguous_mirror_lists_are_never_templated() {
         assert!(policy::admit(value.as_bytes()).is_err());
     }
     assert!(policy::admit(&[0xff]).is_err());
+}
+
+/// The list of an AWS-hosted image, which prefers its region's mirror.
+fn regional(region: &str) -> String {
+    format!(
+        concat!(
+            "http://{}.ec2.archive.ubuntu.com/ubuntu/\tpriority:1\n",
+            "https://archive.ubuntu.com/ubuntu/\tpriority:2\n",
+            "https://security.ubuntu.com/ubuntu/\tpriority:3\n",
+        ),
+        region
+    )
+}
+
+/// An AWS-hosted image's list is reordered exactly as the Azure one is: the
+/// two official archives first, the region's own mirror kept as the last.
+#[test]
+fn an_aws_hosted_list_demotes_its_regional_mirror_the_same_way() {
+    // What a hosted image in AWS reported for its list: 152 bytes.
+    assert_eq!(regional("us-east-2").len(), 152);
+    let regions = [
+        "us-east-2",
+        "us-west-2",
+        "eu-central-1",
+        "ap-southeast-2",
+        "us-gov-west-1",
+        "ap-northeast-3",
+    ];
+    for region in regions {
+        let original = regional(region);
+        let preferred = format!(
+            concat!(
+                "https://archive.ubuntu.com/ubuntu/\tpriority:1\n",
+                "https://security.ubuntu.com/ubuntu/\tpriority:2\n",
+                "http://{}.ec2.archive.ubuntu.com/ubuntu/\tpriority:3\n",
+            ),
+            region
+        );
+        let admitted = policy::admit(original.as_bytes()).unwrap();
+        assert_eq!(admitted.as_deref(), Some(preferred.as_bytes()), "{region}");
+        assert_eq!(
+            policy::admit(preferred.as_bytes()).unwrap(),
+            None,
+            "{region}"
+        );
+        assert!(original.len() as u64 <= policy::LIST_MAX, "{region}");
+    }
+    // The longest region name a list may carry fills the bound exactly.
+    let longest = regional("ap-southeast-east-1");
+    assert_eq!("ap-southeast-east-1".len(), 19);
+    assert!(policy::admit(longest.as_bytes()).is_err());
+    let longest = regional("us-gov-northwest-1");
+    assert!(policy::admit(longest.as_bytes()).is_err());
+    let longest = regional("us-gov-central-1");
+    assert_eq!(longest.len() as u64, policy::LIST_MAX);
+    assert!(policy::admit(longest.as_bytes()).unwrap().is_some());
+}
+
+/// Only a region's name stands before the fixed regional address, only over
+/// the scheme a hosted image uses, and a list has one cloud's mirror once.
+#[test]
+fn a_mirror_that_is_no_aws_regional_archive_is_never_admitted() {
+    for region in [
+        "",
+        "us",
+        "us-east",
+        "us-2",
+        "us-east-22",
+        "us-east-a",
+        "u-east-2",
+        "usa-east-2",
+        "US-EAST-2",
+        "us--2",
+        "us-east-2-1",
+        "us-a-b-c-2",
+        "us-east-2.evil",
+        "evil.example/us-east-2",
+        "us-east-2 ",
+        "us_east_2",
+    ] {
+        assert!(
+            policy::admit(regional(region).as_bytes()).is_err(),
+            "{region:?}"
+        );
+    }
+    let original = regional("us-east-2");
+    for value in [
+        original.replace("http://us-east-2", "https://us-east-2"),
+        original.replace(
+            ".ec2.archive.ubuntu.com/ubuntu/",
+            ".ec2.archive.ubuntu.com/other/",
+        ),
+        original.replace(
+            ".ec2.archive.ubuntu.com",
+            ".ec2.archive.ubuntu.com.evil.example",
+        ),
+        original.replace(".ec2.archive", ".archive"),
+        original.replace("https://archive.", "http://us-west-2.ec2.archive."),
+        original.replace("priority:2", "priority:1"),
+        original.trim_end().to_owned(),
+        format!("{original}http://azure.archive.ubuntu.com/ubuntu/\tpriority:4\n"),
+        format!("http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n{original}"),
+    ] {
+        assert!(policy::admit(value.as_bytes()).is_err(), "{value:?}");
+    }
+    // A cloud's mirror in the middle is neither the original nor the
+    // preferred order.
+    let mut lines: Vec<&str> = original.lines().collect();
+    lines.swap(0, 1);
+    assert!(policy::admit(format!("{}\n", lines.join("\n")).as_bytes()).is_err());
+}
+
+/// A refusal names the check that refused, in fixed words.
+#[test]
+fn a_refusal_names_only_the_check_that_refused() {
+    let named = |check: &str| format!("Unsupported hosted Ubuntu archive profile: {check}.");
+    let refused = policy::admit(b"PRIVATE").unwrap_err();
+    assert_eq!((refused.code, refused.message), (2, named("mirror list")));
+    let refused = policy::sources(b"PRIVATE").unwrap_err();
+    assert_eq!((refused.code, refused.message), (2, named("sources")));
+    let refused = policy::sources(&[0xff]).unwrap_err();
+    assert_eq!(refused.message, named("sources"));
+    let refused = policy::os_release(b"PRIVATE").unwrap_err();
+    assert_eq!((refused.code, refused.message), (2, named("os-release")));
+    let refused = policy::os_release(&[0xff]).unwrap_err();
+    assert_eq!(refused.message, named("os-release"));
+    let refused = policy::host(&Environment::new(), "Linux", "x86_64", 0).unwrap_err();
+    assert_eq!(
+        refusal(&refused),
+        "Hosted Ubuntu mirror preparation refused. \
+         Unsupported hosted Ubuntu archive profile: host."
+    );
+    assert_eq!((refused.code, refused.message), (2, named("host")));
 }
 
 #[test]
@@ -160,6 +296,37 @@ fn readonly_repository_guard_requires_the_effective_fixed_mirror_list() {
         assert!(policy::sources(value.as_bytes()).is_err());
     }
     assert!(policy::sources(&[0xff]).is_err());
+}
+
+/// An AWS-hosted image names the official security archive itself in its
+/// security stanza. That and the list are the only addresses a stanza may
+/// name, and the list must still be named by one.
+#[test]
+fn a_stanza_may_name_the_official_security_archive_directly() {
+    let listed = "URIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble-security";
+    assert_eq!(SOURCES.matches(listed).count(), 1);
+    for address in [
+        "http://security.ubuntu.com/ubuntu/",
+        "http://security.ubuntu.com/ubuntu",
+    ] {
+        let direct = SOURCES.replace(listed, &format!("URIs: {address}\nSuites: noble-security"));
+        policy::sources(direct.as_bytes()).unwrap();
+        // Without any stanza that names the list there is nothing to prefer.
+        let unlisted = direct.replace("mirror+file:/etc/apt/apt-mirrors.txt", address);
+        assert!(policy::sources(unlisted.as_bytes()).is_err(), "{address}");
+    }
+    for address in [
+        "https://security.ubuntu.com/ubuntu/",
+        "http://security.ubuntu.com/other/",
+        "http://security.ubuntu.com/ubuntu//",
+        "http://security.ubuntu.com.evil.example/ubuntu/",
+        "http://archive.ubuntu.com/ubuntu/",
+        "http://us-east-2.ec2.archive.ubuntu.com/ubuntu/",
+        "http://security.ubuntu.com/ubuntu/ http://foreign.example/ubuntu/",
+    ] {
+        let direct = SOURCES.replace(listed, &format!("URIs: {address}\nSuites: noble-security"));
+        assert!(policy::sources(direct.as_bytes()).is_err(), "{address}");
+    }
 }
 
 #[test]

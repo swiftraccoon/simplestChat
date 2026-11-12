@@ -131,6 +131,76 @@ fn replaces_only_mirror_bytes_and_idempotent_admission_does_not_rewrite() {
     assert_eq!(points, vec![Point::Close; 6]);
 }
 
+/// An AWS-hosted image's longer list and its direct security stanza go
+/// through the same transaction: only the list's order changes, and a
+/// second run rewrites nothing.
+#[test]
+fn an_aws_hosted_profile_is_reordered_in_place_and_admitted_again() {
+    let regional = "http://us-east-2.ec2.archive.ubuntu.com/ubuntu/";
+    let official = [
+        "https://archive.ubuntu.com/ubuntu/",
+        "https://security.ubuntu.com/ubuntu/",
+    ];
+    let list = |order: [&str; 3]| {
+        let lines = order.iter().zip(1..);
+        let lines = lines.map(|(address, priority)| format!("{address}\tpriority:{priority}\n"));
+        lines.collect::<String>().into_bytes()
+    };
+    let sources = [
+        "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\n",
+        "Suites: noble noble-updates noble-backports\n\n",
+        "Types: deb\nURIs: http://security.ubuntu.com/ubuntu/\nSuites: noble-security\n",
+    ]
+    .concat();
+    let fixture = Fixture::new();
+    let original = list([regional, official[0], official[1]]);
+    assert_eq!(original.len(), 152);
+    fixture.write("etc/apt/apt-mirrors.txt", &original);
+    fixture.write("etc/apt/sources.list.d/ubuntu.sources", sources.as_bytes());
+    fixture.apply(&mut |_| Ok(())).unwrap();
+    let preferred = list([official[0], official[1], regional]);
+    assert_eq!(fs::read(fixture.mirrors()).unwrap(), preferred);
+    let installed = fs::metadata(fixture.mirrors()).unwrap();
+    profile(&installed, fixture.owner, 152).unwrap();
+    assert!(!fixture.staging().exists());
+    let kept = fs::read(fixture.root.join("etc/apt/sources.list.d/ubuntu.sources")).unwrap();
+    assert_eq!(kept, sources.as_bytes());
+    let mut points = Vec::new();
+    fixture
+        .apply(&mut |point| {
+            points.push(point);
+            Ok(())
+        })
+        .unwrap();
+    assert!(same(&installed, &fs::metadata(fixture.mirrors()).unwrap()));
+    assert_eq!(points, vec![Point::Close; 6]);
+}
+
+/// A list longer than any admitted one is not read at all, and a list of
+/// an admitted length that is no admitted list is refused as a profile.
+#[test]
+fn a_list_past_the_longest_admitted_one_is_a_file_refusal() {
+    let fixture = Fixture::new();
+    let longest = usize::try_from(policy::LIST_MAX).unwrap();
+    fixture.write(
+        "etc/apt/apt-mirrors.txt",
+        "x".repeat(longest + 1).as_bytes(),
+    );
+    let refused = fixture.apply(&mut |_| Ok(())).unwrap_err();
+    assert_eq!(
+        (refused.code, refused.message.as_str()),
+        (1, "APT mirror file operation failed.")
+    );
+    fixture.write("etc/apt/apt-mirrors.txt", "x".repeat(longest).as_bytes());
+    let refused = fixture.apply(&mut |_| Ok(())).unwrap_err();
+    assert_eq!(refused.code, 2);
+    assert_eq!(
+        refused.message,
+        "Unsupported hosted Ubuntu archive profile: mirror list."
+    );
+    assert!(!fixture.staging().exists());
+}
+
 #[test]
 fn unknown_input_or_readonly_guard_refuses_before_any_write() {
     for (name, bytes) in [

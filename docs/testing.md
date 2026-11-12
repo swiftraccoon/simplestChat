@@ -1229,10 +1229,19 @@ Ubuntu/Noble release; ACT is excluded. The workflows invoke the already compiled
 absolute binary through narrowly scoped sudo environment preservation. Local
 disposable CI skips that preparation, and Cargo never runs as root.
 
-Only the known 144-byte runner list or its exact preferred form is accepted.
-Priorities select the existing official archive first, security second and Azure
-third; all three URI bytes remain unchanged. Source definitions, pockets, keys,
-APT authentication, package requests and existing install timeouts are unchanged.
+GitHub hosts these runners in Azure and in AWS, and an image prefers its own
+cloud's mirror. Only two runner lists, or their exact preferred forms, are
+accepted: the 144-byte Azure list, and the same list with the regional mirror
+of an AWS region (`http://REGION.ec2.archive.ubuntu.com/ubuntu/`) in the place
+of Azure's. Priorities select the existing official archive first, security
+second and the cloud's mirror third; all three URI bytes remain unchanged. Every
+stanza of the source definitions must name that list, or, as an AWS image's
+security stanza does, the official security archive itself. Source definitions,
+pockets, keys, APT authentication, package requests and existing install
+timeouts are unchanged. A refusal exits 2 for a profile that is not one of
+these and 1 for a file that is not the runner's own, and its one line names the
+check that refused (`host`, `os-release`, `sources` or `mirror list`) and
+nothing of the host.
 Root-owned retained directories and regular-file checks precede a checked atomic
 replacement, readback and explicit closes. An already preferred list is read-only.
 Late failures remain failures even when the preferred file is visible; atomic

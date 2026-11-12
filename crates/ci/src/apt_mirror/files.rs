@@ -216,6 +216,8 @@ struct Stage {
     stamp: Option<Metadata>,
     visible: Option<Metadata>,
     published: bool,
+    /// The list this transaction installs.
+    preferred: Vec<u8>,
 }
 
 struct Owned {
@@ -234,6 +236,7 @@ impl Owned {
                 stamp: None,
                 visible: None,
                 published: false,
+                preferred: Vec::new(),
             },
         }
     }
@@ -245,7 +248,8 @@ impl Owned {
         Ok(())
     }
 
-    fn prepare(&mut self, root: &Path, owner: Owner) -> tooling::Result<bool> {
+    /// The list to install, or nothing when the preferred one is in place.
+    fn prepare(&mut self, root: &Path, owner: Owner) -> tooling::Result<Option<Vec<u8>>> {
         const CHAINS: &[&[&str]] = &[
             &["etc", "apt"],
             &["etc", "apt", "sources.list.d"],
@@ -255,7 +259,7 @@ impl Owned {
             self.directories.push(directory(root, names, owner)?);
         }
         for (index, name, maximum) in [
-            (0, MIRRORS, policy::BEFORE.len() as u64),
+            (0, MIRRORS, policy::LIST_MAX),
             (1, "ubuntu.sources", GUARD_MAX),
             (2, "os-release", GUARD_MAX),
         ] {
@@ -275,8 +279,12 @@ impl Owned {
     fn replace(
         &mut self,
         owner: Owner,
+        preferred: Vec<u8>,
         hook: &mut impl FnMut(Point) -> tooling::Result<()>,
     ) -> tooling::Result<()> {
+        self.stage.preferred = preferred;
+        let preferred = self.stage.preferred.clone();
+        let length = preferred.len() as u64;
         let parent = &self.directories[0];
         parent.verify().map_err(|_| failure())?;
         self.stage.file = Some(File::from(
@@ -298,16 +306,14 @@ impl Owned {
         self.stage.stamp = Some(io(file.metadata())?);
         rustix::fs::fchmod(&*file, Mode::from_bits_truncate(0o644)).map_err(|_| failure())?;
         hook(Point::Write)?;
-        io(file.write_all(policy::AFTER))?;
+        io(file.write_all(&preferred))?;
         hook(Point::FileSync)?;
         io(file.sync_all())?;
         self.stage.stamp = Some(io(file.metadata())?);
         let stamp = self.stage.stamp.as_ref().ok_or_else(failure)?;
-        profile(stamp, owner, policy::AFTER.len() as u64)?;
+        profile(stamp, owner, length)?;
         hook(Point::Readback)?;
-        if data(file, policy::AFTER.len() as u64)? != policy::AFTER
-            || !same(stamp, &io(file.metadata())?)
-        {
+        if data(file, length)? != preferred || !same(stamp, &io(file.metadata())?) {
             return Err(failure());
         }
         visible(parent, STAGING, stamp)?;
@@ -327,13 +333,13 @@ impl Owned {
         self.stage.published = true;
         hook(Point::DirectorySync)?;
         io(parent.file().sync_all())?;
-        let fresh = Input::open(0, parent, MIRRORS, owner, policy::AFTER.len() as u64)?;
+        let fresh = Input::open(0, parent, MIRRORS, owner, length)?;
         let staged = self.stage.stamp.as_ref().ok_or_else(failure)?;
         let valid = binding(staged, &fresh.stamp)
             && fresh.stamp.len() == staged.len()
             && fresh.stamp.mtime() == staged.mtime()
             && fresh.stamp.mtime_nsec() == staged.mtime_nsec()
-            && fresh.bytes == policy::AFTER;
+            && fresh.bytes == preferred;
         if !valid {
             let _ = checked_close(fresh.file, hook);
             return Err(failure());
@@ -383,16 +389,12 @@ impl Owned {
             // Re-admit the new inode after all their checked-close observations.
             let checked = (|| {
                 let parent = &self.directories[0];
-                let fresh = Input::open(
-                    0,
-                    parent,
-                    MIRRORS,
-                    owner_of(&self.stage)?,
-                    policy::AFTER.len() as u64,
-                )?;
+                let preferred = &self.stage.preferred;
+                let length = preferred.len() as u64;
+                let fresh = Input::open(0, parent, MIRRORS, owner_of(&self.stage)?, length)?;
                 let expected = self.stage.visible.as_ref().ok_or_else(failure);
                 let valid =
-                    expected.map(|stamp| same(stamp, &fresh.stamp) && fresh.bytes == policy::AFTER);
+                    expected.map(|stamp| same(stamp, &fresh.stamp) && fresh.bytes == *preferred);
                 let closed = close(fresh.file);
                 if !valid? {
                     return Err(failure());
@@ -425,8 +427,8 @@ fn apply_at(
 ) -> tooling::Result<()> {
     let mut owned = Owned::new();
     let result = (|| {
-        if owned.prepare(root, owner)? {
-            owned.replace(owner, hook)?;
+        if let Some(preferred) = owned.prepare(root, owner)? {
+            owned.replace(owner, preferred, hook)?;
         }
         Ok(())
     })();

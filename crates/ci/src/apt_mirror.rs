@@ -1,4 +1,5 @@
-//! Prefer the official archives in one admitted hosted Ubuntu mirror profile.
+//! Prefer the official archives in the admitted hosted Ubuntu mirror
+//! profiles: GitHub's Azure-hosted and AWS-hosted Ubuntu 24.04 images.
 
 mod files;
 mod policy;
@@ -9,6 +10,16 @@ use simplestchat_toolkit::tooling;
 use std::process::ExitCode;
 
 const USAGE: &str = "usage: simplestchat-ci apt-mirror";
+
+/// The one line a refusal leaves: that it refused, and the reason, which is
+/// one of this command's own fixed sentences. It names the check that
+/// refused and nothing of the host.
+fn refusal(error: &tooling::Failure) -> String {
+    format!(
+        "Hosted Ubuntu mirror preparation refused. {}",
+        error.message
+    )
+}
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<ExitCode> {
     if arguments.len() == 1 && matches!(arguments[0].as_str(), "--help" | "-h") {
@@ -33,7 +44,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Err(error) => {
-            eprintln!("Hosted Ubuntu mirror preparation refused.");
+            eprintln!("{}", refusal(&error));
             Ok(ExitCode::from(error.code))
         }
     }
