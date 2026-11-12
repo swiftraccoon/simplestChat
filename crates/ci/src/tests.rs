@@ -1075,6 +1075,58 @@ fn shared_crates_are_keyed_wherever_xtask_is() {
     ));
 }
 
+/// The release producer builds the Ops executable with exactly one feature
+/// and refuses a workspace whose resolution gives the package any other:
+/// Cargo unifies the features every member selects, a dev-dependency's
+/// included. So the package declares only that feature, and no manifest
+/// selects one.
+#[test]
+fn no_manifest_selects_a_feature_of_the_ops_package() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let read = |directory: &Path| -> toml::Value {
+        toml::from_str(&fs::read_to_string(directory.join("Cargo.toml")).unwrap()).unwrap()
+    };
+    let workspace = read(root);
+    let declared = read(&root.join("ops"));
+    let features = declared["features"].as_table().unwrap();
+    let names: Vec<&String> = features.keys().collect();
+    assert_eq!(names, ["default", "maintain-guest"]);
+    assert_eq!(features["default"].as_array().map(Vec::len), Some(0));
+    let selects = |name: &str, entry: &toml::Value| {
+        let package = entry.get("package").and_then(toml::Value::as_str);
+        let named = name == "simplestchat-ops" || package == Some("simplestchat-ops");
+        let features = entry.get("features").and_then(toml::Value::as_array);
+        named && features.is_some_and(|features| !features.is_empty())
+    };
+    let members = workspace["workspace"]["members"].as_array().unwrap();
+    let members = members
+        .iter()
+        .map(|member| root.join(member.as_str().unwrap()));
+    let mut dependents = 0;
+    for directory in std::iter::once(root.to_path_buf()).chain(members) {
+        let manifest = read(&directory);
+        let inherited = manifest.get("workspace").into_iter();
+        let targets = manifest.get("target").and_then(toml::Value::as_table);
+        let tables = std::iter::once(&manifest)
+            .chain(inherited)
+            .chain(targets.into_iter().flat_map(toml::Table::values));
+        for table in tables {
+            for kind in ["dependencies", "dev-dependencies", "build-dependencies"] {
+                let entries = table.get(kind).and_then(toml::Value::as_table);
+                for (name, entry) in entries.into_iter().flatten() {
+                    assert!(!selects(name, entry), "{}: {kind}", directory.display());
+                    dependents += usize::from(name == "simplestchat-ops");
+                }
+            }
+        }
+    }
+    // The release controller links the Ops library; the walk has seen it.
+    assert!(dependents >= 1);
+}
+
 #[test]
 fn only_dev_dependencies_enable_the_test_hooks() {
     // A normal, build or target-specific dependency, a feature forwarding the

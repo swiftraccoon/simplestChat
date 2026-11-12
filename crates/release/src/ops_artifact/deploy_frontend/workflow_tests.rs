@@ -107,6 +107,43 @@ fn artifact_record(ops: bool, changed: bool) -> Value {
         "workflow_run":{"id":123,"head_sha":"a".repeat(40),"repository_id":1155881649u64,"head_repository_id":1155881649u64}})
 }
 
+/// The first recorded preparation of the Ops admission tests, built under
+/// `base`: `checkout` with its five source inputs and one migration, and
+/// `artifact`, a valid passed export of it. The recording is read where it
+/// lies; selecting a feature of the Ops package for it would change the
+/// feature set the release producer pins.
+fn plant(base: &Path) {
+    let recorded = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../ops/src/release/recorded_authorize.json"
+    );
+    let recorded: Value = serde_json::from_slice(&fs::read(recorded).unwrap()).unwrap();
+    assert_eq!(recorded["revision"], "a".repeat(40));
+    let tree = recorded["cases"][0]["tree"].as_object().unwrap();
+    let mut names: Vec<&String> = tree.keys().collect();
+    names.sort();
+    for name in names {
+        let (entry, path) = (&tree[name], base.join(name));
+        if entry["directory"] == true {
+            fs::create_dir(&path).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            continue;
+        }
+        let bytes = match entry["blob"].as_str() {
+            Some(blob) => {
+                let spelled = recorded["blobs"][blob].as_str().unwrap().as_bytes();
+                let byte = |pair: &[u8]| {
+                    u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()
+                };
+                spelled.chunks(2).map(byte).collect()
+            }
+            None => entry["text"].as_str().unwrap().as_bytes().to_vec(),
+        };
+        fs::write(&path, bytes).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 struct Fixture {
     root: PathBuf,
     environment: Environment,
@@ -120,7 +157,7 @@ impl Fixture {
         let mut fixture = Self::new();
         let planted = fixture.root.join("planted");
         fs::create_dir(&planted).unwrap();
-        simplestchat_ops::release::admit::fixture::plant(&planted);
+        plant(&planted);
         for name in [
             "Dockerfile",
             ".dockerignore",

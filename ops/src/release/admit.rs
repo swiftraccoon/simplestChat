@@ -9,9 +9,9 @@
 //! `authorize` is the controller's half: it checks an export against the
 //! checkout that is about to be deployed and writes the request.
 
-#[cfg(any(test, feature = "testing"))]
+#[cfg(test)]
 #[path = "admit_fixture.rs"]
-pub mod fixture;
+mod fixture;
 #[cfg(test)]
 #[path = "admit_tests.rs"]
 mod tests;

@@ -37,6 +37,4 @@ url = "2.5.8"
 # Tests inject signal receivers and read bounded log descriptors; this crate's
 # own normal and release builds leave both hooks off.
 simplestchat-ci = { path = "../ci", features = ["test-hooks"] }
-# An inert valid export for the forced route's workflow tests.
-simplestchat-ops = { path = "../../ops", default-features = false, features = ["testing"] }
 simplestchat-toolkit = { path = "../toolkit", features = ["test-hooks"] }

@@ -14,9 +14,6 @@ default = []
 # Only the authenticated distributed Ops artifact needs the native fixture guest.
 # Default Ops and controller bootstrap builds must not acquire an OpenSSL dependency.
 maintain-guest = ["dep:asn1-rs", "dep:openssl", "dep:x509-parser", "rustix/mount"]
-# An inert valid export for the tests of whatever handles one; no build of
-# the executable enables it.
-testing = []
 
 [dependencies]
 asn1-rs = { version = "=0.7.2", default-features = false, features = ["bigint"], optional = true }

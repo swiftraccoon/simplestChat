@@ -1,12 +1,12 @@
-//! An inert, valid export and the checkout it was made from, for tests of
-//! whatever handles one. Nothing here runs, signs or deploys anything.
+//! The recorded checkouts and exports of the preparation replay, built as
+//! files. The controller's own tests read the same recording.
 
 use serde_json::{Map, Value};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::Path;
 
 /// The revision the inert export is a build of.
-pub const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+pub(crate) const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 pub(crate) const RECORDED: &str = include_str!("recorded_authorize.json");
 
 pub(crate) fn hex(text: &str) -> Vec<u8> {
@@ -68,7 +68,7 @@ pub(crate) fn planted(base: &Path, blobs: &Value, tree: &Map<String, Value>) {
 /// Write the valid checkout and its export under `base`, as `base/checkout`
 /// and `base/artifact`: five source inputs, one migration, and a passed
 /// build of `REVISION` whose image archive its manifest describes.
-pub fn plant(base: &Path) {
+pub(crate) fn plant(base: &Path) {
     let recorded: Value = serde_json::from_str(RECORDED).unwrap();
     let tree = recorded["cases"][0]["tree"].as_object().unwrap();
     planted(base, &recorded["blobs"], tree);
