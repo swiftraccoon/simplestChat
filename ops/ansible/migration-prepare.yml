@@ -50,8 +50,9 @@
       timeout: 15
 
   tasks:
-    # Controller-local: neither host is contacted, and the verified originals
-    # the later staging rechecks are named in private controller evidence.
+    # Controller-local: neither host is contacted. The verified application
+    # originals the later staging rechecks, and the authenticated Ops executable
+    # the inspection runs, are named in private controller evidence.
     - name: Verify the signed application on the controller before either host is contacted
       when:
         - scmig_action == 'verify'
@@ -70,6 +71,20 @@
               - scpub_release_ci_run > 0
               - scpub_release_ci_run <= 9007199254740991
               - scpub_release_expected_revision == scmig_revision
+              - scpub_ops_artifact_id is integer
+              - scpub_ops_artifact_id > 0
+              - scpub_ops_artifact_id <= 9007199254740991
+              - scpub_ops_selection is mapping
+              - >-
+                scpub_ops_selection.keys() | list | sort ==
+                ['buildRunId', 'packageVersion', 'protocolVersion', 'repository',
+                 'revision', 'runAttempt', 'target']
+              - scpub_ops_selection.repository == scpub_release_repository
+              - scpub_ops_selection.revision == scmig_revision
+              - scpub_ops_selection.buildRunId == scpub_release_ci_run
+              - >-
+                scpub_ops_artifact_zip is not defined or
+                (scpub_ops_artifact_zip is string and scpub_ops_artifact_zip is match('^/'))
               - scpub_ops_release_controller is string
               - scpub_ops_release_controller is match('^/')
               - scpub_ops_gh_executable is string
@@ -78,8 +93,8 @@
               - scpub_ops_gh_executable | realpath | basename == 'gh'
               - "':' not in scpub_ops_gh_executable"
             fail_msg: >-
-              A signed move needs the typed application selection and caller-trusted absolute
-              controller and gh executables; use the native migration controller.
+              A signed move needs the typed application and Ops selections and caller-trusted
+              absolute controller and gh executables; use the native migration controller.
 
         - name: Verify the signed release through the native controller
           ansible.builtin.command:
@@ -134,18 +149,181 @@
             mode: '0600'
             force: false
 
-    - name: Inspect both selected machines without changing services or files
+        # The inspection runs this executable on both hosts before anything is
+        # installed, so it is authenticated here, before either is contacted.
+        - name: Serialize one original Ops acquisition request
+          ansible.builtin.set_fact:
+            scmig_ops_request: >-
+              {{ {'schemaVersion': 1, 'selection': scpub_ops_selection,
+                  'artifactId': scpub_ops_artifact_id,
+                  'output': scmig_evidence ~ '/ops',
+                  'authentication': 'gh-token'}
+                 | combine({'artifactZip': scpub_ops_artifact_zip}
+                           if scpub_ops_artifact_zip is defined else {}) | to_json }}
+            cacheable: false
+
+        - name: Retain the original acquisition request privately
+          ansible.builtin.copy:
+            content: "{{ scmig_ops_request }}"
+            dest: "{{ scmig_evidence }}/ops-request.json"
+            mode: '0600'
+            force: false
+
+        - name: Read the user's gh token only when GH_TOKEN was not supplied
+          ansible.builtin.command:
+            argv: [/usr/bin/env, -u, GH_TOKEN, -u, GITHUB_TOKEN,
+                   "{{ scpub_ops_gh_executable | realpath }}", auth, token, --hostname, github.com]
+          register: scmig_ops_credential
+          changed_when: false
+          no_log: true
+          timeout: 30
+          when: lookup('ansible.builtin.env', 'GH_TOKEN') | length == 0
+
+        - name: Authenticate the signed Ops executable on the controller
+          ansible.builtin.command:
+            argv:
+              - "{{ scpub_ops_release_controller }}"
+              - ops-artifact
+              - acquire
+              - --request
+              - "{{ scmig_evidence }}/ops-request.json"
+              - --request-sha256
+              - "{{ scmig_ops_request | hash('sha256') }}"
+          environment:
+            PATH: "{{ scpub_ops_gh_executable | realpath | dirname }}:/usr/bin:/bin"
+            GH_TOKEN: >-
+              {{ lookup('ansible.builtin.env', 'GH_TOKEN') or scmig_ops_credential.stdout | trim }}
+            GITHUB_TOKEN: ''
+          register: scmig_ops_acquired
+          changed_when: false
+          no_log: true
+          timeout: 1920
+
+        - name: Snapshot the authenticated executable
+          ansible.builtin.stat:
+            path: "{{ scmig_evidence }}/ops/verified/simplestchat-ops"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_ops_binary
+
+        - name: Require the executable the verifier's signed policy pins
+          vars:
+            scmig_ops_observed: "{{ scmig_ops_acquired.stdout | from_json }}"
+          ansible.builtin.assert:
+            that:
+              - scmig_ops_acquired.rc == 0
+              - scmig_ops_observed is mapping
+              - scmig_ops_observed.kind == 'ops-artifact-acquisition-observation'
+              - scmig_ops_observed.scope == 'AuthenticatedRetainedBytesWithoutExecutionOrInstallation'
+              - scmig_ops_observed.artifact.artifactId == scpub_ops_artifact_id
+              - scmig_ops_observed.selection == scpub_ops_selection
+              - scmig_ops_observed.verification.matchedVerifierPolicy.revision == scmig_revision
+              - scmig_ops_observed.verification.matchedVerifierPolicy.buildRunId == scpub_release_ci_run
+              - >-
+                scmig_ops_observed.verification.matchedVerifierPolicy.binarySha256
+                is match('^[a-f0-9]{64}$')
+              - scmig_ops_binary.stat.isreg | default(false)
+              - not (scmig_ops_binary.stat.islnk | default(false))
+              - scmig_ops_binary.stat.nlink == 1
+              - scmig_ops_binary.stat.size > 0
+              - scmig_ops_binary.stat.size <= 268435456
+              - >-
+                scmig_ops_binary.stat.checksum ==
+                scmig_ops_observed.verification.matchedVerifierPolicy.binarySha256
+            fail_msg: >-
+              The retained Ops executable must be the one the signed attestation pins for
+              exactly this selection.
+
+        - name: Retain the authenticated executable's identity in private controller evidence
+          ansible.builtin.copy:
+            content: >-
+              {{ {'path': scmig_evidence ~ '/ops/verified/simplestchat-ops',
+                  'sha256': scmig_ops_binary.stat.checksum,
+                  'bytes': scmig_ops_binary.stat.size} | to_json }}
+            dest: "{{ scmig_evidence }}/ops.json"
+            mode: '0600'
+            force: false
+
+      always:
+        - name: Clear the noncached token-bearing command result
+          ansible.builtin.set_fact:
+            scmig_ops_credential: {}
+            cacheable: false
+          no_log: true
+
+    # Neither host has a trusted executable of this revision yet, and nothing may
+    # be installed before both are known. The authenticated one is therefore run
+    # from a volatile private directory and removed again.
+    - name: Inspect both selected machines without changing services or stored files
       when: scmig_action == 'inspect'
       block:
+        - name: Snapshot the authenticated executable the controller retained
+          ansible.builtin.stat:
+            path: "{{ scmig_ops_executable }}"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          delegate_to: localhost
+          become: false
+          register: scmig_inspector_original
+
+        - name: Require exactly the executable this move authenticated
+          ansible.builtin.assert:
+            that:
+              - scmig_ops_executable == scmig_evidence ~ '/ops/verified/simplestchat-ops'
+              - scmig_ops_sha256 is match('^[a-f0-9]{64}$')
+              - scmig_inspector_original.stat.isreg | default(false)
+              - not (scmig_inspector_original.stat.islnk | default(false))
+              - scmig_inspector_original.stat.nlink == 1
+              - scmig_inspector_original.stat.checksum == scmig_ops_sha256
+            fail_msg: The controller must still hold the exact executable it authenticated.
+
+        - name: Create a private volatile directory for the executable
+          ansible.builtin.tempfile:
+            state: directory
+            path: /run
+            prefix: simplestchat-inspect-
+          register: scmig_inspector
+
+        - name: Transfer the authenticated executable without installing it
+          ansible.builtin.copy:
+            src: "{{ scmig_ops_executable }}"
+            dest: "{{ scmig_inspector.path }}/simplestchat-ops"
+            owner: root
+            group: root
+            mode: '0700'
+            force: false
+
+        - name: Join the transferred bytes before their first execution
+          ansible.builtin.stat:
+            path: "{{ scmig_inspector.path }}/simplestchat-ops"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scmig_inspector_copy
+
+        - name: Require the authenticated bytes on the host
+          ansible.builtin.assert:
+            that:
+              - scmig_inspector_copy.stat.isreg | default(false)
+              - not (scmig_inspector_copy.stat.islnk | default(false))
+              - scmig_inspector_copy.stat.uid == 0
+              - scmig_inspector_copy.stat.mode == '0700'
+              - scmig_inspector_copy.stat.checksum == scmig_ops_sha256
+
         - name: Read the physical identity and source configuration or empty target state
           ansible.builtin.command:
             argv:
-              - /usr/bin/python3
-              - -B
-              - -c
-              - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/migration_inspect.py', rstrip=false) }}"
+              - "{{ scmig_inspector.path }}/simplestchat-ops"
+              - migrate
+              - inspect
               - "{{ 'source' if inventory_hostname == 'migration_source' else 'target' }}"
               - "{{ scmig_source_origin if inventory_hostname == 'migration_source' else scmig_destination_origin }}"
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
           register: scmig_inspected
           changed_when: false
           timeout: 60
@@ -171,6 +349,13 @@
           delegate_to: localhost
           become: false
           when: inventory_hostname == 'migration_source'
+
+      always:
+        - name: Remove the volatile directory and the executable
+          ansible.builtin.file:
+            path: "{{ scmig_inspector.path }}"
+            state: absent
+          when: scmig_inspector.path is defined
 
     - name: Install the reviewed helpers and exact source secrets without starting services
       when: scmig_action == 'bootstrap'
@@ -471,7 +656,6 @@
       when:
         - scmig_action == 'stage'
         - inventory_hostname == 'migration_target'
-        - not (scmig_force_release | default(false) | bool)
       block:
         - name: Require exact signed-release selectors and direct key-based SSH
           ansible.builtin.assert:
@@ -742,10 +926,3 @@
                 scmig_staged_identity.results[1].stat.checksum ==
                 (scpub_validated_release.stdout | from_json)['release.json']
             fail_msg: The staged release must retain its original signed predicate and manifest.
-
-    - name: Stage the explicitly selected force artifact only on the destination
-      ansible.builtin.include_tasks: tasks/migration-artifact.yml
-      when:
-        - scmig_action == 'stage'
-        - inventory_hostname == 'migration_target'
-        - scmig_force_release | default(false) | bool

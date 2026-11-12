@@ -211,6 +211,7 @@ struct Script {
     notices: Vec<Value>,
     /// What a native-only case makes the verification step leave behind.
     application: Option<Value>,
+    executable: Option<Value>,
     /// What a native-only case makes the name service print, or its failure.
     resolver: Option<std::result::Result<String, u8>>,
     /// A play during which an operator's own inventories are rewritten.
@@ -242,6 +243,7 @@ impl Script {
             lookups: Vec::new(),
             notices: Vec::new(),
             application: None,
+            executable: None,
             resolver: None,
             rewrite_during: None,
             tracked_during: None,
@@ -439,6 +441,13 @@ impl Script {
             let summary = self.application.clone().unwrap_or(summary);
             if !summary.is_null() {
                 private(&evidence.join("application.json"), &bytes(&summary), 0o600);
+            }
+            // And the identity of the Ops executable it authenticated.
+            let held = evidence.join("ops/verified/simplestchat-ops");
+            let record = json!({"path": held, "sha256": "e".repeat(64), "bytes": 22229136});
+            let record = self.executable.clone().unwrap_or(record);
+            if !record.is_null() {
+                private(&evidence.join("ops.json"), &bytes(&record), 0o600);
             }
             return (Vec::new(), 0);
         }
@@ -997,8 +1006,19 @@ async fn a_move_carries_its_signed_selection_and_leaves_private_evidence() {
         );
         assert!(variables.get("scpub_ops_artifact_zip").is_none());
         assert!(variables.get("scpub_turn_verify_address").is_none());
-        if play.action != "verify" {
+        let held = json!(evidence.join("ops/verified/simplestchat-ops"));
+        if play.action == "verify" {
+            assert!(variables.get("scmig_ops_executable").is_none());
+            assert!(variables.get("scmig_ops_sha256").is_none());
+        } else {
             assert_eq!(variables["scpub_release_verified_directory"], directory);
+            assert_eq!(variables["scmig_ops_executable"], held, "{}", play.action);
+            assert_eq!(
+                variables["scmig_ops_sha256"],
+                "e".repeat(64),
+                "{}",
+                play.action
+            );
         }
     }
     let ceilings: Vec<(&str, u64)> = script
@@ -1116,17 +1136,33 @@ async fn a_verification_that_left_no_exact_record_stops_before_any_host() {
     );
     let other = json!({"directory": "/private/verified", "image.tar": "c".repeat(64),
         "release.json": "d".repeat(64), "revision": "b".repeat(40)});
+    let partial = json!({"directory": "/private/verified"});
+    let moved = json!({"path": "/private/elsewhere/simplestchat-ops", "sha256": "e".repeat(64),
+        "bytes": 22229136});
     for (left, class) in [
-        (other, "migration_application_record"),
+        (Ok(other), "migration_application_record"),
+        (Ok(partial), "migration_application_record"),
+        (Ok(Value::Null), "migration_step_failed"),
+        (Err(moved), "migration_ops_record"),
         (
-            json!({"directory": "/private/verified"}),
-            "migration_application_record",
+            Err(json!({"sha256": "e".repeat(64)})),
+            "migration_ops_record",
         ),
-        (Value::Null, "migration_step_failed"),
+        (Err(Value::Null), "migration_step_failed"),
     ] {
         let fixture = Fixture::new(&usual);
         let mut script = Script::new(&fixture, &usual);
-        script.application = Some(left.clone());
+        // Either the application's record or the executable's is wrong.
+        let left = match left {
+            Ok(application) => {
+                script.application = Some(application.clone());
+                application
+            }
+            Err(executable) => {
+                script.executable = Some(executable.clone());
+                executable
+            }
+        };
         let (result, report) = fixture.run(&mut script, &fixture.arguments(&usual)).await;
         assert_eq!(result.unwrap().status, 1, "{left}");
         let verdict = (

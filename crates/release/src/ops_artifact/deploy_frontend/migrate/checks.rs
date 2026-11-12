@@ -258,6 +258,27 @@ pub(super) fn application(bytes: &[u8], revision: &str) -> Result<String> {
         .ok_or_else(invalid)
 }
 
+/// The Ops executable the controller's own acquisition authenticated: its
+/// fixed place in this move's evidence and the digest its signed attestation
+/// pins. Both hosts check their copy against that digest before running it.
+pub(super) fn executable(bytes: &[u8], evidence: &std::path::Path) -> Result<(String, String)> {
+    let invalid = || refusal("migration_ops_record");
+    let record: Value = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    let fields = record.as_object().ok_or_else(invalid)?;
+    let held = evidence.join("ops/verified/simplestchat-ops");
+    let path = fields.get("path").and_then(Value::as_str);
+    let path = path.filter(|path| std::path::Path::new(path) == held);
+    let digest = hexadecimal(fields.get("sha256"), 64);
+    let sized = fields.get("bytes").and_then(Value::as_u64);
+    let sized = sized.is_some_and(|bytes| (1..=256 * 1024 * 1024).contains(&bytes));
+    match (path, digest) {
+        (Some(path), Some(digest)) if fields.len() == 3 && sized => {
+            Ok((path.to_owned(), digest.to_owned()))
+        }
+        _ => Err(invalid()),
+    }
+}
+
 /// One anonymous reply of the destination: curl's body and, on its own last
 /// line, the status. Readiness, the home page and the served revision each
 /// have their own refusal.
@@ -484,6 +505,45 @@ mod tests {
         assert_eq!(
             code(application(b"not json", &revision)),
             "migration_application_record"
+        );
+    }
+
+    #[test]
+    fn the_ops_record_names_the_authenticated_executable_in_this_moves_evidence() {
+        let evidence = std::path::Path::new("/private/results/migration.1");
+        let held = "/private/results/migration.1/ops/verified/simplestchat-ops";
+        let record = |change: &dyn Fn(&mut Value)| {
+            let mut value = json!({"path": held, "sha256": "e".repeat(64), "bytes": 22229136});
+            change(&mut value);
+            serde_json::to_vec(&value).unwrap()
+        };
+        let (path, digest) = executable(&record(&|_| {}), evidence).unwrap();
+        assert_eq!((path.as_str(), digest), (held, "e".repeat(64)));
+        let largest = &|value: &mut Value| value["bytes"] = json!(256 * 1024 * 1024);
+        executable(&record(largest), evidence).unwrap();
+        let elsewhere = "/private/results/migration.2/ops/verified/simplestchat-ops";
+        let changes: [&dyn Fn(&mut Value); 11] = [
+            &|value| value["path"] = json!(elsewhere),
+            &|value| {
+                value["path"] = json!("/private/results/migration.1/ops/input/simplestchat-ops")
+            },
+            &|value| value["path"] = json!(7),
+            &|value| value["sha256"] = json!("e".repeat(63)),
+            &|value| value["sha256"] = json!("E".repeat(64)),
+            &|value| value["bytes"] = json!(0),
+            &|value| value["bytes"] = json!(256 * 1024 * 1024 + 1),
+            &|value| value["bytes"] = json!("22229136"),
+            &|value| value["extra"] = json!(true),
+            &|value| drop(value.as_object_mut().unwrap().remove("bytes")),
+            &|value| *value = json!([]),
+        ];
+        for (index, change) in changes.iter().enumerate() {
+            let refused = code(executable(&record(change), evidence));
+            assert_eq!(refused, "migration_ops_record", "{index}");
+        }
+        assert_eq!(
+            code(executable(b"not json", evidence)),
+            "migration_ops_record"
         );
     }
 

@@ -9,6 +9,8 @@ mod platform;
 #[path = "preflight_request.rs"]
 mod request;
 
+/// The distribution and version an os-release file names.
+pub(crate) use platform::fields as os_release;
 pub use request::ExpectedHelpers;
 use serde::Serialize;
 use std::fmt;

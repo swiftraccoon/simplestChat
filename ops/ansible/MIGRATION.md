@@ -72,9 +72,12 @@ checks that the tools match published `main`, and holds every tracked file under
 it stops at its next step. The complete local CI gate remains available but is
 not required before every push. A move requires that revision's successful
 main-push CI run and its signed application and Ops artifacts. Its first step
-verifies the application's attestation on the controller, before either host
-is contacted; staging verifies the same originals again and authenticates the
-Ops executable it delivers.
+verifies the application's attestation and authenticates the Ops executable on
+the controller, before either host is contacted. Both machines are then
+inspected, read-only, by that executable: it is copied into a private directory
+under `/run`, checked against its signed digest, run uninstalled and removed
+again. Staging verifies the same application originals once more and delivers
+the executable to the destination.
 
 `--revision FULL_COMMIT` selects an ancestor application release independently
 of the migration tools, so moving servers need not also upgrade the application.
@@ -101,16 +104,10 @@ are verified like downloaded ones. `--wait-seconds` bounds the wait for CI
 (default 3600). The command prints one JSON report and exits zero only for a
 complete move.
 
-An explicitly authorized move of an unsigned retained release is the one case
-this controller does not handle. Until the forced release is native as well,
-`ops/ansible/.venv/bin/python build/migrate.py --force --artifact-dir
-/absolute/path/to/export` with the same selectors validates the retained release
-against that exact commit's build inputs and migration checksums and stages it
-unsigned; it refuses without both flags. No signed Ops executable exists for
-such a release, so that route delivers none: move with `scpub_turn_enabled`,
-`scpub_backup_enabled` and `scmon_enabled` set to `false`, then run a signed
-`release.yml` against the destination, set the three back and apply `turn.yml`,
-`backup.yml` and `monitoring.yml`.
+An unsigned retained release cannot be moved. Every host step of a move is a
+command of the signed Ops executable, which exists only for a revision whose
+main-push CI succeeded: move a signed revision, or select a signed ancestor
+with `--revision` and release the newer commit on the destination afterwards.
 
 `--activate-inventory` optionally replaces the existing ignored source inventory
 with the verified destination configuration. Its original bytes are retained
@@ -208,7 +205,8 @@ root-private host evidence under
 `/srv/simplestchat-public/migrations/<operation-id>/`. These include the request,
 the frozen inventories every play used, each play's exact variables
 (`play-NN.json`), original inventory bytes when requested, the verified
-application's identity, every command's output, database archive hashes, logical
+application's identity, the authenticated Ops executable (`ops/`) and its
+identity, every command's output, database archive hashes, logical
 snapshots and a phase receipt (`phase-NN.json`) written before each host
 operation. Database values, archive contents and credentials must remain private.
 Once both hosts are frozen in those private inventories, editing your own

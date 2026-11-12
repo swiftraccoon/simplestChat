@@ -1,0 +1,3953 @@
+{
+ "module": "846d5c9327647edcc43cdc2ea02b1ca7f09245b0",
+ "scenarios": [
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configured source reports only its identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configured target for its own origin",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"next.chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://next.chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a fresh target without any configuration",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target holding only the copied secrets",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source without configuration",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"source_not_configured\"}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source holding only secrets",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"configuration_pair_incomplete\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "too few arguments",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_arguments\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test",
+    "extra"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "too many arguments",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_arguments\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no arguments",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_arguments\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 1000,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "not root",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"root_required\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "both",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another role",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_role\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "http://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin without TLS",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_origin\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test/"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin with a path",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_origin\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test:8443"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin with a port",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_origin\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://Chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin in upper case",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_origin\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://.."
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin of dots",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"..\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://..\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an origin without a host",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_migration_origin\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=ubuntu\n",
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "the release file in etc outranks the vendor's",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a foreign release file in etc outranks the vendor's",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=ubuntu\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_distribution\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another kernel",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_platform\"}\n",
+   "system": "Darwin",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "aarch64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another processor",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_platform\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another distribution",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=ubuntu\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_distribution\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another release of it",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"12\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_distribution\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a point release",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13.1\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_distribution\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an unquoted release",
+   "owners": {},
+   "release": "ID=debian\nVERSION_ID=13\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a single-quoted identity",
+   "owners": {},
+   "release": "ID='debian'\nVERSION_ID='13'\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "the last assignment wins",
+   "owners": {},
+   "release": "ID=ubuntu\nID=debian\nVERSION_ID=12\nVERSION_ID=13\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no release version",
+   "owners": {},
+   "release": "ID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsupported_distribution\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "the vendor release file alone",
+   "owners": {},
+   "release": null,
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no release file at all",
+   "owners": {},
+   "release": null,
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "carriage returns in the release file",
+   "owners": {},
+   "release": "ID=debian\r\nVERSION_ID=13\r\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": null,
+   "name": "no machine identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef\n",
+   "name": "a short machine identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_machine_identity\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789ABCDEF0123456789ABCDEF\n",
+   "name": "an upper-case machine identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_machine_identity\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "  0123456789abcdef0123456789abcdef \n\n",
+   "name": "a machine identity with surrounding space",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "",
+   "name": "an empty machine identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_machine_identity\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configuration directory others can read",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o755"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configuration directory of another owner",
+   "owners": {
+    "etc": 1000
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configuration directory that is a link",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "link": "/nonexistent/configuration"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a configuration directory that is a file",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "mode": "0o700",
+     "text": "x"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source without the environment",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"configuration_pair_incomplete\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source without the image selection",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"configuration_pair_incomplete\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with the environment alone",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"configuration_pair_incomplete\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with the image selection alone",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"configuration_pair_incomplete\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a dangling environment link counts as present",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "link": "/nonexistent/app.env"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment that is a link to a file",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "link": "images.json"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a data root others can read",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o750"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no data root",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a data root of another owner",
+   "owners": {
+    "srv": 1000
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment others can read",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o640",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment of another owner",
+   "owners": {
+    "etc/app.env": 1000
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an empty environment",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_configuration_size\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": ""
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment at the size bound",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": {
+      "count": 65422,
+      "prefix": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n#",
+      "repeat": "x",
+      "suffix": "\n"
+     }
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment over the size bound",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_configuration_size\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": {
+      "count": 65423,
+      "prefix": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n#",
+      "repeat": "x",
+      "suffix": "\n"
+     }
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an image selection others can read",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o644",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an empty image selection",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_configuration_size\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": ""
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a line without an assignment",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_environment\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\nNOT_AN_ASSIGNMENT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a repeated key",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"duplicate_environment_key\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\nWEBAUTHN_RP_ID=other.test\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a value holding an equals sign",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\nDATABASE_URL=postgres://u:p@h/db?sslmode=verify-full\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an empty key",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n=value\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "carriage returns between lines",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\r\nWEBAUTHN_RP_ID=example.test\r\n# a comment\r\n\r\nPRIVATE_VALUE=NOT_FOR_OUTPUT\r\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a form feed between lines",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\fWEBAUTHN_RP_ID=example.test\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an indented comment is an assignment",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n # indented=comment\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "another origin",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"source_or_target_origin_mismatch\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://other.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "two origins",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"source_or_target_origin_mismatch\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test,https://other.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no origin",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"source_or_target_origin_mismatch\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "WEBAUTHN_RP_ID=example.test\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "no passkey identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_rp_id\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an upper-case passkey identity",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_rp_id\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=Example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a passkey identity of the longest length",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a passkey identity one longer",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_rp_id\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an environment that is not text",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "hex": "414c4c4f5745445f4f524947494e533d68747470733a2f2f636861742e6578616d706c652e746573740a574542415554484e5f52505f49443d6578616d706c652e746573740a23206120636f6d6d656e740a0a505249564154455f56414c55453d4e4f545f464f525f4f55545055540a42494e4152593dff0a",
+     "mode": "0o600"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an image selection that is not JSON",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{not json"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an image selection that is a list",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_image_manifest\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "[]"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an image selection without a revision",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_revision\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"serverImage\": \"x\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a short revision",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_revision\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an upper-case revision",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_revision\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a revision that is a number",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_source_revision\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": 7}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "an image selection with a repeated revision",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a fresh target with an empty database directory",
+   "owners": {
+    "srv/postgres": 999
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a database directory of another owner",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_target_database\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a database directory holding files",
+   "owners": {
+    "srv/postgres": 999
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"destination_database_not_empty\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres/PG_VERSION": {
+     "mode": "0o600",
+     "text": "18\n"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a database directory that is a file",
+   "owners": {
+    "srv/postgres": 999
+   },
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_target_database\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "mode": "0o600",
+     "text": "x"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a database directory that is a link",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_target_database\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "link": "/nonexistent/postgres"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source ignores its database directory",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv/postgres/PG_VERSION": {
+     "mode": "0o600",
+     "text": "18\n"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target without containers",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": "0123456789ab\n",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with public containers",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"destination_has_public_containers\"}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": " \n\t\n",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target whose listing is only whitespace",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": null,
+   "dockerStatus": 1,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target whose listing fails",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"destination_has_public_containers\"}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": "timeout",
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target whose listing times out",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [
+    {
+     "argv": [
+      "/usr/bin/docker",
+      "--host",
+      "unix:///var/run/docker.sock",
+      "ps",
+      "--all",
+      "--quiet",
+      "--filter",
+      "label=com.docker.compose.project=simplestchat-public"
+     ],
+     "timeout": 20
+    }
+   ],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": "missing",
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target whose docker is elsewhere",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"inspection_failed\"}\n",
+   "system": "Linux",
+   "tree": {}
+  },
+  {
+   "arguments": [
+    "source",
+    "https://chat.example.test"
+   ],
+   "calls": [],
+   "containers": "0123456789ab\n",
+   "cpu": "x86_64",
+   "docker": "present",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a source never lists containers",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": \"chat.example.test\", \"rpId\": \"example.test\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target configured for another origin",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"source_or_target_origin_mismatch\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/app.env": {
+     "mode": "0o600",
+     "text": "ALLOWED_ORIGINS=https://chat.example.test\nWEBAUTHN_RP_ID=example.test\n# a comment\n\nPRIVATE_VALUE=NOT_FOR_OUTPUT\n"
+    },
+    "etc/images.json": {
+     "mode": "0o600",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"serverImage\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target data root others can read with nothing configured",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o755"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with readable copied secrets",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"unsafe_migration_configuration\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o644",
+     "text": "{}"
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with empty copied secrets",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 1,
+   "stdout": "{\"passed\": false, \"failure\": \"invalid_configuration_size\"}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    },
+    "etc/secrets.json": {
+     "mode": "0o600",
+     "text": ""
+    },
+    "srv": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  },
+  {
+   "arguments": [
+    "target",
+    "https://next.chat.example.test"
+   ],
+   "calls": [],
+   "containers": "",
+   "cpu": "x86_64",
+   "docker": "absent",
+   "dockerRaises": null,
+   "dockerStatus": 0,
+   "euid": 0,
+   "libRelease": null,
+   "machine": "0123456789abcdef0123456789abcdef\n",
+   "name": "a target with a configuration directory and no data root",
+   "owners": {},
+   "release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nID=debian\n",
+   "status": 0,
+   "stdout": "{\"passed\": true, \"machineId\": \"0123456789abcdef0123456789abcdef\", \"domain\": null, \"rpId\": null, \"revision\": null}\n",
+   "system": "Linux",
+   "tree": {
+    "etc": {
+     "directory": true,
+     "mode": "0o700"
+    }
+   }
+  }
+ ],
+ "schemaVersion": 1
+}

@@ -2175,6 +2175,37 @@ those requests from the recorded decisions. `turn_public.py` stays in the
 tree, frozen, for `turn.yml`'s activation, which replaces the application
 through the Python release helper.
 
+## Migration inspection
+
+```sh
+simplestchat-ops migrate inspect source|target ORIGIN
+```
+
+Before a move changes anything, the controller runs the executable it
+authenticated on both machines, uninstalled, to learn what they are. The
+command only reads. It requires root, Debian 13 on x86_64 and a machine
+identity of 32 hexadecimal digits. A source must be the configured deployment
+of `ORIGIN`: a private root-owned configuration directory and data root, an
+`app.env` whose `ALLOWED_ORIGINS` is exactly that origin and whose
+`WEBAUTHN_RP_ID` is a plain host name, and an `images.json` that names a
+40-digit revision. A target may be unconfigured, hold only the copied secrets,
+or be configured for its own origin; it must hold no database files and no
+container of the public project.
+
+One JSON line is printed: `{"passed": true, "machineId": …, "domain": …,
+"rpId": …, "revision": …}` with nulls for an unconfigured target, or
+`{"passed": false, "failure": CODE}` with exit status 1. No other value of the
+configuration and no operating-system detail leaves the machine; a cause that
+has no code of its own is `inspection_failed`.
+
+The Python helper's answers for 96 machines are recorded in
+`ops/src/migrate/recorded_inspect.json` and replayed. Four differences are
+deliberate: a command line of another shape is a usage error; an `images.json`
+with a repeated key is refused instead of read by its last value; a path that
+cannot be examined fails the inspection instead of counting as absent; and
+Docker is looked for in the administrator's standard directories rather than
+on the caller's `PATH`.
+
 ## Migration certificate handoff
 
 ```sh

@@ -1,11 +1,4 @@
 {
- "modules": {
-  "build/migration_artifact.py": "945398bb8a6b6e9bacef97f6bd915d1cf424d26e",
-  "build/migration_controller.py": "a22dd7c77e157e69d39695fc5990bf7cb9f5d1c7",
-  "build/migration_dns.py": "c1c8e8b22cc26417277251c26420cbe9c55e2e4e",
-  "build/release_build.py": "945b3369b10f7f555292a686441521e62496daca",
-  "build/release_deploy.py": "aad0a76d42dc07ff2743964d226556809949efd9"
- },
  "scenarios": [
   {
    "arguments": [

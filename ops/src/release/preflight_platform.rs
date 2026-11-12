@@ -19,11 +19,12 @@ impl Identity {
     }
 }
 
-/// Match platform._parse_os_release's two selected values, including last-key
-/// wins, optional whole quotes, five escapes and text-file universal newlines.
-/// Unknown fields are ignored and none of these bytes become diagnostic output.
-pub(super) fn distribution(bytes: &[u8]) -> Result<()> {
-    let text = std::str::from_utf8(bytes).map_err(|_| Failure::Unavailable)?;
+/// The distribution and version an os-release file names, or nothing for
+/// bytes that are not text. This is platform._parse_os_release for its two
+/// selected values, including last-key wins, optional whole quotes, five
+/// escapes and text-file universal newlines. Unknown fields are ignored.
+pub(crate) fn fields(bytes: &[u8]) -> Option<(String, String)> {
+    let text = std::str::from_utf8(bytes).ok()?;
     let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
     let mut id = "linux".to_owned();
     let mut version = String::new();
@@ -62,6 +63,13 @@ pub(super) fn distribution(bytes: &[u8]) -> Result<()> {
             version = decoded;
         }
     }
+    Some((id, version))
+}
+
+/// Admit the supported distribution; none of these bytes become diagnostic
+/// output.
+pub(super) fn distribution(bytes: &[u8]) -> Result<()> {
+    let (id, version) = fields(bytes).ok_or(Failure::Unavailable)?;
     if id == "debian" && version.split('.').next() == Some("13") {
         Ok(())
     } else {

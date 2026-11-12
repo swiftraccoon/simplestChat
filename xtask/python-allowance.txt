@@ -1,4 +1,4 @@
-total 109988
+total 107300
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -11,10 +11,6 @@ total 109988
 265	build/issue_account_recovery.py
 621	build/maintain_namespace_probe.py
 1438	build/maintain_namespace_probe_guest.py
-11	build/migrate.py
-145	build/migration_artifact.py
-853	build/migration_controller.py
-155	build/migration_dns.py
 1022	build/native_security.py
 176	build/native_security_cache.py
 407	build/release_attestation.py
@@ -91,7 +87,6 @@ total 109988
 6	ops/ansible/files/fetch-release.py
 275	ops/ansible/files/force_release.py
 1122	ops/ansible/files/migrate_public.py
-168	ops/ansible/files/migration_inspect.py
 507	ops/ansible/files/migration_snapshot.py
 274	ops/ansible/files/migration_tls.py
 6	ops/ansible/files/reboot-public.py
@@ -123,10 +118,6 @@ total 109988
 431	ops/ansible/tests/test_maintain_namespace_probe.py
 985	ops/ansible/tests/test_migrate_public.py
 161	ops/ansible/tests/test_migration_abort.py
-229	ops/ansible/tests/test_migration_artifact.py
-762	ops/ansible/tests/test_migration_controller.py
-206	ops/ansible/tests/test_migration_dns.py
-159	ops/ansible/tests/test_migration_inspect.py
 113	ops/ansible/tests/test_migration_prepare.py
 257	ops/ansible/tests/test_migration_tls.py
 875	ops/ansible/tests/test_native_security.py

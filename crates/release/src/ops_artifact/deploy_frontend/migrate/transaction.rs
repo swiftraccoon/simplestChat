@@ -780,13 +780,18 @@ async fn perform<E: Executor>(
         frozen.variables.insert(name.into(), value);
         Ok::<(), Failure>(())
     };
-    // Nothing has contacted either host yet: the signed application is
-    // checked first, and the later staging rechecks the same originals.
+    // Nothing has contacted either host yet: the signed application and the
+    // Ops executable are authenticated first. Staging rechecks the same
+    // application originals, and the inspection runs that executable.
     play(cx, executor, run, Step::Verify, &[]).await?;
     let end = enter(plan, Step::Inspect)?;
     let record = left(cx, executor, end, evidence.join("application.json")).await?;
     let directory = checks::application(&record, revision.as_str())?;
     set(run, "scpub_release_verified_directory", json!(directory))?;
+    let record = left(cx, executor, end, evidence.join("ops.json")).await?;
+    let (inspector, pin) = checks::executable(&record, &evidence)?;
+    set(run, "scmig_ops_executable", json!(inspector))?;
+    set(run, "scmig_ops_sha256", json!(pin))?;
     run.report["githubAttested"] = json!(true);
     play(cx, executor, run, Step::Inspect, &[]).await?;
     let end = enter(plan, Step::Site)?;

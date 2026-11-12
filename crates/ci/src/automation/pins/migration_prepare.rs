@@ -40,28 +40,174 @@ fn uses(task: &Value, module: &str) -> bool {
     task.get(module).is_some()
 }
 
-/// From `test_inspection_is_read_only_remote_and_receipt_is_private_local`:
-/// the source stays live, and physical identities are compared before
-/// preparation.
+/// Both machines are inspected by the executable this move authenticated,
+/// run from a volatile private directory before anything is installed: the
+/// source stays live, nothing is interpreted, and physical identities are
+/// compared before preparation.
 #[test]
-fn inspection_is_read_only_remote_and_receipt_is_private_local() {
+fn inspection_runs_the_authenticated_executable_uninstalled_and_keeps_its_receipt_local() {
     let play = play();
-    let tasks = block(&play, "inspect");
-    let command = first(tasks, |task| uses(task, "ansible.builtin.command"));
-    assert_eq!(command["changed_when"], false);
-    assert!(command.to_string().contains("migration_inspect.py"));
-    for task in tasks {
-        assert!(!uses(task, "ansible.builtin.file") && !uses(task, "ansible.builtin.fetch"));
+    let all = tasks(&play["tasks"]);
+    let inspection = first(all, |task| {
+        task["name"] == "Inspect both selected machines without changing services or stored files"
+    });
+    assert_eq!(inspection["when"], "scmig_action == 'inspect'");
+    let steps = tasks(&inspection["block"]);
+    assert_eq!(
+        names(steps),
+        [
+            "Snapshot the authenticated executable the controller retained",
+            "Require exactly the executable this move authenticated",
+            "Create a private volatile directory for the executable",
+            "Transfer the authenticated executable without installing it",
+            "Join the transferred bytes before their first execution",
+            "Require the authenticated bytes on the host",
+            "Read the physical identity and source configuration or empty target state",
+            "Require two distinct successful physical host inspections",
+            "Retain only the inspected identities in private controller evidence",
+        ]
+    );
+    let text = inspection.to_string();
+    for retired in [
+        ".py",
+        "python",
+        "/usr/local/libexec",
+        "ansible.builtin.fetch",
+    ] {
+        assert!(!text.contains(retired), "{retired}");
     }
-    let receipt = first(tasks, |task| uses(task, "ansible.builtin.copy"));
-    assert_eq!(receipt["delegate_to"], "localhost");
-    assert_eq!(receipt["become"], false);
-    assert_eq!(receipt["ansible.builtin.copy"]["mode"], "0600");
-    let guard = first(tasks, |task| uses(task, "ansible.builtin.assert"));
-    let rules = strings(&guard["ansible.builtin.assert"]["that"]).join(" ");
+    let local = |task: &Value| task["delegate_to"] == "localhost" && task["become"] == false;
+    assert!(local(&steps[0]));
+    assert_eq!(
+        steps[0]["ansible.builtin.stat"]["path"],
+        "{{ scmig_ops_executable }}"
+    );
+    let scratch = json!({"state": "directory", "path": "/run", "prefix": "simplestchat-inspect-"});
+    assert_eq!(steps[2]["ansible.builtin.tempfile"], scratch);
+    let held = "{{ scmig_inspector.path }}/simplestchat-ops";
+    let transfer = json!({"src": "{{ scmig_ops_executable }}", "dest": held, "owner": "root",
+        "group": "root", "mode": "0700", "force": false});
+    assert_eq!(steps[3]["ansible.builtin.copy"], transfer);
+    assert_eq!(steps[4]["ansible.builtin.stat"]["path"], held);
+    let command = &steps[6];
+    let role = "{{ 'source' if inventory_hostname == 'migration_source' else 'target' }}";
+    let origin = concat!(
+        "{{ scmig_source_origin if inventory_hostname == 'migration_source' ",
+        "else scmig_destination_origin }}"
+    );
+    assert_eq!(
+        strings(&command["ansible.builtin.command"]["argv"]),
+        [held, "migrate", "inspect", role, origin]
+    );
+    let environment = json!({"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "GH_TOKEN": "",
+        "GITHUB_TOKEN": ""});
+    assert_eq!(command["environment"], environment);
+    assert_eq!(
+        (&command["changed_when"], &command["timeout"]),
+        (&json!(false), &json!(60))
+    );
+    assert_eq!(command["register"], "scmig_inspected");
+    for step in &steps[1..8] {
+        assert!(step.get("delegate_to").is_none(), "{}", step["name"]);
+    }
+    let rules = strings(&steps[7]["ansible.builtin.assert"]["that"]).join(" ");
     assert!(rules.contains("machineId !="));
+    let receipt = &steps[8];
+    assert!(local(receipt));
+    assert_eq!(receipt["ansible.builtin.copy"]["mode"], "0600");
+    assert_eq!(receipt["ansible.builtin.copy"]["force"], false);
+    // Whatever happened, the executable does not stay on either machine.
+    let always = tasks(&inspection["always"]);
+    let removal = json!({"path": "{{ scmig_inspector.path }}", "state": "absent"});
+    assert_eq!(always.len(), 1);
+    assert_eq!(always[0]["ansible.builtin.file"], removal);
+    assert_eq!(always[0]["when"], "scmig_inspector.path is defined");
     assert_eq!(play["strategy"], "linear");
     assert_eq!(play["any_errors_fatal"], true);
+    // The two guards, as Ansible evaluates them.
+    let digest = "e".repeat(64);
+    let stat = |checksum: &str, change: &dyn Fn(&mut Value)| {
+        let mut stat = json!({"isreg": true, "islnk": false, "nlink": 1, "uid": 0,
+            "mode": "0700", "checksum": checksum});
+        change(&mut stat);
+        json!({"stat": stat})
+    };
+    let evidence = "/private/results/migration.1";
+    let executable = format!("{evidence}/ops/verified/simplestchat-ops");
+    let controller = |executable: &str, pin: &str, original: Value| {
+        json!({"scmig_evidence": evidence, "scmig_ops_executable": executable,
+            "scmig_ops_sha256": pin, "scmig_inspector_original": original})
+    };
+    let cases = [
+        (
+            controller(&executable, &digest, stat(&digest, &|_| {})),
+            true,
+        ),
+        (
+            controller(
+                "/private/elsewhere/simplestchat-ops",
+                &digest,
+                stat(&digest, &|_| {}),
+            ),
+            false,
+        ),
+        (controller(&executable, "E", stat("E", &|_| {})), false),
+        (
+            controller(&executable, &digest, stat(&"f".repeat(64), &|_| {})),
+            false,
+        ),
+        (
+            controller(
+                &executable,
+                &digest,
+                stat(&digest, &|stat| stat["islnk"] = json!(true)),
+            ),
+            false,
+        ),
+        (
+            controller(
+                &executable,
+                &digest,
+                stat(&digest, &|stat| stat["isreg"] = json!(false)),
+            ),
+            false,
+        ),
+        (
+            controller(
+                &executable,
+                &digest,
+                stat(&digest, &|stat| stat["nlink"] = json!(2)),
+            ),
+            false,
+        ),
+    ];
+    let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
+    let verdicts = asserted(&steps[1]["ansible.builtin.assert"]["that"], &variables);
+    for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
+        assert_eq!(accepted, expected, "{case}");
+    }
+    let host = |copy: Value| json!({"scmig_ops_sha256": digest, "scmig_inspector_copy": copy});
+    let cases = [
+        (host(stat(&digest, &|_| {})), true),
+        (host(stat(&"f".repeat(64), &|_| {})), false),
+        (
+            host(stat(&digest, &|stat| stat["uid"] = json!(1000))),
+            false,
+        ),
+        (
+            host(stat(&digest, &|stat| stat["mode"] = json!("0755"))),
+            false,
+        ),
+        (
+            host(stat(&digest, &|stat| stat["islnk"] = json!(true))),
+            false,
+        ),
+    ];
+    let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
+    let verdicts = asserted(&steps[5]["ansible.builtin.assert"]["that"], &variables);
+    for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
+        assert_eq!(accepted, expected, "{case}");
+    }
 }
 
 /// From `test_secret_copy_requires_exact_digest_without_owner_or_secret_logging`:
@@ -134,7 +280,16 @@ fn same_origin_tls_transfer_is_private_and_precedes_staging() {
         task["name"] == "Transfer and stage the exact verified CI artifact only on the destination"
     });
     assert!(transferred < staged);
-    assert!(strings(&stage["when"]).contains(&"not (scmig_force_release | default(false) | bool)"));
+    // Only a signed release is staged; no other route selects this step.
+    let only = [
+        "scmig_action == 'stage'",
+        "inventory_hostname == 'migration_target'",
+    ];
+    assert_eq!(stage["when"], json!(only));
+    let staging = tasks
+        .iter()
+        .filter(|task| task["when"].to_string().contains("'stage'"));
+    assert_eq!(staging.count(), 1);
 }
 
 /// The names of a block's tasks, in order.
@@ -219,12 +374,17 @@ fn verification_runs_on_the_controller_before_any_host_and_retains_its_record() 
     let actions = "scmig_action in ['verify', 'inspect', 'bootstrap', 'stage']";
     assert!(strings(guard).contains(&actions));
     let steps = tasks(&step["block"]);
-    let modules =
-        ["assert", "command", "assert", "copy"].map(|module| format!("ansible.builtin.{module}"));
+    let modules = [
+        "assert", "command", "assert", "copy", "set_fact", "copy", "command", "command", "stat",
+        "assert", "copy",
+    ]
+    .map(|module| format!("ansible.builtin.{module}"));
     assert_eq!(steps.len(), modules.len());
-    for (step, module) in steps.iter().zip(&modules) {
+    for (index, (step, module)) in steps.iter().zip(&modules).enumerate() {
         assert!(uses(step, module), "{module}");
-        assert!(step.get("delegate_to").is_none() && step.get("when").is_none());
+        // Only the token is read conditionally: when the caller supplied none.
+        assert!(step.get("delegate_to").is_none(), "{module}");
+        assert_eq!(step.get("when").is_some(), index == 6, "{module}");
     }
     let command = &steps[1];
     assert_eq!(
@@ -528,5 +688,226 @@ fn stage_reverifies_delivers_the_signed_executable_then_fetches_and_imports_nati
     let verdicts = asserted(&tasks[2]["ansible.builtin.assert"]["that"], &variables);
     for (accepted, (case, expected)) in verdicts.iter().zip(&cases) {
         assert_eq!(accepted, expected, "{case}");
+    }
+}
+
+/// The executable the inspection runs is authenticated on the controller in
+/// the same host-free step: one pinned request, the token only in the child's
+/// environment, and an executable that must hash to the digest the signed
+/// attestation's policy names.
+#[test]
+fn the_ops_executable_is_authenticated_on_the_controller_before_any_host() {
+    let play = play();
+    let step = &tasks(&play["tasks"])[0];
+    let steps = tasks(&step["block"]);
+    assert_eq!(
+        names(&steps[4..]),
+        [
+            "Serialize one original Ops acquisition request",
+            "Retain the original acquisition request privately",
+            "Read the user's gh token only when GH_TOKEN was not supplied",
+            "Authenticate the signed Ops executable on the controller",
+            "Snapshot the authenticated executable",
+            "Require the executable the verifier's signed policy pins",
+            "Retain the authenticated executable's identity in private controller evidence",
+        ]
+    );
+    let request = steps[4]["ansible.builtin.set_fact"]["scmig_ops_request"]
+        .as_str()
+        .unwrap();
+    for part in [
+        "'schemaVersion': 1",
+        "'selection': scpub_ops_selection",
+        "'artifactId': scpub_ops_artifact_id",
+        "'output': scmig_evidence ~ '/ops'",
+        "'authentication': 'gh-token'",
+        "{'artifactZip': scpub_ops_artifact_zip}",
+        "| to_json",
+    ] {
+        assert!(request.contains(part), "{part}");
+    }
+    let retained = json!({"content": "{{ scmig_ops_request }}",
+        "dest": "{{ scmig_evidence }}/ops-request.json", "mode": "0600", "force": false});
+    assert_eq!(steps[5]["ansible.builtin.copy"], retained);
+    let token = &steps[6];
+    assert_eq!(
+        token["when"],
+        "lookup('ansible.builtin.env', 'GH_TOKEN') | length == 0"
+    );
+    assert_eq!(token["no_log"], true);
+    let acquire = &steps[7];
+    assert_eq!(
+        strings(&acquire["ansible.builtin.command"]["argv"]),
+        [
+            "{{ scpub_ops_release_controller }}",
+            "ops-artifact",
+            "acquire",
+            "--request",
+            "{{ scmig_evidence }}/ops-request.json",
+            "--request-sha256",
+            "{{ scmig_ops_request | hash('sha256') }}",
+        ]
+    );
+    let environment = acquire["environment"].as_object().unwrap();
+    let keys: Vec<&str> = environment.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["GH_TOKEN", "GITHUB_TOKEN", "PATH"]);
+    assert_eq!(environment["GITHUB_TOKEN"], "");
+    let path = "{{ scpub_ops_gh_executable | realpath | dirname }}:/usr/bin:/bin";
+    assert_eq!(environment["PATH"], path);
+    assert_eq!(
+        (&acquire["no_log"], &acquire["changed_when"]),
+        (&json!(true), &json!(false))
+    );
+    assert_eq!(acquire["register"], "scmig_ops_acquired");
+    let held = "{{ scmig_evidence }}/ops/verified/simplestchat-ops";
+    assert_eq!(steps[8]["ansible.builtin.stat"]["path"], held);
+    assert_eq!(steps[8]["ansible.builtin.stat"]["follow"], false);
+    let record = &steps[10]["ansible.builtin.copy"];
+    assert_eq!(record["dest"], "{{ scmig_evidence }}/ops.json");
+    assert_eq!(
+        (&record["mode"], &record["force"]),
+        (&json!("0600"), &json!(false))
+    );
+    for field in [
+        "'path': scmig_evidence ~ '/ops/verified/simplestchat-ops'",
+        "'sha256'",
+        "'bytes'",
+    ] {
+        assert!(
+            record["content"].as_str().unwrap().contains(field),
+            "{field}"
+        );
+    }
+    let always = tasks(&step["always"]);
+    assert_eq!(always.len(), 1);
+    assert_eq!(
+        always[0]["ansible.builtin.set_fact"]["scmig_ops_credential"],
+        json!({})
+    );
+    assert_eq!(always[0]["no_log"], true);
+    // The observation and the retained bytes, as Ansible judges them.
+    let digest = "e".repeat(64);
+    let observed = |change: &dyn Fn(&mut Value)| {
+        let mut observation = json!({
+            "kind": "ops-artifact-acquisition-observation",
+            "scope": "AuthenticatedRetainedBytesWithoutExecutionOrInstallation",
+            "artifact": {"artifactId": 4321},
+            "selection": selection()["scpub_ops_selection"],
+            "verification": {"matchedVerifierPolicy": {"revision": "a".repeat(40),
+                "buildRunId": 5678, "binarySha256": digest}}});
+        change(&mut observation);
+        json!({"rc": 0, "stdout": observation.to_string()})
+    };
+    let binary = |change: &dyn Fn(&mut Value)| {
+        let mut stat = json!({"isreg": true, "islnk": false, "nlink": 1, "size": 22229136,
+            "checksum": digest});
+        change(&mut stat);
+        json!({"stat": stat})
+    };
+    let parsed = steps[9]["vars"]["scmig_ops_observed"].clone();
+    let case = |acquired: Value, stat: Value| {
+        let mut values = selection();
+        values.insert("scmig_ops_acquired".into(), acquired);
+        values.insert("scmig_ops_observed".into(), parsed.clone());
+        values.insert("scmig_ops_binary".into(), stat);
+        Value::Object(values)
+    };
+    let policy = "/verification/matchedVerifierPolicy";
+    let cases = [
+        (case(observed(&|_| {}), binary(&|_| {})), true),
+        (
+            case(
+                observed(&|value| value["kind"] = json!("other")),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| value["scope"] = json!("Unverified")),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| value["artifact"]["artifactId"] = json!(4322)),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| value["selection"]["runAttempt"] = json!(3)),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| {
+                    value.pointer_mut(policy).unwrap()["revision"] = json!("b".repeat(40))
+                }),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| value.pointer_mut(policy).unwrap()["buildRunId"] = json!(5679)),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|value| {
+                    value.pointer_mut(policy).unwrap()["binarySha256"] = json!("f".repeat(64))
+                }),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|_| {}),
+                binary(&|stat| stat["checksum"] = json!("f".repeat(64))),
+            ),
+            false,
+        ),
+        (
+            case(observed(&|_| {}), binary(&|stat| stat["size"] = json!(0))),
+            false,
+        ),
+        (
+            case(
+                observed(&|_| {}),
+                binary(&|stat| stat["size"] = json!(268435457)),
+            ),
+            false,
+        ),
+        (
+            case(
+                observed(&|_| {}),
+                binary(&|stat| stat["islnk"] = json!(true)),
+            ),
+            false,
+        ),
+        (
+            case(observed(&|_| {}), binary(&|stat| stat["nlink"] = json!(2))),
+            false,
+        ),
+        (
+            case(
+                json!({"rc": 1, "stdout": observed(&|_| {})["stdout"]}),
+                binary(&|_| {}),
+            ),
+            false,
+        ),
+    ];
+    let variables: Vec<Value> = cases.iter().map(|(case, _)| case.clone()).collect();
+    let verdicts = asserted(&steps[9]["ansible.builtin.assert"]["that"], &variables);
+    for (index, (accepted, (_, expected))) in verdicts.iter().zip(&cases).enumerate() {
+        assert_eq!(accepted, expected, "case {index}");
     }
 }
