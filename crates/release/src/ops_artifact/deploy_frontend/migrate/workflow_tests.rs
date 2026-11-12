@@ -223,6 +223,9 @@ struct Script {
     moves: Option<&'static str>,
     /// Whether git ignores the private results directory.
     results_ignored: bool,
+    /// A play that outlasts its time, and whether the one running now did.
+    expires: Option<&'static str>,
+    late: bool,
     heads: usize,
     mains: usize,
     listings: usize,
@@ -249,6 +252,8 @@ impl Script {
             tracked_during: None,
             moves: None,
             results_ignored: true,
+            expires: None,
+            late: false,
             heads: 0,
             mains: 0,
             listings: 0,
@@ -417,6 +422,7 @@ impl Script {
             hosts: members.keys().cloned().collect(),
             ceiling,
         });
+        self.late = self.expires == Some(action.as_str());
         if self.tracked_during == Some(action.as_str()) {
             let tracked = self.root.join(SOURCE_PATHS[2]);
             private(&tracked, b"changed while this step ran\n", 0o600);
@@ -607,6 +613,9 @@ impl Executor for Script {
         }));
         proof.observed_exit(Some(i32::from(status)), true, true);
         proof.completed()?;
+        if std::mem::take(&mut self.late) {
+            return Err(failure(124));
+        }
         match status {
             0 => Ok(Vec::new()),
             status => Err(Failure::child_exit(status)),
@@ -1182,6 +1191,49 @@ async fn a_verification_that_left_no_exact_record_stops_before_any_host() {
             .collect();
         assert_eq!(actions, ["verify"], "{left}");
     }
+}
+
+/// A step that outlasts its time is named as that in the report, and the
+/// move recovers exactly as it does when the same step fails.
+#[tokio::test]
+async fn a_step_that_outlasts_its_time_is_named_and_recovered_like_a_failed_one() {
+    let failed = scenario(
+        &recorded(),
+        "a transfer that fails stops the target and resumes the source",
+    );
+    let mut slow = failed.clone();
+    for play in slow["plays"].as_array_mut().unwrap() {
+        play["fails"] = json!(false);
+    }
+    let fixture = Fixture::new(&slow);
+    let mut script = Script::new(&fixture, &slow);
+    script.expires = Some("transfer");
+    let (result, report) = fixture.run(&mut script, &fixture.arguments(&slow)).await;
+    assert_eq!(result.unwrap().status, 124);
+    let verdict = (
+        &report["failureClass"],
+        &report["failedPhase"],
+        &report["recovery"],
+    );
+    let recovery = &failed["report"]["recovery"];
+    assert_eq!(recovery, "source_resumed_target_stopped");
+    assert_eq!(
+        verdict,
+        (
+            &json!("migration_deadline_exceeded"),
+            &json!("transfer"),
+            recovery
+        )
+    );
+    let actions: Vec<&str> = script
+        .plays
+        .iter()
+        .map(|play| play.action.as_str())
+        .collect();
+    assert!(
+        actions.ends_with(&["transfer", "stop-target", "resume-source"]),
+        "{actions:?}"
+    );
 }
 
 /// After the freeze every play reads the private copies, so an operator who

@@ -13,13 +13,16 @@ pub(super) fn refusal(code: &'static str) -> Failure {
     Failure::new(1, code)
 }
 
-/// The fixed diagnostic a failure carries, or the one name for every failure
-/// whose cause stays in private evidence.
+/// The fixed diagnostic a failure carries, the name of a wait or a step
+/// that outlasted its time, or the one name for every failure whose cause
+/// stays in private evidence. A child that itself exits with the status a
+/// deadline uses did not run out of time.
 pub(super) fn class(error: &Failure) -> &str {
     let code = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_';
     match error.code {
         130 | 143 => "interrupted",
         _ if !error.message.is_empty() && error.message.bytes().all(code) => &error.message,
+        124 if !error.is_child_exit() => "migration_deadline_exceeded",
         _ => "migration_step_failed",
     }
 }
@@ -360,6 +363,15 @@ mod tests {
         }
         assert_eq!(class(&Failure::child_exit(2)), "migration_step_failed");
         assert_eq!(class(&Failure::new(124, "ci_failed")), "ci_failed");
+        for private in ["Routine deployment command failed.", ""] {
+            assert_eq!(
+                class(&Failure::new(124, private)),
+                "migration_deadline_exceeded",
+                "{private:?}"
+            );
+            assert_eq!(class(&Failure::new(125, private)), "migration_step_failed");
+        }
+        assert_eq!(class(&Failure::child_exit(124)), "migration_step_failed");
         for signal in [130, 143] {
             assert_eq!(class(&Failure::new(signal, "ci_failed")), "interrupted");
         }

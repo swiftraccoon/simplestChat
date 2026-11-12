@@ -108,7 +108,9 @@ tools explicitly; `--application-artifact-dir` and `--ops-artifact-zip` supply
 [retained artifact inputs](RELEASES.md#optional-retained-artifact-inputs), which
 are verified like downloaded ones. `--wait-seconds` bounds the wait for CI
 (default 3600). The command prints one JSON report and exits zero only for a
-complete move.
+complete move. A wait or a step that outlasts its time ends the move with status
+124 and `failureClass: migration_deadline_exceeded`; recovery is the same as
+after the step failing.
 
 An unsigned retained release cannot be moved. Every host step of a move is a
 command of the signed Ops executable, which exists only for a revision whose
