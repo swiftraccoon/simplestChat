@@ -91,7 +91,7 @@ lru = { version = "0.18.5", default-features = false }
 # The public lobby's seeding transaction, driven against the real router. The
 # version keeps this path dependency from being a wildcard requirement.
 simplestchat-lobby-seed = { path = "crates/lobby-seed", version = "0.1.0" }
-syn = { version = "=3.0.6", features = ["full", "visit"] }
+syn = { version = "=3.0.9", features = ["full", "visit"] }
 tokio-test = "0.4.6"
 tower = { version = "0.5.3", features = ["util"] }
 
