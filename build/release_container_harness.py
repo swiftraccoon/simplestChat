@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
 PROJECT = Path(__file__).resolve().parents[1]
 OPS = "/usr/local/libexec/simplestchat-public/simplestchat-ops"
+FINAL = ("--finalization-seconds", "60")
 
 CONFIG, ROOT, WORK = release.CONFIG, release.ROOT, release.WORK
 FIXED_PATHS = (CONFIG, ROOT, WORK, Path("/srv/simplestchat-bench"))
@@ -1276,12 +1277,9 @@ class Harness:
     ) -> tuple[Path, JsonObject]:
         """Run one real release attempt and preserve its original, identity-bound result."""
         before = set((ROOT / "results").glob("release.*"))
-        limits = ["--timeout-seconds", "900", "--finalization-seconds", "60"]
-        command = self.commands.run(
-            [OPS, "release", action, "--revision", candidate["revision"], *limits],
-            timeout=240,
-            success=False,
-        )
+        budget = "600" if action == "stage" else "900"  # staging admits at most ten minutes
+        argv = [OPS, "release", action, "--revision", candidate["revision"], "--timeout-seconds"]
+        command = self.commands.run([*argv, budget, *FINAL], timeout=240, success=False)
         attempts = set((ROOT / "results").glob("release.*")) - before
         require(len(attempts) == 1, "Release must retain exactly one new attempt")
         attempt = attempts.pop()

@@ -162,8 +162,17 @@ fn the_release_integration_runs_the_installed_source_built_ops_executable() {
     let harness = checkout_file(HARNESS);
     let path = "OPS = \"/usr/local/libexec/simplestchat-public/simplestchat-ops\"\n";
     assert_eq!(harness.matches(path).count(), 1);
-    let invocation = "[OPS, \"release\", action, \"--revision\", candidate[\"revision\"], *limits]";
-    assert_eq!(harness.matches(invocation).count(), 1);
+    // Staging admits a whole budget of at most 600 seconds; a deployment
+    // needs more than the time it reserves for its one rollback.
+    for line in [
+        "FINAL = (\"--finalization-seconds\", \"60\")\n",
+        "        budget = \"600\" if action == \"stage\" else \"900\"",
+        "        argv = [OPS, \"release\", action, \"--revision\", candidate[\"revision\"], ",
+        "candidate[\"revision\"], \"--timeout-seconds\"]\n",
+        "self.commands.run([*argv, budget, *FINAL], timeout=240, success=False)\n",
+    ] {
+        assert_eq!(harness.matches(line).count(), 1, "{line}");
+    }
     assert!(!harness.contains("release-public.py"));
 }
 

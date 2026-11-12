@@ -1,4 +1,4 @@
-total 101029
+total 101027
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -13,7 +13,7 @@ total 101029
 407	build/release_attestation.py
 747	build/release_build.py
 267	build/release_container_fixture.py
-1680	build/release_container_harness.py
+1678	build/release_container_harness.py
 599	build/release_deploy.py
 722	build/release_fetch_controller.py
 306	build/security_actions.py
