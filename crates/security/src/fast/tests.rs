@@ -8,7 +8,9 @@
 //! recorded names. Where the reference failed with an exception of its
 //! interpreter, `named` gives the code here.
 
-use super::{Installed, Programs, Scan, canary, secret_scan, workflows};
+use super::{
+    AUDIT, Installed, Programs, Scan, canary, dependencies, locked, secret_scan, workflows,
+};
 use crate::{
     context::{Context, Failure, Limits, Outcome, Snapshot, executable},
     policy::{self, Date, Exception},
@@ -22,9 +24,11 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    time::Duration,
 };
 
 const RECORDED: &str = include_str!("recorded_drivers.json");
+const DEPENDENCIES: &str = include_str!("recorded_dependencies.json");
 
 /// What a shell adds to the environment of what it runs.
 const SHELL: [&str; 5] = ["_", "PWD", "OLDPWD", "SHLVL", "__CF_USER_TEXT_ENCODING"];
@@ -54,6 +58,15 @@ fn named(code: &str) -> &str {
     }
 }
 
+/// The codes of the dependency checks, where the only TOML read is the lock.
+fn named_of_dependencies(code: &str) -> &str {
+    match code {
+        "FileNotFoundError" => "tool_entry_missing",
+        "TOMLDecodeError" | "UnicodeDecodeError" => "cargo_lock_invalid",
+        code => named(code),
+    }
+}
+
 fn reviews(recording: &Value, case: &Value) -> Vec<Exception> {
     let today = Date::parse(text(&recording["today"])).expect("the recorded day");
     let parsed = |review| policy::parse(review, today).expect("a recorded review");
@@ -61,11 +74,35 @@ fn reviews(recording: &Value, case: &Value) -> Vec<Exception> {
 }
 
 /// Scripted scanners by name.
-struct Scripted(BTreeMap<&'static str, PathBuf>);
+struct Scripted(BTreeMap<&'static str, PathBuf>, Vec<&'static str>);
 
 impl Programs for Scripted {
     fn program(&self, name: &'static str) -> Outcome<PathBuf> {
         Ok(self.0[name].clone())
+    }
+
+    fn prerequisite(&self, name: &'static str) -> Outcome<PathBuf> {
+        if self.1.contains(&name) {
+            return Err(Failure::Prerequisite(name));
+        }
+        self.program(name)
+    }
+
+    fn python(&self) -> Outcome<PathBuf> {
+        self.program("python")
+    }
+}
+
+/// A recorded name as the fixed text a program's name is.
+fn fixed(name: &str) -> &'static str {
+    Box::leak(name.to_owned().into_boxed_str())
+}
+
+/// The program that a kind of run belongs to.
+fn program_of(kind: &'static str) -> &'static str {
+    match kind.rsplit_once('-') {
+        Some((program @ ("gitleaks" | "python" | "npm"), _)) => program,
+        _ => kind,
     }
 }
 
@@ -73,14 +110,22 @@ impl Programs for Scripted {
 /// tell it to. A scanner run in several ways picks its files by its
 /// arguments.
 fn script(name: &str, directory: &Path, log: &Path) -> String {
-    let select = if name == "gitleaks" {
-        concat!(
+    let select = match name {
+        "gitleaks" => concat!(
             "case \" $* \" in *\" --exit-code=10 \"*) kind=gitleaks-selftest;; ",
             "*\" --pre-commit \"*) kind=gitleaks-working;; ",
             "*\" --log-opts=\"*) kind=gitleaks-range;; *) kind=gitleaks-tree;; esac"
-        )
-    } else {
-        ":"
+        ),
+        "python" => concat!(
+            "case \"$6\" in build/python-requirements.txt) kind=python-0;; ",
+            "ops/ansible/requirements.txt) kind=python-1;; ",
+            "security/requirements.txt) kind=python-2;; ",
+            "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt) kind=python-3;; ",
+            "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt) kind=python-4;; ",
+            "*) kind=python-other;; esac"
+        ),
+        "npm" => "case \"$(pwd -P)\" in */web/e2e) kind=npm-1;; *) kind=npm-0;; esac",
+        _ => ":",
     };
     let (directory, log) = (spelled(directory), spelled(log));
     [
@@ -122,11 +167,7 @@ fn programs(directory: &Path, log: &Path, behaviours: &[(&'static str, &Value)])
             format!("{status}\n"),
         )
         .expect("a status file");
-        let name = if kind.starts_with("gitleaks") {
-            "gitleaks"
-        } else {
-            kind
-        };
+        let name = program_of(kind);
         if !paths.contains_key(name) {
             let path = directory.join(name);
             std::fs::write(&path, script(name, directory, log)).expect("a program");
@@ -135,7 +176,7 @@ fn programs(directory: &Path, log: &Path, behaviours: &[(&'static str, &Value)])
             paths.insert(name, path);
         }
     }
-    Scripted(paths)
+    Scripted(paths, Vec::new())
 }
 
 /// The name of a `NAME=value` pair.
@@ -212,7 +253,7 @@ fn noted(context: &Context, replacements: &[(String, String)]) -> Value {
     serde_json::from_str(&written).expect("checks again")
 }
 
-fn settled(case: &Value, judged: Outcome<()>) -> bool {
+fn settled(case: &Value, judged: Outcome<()>, named: fn(&str) -> &str) -> bool {
     let name = text(&case["name"]);
     let refused = judged.err().map(|failure| failure.to_string());
     let expected = case["result"].get("code").map(|code| named(text(code)));
@@ -250,7 +291,7 @@ fn every_recorded_workflow_check_is_made_alike() {
         let mut context =
             Context::new(&root, &output, Limits::REVIEWED, &ambient).expect("a context");
         let judged = workflows(&mut context, &scripted, &reviews(&recording, case));
-        if settled(case, judged) {
+        if settled(case, judged, named) {
             held += 1
         } else {
             refused += 1
@@ -397,7 +438,7 @@ fn every_recorded_secret_scan_is_made_alike() {
             git: &git,
         };
         let judged = secret_scan(&mut context, &scripted, &scan);
-        if settled(case, judged) {
+        if settled(case, judged, named) {
             held += 1
         } else {
             refused += 1
@@ -556,7 +597,149 @@ fn an_installation_answers_from_its_own_directory() {
     let installed = Installed {
         site,
         directory: &directory,
+        search: None,
+        python: Path::new("/nowhere/python"),
     };
     let refused = installed.program("gitleaks");
     assert_eq!(refused, Err(Failure::Fixed("invalid_tool_json")));
+}
+
+/// What the reference admitted and this check refuses: a total that is no
+/// whole number, and a lock that is empty where a field was missed.
+const STRICTER: [(&str, &str); 3] = [
+    (
+        "an npm total that is a truth value",
+        "npm_dependency_advisory",
+    ),
+    (
+        "an npm total that is a fraction of nothing",
+        "npm_dependency_advisory",
+    ),
+    ("a lock that is empty", "tool_file_size"),
+];
+
+#[test]
+fn every_recorded_dependency_check_is_made_alike() {
+    let recording: Value = serde_json::from_str(DEPENDENCIES).expect("the recording is JSON");
+    let scratch = Scratch::new("fd");
+    let now = Duration::from_secs(recording["now"].as_u64().expect("the recorded time"));
+    let usual = recording["usual"]
+        .as_object()
+        .expect("the usual behaviours");
+    let kinds: Vec<&'static str> = usual.keys().map(|kind| fixed(kind)).collect();
+    let (mut held, mut refused, mut stricter) = (0, 0, 0);
+    for (index, case) in list(&recording["dependencies"]).iter().enumerate() {
+        let name = text(&case["name"]);
+        let base = scratch.0.join(index.to_string());
+        let [root, output, tools] = ["root", "output", "tools"].map(|part| base.join(part));
+        for directory in [
+            &root.join("web/e2e"),
+            &root.join("security"),
+            &output,
+            &tools,
+        ] {
+            std::fs::create_dir_all(directory).expect("a directory");
+        }
+        match &case["lock"] {
+            Value::Null => {}
+            Value::String(lock) => std::fs::write(root.join("Cargo.lock"), lock).expect("a lock"),
+            bytes => {
+                let byte = |value: &Value| u8::try_from(value.as_u64().expect("a byte"));
+                let bytes: Vec<u8> = list(&bytes["bytes"])
+                    .iter()
+                    .map(|value| byte(value).expect("a small byte"))
+                    .collect();
+                std::fs::write(root.join("Cargo.lock"), bytes).expect("a lock");
+            }
+        }
+        let budget = root.join("security/dependency-budget.json");
+        match &case["budget"] {
+            Value::Null => {}
+            Value::String(written) => std::fs::write(&budget, written).expect("a budget"),
+            document => {
+                let written = serde_json::to_string(document).expect("a budget");
+                std::fs::write(&budget, written).expect("a budget");
+            }
+        }
+        let log = base.join("log");
+        let said = |kind: &&'static str| {
+            (
+                *kind,
+                case["behaviours"].get(*kind).unwrap_or(&usual[*kind]),
+            )
+        };
+        let behaviours: Vec<(&'static str, &Value)> = kinds.iter().map(said).collect();
+        let mut scripted = programs(&tools, &log, &behaviours);
+        scripted.1 = list(&case["missing"])
+            .iter()
+            .map(|name| fixed(text(name)))
+            .collect();
+        let ambient = caller(Some("/usr/bin:/bin".into()));
+        let mut context =
+            Context::new(&root, &output, Limits::REVIEWED, &ambient).expect("a context");
+        let judged = dependencies(&mut context, &scripted, &reviews(&recording, case), now);
+        let replacements = [
+            (&root, "<root>"),
+            (&output, "<output>"),
+            (&tools, "<tools>"),
+        ]
+        .map(|(path, token)| (spelled(path).to_owned(), token.to_owned()));
+        if let Some((_, code)) = STRICTER.iter().find(|(case, _)| *case == name) {
+            let judged = judged.err().map(|failure| failure.to_string());
+            assert_eq!(judged.as_deref(), Some(*code), "{name}");
+            stricter += 1;
+            continue;
+        }
+        if settled(case, judged, named_of_dependencies) {
+            held += 1
+        } else {
+            refused += 1
+        }
+        assert_eq!(noted(&context, &replacements), case["checks"], "{name}");
+        let fixed = &recording["environments"]["dependencies"];
+        assert_eq!(logged(&log, &replacements, fixed), case["log"], "{name}");
+    }
+    assert_eq!((held, refused, stricter), (6, 53, 3));
+}
+
+#[test]
+fn an_installation_finds_the_programs_of_the_host_and_its_interpreter() {
+    let scratch = Scratch::new("fq");
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lock = manifest.join("../../build/security-tools.lock.json");
+    let python = scratch.0.join("environment/bin/python");
+    let installed = Installed {
+        site: Site {
+            lock: &lock,
+            cache: &scratch.0,
+            platform: "linux-x86_64",
+            limits: crate::tools::Limits::REVIEWED,
+        },
+        directory: &scratch.0,
+        search: Some(scratch.0.as_os_str()),
+        python: &python,
+    };
+    let own = scratch.0.join("a-program-of-the-test");
+    std::fs::write(&own, "#!/bin/sh\n").expect("a program");
+    std::fs::set_permissions(&own, std::fs::Permissions::from_mode(0o755)).expect("a mode");
+    assert_eq!(installed.prerequisite("a-program-of-the-test"), Ok(own));
+    let elsewhere = installed.prerequisite("sh");
+    assert_eq!(elsewhere, Err(Failure::Prerequisite("sh")));
+    assert_eq!(installed.python(), Ok(python.clone()));
+}
+
+#[test]
+fn an_audit_has_five_minutes_and_a_lock_is_bounded() {
+    assert_eq!(AUDIT, Duration::from_secs(300));
+    let scratch = Scratch::new("fl");
+    let lock = scratch.0.join("Cargo.lock");
+    let written = "[[package]]\nname = \"p\"\n\n[[package]]\nname = \"q\"\n";
+    std::fs::write(&lock, written).expect("a lock");
+    let bounded = |source: usize| Limits {
+        source: source as u64,
+        ..Limits::REVIEWED
+    };
+    assert_eq!(locked(&lock, &bounded(written.len())), Ok(2));
+    let refused = locked(&lock, &bounded(written.len() - 1));
+    assert_eq!(refused, Err(crate::Fault("tool_file_size")));
 }

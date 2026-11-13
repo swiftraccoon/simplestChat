@@ -6,47 +6,85 @@
 //! another shape fails the check.
 
 use crate::{
-    Fault,
-    context::{Context, Outcome, Run},
+    Fault, Result,
+    context::{Context, Limits, Outcome, Run, executable},
     files,
     findings::{self, field, list, object},
     policy::Exception,
     record, require, secrets,
     tools::{self, Site},
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use sha2::{Digest as _, Sha512};
 use std::{
     ffi::{OsStr, OsString},
     fs::DirBuilder,
     os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 /// What the reference derives its inert canary from.
 const CANARY_SEED: &[u8] = b"inert source scanner coverage only";
 /// The scanner's status when it found something and was asked to say so.
 const FOUND: i32 = 10;
+/// How long an audit that reads an advisory database or an index may take.
+const AUDIT: Duration = Duration::from_secs(300);
+/// The requirement files whose pinned Python packages are audited, each
+/// under the name of its check.
+const REQUIREMENTS: [(&str, &str); 5] = [
+    ("pip-audit-0", "build/python-requirements.txt"),
+    ("pip-audit-1", "ops/ansible/requirements.txt"),
+    ("pip-audit-2", "security/requirements.txt"),
+    (
+        "pip-audit-3",
+        "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+    ),
+    (
+        "pip-audit-4",
+        "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+    ),
+];
+/// The directories whose npm lock files are audited.
+const PACKAGES: [(&str, &str); 2] = [("npm-audit-0", "web"), ("npm-audit-1", "web/e2e")];
 
-/// Where the pinned scanners are.
+/// Where the programs of the checks are.
 pub trait Programs {
-    /// The path of the scanner `name`, verified before it is given.
+    /// The path of the pinned scanner `name`, verified before it is given.
     fn program(&self, name: &'static str) -> Outcome<PathBuf>;
+
+    /// The path of the host's own `name`, looked for when it is asked for.
+    fn prerequisite(&self, name: &'static str) -> Outcome<PathBuf>;
+
+    /// The interpreter of the hash-locked scanner environment.
+    fn python(&self) -> Outcome<PathBuf>;
 }
 
 /// The scanners of one installation, each verified against its receipt and
-/// the lock whenever it is asked for.
+/// the lock whenever it is asked for, beside the host's own programs.
 #[derive(Clone, Copy, Debug)]
 pub struct Installed<'a> {
     /// Where the lock is and what the installation is for.
     pub site: Site<'a>,
     /// The installation.
     pub directory: &'a Path,
+    /// The caller's search path.
+    pub search: Option<&'a OsStr>,
+    /// The scanner environment's interpreter.
+    pub python: &'a Path,
 }
 
 impl Programs for Installed<'_> {
     fn program(&self, name: &'static str) -> Outcome<PathBuf> {
         Ok(tools::path(&self.site, name, Some(self.directory))?)
+    }
+
+    fn prerequisite(&self, name: &'static str) -> Outcome<PathBuf> {
+        executable(name, self.search)
+    }
+
+    fn python(&self) -> Outcome<PathBuf> {
+        Ok(self.python.to_path_buf())
     }
 }
 
@@ -333,6 +371,126 @@ pub fn secret_scan(context: &mut Context, programs: &dyn Programs, scan: &Scan<'
         &command(&scanner, &changes),
         &given,
     )
+}
+
+/// How many packages the Cargo lock at `path` names.
+fn locked(path: &Path, limits: &Limits) -> Result<u64> {
+    let content = files::bounded(path, limits.source, false)?;
+    let text = std::str::from_utf8(&content).map_err(|_| Fault("cargo_lock_invalid"))?;
+    let document: Value = toml::from_str(text).map_err(|_| Fault("cargo_lock_invalid"))?;
+    Ok(list(field(object(&document)?, "package")?)?.len() as u64)
+}
+
+/// A report that is a record, as the audits of other ecosystems print one.
+fn reported(report: &[u8]) -> Result<Value> {
+    let document = record::document(report)?;
+    require(document.is_object(), "scanner_report_object")?;
+    Ok(document)
+}
+
+/// Audit every locked dependency against today's advisories and hold the
+/// crates to the reviewed budget and policy.
+///
+/// The Rust audit reads the whole lock with a Cargo home of its own; each of
+/// its advisories needs a review, and its status for a finding is an answer
+/// only beside reviewed findings. cargo-deny holds bans, licenses and
+/// sources; Cargo's own metadata is held to the budget of duplicated
+/// packages. No pinned Python package and no npm package of either lock may
+/// have an advisory at all. `now` is the time since the epoch.
+pub fn dependencies(
+    context: &mut Context,
+    programs: &dyn Programs,
+    reviews: &[Exception],
+    now: Duration,
+) -> Outcome<()> {
+    let auditor = programs.program("cargo-audit")?;
+    let lock = context.root().join("Cargo.lock");
+    let database = context.root().join(".cache/security-rustsec-db");
+    let (home, own) = (
+        context.output().join("home"),
+        context.output().join("cargo-audit-home"),
+    );
+    let arguments = [
+        OsStr::new("audit"),
+        OsStr::new("--json"),
+        OsStr::new("--file"),
+        lock.as_os_str(),
+        OsStr::new("--db"),
+        database.as_os_str(),
+    ];
+    let how = Run {
+        directory: Some(&home),
+        within: AUDIT,
+        accepted: &[0, 1],
+        variables: &[("CARGO_HOME", own.as_os_str())],
+        ..Run::default()
+    };
+    let (status, report) = context.run("cargo-audit", &command(&auditor, &arguments), &how)?;
+    let packages = locked(&lock, context.limits())?;
+    let unreadable = |fault: Fault| match fault.0 {
+        "invalid_tool_json" => Fault("cargo_audit_invalid_report"),
+        _ => fault,
+    };
+    let reviewed = findings::cargo(&report, reviews, packages, now).map_err(unreadable)?;
+    require(
+        status == 0 || reviewed > 0,
+        "cargo_unsuccessful_empty_report",
+    )?;
+    context.annotate([("reviewedFindings", reviewed.into())]);
+    let slow = Run {
+        within: AUDIT,
+        ..Run::default()
+    };
+    let deny = programs.program("cargo-deny")?;
+    let policy = ["--locked", "check", "bans", "licenses", "sources"].map(OsStr::new);
+    context.run("cargo-deny", &command(&deny, &policy), &slow)?;
+    let cargo = programs.prerequisite("cargo")?;
+    let asked = [
+        "metadata",
+        "--locked",
+        "--all-features",
+        "--format-version=1",
+    ]
+    .map(OsStr::new);
+    let (_, metadata) = context.run("cargo-metadata", &command(&cargo, &asked), &slow)?;
+    let budget = context.root().join("security/dependency-budget.json");
+    findings::dependency_budget(&metadata, &budget)?;
+    for (name, requirements) in REQUIREMENTS {
+        let python = programs.python()?;
+        let audit = [
+            "-m",
+            "pip_audit",
+            "--require-hashes",
+            "--disable-pip",
+            "-r",
+            requirements,
+            "--format=json",
+        ];
+        let (_, report) = context.run(name, &command(&python, &audit.map(OsStr::new)), &slow)?;
+        let document = reported(&report)?;
+        for dependency in list(field(object(&document)?, "dependencies")?)? {
+            let advisories = list(field(object(dependency)?, "vulns")?)?;
+            require(advisories.is_empty(), "python_dependency_advisory")?;
+        }
+    }
+    for (name, package) in PACKAGES {
+        let npm = programs.prerequisite("npm")?;
+        let directory = context.root().join(package);
+        let audit = ["audit", "--package-lock-only", "--ignore-scripts", "--json"].map(OsStr::new);
+        let how = Run {
+            directory: Some(&directory),
+            ..slow
+        };
+        let (_, report) = context.run(name, &command(&npm, &audit), &how)?;
+        let document = reported(&report)?;
+        let counted = object(field(object(&document)?, "metadata")?)?;
+        let counts = object(field(counted, "vulnerabilities")?)?;
+        require(
+            field(counts, "total")? == &json!(0),
+            "npm_dependency_advisory",
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

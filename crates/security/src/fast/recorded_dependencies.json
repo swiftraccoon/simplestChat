@@ -1,0 +1,8321 @@
+{
+ "dependencies": [
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "nothing found",
+   "result": {
+    "held": true
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     1,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [{\"package\": {\"name\": \"example\", \"version\": \"1.0.0\"}, \"advisory\": {\"id\": \"RUSTSEC-2099-0001\"}}], \"found\": true, \"count\": 1}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "cargo-audit",
+     "reviewedFindings": 1
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a reviewed vulnerability and the status of a finding",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [{\"package\": {\"name\": \"example\", \"version\": \"1.0.0\"}, \"advisory\": {\"id\": \"RUSTSEC-2099-0001\"}}], \"found\": true, \"count\": 1}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 1
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a reviewed vulnerability and success",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [], \"found\": false, \"count\": 0}, \"warnings\": {\"unmaintained\": [{\"package\": {\"name\": \"example\", \"version\": \"1.0.0\"}, \"advisory\": {\"id\": \"RUSTSEC-2099-0001\"}}]}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 1
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a reviewed warning and success",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     1,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [{\"package\": {\"name\": \"example\", \"version\": \"1.0.0\"}, \"advisory\": {\"id\": \"RUSTSEC-2099-0001\"}}], \"found\": true, \"count\": 1}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a vulnerability without a review",
+   "result": {
+    "code": "unreviewed_cargo_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     1,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [], \"found\": false, \"count\": 0}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "the status of a finding and an empty report",
+   "result": {
+    "code": "cargo_unsuccessful_empty_report"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     2,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [{\"package\": {\"name\": \"example\", \"version\": \"1.0.0\"}, \"advisory\": {\"id\": \"RUSTSEC-2099-0001\"}}], \"found\": true, \"count\": 1}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 2,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit that exits with two",
+   "result": {
+    "code": "scanner_command_failed_cargo-audit"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "{"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit that is no JSON",
+   "result": {
+    "code": "cargo_audit_invalid_report"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     ""
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit of nothing at all",
+   "result": {
+    "code": "cargo_audit_invalid_report"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     1,
+     "error: no database\n"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit that is no JSON and the status of a finding",
+   "result": {
+    "code": "cargo_audit_invalid_report"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "[]"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit that is a list",
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 4}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [], \"found\": false, \"count\": 0}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit of another lock size",
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-audit": [
+     0,
+     "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-08-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [], \"found\": false, \"count\": 0}, \"warnings\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an audit with a stale database",
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p\"\nversion = \"1.0.0\"\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock of one package",
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": null,
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock that is missing",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock that is empty",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "[[package\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock that is no TOML",
+   "result": {
+    "code": "TOMLDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": {
+    "bytes": [
+     110,
+     97,
+     109,
+     101,
+     32,
+     61,
+     32,
+     39,
+     255,
+     39,
+     10
+    ]
+   },
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock that is not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock without packages",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "version = 4\n[package]\nname = \"p\"\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock whose packages are a table",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit"
+    }
+   ],
+   "lock": "package = 3\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a lock whose packages are a number",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-deny": [
+     1,
+     ""
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 1,
+     "name": "cargo-deny"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a policy check that fails",
+   "result": {
+    "code": "scanner_command_failed_cargo-deny"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo-deny": [
+     0,
+     "advisories ok\n"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a policy check that says something",
+   "result": {
+    "held": true
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo": [
+     101,
+     ""
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 101,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "metadata that fails",
+   "result": {
+    "code": "scanner_command_failed_cargo-metadata"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo": [
+     0,
+     "{"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "metadata that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo": [
+     0,
+     "{\"packages\": [{\"name\": \"example\", \"version\": \"1.0.0\"}, {\"name\": \"example\", \"version\": \"2.0.0\"}, {\"name\": \"other\", \"version\": \"0.1.0\"}, {\"name\": \"example\", \"version\": \"3.0.0\"}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "metadata with a third version of a budgeted package",
+   "result": {
+    "code": "new_duplicate_dependency_version"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "cargo": [
+     0,
+     "{\"packages\": [{\"name\": \"example\", \"version\": \"1.0.0\"}, {\"name\": \"example\", \"version\": \"2.0.0\"}, {\"name\": \"other\", \"version\": \"0.1.0\"}, {\"name\": \"other\", \"version\": \"0.2.0\"}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "metadata with a duplicate outside the budget",
+   "result": {
+    "code": "new_duplicate_dependency_group"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": null,
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a budget that is missing",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": "{",
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a budget that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    }
+   ],
+   "missing": [
+    "cargo"
+   ],
+   "name": "no cargo on the search path",
+   "result": {
+    "code": "missing_security_prerequisite_cargo"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {},
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    }
+   ],
+   "missing": [
+    "npm"
+   ],
+   "name": "no npm on the search path",
+   "result": {
+    "code": "missing_security_prerequisite_npm"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": [{\"id\": \"PYSEC-1\"}]}], \"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python advisory in the first file",
+   "result": {
+    "code": "python_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-2": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": [{\"id\": \"PYSEC-1\"}]}], \"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python advisory in the third file",
+   "result": {
+    "code": "python_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-4": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": [{\"id\": \"PYSEC-1\"}]}], \"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python advisory in the last file",
+   "result": {
+    "code": "python_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-1": [
+     1,
+     "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 1,
+     "name": "pip-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit that fails",
+   "result": {
+    "code": "scanner_command_failed_pip-audit-1"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-3": [
+     0,
+     "{\"dependencies\": [], \"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit of no dependencies",
+   "result": {
+    "held": true
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     ""
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit of nothing at all",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "[]"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit that is a list",
+   "result": {
+    "code": "scanner_report_object"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"fixes\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit without dependencies",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit whose dependencies are a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [[]]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit with a dependency that is a list",
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\"}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit with a dependency without advisories",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"vulns\": {}}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit whose advisories are a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"vulns\": null}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit whose advisories are nothing",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "python-0": [
+     0,
+     "{\"dependencies\": [{\"name\": \"a\", \"skip_reason\": \"not on the index\"}]}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "a Python audit with a skipped dependency",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": 1}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm advisory in the application",
+   "result": {
+    "code": "npm_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-1": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": 2}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm advisory in the browser suite",
+   "result": {
+    "code": "npm_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     1,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": 1}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 1,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit that fails",
+   "result": {
+    "code": "scanner_command_failed_npm-audit-0"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-1": [
+     1,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": 0}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 1,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit of the browser suite that fails",
+   "result": {
+    "code": "scanner_command_failed_npm-audit-1"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "[]"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit that is a list",
+   "result": {
+    "code": "scanner_report_object"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"vulnerabilities\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit without metadata",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": []}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit whose metadata is a list",
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit without counts",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": []}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit whose counts are a list",
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"high\": 0}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm audit without a total",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": \"0\"}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm total that is text",
+   "result": {
+    "code": "npm_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": null}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm total that is nothing",
+   "result": {
+    "code": "npm_dependency_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": false}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm total that is a truth value",
+   "result": {
+    "held": true
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": 0.0}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-1"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web/e2e",
+     "index": "",
+     "lost": [],
+     "program": "npm-1",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm total that is a fraction of nothing",
+   "result": {
+    "held": true
+   },
+   "reviews": []
+  },
+  {
+   "behaviours": {
+    "npm-0": [
+     0,
+     "{\"metadata\": {\"vulnerabilities\": {\"total\": -1}}}"
+    ]
+   },
+   "budget": {
+    "duplicates": {
+     "example": [
+      "1.0.0",
+      "2.0.0"
+     ]
+    },
+    "reviewedRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaVersion": 1
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "cargo-audit",
+     "reviewedFindings": 0
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-deny"
+    },
+    {
+     "exitStatus": 0,
+     "name": "cargo-metadata"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-0"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-1"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-2"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-3"
+    },
+    {
+     "exitStatus": 0,
+     "name": "pip-audit-4"
+    },
+    {
+     "exitStatus": 0,
+     "name": "npm-audit-0"
+    }
+   ],
+   "lock": "version = 4\n\n[[package]]\nname = \"p0\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"p1\"\nversion = \"1.0.1\"\n\n[[package]]\nname = \"p2\"\nversion = \"1.0.2\"\n\n",
+   "log": [
+    {
+     "added": [
+      "CARGO_HOME=<output>/cargo-audit-home"
+     ],
+     "argv": [
+      "audit",
+      "--json",
+      "--file",
+      "<root>/Cargo.lock",
+      "--db",
+      "<root>/.cache/security-rustsec-db"
+     ],
+     "cwd": "<output>/home",
+     "index": "",
+     "lost": [],
+     "program": "cargo-audit",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--locked",
+      "check",
+      "bans",
+      "licenses",
+      "sources"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo-deny",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "metadata",
+      "--locked",
+      "--all-features",
+      "--format-version=1"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "cargo",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "build/python-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-0",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "ops/ansible/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-1",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "security/requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-2",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-3",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "-m",
+      "pip_audit",
+      "--require-hashes",
+      "--disable-pip",
+      "-r",
+      "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "--format=json"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "python-4",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "audit",
+      "--package-lock-only",
+      "--ignore-scripts",
+      "--json"
+     ],
+     "cwd": "<root>/web",
+     "index": "",
+     "lost": [],
+     "program": "npm-0",
+     "stdin": ""
+    }
+   ],
+   "missing": [],
+   "name": "an npm total below nothing",
+   "result": {
+    "code": "npm_dependency_advisory"
+   },
+   "reviews": []
+  }
+ ],
+ "environments": {
+  "dependencies": [
+   "CARGO_HOME=/h/.cargo",
+   "GIT_CONFIG_GLOBAL=/dev/null",
+   "GIT_CONFIG_SYSTEM=/dev/null",
+   "GIT_TERMINAL_PROMPT=0",
+   "HOME=<output>/home",
+   "LANG=en_US.UTF-8",
+   "LC_ALL=en_US.UTF-8",
+   "NO_COLOR=1",
+   "PATH=/usr/bin:/bin",
+   "PIP_CONFIG_FILE=/dev/null",
+   "PIP_DISABLE_PIP_VERSION_CHECK=1",
+   "PYTHONDONTWRITEBYTECODE=1",
+   "PYTHONNOUSERSITE=1",
+   "RUSTUP_HOME=/h/.rustup",
+   "SEMGREP_SEND_METRICS=off"
+  ]
+ },
+ "now": 1790769600,
+ "requirements": [
+  "build/python-requirements.txt",
+  "ops/ansible/requirements.txt",
+  "security/requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt"
+ ],
+ "today": "2026-09-30",
+ "usual": {
+  "cargo": [
+   0,
+   "{\"packages\": [{\"name\": \"example\", \"version\": \"1.0.0\"}, {\"name\": \"example\", \"version\": \"2.0.0\"}, {\"name\": \"other\", \"version\": \"0.1.0\"}]}"
+  ],
+  "cargo-audit": [
+   0,
+   "{\"settings\": {\"target_arch\": [], \"target_os\": [], \"severity\": null, \"ignore\": [], \"informational_warnings\": [\"unmaintained\", \"unsound\", \"notice\"]}, \"lockfile\": {\"dependency-count\": 3}, \"database\": {\"last-commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"advisory-count\": 10, \"last-updated\": \"2026-09-30T12:00:00+00:00\"}, \"vulnerabilities\": {\"list\": [], \"found\": false, \"count\": 0}, \"warnings\": {}}"
+  ],
+  "cargo-deny": [
+   0,
+   ""
+  ],
+  "npm-0": [
+   0,
+   "{\"auditReportVersion\": 2, \"vulnerabilities\": {}, \"metadata\": {\"vulnerabilities\": {\"info\": 0, \"low\": 0, \"moderate\": 0, \"high\": 0, \"critical\": 0, \"total\": 0}}}"
+  ],
+  "npm-1": [
+   0,
+   "{\"auditReportVersion\": 2, \"vulnerabilities\": {}, \"metadata\": {\"vulnerabilities\": {\"info\": 0, \"low\": 0, \"moderate\": 0, \"high\": 0, \"critical\": 0, \"total\": 0}}}"
+  ],
+  "python-0": [
+   0,
+   "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+  ],
+  "python-1": [
+   0,
+   "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+  ],
+  "python-2": [
+   0,
+   "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+  ],
+  "python-3": [
+   0,
+   "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+  ],
+  "python-4": [
+   0,
+   "{\"dependencies\": [{\"name\": \"a\", \"version\": \"1\", \"vulns\": []}, {\"name\": \"b\", \"version\": \"2\", \"vulns\": []}], \"fixes\": []}"
+  ]
+ }
+}
