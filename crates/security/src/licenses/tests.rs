@@ -2,18 +2,20 @@
 //!
 //! `recorded_locks.json` holds what `build/security_dependency_licenses.py`
 //! answered for requirement lines and versions (as its packaging library
-//! judges them), the lines of requirement files, npm locks, graphs of
-//! includes, the wheel-only policy, locks nobody audits and the licence
-//! allowlist. Where the reference failed with an exception of its
-//! interpreter or its library, `named` gives the code here; `STRICTER` names
-//! what it admitted and is refused here.
+//! judges them), the lines of requirement files beside what pip's own
+//! reader makes of the same text, npm locks, graphs of includes, the
+//! wheel-only policy, locks nobody audits and the licence allowlist. Where
+//! the reference failed with an exception of its interpreter or its
+//! library, `named` gives the code here; `STRICTER` names what it admitted
+//! and is refused here.
 
 use super::{
-    Dependency, allowed_licenses, dependencies, npm_dependencies, require_audited_locks,
-    require_wheel_only, requirement, requirement_lines,
+    Dependency, PYTHON_LOCKS, allowed_licenses, dependencies, npm_dependencies,
+    require_audited_locks, require_wheel_only, requirement, requirement_lines,
 };
 use crate::{
     Result,
+    policy::space,
     scratch::{Scratch, base64},
 };
 use serde_json::{Value, json};
@@ -183,7 +185,7 @@ fn every_recorded_requirement_file_is_split_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(18, 3, 0));
+    assert_eq!(tally, Tally(29, 11, 0));
 }
 
 #[test]
@@ -220,7 +222,7 @@ fn every_recorded_graph_of_locks_is_read_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(11, 12, 0));
+    assert_eq!(tally, Tally(13, 20, 0));
 }
 
 #[test]
@@ -245,7 +247,7 @@ fn every_recorded_tree_is_held_to_wheels_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(8, 12, 0));
+    assert_eq!(tally, Tally(9, 14, 0));
 }
 
 #[test]
@@ -299,6 +301,45 @@ fn every_recorded_allowlist_is_read_alike() {
         );
     }
     assert_eq!(tally, Tally(3, 11, 0));
+}
+
+/// A backslash before a carriage return, or one that ends the file, joins
+/// lines for pip's reader and not here. What is then read here is no
+/// requirement, so such a lock is refused and nothing is hidden.
+const OTHERWISE_THAN_PIP: [&str; 2] = [
+    "a backslash before a carriage return",
+    "a backslash at the end",
+];
+
+#[test]
+fn what_is_read_is_what_pip_reads() {
+    let recording = recorded();
+    let narrow = |line: &str| {
+        let words: Vec<&str> = line.split(space).filter(|word| !word.is_empty()).collect();
+        words.join(" ")
+    };
+    let (mut same, mut otherwise) = (0, 0);
+    for case in list(&recording["lines"]) {
+        let name = text(&case["name"]);
+        let bytes = content(&case["content"]);
+        let (Some(pip), Ok(read)) = (case["pip"].as_array(), requirement_lines(&bytes)) else {
+            continue;
+        };
+        // Lines that were joined differ in the width of the space between them.
+        let pip: Vec<String> = pip.iter().map(|line| narrow(text(line))).collect();
+        let read: Vec<String> = read.iter().map(|line| narrow(line)).collect();
+        if OTHERWISE_THAN_PIP.contains(&name) {
+            assert_ne!(read, pip, "{name}");
+            let load = |path: &str| Ok((path == PYTHON_LOCKS[0]).then(|| bytes.clone()));
+            let refused = dependencies(&load).err().map(|fault| fault.0);
+            assert_eq!(refused, Some("dependency_python_hash"), "{name}");
+            otherwise += 1;
+        } else {
+            assert_eq!(read, pip, "{name}");
+            same += 1;
+        }
+    }
+    assert_eq!((same, otherwise), (27, 2));
 }
 
 /// An npm lock of `count` packages whose names start with `prefix`.

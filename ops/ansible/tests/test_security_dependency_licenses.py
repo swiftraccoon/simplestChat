@@ -146,11 +146,10 @@ class DependencyLicenseTests(unittest.TestCase):
         ):
             with self.subTest(line=line), self.assertRaises((ToolError, ValueError)):
                 _ = licenses.python_requirement("requirements.txt", line)
-        for include in (b"-r ../outside.txt", b"-r requirements.txt", b"-r missing.txt"):
+        hidden, glued = b"# pip continues no comment \\\nhidden==1", b"--only-binary=:all:#glued"
+        for include in (b"-r ../o.txt", b"-r r.txt", b"-r m.txt", b"-r $X.txt", hidden, glued):
             with self.subTest(include=include), self.assertRaises(ToolError):
-                _ = licenses.python_dependencies(
-                    "requirements.txt", {"requirements.txt": include}.get
-                )
+                _ = licenses.python_dependencies("r.txt", {"r.txt": include}.get)
 
     def test_changed_unmanaged_locks_require_shared_audit_support(self) -> None:
         """A new first-party project cannot evade the maintained audit graphs."""
@@ -329,9 +328,10 @@ class DependencyLicenseTests(unittest.TestCase):
             requirement = root / "ops/ansible/requirements.txt"
             _ = requirement.write_text("--require-hashes\n--only-binary=:all:\n")
             licenses.require_wheel_only(root)
-            _ = requirement.write_text("--require-hashes\n")
-            with self.assertRaisesRegex(ToolError, "dependency_python_wheel_only_policy"):
-                licenses.require_wheel_only(root)
+            for text in ("--require-hashes\n", "--require-hashes\n--only-binary=:all:#glued\n"):
+                _ = requirement.write_text(text)
+                with self.assertRaisesRegex(ToolError, "dependency_python_wheel_only_policy"):
+                    licenses.require_wheel_only(root)
             requirement.unlink()
             (root / "security").mkdir()
             _ = (root / "security/requirements.txt").write_text("# pinned scanner tools\n")

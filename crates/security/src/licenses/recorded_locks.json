@@ -957,6 +957,130 @@
   },
   {
    "files": {
+    "build/$X.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r $X.txt\n"
+   },
+   "name": "an include named by a variable",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/${X}.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r ${X}.txt\n"
+   },
+   "name": "an include named by a variable in braces",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/$X/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r $X/base.txt\n"
+   },
+   "name": "an include in a directory named by a variable",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "-r ../pay$/base.txt\n",
+    "pay$/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock in a directory named with a dollar",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "b==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+    "build/base.txt#x": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r base.txt#x\n"
+   },
+   "name": "an include with a glued number sign",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/base.txt#x",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "b==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+    "build/base.txt#x": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r base.txt #x\n"
+   },
+   "name": "an include before a comment",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "identity": "[\"b==2\",[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+      "license": "",
+      "manifest": "build/base.txt",
+      "name": "b",
+      "source": "",
+      "version": "2"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "# a note \\\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a requirement hidden behind a comment",
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--require-hashes#x\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the hash option with a glued number sign",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--only-binary=:all:#x\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the wheel option with a glued number sign",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#x\n"
+   },
+   "name": "a hash with a glued number sign",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
     "build/python-requirements.txt": "-r /etc/requirements.txt\n"
    },
    "name": "an include that is absolute",
@@ -1164,6 +1288,10 @@
   {
    "content": "a==1\nb==2\n",
    "name": "two requirements",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
    "result": {
     "lines": [
      "a==1",
@@ -1174,6 +1302,10 @@
   {
    "content": "a==1 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \\\n    --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nb==2\n",
    "name": "a continued requirement",
+   "pip": [
+    "a==1     --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa     --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "b==2"
+   ],
    "result": {
     "lines": [
      "a==1      --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa      --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1184,6 +1316,10 @@
   {
    "content": "# head\n\na==1  # tail\n   \n#\n b==2 \n",
    "name": "comments and blank lines",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
    "result": {
     "lines": [
      "a==1",
@@ -1194,22 +1330,257 @@
   {
    "content": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment\n",
    "name": "a number sign inside a line",
+   "pip": [
+    "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment"
+   ],
    "result": {
     "lines": [
-     "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment"
     ]
    }
   },
   {
    "content": "# one \\\na==1\n",
    "name": "a continued comment",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "   # one \\\na==1\n",
+   "name": "an indented comment that ends with a backslash",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "\u00a0\t# one \\\na==1\n",
+   "name": "a comment after wide space that ends with a backslash",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "a==1 \\\n# c \\\nb==2\n",
+   "name": "a comment inside a continuation",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "# c \\\r\nb==2\r\n",
+   "name": "a comment that ends with a backslash before a carriage return",
+   "pip": [
+    "b==2"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "a==1\n# c \\",
+   "name": "a comment that ends with a backslash at the end",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "x\f# c \\\nb==2\n",
+   "name": "a comment after a form feed that ends with a backslash",
+   "pip": [
+    "x",
+    "b==2"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "# c \\\\\na==1\n",
+   "name": "a comment that ends with two backslashes",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "code": "dependency_requirements_comment"
+   }
+  },
+  {
+   "content": "# c \\ \na==1\n",
+   "name": "a comment with a backslash that is not last",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": "a==1 # note \\\nb==2\n",
+   "name": "a comment after a requirement that ends with a backslash",
+   "pip": [
+    "a==1"
+   ],
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": "a==1#note \\\nb==2\n",
+   "name": "a number sign glued to a requirement that ends with a backslash",
+   "pip": [
+    "a==1#note b==2"
+   ],
+   "result": {
+    "lines": [
+     "a==1#note  b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1\t# c\nb==2\n",
+   "name": "a number sign after a tab",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1\u00a0# c\nb==2\n",
+   "name": "a number sign after a no-break space",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1\u001f# c\nb==2\n",
+   "name": "a number sign after a unit separator",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1 #x #y\nb==2 #x#y\n",
+   "name": "two number signs",
+   "pip": [
+    "a==1",
+    "b==2"
+   ],
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a#b # c\n",
+   "name": "a glued number sign before a comment",
+   "pip": [
+    "a#b"
+   ],
+   "result": {
+    "lines": [
+     "a#b"
+    ]
+   }
+  },
+  {
+   "content": "a # b#c\n",
+   "name": "a glued number sign after a comment",
+   "pip": [
+    "a"
+   ],
+   "result": {
+    "lines": [
+     "a"
+    ]
+   }
+  },
+  {
+   "content": "--only-binary=:all:#x\n--require-hashes#y\n-r other.txt#z\n",
+   "name": "a number sign glued in an option",
+   "pip": [
+    "--only-binary=:all:#x",
+    "--require-hashes#y",
+    "-r other.txt#z"
+   ],
+   "result": {
+    "lines": [
+     "--only-binary=:all:#x",
+     "--require-hashes#y",
+     "-r other.txt#z"
+    ]
+   }
+  },
+  {
+   "content": "#\n##\n # \n",
+   "name": "only number signs",
+   "pip": [],
    "result": {
     "lines": []
    }
   },
   {
+   "content": "-r ${RECORDED_VARIABLE}.txt\na==1 ; os_name == '${RECORDED_VARIABLE}'\n",
+   "name": "a variable of the environment",
+   "pip": [
+    "-r ${RECORDED_VARIABLE}.txt",
+    "a==1 ; os_name == '${RECORDED_VARIABLE}'"
+   ],
+   "result": {
+    "lines": [
+     "-r ${RECORDED_VARIABLE}.txt",
+     "a==1 ; os_name == '${RECORDED_VARIABLE}'"
+    ]
+   }
+  },
+  {
    "content": "a==1 \\\r\n --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n",
    "name": "a backslash before a carriage return",
+   "pip": [
+    "a==1  --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   ],
    "result": {
     "lines": [
      "a==1 \\",
@@ -1220,6 +1591,11 @@
   {
    "content": "a==1\r\nb==2\rc==3\n",
    "name": "carriage returns",
+   "pip": [
+    "a==1",
+    "b==2",
+    "c==3"
+   ],
    "result": {
     "lines": [
      "a==1",
@@ -1231,6 +1607,17 @@
   {
    "content": "a==1\u000bb==2\fc==3\u001cd==4\u001de==5\u001ef==6\u0085g==7\u2028h==8\u2029i==9",
    "name": "other line ends",
+   "pip": [
+    "a==1",
+    "b==2",
+    "c==3",
+    "d==4",
+    "e==5",
+    "f==6",
+    "g==7",
+    "h==8",
+    "i==9"
+   ],
    "result": {
     "lines": [
      "a==1",
@@ -1248,6 +1635,9 @@
   {
    "content": "a==1",
    "name": "no last line end",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "lines": [
      "a==1"
@@ -1257,6 +1647,9 @@
   {
    "content": "a==1 \\",
    "name": "a backslash at the end",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "lines": [
      "a==1 \\"
@@ -1266,6 +1659,10 @@
   {
    "content": "a==1 \\ \nb==2\n",
    "name": "a backslash alone",
+   "pip": [
+    "a==1 \\",
+    "b==2"
+   ],
    "result": {
     "lines": [
      "a==1 \\",
@@ -1276,6 +1673,7 @@
   {
    "content": "",
    "name": "nothing",
+   "pip": [],
    "result": {
     "lines": []
    }
@@ -1283,6 +1681,7 @@
   {
    "content": "# a\n# b\n",
    "name": "only comments",
+   "pip": [],
    "result": {
     "lines": []
    }
@@ -1290,6 +1689,12 @@
   {
    "content": "--require-hashes\n--only-binary=:all:\n-r other.txt\na==1\n",
    "name": "options",
+   "pip": [
+    "--require-hashes",
+    "--only-binary=:all:",
+    "-r other.txt",
+    "a==1"
+   ],
    "result": {
     "lines": [
      "--require-hashes",
@@ -1304,6 +1709,7 @@
     "base64": "YT09MQr/Cg=="
    },
    "name": "bytes that are not UTF-8",
+   "pip": null,
    "result": {
     "code": "UnicodeDecodeError"
    }
@@ -1311,6 +1717,9 @@
   {
    "content": "\ufeffa==1\n",
    "name": "a byte order mark",
+   "pip": [
+    "\ufeffa==1"
+   ],
    "result": {
     "lines": [
      "\ufeffa==1"
@@ -1324,6 +1733,9 @@
     "times": 2097147
    },
    "name": "exactly the size limit",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "lines": [
      "a==1"
@@ -1337,6 +1749,9 @@
     "times": 2097148
    },
    "name": "a byte past the size limit",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "code": "dependency_requirements_size"
    }
@@ -1348,6 +1763,9 @@
     "times": 9999
    },
    "name": "exactly the line limit",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "lines": [
      "a==1"
@@ -1361,6 +1779,9 @@
     "times": 10000
    },
    "name": "a line past the limit",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "code": "dependency_requirements_count"
    }
@@ -1372,6 +1793,9 @@
     "times": 9999
    },
    "name": "exactly the line limit with carriage returns",
+   "pip": [
+    "a==1"
+   ],
    "result": {
     "lines": [
      "a==1"
@@ -1833,6 +2257,7 @@
    }
   }
  ],
+ "pip": "26.2.1",
  "requirements": [
   {
    "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -4442,6 +4867,33 @@
    "name": "a lock without the option",
    "result": {
     "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:#x\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option and a glued number sign",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all: #x\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option before a comment",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "# note \\\n--only-binary=:all:\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option hidden behind a comment",
+   "result": {
+    "code": "dependency_requirements_comment"
    }
   },
   {

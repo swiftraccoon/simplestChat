@@ -147,20 +147,43 @@ fn splitlines(text: &str) -> Vec<&str> {
     lines
 }
 
-/// The requirements and options of a requirement file: a backslash before a
-/// line feed joins two lines, a number sign starts a comment, and what is
-/// left of a line without its surrounding space is kept unless it is empty.
+/// `line` without its comment, which pip starts at the first number sign
+/// that starts the line or follows space. Any other number sign is part of
+/// what the line says.
+fn uncommented(line: &str) -> &str {
+    let mut starts = true;
+    for (at, character) in line.char_indices() {
+        if character == '#' && starts {
+            return &line[..at];
+        }
+        starts = space(character);
+    }
+    line
+}
+
+/// The requirements and options of a requirement file, as pip reads them:
+/// a backslash before a line feed joins two lines, a comment is dropped,
+/// and what is left of a line without its surrounding space is kept unless
+/// it is empty. A comment line that ends with a backslash is refused: pip
+/// continues no comment, so it would read the line after it and this
+/// reader would not.
 pub fn requirement_lines(content: &[u8]) -> Result<Vec<String>> {
     require(
         content.len() as u64 <= MAX_LOCK,
         "dependency_requirements_size",
     )?;
     let text = std::str::from_utf8(content).map_err(|_| Fault("dependency_requirements_text"))?;
+    let hidden =
+        |line: &&str| line.trim_start_matches(space).starts_with('#') && line.ends_with('\\');
+    require(
+        !splitlines(text).iter().any(hidden),
+        "dependency_requirements_comment",
+    )?;
     let joined = text.replace("\\\n", " ");
     let lines = splitlines(&joined);
     require(lines.len() <= MAX_ENTRIES, "dependency_requirements_count")?;
     let kept = lines.into_iter().filter_map(|line| {
-        let line = line.split('#').next().unwrap_or("").trim_matches(space);
+        let line = uncommented(line).trim_matches(space);
         (!line.is_empty()).then(|| line.to_owned())
     });
     Ok(kept.collect())
@@ -193,7 +216,8 @@ fn beside(path: &str, relative: &str) -> String {
 /// after another, and of the files it includes. A lock that is not there
 /// declares nothing; an include that is not there is refused, as is a longer
 /// row of includes than the bound, which is where a file that includes
-/// itself ends.
+/// itself ends. So is a path with a dollar sign, where pip would put a
+/// variable of its environment.
 fn python_dependencies(
     path: &str,
     load: Load<'_>,
@@ -201,7 +225,7 @@ fn python_dependencies(
     found: &mut BTreeSet<Dependency>,
 ) -> Result<()> {
     require(
-        depth < MAX_INCLUDES && safe_name(path),
+        depth < MAX_INCLUDES && safe_name(path) && !path.contains('$'),
         "dependency_requirements_include",
     )?;
     let Some(content) = load(path)? else {

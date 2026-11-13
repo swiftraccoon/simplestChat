@@ -1,11 +1,10 @@
 """Enforce the existing license policy on changed npm and Python lock entries.
 
-Current vulnerability audits still inspect complete dependency graphs. This
-additional gate compares an ancestor with the source snapshot and checks newly
-introduced package identities using authenticated registry metadata. It never
-installs packages, builds source distributions or infers licenses from prose.
-Two exact legacy wheel declarations are bound to the source review in
-security/reviews.md; changed metadata or wheel bytes require a fresh review.
+Vulnerability audits still inspect complete dependency graphs. This gate compares
+an ancestor with the source snapshot and checks new package identities against
+authenticated registry metadata; it never installs packages, builds source
+distributions or infers licenses from prose. Requirement files are read as pip
+reads them. Exact legacy wheel declarations are bound to security/reviews.md.
 """
 
 from __future__ import annotations
@@ -74,6 +73,7 @@ MAX_INCLUDES = 16
 MAX_INDEX_FILES = 50000
 NPM_LOCK_VERSION = 3
 SHA256 = re.compile(r"[a-f0-9]{64}")
+COMMENT, HIDDEN = re.compile(r"(^|\s+)#.*$"), re.compile(r"\s*#.*\\$")
 OTHER_LOCK_NAMES = frozenset(
     {
         "package-lock.json",
@@ -144,10 +144,11 @@ def npm_dependencies(path: str, content: bytes) -> set[Dependency]:
 
 
 def requirement_lines(content: bytes) -> list[str]:
-    """Join bounded hash-lock continuations and discard only requirement comments."""
+    """Join hash-lock continuations and drop comments where pip does; it continues no comment."""
     require(len(content) <= MAX_LOCK, "dependency_requirements_size")
-    text = content.decode("utf-8").replace("\\\n", " ")
-    lines = [line.split("#", 1)[0].strip() for line in text.splitlines()]
+    text = content.decode("utf-8")
+    require(not any(map(HIDDEN.match, text.splitlines())), "dependency_requirements_comment")
+    lines = [COMMENT.sub("", line).strip() for line in text.replace("\\\n", " ").splitlines()]
     require(len(lines) <= MAX_ENTRIES, "dependency_requirements_count")
     return [line for line in lines if line]
 
@@ -181,7 +182,7 @@ def python_dependencies(
 ) -> set[Dependency]:
     """Follow in-repository includes without evaluating platform markers locally."""
     require(
-        path not in stack and len(stack) < MAX_INCLUDES and safe_name(path),
+        path not in stack and len(stack) < MAX_INCLUDES and safe_name(path) and "$" not in path,
         "dependency_requirements_include",
     )
     content = load(path)
@@ -475,10 +476,9 @@ def changed_dependencies(
             accepted=(0, 1, 128),
         )
     if ancestor != 0:
-        # An unknown or rewritten base (an owner-only force push) leaves no range to
-        # diff. Reviewing every dependency instead would fetch registry metadata for
-        # all of them on each such push, so the range review is skipped and the
-        # evidence says so; the next ordinary push compares against this head.
+        # An unknown or rewritten base (an owner-only force push) leaves no range to diff.
+        # Reviewing every dependency instead would fetch all registry metadata on each such
+        # push, so the range review is skipped; the next ordinary push compares against it.
         context.checks[-1]["rangeScan"] = "skipped_base_not_an_ancestor"
         return selected, set()
     _, listing = context.run(
