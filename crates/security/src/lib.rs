@@ -1,9 +1,11 @@
 //! The repository's security gate. `tools` installs the checksum-pinned
 //! scanners the gate runs and verifies an installation before each use;
 //! `policy` reads the reviewed exceptions a finding may be matched against,
-//! and `scope` says which sources a diagnostic covers.
+//! `findings` holds each scanner's report to them, and `scope` says which
+//! sources a diagnostic covers.
 
 pub(crate) mod files;
+pub mod findings;
 pub mod policy;
 pub(crate) mod record;
 pub mod scope;

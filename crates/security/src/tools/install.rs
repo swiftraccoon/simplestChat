@@ -6,7 +6,7 @@ use super::{
     require,
     transport::{self, Transport},
 };
-use crate::record;
+use crate::record::{self, quoted};
 use serde_json::Value;
 use std::{
     collections::BTreeSet,
@@ -89,27 +89,6 @@ impl Drop for Staging {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-}
-
-/// A JSON string as the receipt has always spelled it: ASCII only.
-fn quoted(text: &str) -> String {
-    let mut quoted = String::from("\"");
-    for character in text.chars() {
-        match character {
-            '"' | '\\' => {
-                quoted.push('\\');
-                quoted.push(character);
-            }
-            ' '..='~' => quoted.push(character),
-            _ => {
-                for unit in character.encode_utf16(&mut [0; 2]) {
-                    let _ = write!(quoted, "\\u{unit:04x}");
-                }
-            }
-        }
-    }
-    quoted.push('"');
-    quoted
 }
 
 /// One installed tool: its name, its version, its archive and its files.

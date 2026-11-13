@@ -1,0 +1,7921 @@
+{
+ "budgets": [
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "one version of a budgeted package",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "2.0.0"
+     }
+    ]
+   },
+   "name": "both budgeted versions",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "2.0.0"
+     },
+     {
+      "name": "example",
+      "version": "3.0.0"
+     }
+    ]
+   },
+   "name": "a third version",
+   "result": {
+    "code": "new_duplicate_dependency_version"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "3.0.0"
+     }
+    ]
+   },
+   "name": "two versions, one outside the budget",
+   "result": {
+    "code": "new_duplicate_dependency_version"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "other",
+      "version": "1.0.0"
+     },
+     {
+      "name": "other",
+      "version": "2.0.0"
+     }
+    ]
+   },
+   "name": "a new duplicate group",
+   "result": {
+    "code": "new_duplicate_dependency_group"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "other",
+      "version": "1.0.0"
+     },
+     {
+      "name": "other",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "the same version twice",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     },
+     {
+      "name": "b",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "single versions of unbudgeted packages",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": []
+   },
+   "name": "no packages",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"], \"unused\": [\"1.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget with unused groups",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "2.0.0"
+     }
+    ]
+   },
+   "name": "an empty budget and a duplicate",
+   "result": {
+    "code": "new_duplicate_dependency_group"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 2, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget of schema two",
+   "result": {
+    "code": "dependency_budget_schema"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": true, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget whose schema is a truth value",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1.0, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget whose schema is a fraction",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": \"1\", \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget whose schema is text",
+   "result": {
+    "code": "dependency_budget_schema"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}, \"extra\": 1}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget with another field",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"duplicates\": {}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget without its revision",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": []}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget whose duplicates are a list",
+   "result": {
+    "code": "scanner_object_expected"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": \"1.0.0\"}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "2.0.0"
+     }
+    ]
+   },
+   "name": "a budget group that is text",
+   "result": {
+    "code": "scanner_list_expected"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", 2]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": "1.0.0"
+     },
+     {
+      "name": "example",
+      "version": "2.0.0"
+     }
+    ]
+   },
+   "name": "a budget version that is a number",
+   "result": {
+    "code": "invalid_tool_string"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": \"1.0.0\"}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "an unused budget group that is malformed",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": {}
+   },
+   "name": "packages that are an object",
+   "result": {
+    "code": "scanner_list_expected"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": [],
+   "name": "metadata that is a list",
+   "result": {
+    "code": "scanner_object_expected"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {},
+   "name": "metadata without packages",
+   "result": {
+    "code": "KeyError"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     "example"
+    ]
+   },
+   "name": "a package that is text",
+   "result": {
+    "code": "scanner_object_expected"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example"
+     }
+    ]
+   },
+   "name": "a package without its version",
+   "result": {
+    "code": "KeyError"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a package with an empty name",
+   "result": {
+    "code": "invalid_tool_string"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "name": "example",
+      "version": 1
+     }
+    ]
+   },
+   "name": "a package whose version is a number",
+   "result": {
+    "code": "invalid_tool_string"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "metadata": {
+    "packages": [
+     {
+      "id": "x",
+      "name": "example",
+      "source": null,
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a package with other fields as well",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "budget": "[]",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget that is a list",
+   "result": {
+    "code": "invalid_tool_record"
+   }
+  },
+  {
+   "budget": null,
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "no budget file",
+   "result": {
+    "code": "FileNotFoundError"
+   }
+  },
+  {
+   "budget": "{",
+   "metadata": {
+    "packages": [
+     {
+      "name": "a",
+      "version": "1.0.0"
+     }
+    ]
+   },
+   "name": "a budget that is not JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   }
+  },
+  {
+   "budget": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"duplicates\": {\"example\": [\"1.0.0\", \"2.0.0\"]}}",
+   "name": "metadata that is not JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "text": "{"
+  }
+ ],
+ "cargo": [
+  {
+   "dependencies": 3,
+   "name": "a clean report",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a reviewed warning",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "an unreviewed warning",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "unreviewed_cargo_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning of another version",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.1"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "unreviewed_cargo_advisory"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning of another advisory",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0002"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "unreviewed_cargo_advisory"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a reviewed vulnerability",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": true,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "an unreviewed vulnerability",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": true,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "unreviewed_cargo_advisory"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a vulnerability and two kinds of warning",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": true,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ],
+     "unsound": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      },
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "count": 4
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "an ignored advisory in the settings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [
+      "RUSTSEC-2099-0001"
+     ],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a target architecture in the settings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [
+      "x86_64"
+     ],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a target system in the settings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": [
+      "linux"
+     ]
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a severity in the settings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": "high",
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "informational warnings in another order",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unsound",
+      "unmaintained",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "fewer informational warnings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "another setting",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "color": "never",
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a setting missing",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "settings that are a list",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": [],
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_filtered_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 4,
+   "name": "another dependency count",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a dependency count that is a fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3.0
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 1,
+   "name": "a dependency count that is a truth value",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": true
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a dependency count that is text",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": "3"
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_incomplete_lockfile"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a lockfile that is a list",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": [],
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a short database commit",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_identity"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database commit in capitals",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_identity"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database commit that is a number",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": 1,
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "no advisories in the database",
+   "report": {
+    "database": {
+     "advisory-count": 0,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_identity"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "an advisory count that is a fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10.0,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_identity"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "an advisory count that is a truth value",
+   "report": {
+    "database": {
+     "advisory-count": true,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_identity"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database thirty days old",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-08-31T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database thirty days and a second old",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-08-31T11:59:59+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours ahead",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours and a second ahead",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:01+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time without a zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a Z",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00Z"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time in another zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T17:30:00+05:30"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time behind in another zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T04:00:00-08:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00.123456+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with nine fraction digits",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00.123456789+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a space",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30 12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time without seconds",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time in the basic form",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "20260930T120000Z"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a zone without a colon",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+0000"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a lower-case z",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00z"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database date only",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time that is no time",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "yesterday"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time on a day the calendar lacks",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-02-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time at hour twenty-four",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-29T24:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time that is a number",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": 1790769600
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database that is a list",
+   "report": {
+    "database": [],
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with the hour alone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a one-digit hour",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T9:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a one-digit minute",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:0:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time at minute sixty",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T11:60:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time at second sixty",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T11:59:60+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a zone of hours alone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T17:00:00+05"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a zone of one digit",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+5"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a zone of three digits",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+053"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with seconds in its zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T17:30:15+05:30:15"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time in a zone past a day",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+24:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with minute sixty in its zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:60"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time after an underscore",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30_12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time after a lower-case t",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30t12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time after a letter outside ASCII",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30\u00e912:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time after two separators",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30TT12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database thirty days and a second old in a half-hour zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-08-31T12:29:59+00:30"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database thirty days old in a half-hour zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-08-31T12:30:00+00:30"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours ahead in a negative zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T13:15:00-00:45"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours and a second ahead in a negative zone",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T13:15:01-00:45"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database half a second inside the limit",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-08-31T11:59:59.500000+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours and half a second ahead",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:00.500000+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database two hours ahead to the microsecond",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:00.000000+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database a microsecond past two hours ahead",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:00.000001+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_database_stale"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database a tenth of a microsecond past two hours ahead",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T14:00:00.0000001+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with an empty fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00.+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "ValueError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a database time with a comma for its fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00,5+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a count that disagrees though nothing is found",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "two vulnerabilities counted as one",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": true,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      },
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a vulnerability count that disagrees",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": true,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "found without vulnerabilities",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": true,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "vulnerabilities not found though listed",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": false,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "found as a number",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1,
+     "found": 1,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a count as a fraction",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 1.0,
+     "found": true,
+     "list": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "cargo_inconsistent_report"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a vulnerability list that is an object",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": {}
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "warnings that are a list",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": []
+   },
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning kind that is an object",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": {}
+    }
+   },
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning that is text",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      "advisory"
+     ]
+    }
+   },
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning without its package",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning without its advisory",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning whose advisory is null",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": null,
+       "package": {
+        "name": "example",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning with an empty package name",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "",
+        "version": "1.0.0"
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "a warning whose version is a number",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {
+     "unmaintained": [
+      {
+       "advisory": {
+        "id": "RUSTSEC-2099-0001"
+       },
+       "package": {
+        "name": "example",
+        "version": 1
+       }
+      }
+     ]
+    }
+   },
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "RUSTSEC-2099-0001",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "cargo-audit",
+     "scope": "example@1.0.0"
+    }
+   ]
+  },
+  {
+   "dependencies": 3,
+   "name": "an empty report",
+   "report": {},
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report without settings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report without its lockfile",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report without its database",
+   "report": {
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report without vulnerabilities",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report without warnings",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    }
+   },
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "a report that is a list",
+   "report": [],
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "dependencies": 3,
+   "name": "another top-level field",
+   "report": {
+    "database": {
+     "advisory-count": 10,
+     "last-commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "last-updated": "2026-09-30T12:00:00+00:00"
+    },
+    "extra": 1,
+    "lockfile": {
+     "dependency-count": 3
+    },
+    "settings": {
+     "ignore": [],
+     "informational_warnings": [
+      "unmaintained",
+      "unsound",
+      "notice"
+     ],
+     "severity": null,
+     "target_arch": [],
+     "target_os": []
+    },
+    "vulnerabilities": {
+     "count": 0,
+     "found": false,
+     "list": []
+    },
+    "warnings": {}
+   },
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  }
+ ],
+ "comment": "Recorded from build/security_findings.py; see the replay tests.",
+ "gitleaks": [
+  {
+   "includeVendor": false,
+   "name": "one reviewed fixture",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "one unreviewed fixture",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a fixture reviewed for another path",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/other.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a fixture whose pattern changed since its review",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PRIVATE KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a fixture whose target changed since its review",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"match\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "two reviewed fixtures",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    },
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:75a5cf04d7afe744bcea64a2917d2f4cb871d844b8b5113f8da33d17c5c11d04",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/b.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n[[allowlists]]\ndescription = \"Public fixture: tests/b.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/b\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "no allowlists",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "text": "title = \"t\"\nallowlists = []\n[extend]\nuseDefault = true\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "the default rules turned off",
+   "result": {
+    "code": "gitleaks_default_rules_required"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = false\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "another extension setting",
+   "result": {
+    "code": "gitleaks_default_rules_required"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\npath = \"other.toml\"\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist joined by OR",
+   "result": {
+    "code": "gitleaks_broad_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:c181c3226e1304c4a3fd395c9a97fcd7fdf78e21d9b6b8bd0042dc230eec9d56",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"OR\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist of two paths",
+   "result": {
+    "code": "gitleaks_broad_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:7ceb22b6063f11272e652ec69cb7c29a1749cc0975c96030ca2e5f3d2d5032ec",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"a\", \"b\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist of two patterns",
+   "result": {
+    "code": "gitleaks_broad_allowlist"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:1ddefa3d5d60cda4029a74eada7316b177e52ce3259778cf92509b97644cfea8",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"a\", \"b\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist without paths",
+   "result": {
+    "code": "gitleaks_broad_allowlist"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = []\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist with another field",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\ncommits = [\"abc\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist without its target",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a description without the prefix",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:1bef6f76f07a79aba03f924eeac2f629c2f9ebc9f8c759add805912448b666ec",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a description that is a number",
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = 7\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an empty description",
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "paths that are text",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = \"x\"\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture with its path anchored at the root",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture whose path also matches below a first-party directory",
+   "result": {
+    "code": "gitleaks_vendor_fixture_path"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture whose path is not anchored at its end",
+   "result": {
+    "code": "gitleaks_vendor_fixture_path"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/key\\\\.pem\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture whose path is its bare name",
+   "result": {
+    "code": "gitleaks_vendor_fixture_path"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"vendor/lib/key.pem\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": true,
+   "name": "a nested vendor fixture path when vendor sources are selected, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:232d8ecc4593269a3b792a5d5cc452504c184dc2c54eadd0c0d11f75a26be331",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "vendor/lib/key.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture with a broader path",
+   "result": {
+    "code": "gitleaks_vendor_fixture_path"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"vendor/.*\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": true,
+   "name": "a vendor fixture when vendor sources are selected",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": true,
+   "name": "a reviewed vendor fixture when vendor sources are selected",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:a37fd3518cae3ab18fa632f0556c0175b66901a5f3479ea8bf4e3171e2347643",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "vendor/lib/key.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture beside an unreviewed first-party one",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/key.pem\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/key\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a fixture path with pattern characters, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:7f98738b608b4339c0924b2c7f6ab80031698c2f428fab94af0bd9428c69433a",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixt\u00fcre (1)+[a].pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixt\u00fcre (1)+[a].pem\"\ncondition = \"AND\"\npaths = [\"x\"]\nregexTarget = \"line\"\nregexes = [\"\\u00e9 \\\"quoted\\\" \\\\\\\\ back\\ttab\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a vendor fixture path with pattern characters",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/a b/k(1)+[x]{2}^$|?*.~#&-pem\"\ncondition = \"AND\"\npaths = [\"^vendor/a\\\\ b/k\\\\(1\\\\)\\\\+\\\\[x\\\\]\\\\{2\\\\}\\\\^\\\\$\\\\|\\\\?\\\\*\\\\.\\\\~\\\\#\\\\&\\\\-pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a pattern that is a number, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:ce28a0c817086f3108f670e9764e5f619301feb6fe6962bc1c47fe3f9f9a8a70",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [7]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a target that is a truth value, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:da52a4cec199b79a3818b1e2c845bcd529317b7ffbc98b78651c2f67f5ce076d",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = true\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a pattern with control characters, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:8d1c714081b083ba9f3d4953d2c76b9b2b25ae3915e9753bf67d9c201b994aa6",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"a\\nb\\rc\\bd\\fe\\u0001f\\u007fg\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a pattern that is a fraction, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:53151c7f9def97a121977707adf584e06f8c2026d70dd9552bbe68be2dc6cabf",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [1.5]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a negative number for a target, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:47ec0bf4999d15aba84e3e3015ed05705eb547aa5e186483d56fdc2192927fd6",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = -7\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a target that is a list of two, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:6d8cafab3c2aca1a022c67d46812f87073fc9c0097f8e9fb8ef6b13ca683b66d",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = [\"line\", \"match\"]\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a target that is an empty list, reviewed",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:d17008b15e9e2f4a24c68a651fe082d9eeea7d6750e4794eac890986fa3f705e",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = []\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a title missing",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   },
+   "reviews": [],
+   "text": "[extend]\nuseDefault = true\n[[allowlists]]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "another top-level table",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "text": "title = \"Reviewed secrets policy\"\n[other]\nkey = 1\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "a configuration that is not TOML",
+   "result": {
+    "code": "TOMLDecodeError"
+   },
+   "reviews": [],
+   "text": "title = ["
+  },
+  {
+   "includeVendor": false,
+   "name": "allowlists that are a table",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "text": "title = \"t\"\n[extend]\nuseDefault = true\n[allowlists]\na = 1\n"
+  },
+  {
+   "includeVendor": false,
+   "name": "an allowlist that is text",
+   "result": {
+    "code": "invalid_tool_record"
+   },
+   "reviews": [],
+   "text": "title = \"t\"\nallowlists = [\"x\"]\n[extend]\nuseDefault = true\n"
+  },
+  {
+   "includeVendor": false,
+   "latin1": "title = \"\u00ff\"\n",
+   "name": "a configuration that is not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "reviews": []
+  },
+  {
+   "includeVendor": false,
+   "name": "no configuration file",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "reviews": [],
+   "text": null
+  }
+ ],
+ "migrations": [
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "only the reviewed migration",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "SELECT 1;\n"
+   },
+   "name": "one new migration",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "SELECT 2;\n",
+    "migrations/003_b.sql": "SELECT 3;\n",
+    "migrations/010_later.sql": "SELECT 1;\n"
+   },
+   "name": "new migrations in name order",
+   "result": {
+    "added": [
+     "migrations/002_next.sql",
+     "migrations/003_b.sql",
+     "migrations/010_later.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "SELECT 2;\n"
+   },
+   "name": "a reviewed migration that changed",
+   "result": {
+    "code": "reviewed_migration_modified"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/002_next.sql": "SELECT 1;\n"
+   },
+   "name": "a reviewed migration that is gone",
+   "result": {
+    "code": "reviewed_migration_deleted"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": []}",
+   "bytes": [],
+   "files": {},
+   "name": "no migrations and no baseline entries",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": []}",
+   "bytes": [],
+   "files": {
+    "migrations/a.sql": "SELECT 1;\n",
+    "migrations/b.sql": "SELECT 1;\n"
+   },
+   "name": "no baseline entries and two migrations",
+   "result": {
+    "added": [
+     "migrations/a.sql",
+     "migrations/b.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/notes.txt": "squawk-ignore\n"
+   },
+   "name": "a file that is no SQL",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/sub/002_next.sql": "SELECT 1;\n"
+   },
+   "name": "a new migration in a directory below",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore-file\nSELECT 1;\n"
+   },
+   "name": "an ignore-file directive",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore prefer-bigint-over-int\nSELECT 1;\n"
+   },
+   "name": "an ignore directive",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-disable-assume-in-transaction\nSELECT 1;\n"
+   },
+   "name": "a transaction directive",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- SQUAWK-IGNORE x\nSELECT 1;\n"
+   },
+   "name": "a directive in capitals",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "SELECT 1; -- squawk-ignore"
+   },
+   "name": "a directive at the end without a line end",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- xsquawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive inside a longer word",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignored\nSELECT 1;\n"
+   },
+   "name": "a directive followed by letters",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore-next\nSELECT 1;\n"
+   },
+   "name": "a directive followed by a hyphen",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore_x\nSELECT 1;\n"
+   },
+   "name": "a directive followed by an underscore",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- _squawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive after an underscore",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- \u00e9squawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive after a letter outside ASCII",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore\u00e9\nSELECT 1;\n"
+   },
+   "name": "a directive before a letter outside ASCII",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk is the linter\nSELECT 1;\n"
+   },
+   "name": "the word squawk alone",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-disable-other\nSELECT 1;\n"
+   },
+   "name": "a disable directive of another kind",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"6b7217472a7be7a2f8abfa32f8224664b3841a6e073ddd2b4a8d39eb1282de9c\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "-- squawk-ignore\n"
+   },
+   "name": "a directive in a reviewed migration",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": ""
+   },
+   "name": "an empty new migration",
+   "result": {
+    "code": "tool_file_size"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [
+    "migrations/002_next.sql"
+   ],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "SELECT '\u00ff';\n"
+   },
+   "name": "a new migration that is not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 2, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline of schema two",
+   "result": {
+    "code": "migration_baseline_schema"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": true, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline whose schema is a truth value",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}], \"extra\": 1}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline with another field",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": {}}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline whose files are an object",
+   "result": {
+    "code": "scanner_list_expected"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\", \"note\": 1}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline entry with another field",
+   "result": {
+    "code": "invalid_tool_record_fields"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [\"migrations/001_initial.sql\"]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline entry that is text",
+   "result": {
+    "code": "invalid_tool_record"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}, {\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline path twice",
+   "result": {
+    "code": "duplicate_reviewed_migration"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"other/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "other/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline path outside migrations",
+   "result": {
+    "code": "reviewed_migration_deleted"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/sub/001.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/sub/001.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline path in a directory below",
+   "result": {
+    "code": "reviewed_migration_deleted"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"./migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline path spelled with a dot",
+   "result": {
+    "code": "reviewed_migration_deleted"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781C92F390949164354EA00F44BB37E0E1B4C24E700B19D0B79C35D8E3FB2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline digest in capitals",
+   "result": {
+    "code": "reviewed_migration_modified"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": 1}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a baseline digest that is a number",
+   "result": {
+    "code": "invalid_tool_string"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "an empty baseline path",
+   "result": {
+    "code": "invalid_tool_string"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- \u017fquawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive spelled with a long s",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squaw\u212a-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive spelled with a Kelvin sign",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- \u00dfquawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive spelled with a sharp s",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- 1squawk-ignore\nSELECT 1;\n"
+   },
+   "name": "a directive after a digit",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore1\nSELECT 1;\n"
+   },
+   "name": "a directive before a digit",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "squawk-ignore-file"
+   },
+   "name": "a directive at the very start",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-ignore-filex\nSELECT 1;\n"
+   },
+   "name": "a file directive followed by letters",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "-- squawk-disable-assume-in-transactions\nSELECT 1;\n"
+   },
+   "name": "a transaction directive followed by letters",
+   "result": {
+    "added": [
+     "migrations/002_next.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_next.sql": "SELECT 1;\n",
+    "migrations/003_more.sql": "-- squawk-ignore\n"
+   },
+   "name": "a directive in the second new migration only",
+   "result": {
+    "code": "migration_inline_suppression_forbidden"
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n",
+    "migrations/002_NEXT.SQL": "-- squawk-ignore\n"
+   },
+   "name": "a migration named in capitals",
+   "result": {
+    "added": []
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"743781c92f390949164354ea00f44bb37e0e1b4c24e700b19d0b79c35d8e3fb2\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/.sql": "SELECT 1;\n",
+    "migrations/001_initial.sql": "CREATE TABLE example (id bigint);\n"
+   },
+   "name": "a hidden migration",
+   "result": {
+    "added": [
+     "migrations/.sql"
+    ]
+   }
+  },
+  {
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": [{\"path\": \"migrations/001_initial.sql\", \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}]}",
+   "bytes": [],
+   "files": {
+    "migrations/001_initial.sql": ""
+   },
+   "name": "a reviewed migration that is empty",
+   "result": {
+    "code": "tool_file_size"
+   }
+  },
+  {
+   "baseline": null,
+   "bytes": [],
+   "files": {},
+   "name": "no baseline file",
+   "result": {
+    "code": "FileNotFoundError"
+   }
+  },
+  {
+   "absent": true,
+   "baseline": "{\"schemaVersion\": 1, \"reviewedRevision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"files\": []}",
+   "bytes": [],
+   "files": {},
+   "name": "no migrations directory",
+   "result": {
+    "added": []
+   }
+  }
+ ],
+ "now": 1790769600,
+ "today": "2026-09-30",
+ "zizmor": [
+  {
+   "name": "no findings",
+   "report": [],
+   "result": {
+    "count": 0
+   },
+   "reviews": []
+  },
+  {
+   "name": "one reviewed finding",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "one unreviewed finding",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": []
+  },
+  {
+   "name": "a finding reviewed for another scanner",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "semgrep",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding reviewed at another step",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/4"
+    }
+   ]
+  },
+  {
+   "name": "a finding reviewed for another feature",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0000000000000000000000000000000000000000000000000000000000000000",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "two reviewed findings",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 2
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a reviewed finding and an unreviewed one",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ident": "excessive-permissions",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding ignored inline",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": true,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_inline_ignore_forbidden"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding not ignored",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": false,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is text",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": "yes",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_inline_ignore_forbidden"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is empty text",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": "",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is zero",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": 0,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is one",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": 1,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_inline_ignore_forbidden"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is null",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": null,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is an empty list",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": [],
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding whose ignored flag is a list",
+   "report": [
+    {
+     "ident": "template-injection",
+     "ignored": [
+      0
+     ],
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_inline_ignore_forbidden"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding without a primary location",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Related",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_primary_location"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding with two primary locations",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      },
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_primary_location"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding with a related location as well",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": "other.yml"
+         }
+        },
+        "kind": "Related",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      },
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding without locations",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": []
+    }
+   ],
+   "result": {
+    "code": "zizmor_primary_location"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a route component with two keys",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Index": 1,
+           "Key": "jobs"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_route"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a route component of another kind",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Other": "jobs"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_route"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an empty route component",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {}
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "zizmor_route"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an empty route",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": []
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#"
+    }
+   ]
+  },
+  {
+   "name": "a key that is a number",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": 7
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#7"
+    }
+   ]
+  },
+  {
+   "name": "an index that is text",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Index": "3"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#3"
+    }
+   ]
+  },
+  {
+   "name": "a key that is a truth value",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": true
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#True"
+    }
+   ]
+  },
+  {
+   "name": "a key that is null",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": null
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#None"
+    }
+   ]
+  },
+  {
+   "name": "a key that is a fraction",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": 1.5
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#1.5"
+    }
+   ]
+  },
+  {
+   "name": "a key with a slash",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "a/b"
+          },
+          {
+           "Key": "c"
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#a/b/c"
+    }
+   ]
+  },
+  {
+   "name": "a route component that is text",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          "jobs"
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a route that is an object",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": {
+          "Key": "jobs"
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a report that is an object",
+   "report": {},
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "name": "a report that is text",
+   "report": "findings",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": []
+  },
+  {
+   "name": "a finding that is text",
+   "report": [
+    "finding"
+   ],
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": []
+  },
+  {
+   "name": "a finding without its identifier",
+   "report": [
+    {
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a finding without locations at all",
+   "report": [
+    {
+     "ident": "template-injection"
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an identifier that is a number",
+   "report": [
+    {
+     "ident": 1,
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an empty identifier",
+   "report": [
+    {
+     "ident": "",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an empty path",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ""
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a location without its feature",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {},
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "an empty feature",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": ""
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a location without its symbolic part",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a location that is text",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      "location"
+     ]
+    }
+   ],
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a key that is not local",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Remote": {
+          "verbatim_path": "x"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a feature outside ASCII",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: \u00e9cho"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:3915012169989a583bc08bdb2343b91839fdd7c34e89e7c7a4adfc7ff667b1ac",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a related location without a feature",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "kind": "Primary",
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      },
+      {
+       "symbolic": {
+        "kind": "Related"
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "count": 1
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a location whose kind is missing",
+   "report": [
+    {
+     "ident": "template-injection",
+     "locations": [
+      {
+       "concrete": {
+        "feature": "run: echo ${{ github.event.issue.title }}"
+       },
+       "symbolic": {
+        "key": {
+         "Local": {
+          "verbatim_path": ".github/workflows/ci.yml"
+         }
+        },
+        "route": {
+         "route": [
+          {
+           "Key": "jobs"
+          },
+          {
+           "Key": "build"
+          },
+          {
+           "Key": "steps"
+          },
+          {
+           "Index": 3
+          }
+         ]
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ]
+  },
+  {
+   "name": "a report that is not JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "text": "["
+  }
+ ]
+}

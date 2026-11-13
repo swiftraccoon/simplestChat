@@ -80,7 +80,7 @@ impl Date {
     }
 
     /// `YYYY-MM-DD` in ASCII digits and nothing else.
-    fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         let bytes = text.as_bytes();
         let digits = |range: std::ops::Range<usize>| {
             let part = bytes.get(range)?;
@@ -105,6 +105,16 @@ impl Date {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
         Self::of_epoch_second(seconds).unwrap_or(Self::MIN)
+    }
+
+    /// The number of days from 1970-01-01 to this day.
+    pub(crate) fn epoch_day(self) -> i64 {
+        let (month, day) = (i64::from(self.month), i64::from(self.day));
+        let year = i64::from(self.year) - i64::from(month <= 2);
+        let (era, year_of_era) = (year.div_euclid(400), year.rem_euclid(400));
+        let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+        let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+        era * 146_097 + day_of_era - 719_468
     }
 
     /// The UTC day of the second `seconds` after the epoch.
@@ -308,7 +318,7 @@ fn linked(review: &str) -> bool {
 }
 
 /// One record, complete and current on `today`.
-fn parse(value: &Value, today: Date) -> Result<Exception> {
+pub(crate) fn parse(value: &Value, today: Date) -> Result<Exception> {
     let raw = record::record(value, &FIELDS)?;
     let mut fields = Vec::with_capacity(FIELDS.len());
     for name in FIELDS {

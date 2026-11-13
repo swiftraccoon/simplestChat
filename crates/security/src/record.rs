@@ -51,3 +51,29 @@ pub(crate) fn safe_name(value: &str) -> bool {
             .split('/')
             .all(|part| !matches!(part, "" | "." | ".."))
 }
+
+/// A JSON string as the reference writes one: ASCII only, with the short
+/// escapes for the quote, the backslash and five control characters.
+pub(crate) fn quoted(text: &str) -> String {
+    use std::fmt::Write as _;
+    let mut quoted = String::from("\"");
+    for character in text.chars() {
+        match character {
+            '"' => quoted.push_str("\\\""),
+            '\\' => quoted.push_str("\\\\"),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            '\u{8}' => quoted.push_str("\\b"),
+            '\u{c}' => quoted.push_str("\\f"),
+            ' '..='~' => quoted.push(character),
+            _ => {
+                for unit in character.encode_utf16(&mut [0; 2]) {
+                    let _ = write!(quoted, "\\u{unit:04x}");
+                }
+            }
+        }
+    }
+    quoted.push('"');
+    quoted
+}

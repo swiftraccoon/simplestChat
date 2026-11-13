@@ -194,11 +194,13 @@ fn a_day_number_is_the_calendar_day_the_reference_names() {
     let recording = recorded();
     let days = recording["days"].as_array().expect("days");
     for case in days {
-        let day = Date::of_epoch_day(case[0].as_u64().expect("a day number"));
+        let number = case[0].as_u64().expect("a day number");
+        let day = Date::of_epoch_day(number);
         assert_eq!(
             day.map(|day| day.to_string()),
             case[1].as_str().map(str::to_owned)
         );
+        assert_eq!(day.map(Date::epoch_day), i64::try_from(number).ok());
     }
     assert_eq!(days.len(), 22);
     let seconds = recording["seconds"].as_array().expect("seconds");
@@ -214,6 +216,7 @@ fn a_day_number_is_the_calendar_day_the_reference_names() {
     assert_eq!(Date::of_epoch_day(2_932_897), None);
     assert!(Date::today() > Date::new(2026, 1, 1).expect("a day"));
     assert_eq!(Date::MIN.to_string(), "0001-01-01");
+    assert_eq!(Date::MIN.epoch_day(), -719_162);
 }
 
 #[test]
