@@ -1,0 +1,992 @@
+{
+ "cases": [
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a first build",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image",
+    "--engine",
+    "podman"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image\t--engine\tpodman"
+   ],
+   "name": "a first build for another tier",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "complete",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "an environment that is ready",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "complete directory",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    "<digest>": {
+     "directory": 493
+    },
+    "<digest>/bin": {
+     "directory": 493
+    },
+    "<digest>/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    "<digest>/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    }
+   },
+   "log": [
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "an environment that is a directory and ready",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "other environments",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    ".install.an-other": {
+     "directory": 493
+    },
+    ".install.an-other/bin": {
+     "directory": 493
+    },
+    ".install.an-other/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.an-other/ready": {
+     "file": 420,
+     "text": "1111111111111111111111111111111111111111111111111111111111111111\n"
+    },
+    "1111111111111111111111111111111111111111111111111111111111111111": {
+     "link": "<project>/.cache/security-environments/.install.an-other"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "an environment beside others",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link without a receipt",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "an interrupted build",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link to nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link to a build that is gone",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link outside",
+   "check": 0,
+   "elsewhere": true,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link out of the cache without a receipt",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "relative link",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a relative link without a receipt",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link to a staging name outside",
+   "check": 0,
+   "elsewhere": true,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link to a staging directory of another cache",
+   "outside": true,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link to another entry",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    },
+    "kept-entry": {
+     "directory": 493
+    },
+    "kept-entry/bin": {
+     "directory": 493
+    },
+    "kept-entry/bin/python": {
+     "file": 493,
+     "text": null
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link to another entry of the cache",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link below a build",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/inner": {
+     "directory": 493
+    },
+    ".install.old-build/inner/bin": {
+     "directory": 493
+    },
+    ".install.old-build/inner/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link to a directory below an old build",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link through a build",
+   "check": 0,
+   "elsewhere": true,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    ".install.old-build": {
+     "directory": 493
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a link that leaves the cache through an old build",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "directory without a receipt",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a directory without a receipt",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "file",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a file where the environment belongs",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "another receipt",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Scanner environment receipt does not match the current lock.\n",
+   "install": 0,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "0000000000000000000000000000000000000000000000000000000000000000\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [],
+   "name": "a receipt of another lock",
+   "outside": false,
+   "status": 1,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "receipt without a line end",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a receipt without a line end",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "receipt with two line ends",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a receipt with two line ends",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "receipt with a space",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Scanner environment receipt does not match the current lock.\n",
+   "install": 0,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60 \n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [],
+   "name": "a receipt with a space after it",
+   "outside": false,
+   "status": 1,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "receipt that is a directory",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 0,
+   "left": {
+    ".install.<new>": {
+     "directory": 448
+    },
+    ".install.<new>/bin": {
+     "directory": 448
+    },
+    ".install.<new>/bin/python": {
+     "file": 448,
+     "text": null
+    },
+    ".install.<new>/ready": {
+     "file": 384,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.<new>"
+    }
+   },
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck",
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "a receipt that is a directory",
+   "outside": false,
+   "status": 0,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>"
+   ],
+   "name": "an environment that cannot be created",
+   "outside": false,
+   "status": 1,
+   "venv": 1
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>"
+   ],
+   "name": "an environment that cannot be created, with status seven",
+   "outside": false,
+   "status": 7,
+   "venv": 7
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 1,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt"
+   ],
+   "name": "packages that cannot be installed",
+   "outside": false,
+   "status": 1,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "",
+   "install": 2,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt"
+   ],
+   "name": "packages that cannot be installed, with status two",
+   "outside": false,
+   "status": 2,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "nothing",
+   "check": 1,
+   "elsewhere": false,
+   "errors": "",
+   "install": 0,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
+    "python\t-m\tpip\t--isolated\tcheck"
+   ],
+   "name": "packages that do not agree",
+   "outside": false,
+   "status": 1,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "link without a receipt",
+   "check": 0,
+   "elsewhere": false,
+   "errors": "Rebuilding an incomplete scanner environment: <project>/.cache/security-environments/<digest>\n",
+   "install": 1,
+   "left": {},
+   "log": [
+    "venv\t<project>/.cache/security-environments/.install.<new>",
+    "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt"
+   ],
+   "name": "an interrupted build and packages that cannot be installed",
+   "outside": false,
+   "status": 1,
+   "venv": 0
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image"
+   ],
+   "before": "complete",
+   "check": 1,
+   "elsewhere": false,
+   "errors": "",
+   "install": 1,
+   "left": {
+    ".install.old-build": {
+     "directory": 493
+    },
+    ".install.old-build/bin": {
+     "directory": 493
+    },
+    ".install.old-build/bin/python": {
+     "file": 493,
+     "text": null
+    },
+    ".install.old-build/ready": {
+     "file": 420,
+     "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
+    },
+    "<digest>": {
+     "link": "<project>/.cache/security-environments/.install.old-build"
+    }
+   },
+   "log": [
+    "python\tbuild/security_check.py\timage\tan-image"
+   ],
+   "name": "an environment that is ready although nothing could be built",
+   "outside": false,
+   "status": 0,
+   "venv": 1
+  }
+ ],
+ "digest": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60",
+ "lock": "pip-audit==2.10.1 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+}

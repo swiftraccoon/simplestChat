@@ -4,10 +4,12 @@
 //! `findings` holds each scanner's report to them, `scope` says which
 //! sources a diagnostic covers, `context` runs an invocation's bounded
 //! commands and takes its private copy of the sources, `secrets` turns that
-//! copy into what a secret scanner must read, and `fast` holds the checks of
-//! the fast tier.
+//! copy into what a secret scanner must read, `environment` builds the
+//! hash-locked Python environment of the scanners that need one, and `fast`
+//! holds the checks of the fast tier.
 
 pub mod context;
+pub mod environment;
 pub mod fast;
 pub(crate) mod files;
 pub mod findings;
