@@ -118,7 +118,7 @@ impl Executor for Fake {
             .collect::<Vec<_>>();
         let stage = if command.program == Program::CargoAudit {
             "audit"
-        } else if args[1] == "install" {
+        } else if args[7] == "install" {
             "install"
         } else {
             "resolve"
@@ -203,7 +203,13 @@ fn exact_reference_commands_advisory_exclusions_and_one_deadline_are_retained() 
         (
             true,
             vec![
-                "build/security_tools.py",
+                "run",
+                "--locked",
+                "-q",
+                "-p",
+                "simplestchat-security",
+                "--",
+                "tools",
                 "install",
                 "--tools",
                 "cargo-audit",
@@ -213,7 +219,13 @@ fn exact_reference_commands_advisory_exclusions_and_one_deadline_are_retained() 
         (
             false,
             vec![
-                "build/security_tools.py",
+                "run",
+                "--locked",
+                "-q",
+                "-p",
+                "simplestchat-security",
+                "--",
+                "tools",
                 "path",
                 "cargo-audit",
                 "--directory",
@@ -221,7 +233,7 @@ fn exact_reference_commands_advisory_exclusions_and_one_deadline_are_retained() 
         ),
     ] {
         let command = plan::reference(&tools, install, deadline).unwrap();
-        assert_eq!(command.program, Program::Python);
+        assert_eq!(command.program, Program::Cargo);
         assert_eq!(command.arguments[..command.arguments.len() - 1], expected);
         assert_eq!(command.arguments.last().unwrap(), tools.as_os_str());
         assert_eq!(command.capture, Some(4096));

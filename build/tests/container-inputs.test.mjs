@@ -283,6 +283,30 @@ test('the builder stage loads every workspace member before warming dependencies
   }
 });
 
+test('the builder authenticates cargo-auditable with the security crate built from its real sources', () => {
+  // The stubs come first, because Cargo loads every manifest; the installer is then
+  // compiled from the checkout's own sources, never from a stub, and both
+  // application builds run the executable it installed and verified.
+  const builder = dockerfile.split(/\bAS builder\s*\n/i)[1]?.split(/^FROM /m)[0];
+  assert.ok(builder, 'Dockerfile must retain its builder stage');
+  const order = [
+    /> crates\/security\/src\/lib\.rs(?=\s|$)/,
+    /^COPY build\/security-tools\.lock\.json \.\/build\/$/m,
+    /^COPY crates\/security\/src \.\/crates\/security\/src$/m,
+    /^RUN cargo build --locked --release -p simplestchat-security --bin simplestchat-security +&& target\/release\/simplestchat-security tools install --tools cargo-auditable --directory \/opt\/security-tools$/m,
+    /^RUN \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,
+    /^COPY src \.\/src$/m,
+    /^RUN target\/release\/simplestchat-security tools path cargo-auditable --directory \/opt\/security-tools +&& \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,
+  ].map(pattern => builder.search(pattern));
+  assert.ok(order.every(position => position >= 0), `every builder step is present: ${order}`);
+  assert.deepEqual(order, order.toSorted((left, right) => left - right), 'the builder steps keep their order');
+  assert.equal(builder.match(/auditable build/g).length, 2, 'both application builds are auditable builds');
+  assert.equal(builder.match(/simplestchat-security tools /g).length, 2);
+  assert.ok(!dockerfile.includes('security_tools.py'), 'no stage installs through the retired installer');
+  assert.equal(excluded('build/security_tools.py'), true, 'the retired installer stays outside the context');
+  assert.equal(excluded('crates/security/src/tools/recorded_tools.json'), true);
+});
+
 test('context excludes local-only descendants while retaining production inputs', () => {
   for (const rule of [
     '!crates/ci/src/apt_mirror/',

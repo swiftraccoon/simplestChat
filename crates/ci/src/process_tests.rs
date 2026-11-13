@@ -1202,12 +1202,13 @@ async fn mdns_actual_interruption_stays_distinct_after_group_and_pipe_settlement
 }
 
 /// Every program, in declaration order; the declaration scan below pins it.
-const PROGRAMS: [Program; 42] = [
+const PROGRAMS: [Program; 43] = [
     Program::Git,
     Program::Docker,
     Program::Curl,
     Program::Sudo,
     Program::Python,
+    Program::Cargo,
     Program::CargoAudit,
     Program::Node,
     Program::PgConfig,
@@ -1259,6 +1260,7 @@ fn release_roles_partition_exactly_the_runner_selected_programs() {
             | Program::Curl
             | Program::Sudo
             | Program::Python
+            | Program::Cargo
             | Program::PgConfig => (false, &[]),
             Program::CargoAudit
             | Program::Node

@@ -42,9 +42,9 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/release-fetch-controller"
           "$RUNNER_TEMP/release-fetch-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
-          python3 build/security_tools.py install --tools gh \
+          cargo run --locked -q -p simplestchat-security -- tools install --tools gh \
             --directory "$RUNNER_TEMP/release-fetch-gh"
-          fetch_gh="$(python3 build/security_tools.py path gh \
+          fetch_gh="$(cargo run --locked -q -p simplestchat-security -- tools path gh \
             --directory "$RUNNER_TEMP/release-fetch-gh")"
           test "$fetch_gh" = "$RUNNER_TEMP/release-fetch-gh/bin/gh"
           printf '%s\n' "$RUNNER_TEMP/release-fetch-controller/bin" \

@@ -8,16 +8,17 @@ are described in [the security guide](../docs/security.md).
 
 `build/security-tools.lock.json` records exact versions, HTTPS distribution URLs,
 archive SHA-256 values and explicit archive-member-to-install-path mappings.
-`build/security_tools.py` installs only those mapped regular files. It rejects
-links, device entries, path traversal, duplicate entries, missing files, excessive
-archive expansion and unsupported platforms. It never invokes an archive's
-installer or extracts arbitrary paths onto the host.
+`simplestchat-security tools` (`crates/security`) installs only those mapped
+regular files. It rejects links, device entries, path traversal, duplicate
+entries, missing files, excessive archive expansion and unsupported platforms.
+It never invokes an archive's installer or extracts arbitrary paths onto the
+host.
 
 Install the default source scanners or resolve one verified executable:
 
 ```sh
-python3 build/security_tools.py install
-python3 build/security_tools.py path semgrep-core
+cargo run --locked -q -p simplestchat-security -- tools install
+cargo run --locked -q -p simplestchat-security -- tools path semgrep-core
 ```
 
 Tools are installed in a private directory below
@@ -31,16 +32,12 @@ path. Interrupted installation does not publish a usable prefix. Installation
 does not merge new tools into an unrelated or incomplete prefix; an explicit
 `--directory` selects a separate installation.
 
-`simplestchat-security tools install` and `tools path` (`crates/security`) are
-the same installer in Rust, with the same options, lock and default directory:
-
-```sh
-cargo run --locked -q -p simplestchat-security -- tools install
-cargo run --locked -q -p simplestchat-security -- tools path semgrep-core
-```
-
-It writes the same files and a byte-identical receipt, so either installer
-verifies and reuses a directory the other published. It downloads with
+The image's builder stage, the runtime proof workflows and the Rust dependency
+audit install through these commands. `build/security_tools.py` is the same
+installer for the Python gate (`build/check-security.sh` and the release
+checks run it): it takes the same options, lock and default directory and
+writes the same files and a byte-identical receipt, so either one verifies and
+reuses a directory the other published. The Rust installer downloads with
 `/usr/bin/curl`, which is given none of the caller's environment and accepts
 only HTTPS, redirects included, within the same three attempts, delays and
 three-minute bound; nothing is parsed before the archive has the locked digest.
@@ -69,8 +66,10 @@ scanner set. Bootstrap it into a separate prefix before supplying the Ops
 caller's token, then resolve the verified path:
 
 ```sh
-python3 build/security_tools.py install --tools gh --directory /absolute/private/ops-gh
-python3 build/security_tools.py path gh --directory /absolute/private/ops-gh
+cargo run --locked -q -p simplestchat-security -- tools install --tools gh \
+  --directory /absolute/private/ops-gh
+cargo run --locked -q -p simplestchat-security -- tools path gh \
+  --directory /absolute/private/ops-gh
 ```
 
 The standalone Semgrep engine and its native libraries come from authenticated

@@ -12,7 +12,7 @@ const JOB: &str = "ops-runtime";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const UPLOAD: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const COMPILE: &str = "cargo build --locked -p simplestchat-release --bin simplestchat-release";
-const INSTALL: &str = "security_tools.py install --tools gh";
+const TOOLS: &str = "cargo run --locked -q -p simplestchat-security -- tools";
 
 /// The indices of the steps `accept` selects, in workflow order.
 fn indices(steps: &[Value], accept: impl Fn(&Value) -> bool) -> Vec<usize> {
@@ -148,17 +148,15 @@ fn api_credential_is_only_in_the_post_bootstrap_runtime_leaf() {
             "  --request-sha256 \"$OPS_REQUEST_SHA256\"",
         ]
     );
-    let [install] = indices(steps, |step| script(step).contains(INSTALL))[..] else {
+    let install = format!("{TOOLS} install --tools gh --directory \"$RUNNER_TEMP/ops-gh\"");
+    let resolve = format!("\"$({TOOLS} path gh --directory \"$RUNNER_TEMP/ops-gh\")\"");
+    let [bootstrap] = indices(steps, |step| script(step).contains(&install))[..] else {
         panic!("exactly one step installs the pinned gh");
     };
-    assert!(install < runtime);
-    let bootstrap = script(&steps[install]);
-    assert!(
-        bootstrap.find(INSTALL).unwrap()
-            < bootstrap
-                .find("security_tools.py path gh --directory")
-                .unwrap()
-    );
+    assert!(bootstrap < runtime);
+    let bootstrap = script(&steps[bootstrap]);
+    assert!(bootstrap.find(&install).unwrap() < bootstrap.find(&resolve).unwrap());
+    assert!(!bootstrap.contains("security_tools.py"));
     assert!(bootstrap.contains("test \"$ops_gh_executable\" = \"$RUNNER_TEMP/ops-gh/bin/gh\""));
     for (index, step) in steps.iter().enumerate() {
         assert!(!carries(step, "GITHUB_TOKEN"));

@@ -422,8 +422,8 @@ class ElfSecurityTests(unittest.TestCase):
             + " --locked --release --bin simplestChat"
         )
         self.assertEqual(dockerfile.count(invocation), 2)
-        self.assertIn("security_tools.py install --tools cargo-auditable", dockerfile)
-        self.assertIn("security_tools.py path cargo-auditable", dockerfile)
+        self.assertIn("simplestchat-security tools install --tools cargo-auditable", dockerfile)
+        self.assertIn("simplestchat-security tools path cargo-auditable", dockerfile)
         self.assertNotIn("cargo build --locked --release --bin simplestChat", dockerfile)
 
     def test_failed_library_policy_retains_bounded_identities_without_relaxing_policy(self) -> None:

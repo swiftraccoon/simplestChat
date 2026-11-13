@@ -1,4 +1,5 @@
-//! Keep the reference installer and exact advisory policy; bound the whole plan.
+//! The pinned installer, the exact advisory policy, and one budget for the
+//! whole plan.
 
 use crate::{
     command::{Command, Program},
@@ -46,26 +47,25 @@ fn remaining(deadline: Instant) -> Result<Duration> {
         .filter(|left| !left.is_zero())
         .ok_or_else(|| Failure::new(124, "Rust audit budget exhausted."))
 }
+/// `simplestchat-security tools`, built and run from this checkout.
+const INSTALLER: [&str; 7] = [
+    "run",
+    "--locked",
+    "-q",
+    "-p",
+    "simplestchat-security",
+    "--",
+    "tools",
+];
+
+/// Install cargo-audit into `path`, or resolve its verified executable there.
 pub(super) fn reference(path: &Path, install: bool, deadline: Instant) -> Result<Command> {
-    let mut command = Command::capture(
-        Program::Python,
-        if install {
-            &[
-                "build/security_tools.py",
-                "install",
-                "--tools",
-                "cargo-audit",
-                "--directory",
-            ]
-        } else {
-            &[
-                "build/security_tools.py",
-                "path",
-                "cargo-audit",
-                "--directory",
-            ]
-        },
-    );
+    let action: &[&str] = if install {
+        &["install", "--tools", "cargo-audit", "--directory"]
+    } else {
+        &["path", "cargo-audit", "--directory"]
+    };
+    let mut command = Command::capture(Program::Cargo, &[&INSTALLER, action].concat());
     command.arguments.push(path.as_os_str().to_owned());
     command.timeout = remaining(deadline)?;
     command.capture = Some(4096);

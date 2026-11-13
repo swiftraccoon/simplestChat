@@ -1861,10 +1861,10 @@ authenticity or immunity to later changes by the same filesystem owner.
 
 The unconditional Rust dependency audit uses
 `cargo run --locked -q -p simplestchat-ci -- audit-rust` in the same explicit
-hosted/disposable Linux contexts. It retains the reference
-`python3 build/security_tools.py install --tools cargo-audit --directory PATH`
-and `path cargo-audit --directory PATH` commands. That installer authenticates
-the scanner and its receipt. The native command accepts only the selected
+hosted/disposable Linux contexts. It runs
+`cargo run --locked -q -p simplestchat-security -- tools install --tools cargo-audit --directory PATH`
+and `tools path cargo-audit --directory PATH` through the same bounded runner.
+That installer authenticates the scanner and its receipt. The native command accepts only the selected
 `tools/bin/cargo-audit` beneath its fresh 0700 prefix, retains its descriptors,
 and rechecks file and directory identities before execution and after audit.
 Files must be executable, regular, single-link and at most 256 MiB; directories

@@ -1,4 +1,5 @@
-//! Unconditional CI advisory audit, using the unchanged authenticated installer.
+//! Unconditional CI advisory audit, with cargo-audit installed and verified by
+//! `simplestchat-security tools`.
 
 mod execute;
 pub(super) mod files;

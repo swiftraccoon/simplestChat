@@ -52,8 +52,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/ops-controller"
           "$RUNNER_TEMP/ops-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
-          python3 build/security_tools.py install --tools gh --directory "$RUNNER_TEMP/ops-gh"
-          ops_gh_executable="$(python3 build/security_tools.py path gh --directory "$RUNNER_TEMP/ops-gh")"
+          cargo run --locked -q -p simplestchat-security -- tools install --tools gh --directory "$RUNNER_TEMP/ops-gh"
+          ops_gh_executable="$(cargo run --locked -q -p simplestchat-security -- tools path gh --directory "$RUNNER_TEMP/ops-gh")"
           test "$ops_gh_executable" = "$RUNNER_TEMP/ops-gh/bin/gh"
           printf '%s\n' "$RUNNER_TEMP/ops-controller/bin" "${ops_gh_executable%/gh}" >> "$GITHUB_PATH"
       - name: Compile the controller before exposing its API credential

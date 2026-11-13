@@ -117,10 +117,6 @@ ENV AWS_LC_SYS_SYSTEM_DIR=/opt/aws-lc-5.11.0 \
     AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
 
 WORKDIR /app
-# Authenticate the exact cargo-auditable executable before either Cargo build.
-# Its dependency section must survive in the final executable for image auditing.
-COPY build/security_tools.py build/security-tools.lock.json ./build/
-RUN python3 build/security_tools.py install --tools cargo-auditable --directory /opt/security-tools
 # The toolchain and build-required rustfmt component are installed above. Do not
 # copy the developer toolchain file: its IDE-only components would enter this layer.
 COPY build/pip-constraints.txt /opt/simplestchat/pip-constraints.txt
@@ -139,11 +135,8 @@ COPY build/security_vendor.py ./build/
 COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py ./ops/ansible/files/
 RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /app/vendor-evidence
 
-# Warm every dependency, including the native worker, against stub sources.
-# This layer is reused until the manifest, lockfile or vendored patches change,
-# so a source-only build compiles this crate alone instead of the whole graph.
-# The member stubs stay in place: Cargo loads every workspace manifest, and
-# the load-test stage copies the real sources over them.
+# Cargo loads every workspace manifest, so each member gets a stub target. The
+# stubs stay in place; the load-test stage copies the real sources over them.
 RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crates/release/src crates/lobby-seed/src crates/security/src ops/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
@@ -158,8 +151,20 @@ RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crate
     && printf 'fn main() {}\n' > crates/security/src/main.rs \
     && printf '' > crates/security/src/lib.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
-    && printf '' > ops/src/lib.rs \
-    && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
+    && printf '' > ops/src/lib.rs
+# Authenticate the exact cargo-auditable executable before either application
+# build: its dependency section must survive in the final executable for image
+# auditing. The installer is the security crate itself, built here from its
+# real sources and the locked dependencies; it downloads with this stage's curl
+# and admits only the archive the tool lock names.
+COPY build/security-tools.lock.json ./build/
+COPY crates/security/src ./crates/security/src
+RUN cargo build --locked --release -p simplestchat-security --bin simplestchat-security \
+    && target/release/simplestchat-security tools install --tools cargo-auditable --directory /opt/security-tools
+# Warm every dependency, including the native worker, against stub sources.
+# This layer is reused until the manifest, lockfile or vendored patches change,
+# so a source-only build compiles this crate alone instead of the whole graph.
+RUN /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
     && rm -rf src \
         target/release/simplestChat \
         target/release/deps/simplestChat-* target/release/deps/libsimplestchat-* \
@@ -172,7 +177,7 @@ COPY build.rs ./
 COPY ops/src ./ops/src
 COPY ops/ops-build-inputs.lock.json ./ops/ops-build-inputs.lock.json
 COPY migrations/*.sql ./migrations/
-RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
+RUN target/release/simplestchat-security tools path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
         --message-format=json > /app/cargo-build.json \
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.1.0 23 Oct 2026' \

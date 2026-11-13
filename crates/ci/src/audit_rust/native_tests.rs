@@ -1,4 +1,5 @@
-//! Execute owned Python/scanner fixtures through the shared native supervisor.
+//! Execute owned installer and scanner fixtures through the shared native
+//! supervisor.
 
 use super::*;
 use crate::{browser_suite::process::Signals, process::Native};
@@ -11,7 +12,8 @@ import json,os,signal,sys,time
 from pathlib import Path
 root=Path(os.environ['FIXTURE_ROOT']);mode=os.environ['FIXTURE_MODE']
 args=sys.argv[1:]
-assert args[0]=='build/security_tools.py'
+assert args[:7]==['run','--locked','-q','-p','simplestchat-security','--','tools']
+args=args[6:]
 stage='install' if args[1]=='install' else 'resolve'
 with (root/'events').open('a') as out:out.write(json.dumps([stage,args])+'\n')
 if mode==stage+'-fail':
@@ -43,7 +45,7 @@ else:
     if mode=='resolve-overflow':print('x'*4097)
     else:print(str(Path(args[-1])/'bin/cargo-audit'))
 "#;
-    let path = bin.join("python3");
+    let path = bin.join("cargo");
     fs::write(&path, source).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
     for (key, value) in [

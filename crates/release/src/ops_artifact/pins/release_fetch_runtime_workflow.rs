@@ -78,7 +78,7 @@ fn sole_credential_leaf_runs_only_after_pinned_install_and_gnu_source_build() {
         .join("\n");
     for text in [
         "--require-hashes --only-binary=:all:",
-        "build/security_tools.py install --tools gh",
+        "cargo run --locked -q -p simplestchat-security -- tools install --tools gh",
         "cargo build --locked --release --target x86_64-unknown-linux-gnu",
         "-p simplestchat-ops --bin simplestchat-ops",
     ] {

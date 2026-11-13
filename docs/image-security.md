@@ -43,9 +43,11 @@ the main image's scan and signing requirements.
 ## Rust dependency metadata
 
 Both production Cargo builds in `Dockerfile` use the same checksum-pinned
-`cargo-auditable` executable, installed through `build/security_tools.py` from
-`build/security-tools.lock.json`. The final build verifies its installed receipt
-and executable hash again. There is no unverified executable lookup fallback.
+`cargo-auditable` executable. The builder stage compiles `simplestchat-security`
+from its own sources and the locked dependencies and installs the tool with
+`tools install` from `build/security-tools.lock.json`. The final build verifies
+its installed receipt and executable hash again with `tools path`. There is no
+unverified executable lookup fallback.
 
 `cargo-auditable` embeds a compressed dependency graph in the executable's
 `.dep-v0` section. The maintained checker requires the format emitted by the
@@ -295,7 +297,7 @@ Use that same private artifact directory, containing `image.tar`, `release.json`
 and a successful `outcome.json` bound to the selected image ID:
 
 ```sh
-python3 build/security_tools.py install \
+cargo run --locked -q -p simplestchat-security -- tools install \
   --tools syft grype gitleaks --platform linux-x86_64 \
   --directory /private/new-image-tools
 python3 build/security_image.py sha256:FULL_IMAGE_ID \

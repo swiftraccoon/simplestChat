@@ -43,7 +43,7 @@ For a focused local iteration, install the same tool and invoke the maintained
 helper directly with a **new** private output directory:
 
 ```sh
-python3 build/security_tools.py install --tools cargo-mutants \
+cargo run --locked -q -p simplestchat-security -- tools install --tools cargo-mutants \
   --directory "$PWD/target/mutation-tools-local"
 python3 build/security_mutation.py \
   --tools-directory "$PWD/target/mutation-tools-local" \

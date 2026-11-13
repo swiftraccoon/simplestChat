@@ -63,8 +63,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/restore-controller"
           "$RUNNER_TEMP/restore-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
-          python3 build/security_tools.py install --tools gh --directory "$RUNNER_TEMP/restore-gh"
-          restore_gh="$(python3 build/security_tools.py path gh \
+          cargo run --locked -q -p simplestchat-security -- tools install --tools gh --directory "$RUNNER_TEMP/restore-gh"
+          restore_gh="$(cargo run --locked -q -p simplestchat-security -- tools path gh \
             --directory "$RUNNER_TEMP/restore-gh")"
           test "$restore_gh" = "$RUNNER_TEMP/restore-gh/bin/gh"
           printf '%s\n' "$RUNNER_TEMP/restore-controller/bin" "${restore_gh%/gh}" >> "$GITHUB_PATH"
