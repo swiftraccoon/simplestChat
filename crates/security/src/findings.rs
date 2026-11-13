@@ -114,6 +114,135 @@ fn literal(path: &str) -> String {
     pattern
 }
 
+/// The gitleaks configuration at `path`, as a document.
+pub(crate) fn configuration(path: &Path) -> Result<Value> {
+    let content = files::bounded(path, MAX_DOCUMENT, false)?;
+    let text = std::str::from_utf8(&content).map_err(|_| CONFIGURATION)?;
+    toml::from_str(text).map_err(|_| CONFIGURATION)
+}
+
+/// One public fixture allowlist of a gitleaks configuration.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Fixture<'a> {
+    /// The whole allowlist: what a review fingerprints.
+    entry: &'a Value,
+    /// What the allowlist says it is for.
+    pub(crate) description: &'a str,
+    path: &'a Value,
+    target: &'a Value,
+    pattern: &'a Value,
+}
+
+/// Where a fixture's value is allowed: in the one file its path names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Place<'a> {
+    rooted: bool,
+    located: String,
+    /// What the pattern is matched against.
+    pub(crate) target: &'a str,
+    /// The pattern of the value.
+    pub(crate) pattern: &'a str,
+}
+
+impl Place<'_> {
+    /// Whether the fixture's path finds the file `name`: the whole name, or
+    /// its end after a separator unless the path is anchored at the root.
+    pub(crate) fn finds(&self, name: &str) -> bool {
+        let above = name.strip_suffix(self.located.as_str());
+        above.is_some_and(|above| above.is_empty() || (!self.rooted && above.ends_with('/')))
+    }
+}
+
+impl<'a> Fixture<'a> {
+    /// The file the description names.
+    fn name(&self) -> &'a str {
+        let described = self.description.strip_prefix("Public fixture: ");
+        described.unwrap_or(self.description)
+    }
+
+    /// The fixture's place. Its path is a literal one between `(^|/)` or `^`
+    /// and `$`, so it is matched without a pattern library and can find
+    /// nothing its reviewer did not read; its target and pattern are text.
+    pub(crate) fn place(&self) -> Result<Place<'a>> {
+        let texts = (
+            self.path.as_str(),
+            self.target.as_str(),
+            self.pattern.as_str(),
+        );
+        let (Some(path), Some(target), Some(pattern)) = texts else {
+            return Err(BROAD);
+        };
+        let (rooted, located) = located(path).ok_or(Fault("gitleaks_fixture_path"))?;
+        Ok(Place {
+            rooted,
+            located,
+            target,
+            pattern,
+        })
+    }
+}
+
+/// The path a pattern names and whether the pattern is anchored at the root,
+/// when the pattern is that path alone: every character stands for itself,
+/// or is punctuation after a backslash.
+fn located(pattern: &str) -> Option<(bool, String)> {
+    let body = pattern.strip_suffix('$')?;
+    let (rooted, body) = match body.strip_prefix("(^|/)") {
+        Some(body) => (false, body),
+        None => (true, body.strip_prefix('^')?),
+    };
+    let mut path = String::new();
+    let mut characters = body.chars();
+    while let Some(character) = characters.next() {
+        let escaped = |next: &char| next.is_ascii_punctuation() || *next == ' ';
+        path.push(match character {
+            '\\' => characters.next().filter(escaped)?,
+            '.' | '^' | '$' | '*' | '+' | '?' | '{' | '}' | '[' | ']' | '|' | '(' | ')' => {
+                return None;
+            }
+            plain => plain,
+        });
+    }
+    (!path.is_empty()).then_some((rooted, path))
+}
+
+fn fixture(entry: &Value) -> Result<Fixture<'_>> {
+    let fields = record::record(
+        entry,
+        &[
+            "description",
+            "condition",
+            "paths",
+            "regexTarget",
+            "regexes",
+        ],
+    )?;
+    let (paths, patterns) = (list(&fields["paths"])?, list(&fields["regexes"])?);
+    require(
+        fields["condition"] == "AND" && paths.len() == 1 && patterns.len() == 1,
+        BROAD.0,
+    )?;
+    Ok(Fixture {
+        entry,
+        description: record::string(&fields["description"])?,
+        path: &paths[0],
+        target: &fields["regexTarget"],
+        pattern: &patterns[0],
+    })
+}
+
+/// The public fixture allowlists of a configuration, each read when it is
+/// reached: the default rules stay on, and an allowlist is one path and one
+/// pattern joined by AND.
+pub(crate) fn fixtures(document: &Value) -> Result<impl Iterator<Item = Result<Fixture<'_>>>> {
+    let raw = record::record(document, &["title", "extend", "allowlists"])?;
+    require(
+        raw["extend"] == json!({"useDefault": true}),
+        "gitleaks_default_rules_required",
+    )?;
+    Ok(list(&raw["allowlists"])?.iter().map(fixture))
+}
+
 /// Every public fixture allowlist of the gitleaks configuration at `path` is
 /// exact, conjunctive and backed by a current review of its whole text.
 pub fn gitleaks_configuration(
@@ -121,50 +250,27 @@ pub fn gitleaks_configuration(
     reviews: &[Exception],
     include_vendor: bool,
 ) -> Result<()> {
-    let content = files::bounded(path, MAX_DOCUMENT, false)?;
-    let text = std::str::from_utf8(&content).map_err(|_| CONFIGURATION)?;
-    let value: Value = toml::from_str(text).map_err(|_| CONFIGURATION)?;
-    let raw = record::record(&value, &["title", "extend", "allowlists"])?;
-    require(
-        raw["extend"] == json!({"useDefault": true}),
-        "gitleaks_default_rules_required",
-    )?;
-    for value in list(&raw["allowlists"])? {
-        let entry = record::record(
-            value,
-            &[
-                "description",
-                "condition",
-                "paths",
-                "regexTarget",
-                "regexes",
-            ],
-        )?;
-        let (paths, patterns) = (list(&entry["paths"])?, list(&entry["regexes"])?);
-        require(
-            entry["condition"] == "AND" && paths.len() == 1 && patterns.len() == 1,
-            BROAD.0,
-        )?;
-        let description = record::string(&entry["description"])?;
-        let fixture = description
-            .strip_prefix("Public fixture: ")
-            .unwrap_or(description);
-        if !scope::selected(fixture, include_vendor) {
+    let document = configuration(path)?;
+    for fixture in fixtures(&document)? {
+        let fixture = fixture?;
+        let name = fixture.name();
+        if scope::selected(name, include_vendor) {
+            let mut spelled = String::new();
+            canonical(fixture.entry, &mut spelled)?;
+            let fingerprint = format!("public-fixture:{}", digest(spelled.as_bytes()));
+            require(
+                permitted(reviews, "gitleaks", &fingerprint, name),
+                "unreviewed_gitleaks_allowlist",
+            )?;
+        } else {
             // A vendor-only fixture cannot authorize a first-party path: its
             // pattern is the fixture itself, anchored at the repository root.
             require(
-                paths[0] == json!(format!("^{}$", literal(fixture))),
+                *fixture.path == json!(format!("^{}$", literal(name))),
                 "gitleaks_vendor_fixture_path",
             )?;
-            continue;
         }
-        let mut spelled = String::new();
-        canonical(value, &mut spelled)?;
-        let fingerprint = format!("public-fixture:{}", digest(spelled.as_bytes()));
-        require(
-            permitted(reviews, "gitleaks", &fingerprint, fixture),
-            "unreviewed_gitleaks_allowlist",
-        )?;
+        fixture.place()?;
     }
     Ok(())
 }

@@ -267,6 +267,9 @@ crates/security/src/findings/**
 !crates/security/src/context/
 crates/security/src/context/**
 !crates/security/src/context/*.rs
+!crates/security/src/secrets/
+crates/security/src/secrets/**
+!crates/security/src/secrets/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

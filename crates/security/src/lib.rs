@@ -2,8 +2,9 @@
 //! scanners the gate runs and verifies an installation before each use;
 //! `policy` reads the reviewed exceptions a finding may be matched against,
 //! `findings` holds each scanner's report to them, `scope` says which
-//! sources a diagnostic covers, and `context` runs an invocation's bounded
-//! commands and takes its private copy of the sources.
+//! sources a diagnostic covers, `context` runs an invocation's bounded
+//! commands and takes its private copy of the sources, and `secrets` turns
+//! that copy into what a secret scanner must read.
 
 pub mod context;
 pub(crate) mod files;
@@ -13,6 +14,7 @@ pub(crate) mod record;
 pub mod scope;
 #[cfg(test)]
 pub(crate) mod scratch;
+pub mod secrets;
 pub mod tools;
 
 /// A fixed failure code. It never carries scanner output, report contents or
@@ -35,13 +37,18 @@ pub(crate) fn require(held: bool, code: &'static str) -> Result<()> {
     if held { Ok(()) } else { Err(Fault(code)) }
 }
 
-/// The lowercase SHA-256 of `bytes`.
-pub(crate) fn digest(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
+/// `bytes` in lowercase hexadecimal.
+pub(crate) fn hexadecimal(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
-    let mut text = String::with_capacity(64);
-    for byte in sha2::Sha256::digest(bytes) {
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
         let _ = write!(text, "{byte:02x}");
     }
     text
+}
+
+/// The lowercase SHA-256 of `bytes`.
+pub(crate) fn digest(bytes: &[u8]) -> String {
+    use sha2::Digest as _;
+    hexadecimal(&sha2::Sha256::digest(bytes))
 }

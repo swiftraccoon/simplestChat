@@ -6,7 +6,7 @@
 //! its interpreter, `named` gives the code here; `STRICTER` names the inputs
 //! it admitted and these checks refuse.
 
-use super::{cargo, dependency_budget, gitleaks_configuration, new_migrations, zizmor};
+use super::{cargo, dependency_budget, gitleaks_configuration, located, new_migrations, zizmor};
 use crate::{
     Result,
     policy::{self, Date, Exception},
@@ -18,8 +18,9 @@ use std::{path::Path, time::Duration};
 const RECORDED: &str = include_str!("recorded_findings.json");
 
 /// A route step is text or a whole number; a time is written the one plain
-/// way; a schema is the number one; an allowlist holds no fraction.
-const STRICTER: [(&str, &str); 9] = [
+/// way; a schema is the number one; an allowlist holds no fraction, its path
+/// is a literal one between its anchors, and its target and pattern are text.
+const STRICTER: [(&str, &str); 15] = [
     ("a key that is a truth value", "zizmor_route"),
     ("a key that is null", "zizmor_route"),
     ("a key that is a fraction", "zizmor_route"),
@@ -43,6 +44,30 @@ const STRICTER: [(&str, &str); 9] = [
     (
         "a baseline whose schema is a truth value",
         "migration_baseline_schema",
+    ),
+    (
+        "a fixture path with pattern characters, reviewed",
+        "gitleaks_fixture_path",
+    ),
+    (
+        "a pattern that is a number, reviewed",
+        "gitleaks_broad_allowlist",
+    ),
+    (
+        "a target that is a truth value, reviewed",
+        "gitleaks_broad_allowlist",
+    ),
+    (
+        "a negative number for a target, reviewed",
+        "gitleaks_broad_allowlist",
+    ),
+    (
+        "a target that is a list of two, reviewed",
+        "gitleaks_broad_allowlist",
+    ),
+    (
+        "a target that is an empty list, reviewed",
+        "gitleaks_broad_allowlist",
     ),
 ];
 const FRACTION: (&str, &str) = (
@@ -114,6 +139,35 @@ fn settle(group: &str, case: &Value, judged: Result<Value>, tally: &mut Tally) {
     } else {
         assert_eq!(judged.as_ref().ok(), Some(result), "{group}: {name}");
         tally.0 += 1;
+    }
+}
+
+#[test]
+fn a_literal_path_is_one_whose_every_character_is_itself() {
+    let below = |path: &str| Some((false, path.to_owned()));
+    assert_eq!(located(r"(^|/)src/t\.rs$"), below("src/t.rs"));
+    assert_eq!(located(r"^src/t\.rs$"), Some((true, "src/t.rs".to_owned())));
+    assert_eq!(
+        located("(^|/)a-b_c d/\u{e9}~#&$"),
+        below("a-b_c d/\u{e9}~#&")
+    );
+    assert_eq!(located(r"(^|/)a\ b\-c\$\\$"), below(r"a b-c$\"));
+    for special in ".^$*+?{}[]|()".chars() {
+        assert_eq!(located(&format!("(^|/)a{special}b$")), None, "{special}");
+        let escaped = located(&format!(r"(^|/)a\{special}b$"));
+        assert_eq!(escaped, below(&format!("a{special}b")), "{special}");
+    }
+    for class in [
+        "d", "w", "s", "b", "n", "t", "A", "Z", "0", "1", "\u{e9}", "\t",
+    ] {
+        assert_eq!(located(&format!(r"(^|/)a\{class}$")), None, "{class}");
+    }
+    let refused = ["", "$", "^$", "(^|/)$", "src/t$", "(^|/)src/t", "^src/t"];
+    for pattern in refused
+        .into_iter()
+        .chain([r"(^|/)t\", "(^|/)(^|/)t$", "^(^|/)t$"])
+    {
+        assert_eq!(located(pattern), None, "{pattern}");
     }
 }
 
@@ -239,7 +293,7 @@ fn every_recorded_gitleaks_configuration_is_judged_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(15, 28, 1));
+    assert_eq!(tally, Tally(9, 28, 7));
 }
 
 #[test]
