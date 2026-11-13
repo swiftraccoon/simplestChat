@@ -137,7 +137,11 @@ An inline `gitleaks:allow` comment must not suppress it. The current-tree scan
 and the selected Git diff scans must then return both a successful exit status
 and an explicit empty findings array. Fixture allowances retain their exact
 review fingerprints and original paths; translating a fixture to its neutral
-filename never exempts the same value elsewhere.
+filename never exempts the same value elsewhere. An allowance for a fixture
+below `vendor/` needs no review while vendored sources are outside the scan,
+so its one path must be that file anchored at the repository root
+(`^vendor/...$`): a pattern that could also match below a first-party
+directory is refused as `gitleaks_vendor_fixture_path`.
 
 This is printable-string detection, with up to three scanner decoding passes
 for supported encodings. It does not decrypt or unpack arbitrary content, decode

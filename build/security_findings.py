@@ -66,7 +66,7 @@ def gitleaks_configuration(
         if not selected(scope, include_vendor=include_vendor):
             # A vendor-only fixture cannot authorize a first-party path.
             require(
-                paths == ["(^|/)" + re.escape(scope) + "$"],
+                paths == ["^" + re.escape(scope) + "$"],
                 "gitleaks_vendor_fixture_path",
             )
             continue
