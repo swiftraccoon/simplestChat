@@ -4,9 +4,10 @@
 
 use super::{
     Fault, Limits, Result, digest,
-    lock::{Asset, Format, safe_name},
+    lock::{Asset, Format},
     require,
 };
+use crate::record::safe_name;
 use rawzip::{CompressionMethod, ZipArchive, ZipArchiveEntryWayfinder, extra_fields::ExtraFieldId};
 use std::{
     collections::BTreeSet,

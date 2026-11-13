@@ -11,6 +11,7 @@ use super::{
     lock::{Asset, Format, Lock},
     path, platform, transport,
 };
+use crate::scratch::Scratch;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -94,27 +95,6 @@ fn base64(text: &str) -> Vec<u8> {
         }
     }
     bytes
-}
-
-/// A directory of one test's own, removed with it.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "simplestchat-security-{}-{name}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).expect("scratch directory");
-        Self(path.canonicalize().expect("scratch path"))
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
 }
 
 #[test]

@@ -11,7 +11,6 @@
 
 mod archive;
 mod cli;
-mod files;
 mod install;
 mod lock;
 mod transport;
@@ -19,6 +18,8 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
+pub use crate::{Fault, Result};
+use crate::{digest, files, require};
 pub use cli::run;
 pub use install::{Site, install, path};
 pub use transport::{Answer, Curl, Transport};
@@ -33,21 +34,6 @@ pub const FAST_TOOLS: [&str; 7] = [
     "squawk",
     "semgrep-core",
 ];
-
-/// A fixed failure code. It never carries scanner output or downloaded bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Fault(pub &'static str);
-
-impl std::fmt::Display for Fault {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.0)
-    }
-}
-
-impl std::error::Error for Fault {}
-
-/// The installer's verdicts.
-pub type Result<T> = std::result::Result<T, Fault>;
 
 /// The bounds one installation works within.
 #[derive(Clone, Copy, Debug)]
@@ -70,21 +56,6 @@ impl Limits {
         members: 10_000,
         unpacked: 512 * 1024 * 1024,
     };
-}
-
-fn require(held: bool, code: &'static str) -> Result<()> {
-    if held { Ok(()) } else { Err(Fault(code)) }
-}
-
-/// The lowercase SHA-256 of `bytes`.
-fn digest(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    use std::fmt::Write as _;
-    let mut text = String::with_capacity(64);
-    for byte in sha2::Sha256::digest(bytes) {
-        let _ = write!(text, "{byte:02x}");
-    }
-    text
 }
 
 /// The four platforms a lock may name, from the kernel's own two names.

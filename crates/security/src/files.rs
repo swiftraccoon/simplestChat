@@ -1,7 +1,7 @@
 //! Owned files and directories: nothing is read through a final link, and
 //! nothing another account could have written is trusted.
 
-use super::{Fault, Result, require};
+use crate::{Fault, Result, require};
 use rustix::fs::{Mode, OFlags};
 use std::{
     fs::{File, OpenOptions},
@@ -11,7 +11,7 @@ use std::{
 };
 
 /// An entry that is not there, or one that cannot be used.
-pub(super) fn unusable(error: &std::io::Error) -> Fault {
+pub(crate) fn unusable(error: &std::io::Error) -> Fault {
     if error.kind() == std::io::ErrorKind::NotFound {
         Fault("tool_entry_missing")
     } else {
@@ -25,7 +25,7 @@ fn owned(metadata: &std::fs::Metadata) -> bool {
 
 /// The whole of a regular, nonempty file of at most `limit` bytes. A `private`
 /// file must also be the caller's own and writable by nobody else.
-pub(super) fn bounded(path: &Path, limit: u64, private: bool) -> Result<Vec<u8>> {
+pub(crate) fn bounded(path: &Path, limit: u64, private: bool) -> Result<Vec<u8>> {
     let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
     let file = rustix::fs::open(path, flags, Mode::empty())
         .map(File::from)
@@ -46,7 +46,7 @@ pub(super) fn bounded(path: &Path, limit: u64, private: bool) -> Result<Vec<u8>>
 }
 
 /// A real directory of the caller's that nobody else may write.
-pub(super) fn private_directory(path: &Path) -> Result<()> {
+pub(crate) fn private_directory(path: &Path) -> Result<()> {
     let metadata = path.symlink_metadata().map_err(|error| unusable(&error))?;
     require(
         metadata.is_dir() && owned(&metadata),
@@ -56,7 +56,7 @@ pub(super) fn private_directory(path: &Path) -> Result<()> {
 
 /// Create `path` and nothing else, and have its bytes on disk before it is
 /// published.
-pub(super) fn write_private(path: &Path, content: &[u8], mode: u32) -> Result<()> {
+pub(crate) fn write_private(path: &Path, content: &[u8], mode: u32) -> Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)

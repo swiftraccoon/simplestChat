@@ -2,10 +2,11 @@
 
 use super::{
     FAST_TOOLS, Fault, Limits, Result, archive, digest, files,
-    lock::{self, Lock},
+    lock::Lock,
     require,
     transport::{self, Transport},
 };
+use crate::record;
 use serde_json::Value;
 use std::{
     collections::BTreeSet,
@@ -233,9 +234,9 @@ fn verified(site: &Site<'_>, lock: &Lock, name: &str, root: &Path) -> Result<Pat
     let bin = root.join("bin");
     files::private_directory(root)?;
     files::private_directory(&bin)?;
-    let content = files::bounded(&root.join("receipt.json"), lock::MAX_DOCUMENT, true)?;
-    let value = lock::document(&content)?;
-    let receipt = lock::record(
+    let content = files::bounded(&root.join("receipt.json"), record::MAX_DOCUMENT, true)?;
+    let value = record::document(&content)?;
+    let receipt = record::record(
         &value,
         &["schemaVersion", "lockSha256", "platform", "tools"],
     )?;
@@ -252,14 +253,14 @@ fn verified(site: &Site<'_>, lock: &Lock, name: &str, root: &Path) -> Result<Pat
         return Err(Fault("tool_receipt_tools"));
     };
     let item = installed.get(name).ok_or(Fault("tool_not_installed"))?;
-    let item = lock::record(item, &["version", "archiveSha256", "files"])?;
+    let item = record::record(item, &["version", "archiveSha256", "files"])?;
     require(
         item["version"].as_str() == Some(&tool.version)
             && item["archiveSha256"].as_str() == Some(&asset.sha256),
         "tool_receipt_identity",
     )?;
     let destinations: Vec<&str> = asset.files.values().map(String::as_str).collect();
-    for (destination, expected) in lock::record(&item["files"], &destinations)? {
+    for (destination, expected) in record::record(&item["files"], &destinations)? {
         let mut above = Path::new(destination).parent();
         while let Some(directory) = above.filter(|path| !path.as_os_str().is_empty()) {
             files::private_directory(&bin.join(directory))?;

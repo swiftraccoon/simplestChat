@@ -258,6 +258,9 @@ crates/security/src/**
 !crates/security/src/tools/
 crates/security/src/tools/**
 !crates/security/src/tools/*.rs
+!crates/security/src/policy/
+crates/security/src/policy/**
+!crates/security/src/policy/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml
