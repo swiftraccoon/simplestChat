@@ -1,0 +1,6682 @@
+{
+ "documents": [
+  {
+   "text": "{}\n",
+   "value": {}
+  },
+  {
+   "text": "[]\n",
+   "value": []
+  },
+  {
+   "text": "{\n  \"a\": 1\n}\n",
+   "value": {
+    "a": 1
+   }
+  },
+  {
+   "text": "[\n  1\n]\n",
+   "value": [
+    1
+   ]
+  },
+  {
+   "text": "\"text\"\n",
+   "value": "text"
+  },
+  {
+   "text": "7\n",
+   "value": 7
+  },
+  {
+   "text": "-7\n",
+   "value": -7
+  },
+  {
+   "text": "0\n",
+   "value": 0
+  },
+  {
+   "text": "true\n",
+   "value": true
+  },
+  {
+   "text": "false\n",
+   "value": false
+  },
+  {
+   "text": "null\n",
+   "value": null
+  },
+  {
+   "text": "{\n  \"\": 9,\n  \"C\": 3,\n  \"_\": 4,\n  \"a\": 1,\n  \"a-\": 6,\n  \"a0\": 5,\n  \"b\": 2,\n  \"\\u00e9\": 7,\n  \"\\ud83d\\ude00\": 8\n}\n",
+   "value": {
+    "": 9,
+    "C": 3,
+    "_": 4,
+    "a": 1,
+    "a-": 6,
+    "a0": 5,
+    "b": 2,
+    "\u00e9": 7,
+    "\ud83d\ude00": 8
+   }
+  },
+  {
+   "text": "[\n  1,\n  \"two\",\n  null,\n  true,\n  false,\n  [],\n  {},\n  [\n    []\n  ],\n  [\n    {}\n  ],\n  {\n    \"k\": []\n  },\n  {\n    \"k\": {}\n  }\n]\n",
+   "value": [
+    1,
+    "two",
+    null,
+    true,
+    false,
+    [],
+    {},
+    [
+     []
+    ],
+    [
+     {}
+    ],
+    {
+     "k": []
+    },
+    {
+     "k": {}
+    }
+   ]
+  },
+  {
+   "text": "{\n  \"empty\": {\n    \"list\": [],\n    \"record\": {}\n  },\n  \"list\": [\n    1,\n    2,\n    [\n      3,\n      [\n        4,\n        [\n          5\n        ]\n      ]\n    ]\n  ],\n  \"record\": {\n    \"inner\": {\n      \"innermost\": {\n        \"deep\": [\n          {\n            \"x\": 1\n          },\n          {\n            \"y\": [\n              2\n            ]\n          }\n        ]\n      }\n    }\n  }\n}\n",
+   "value": {
+    "empty": {
+     "list": [],
+     "record": {}
+    },
+    "list": [
+     1,
+     2,
+     [
+      3,
+      [
+       4,
+       [
+        5
+       ]
+      ]
+     ]
+    ],
+    "record": {
+     "inner": {
+      "innermost": {
+       "deep": [
+        {
+         "x": 1
+        },
+        {
+         "y": [
+          2
+         ]
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "text": "{\n  \"backslash\": \"a\\\\b\",\n  \"controls\": \"\\n\\r\\t\\b\\f\\u0000\\u001f\\u007f\",\n  \"key \\\"q\\\" \\u00e9\": \"v\",\n  \"outside\": \"caf\\u00e9 \\u2603 \\ud83d\\ude00\",\n  \"quote\": \"say \\\"hi\\\"\",\n  \"text\": \"plain\"\n}\n",
+   "value": {
+    "backslash": "a\\b",
+    "controls": "\n\r\t\b\f\u0000\u001f\u007f",
+    "key \"q\" \u00e9": "v",
+    "outside": "caf\u00e9 \u2603 \ud83d\ude00",
+    "quote": "say \"hi\"",
+    "text": "plain"
+   }
+  },
+  {
+   "text": "{\n  \"entries\": {\n    \"source000000\": {\n      \"path\": \"a\",\n      \"sourceBytes\": 4\n    },\n    \"source000001\": {\n      \"path\": \"b\",\n      \"sourceBytes\": 0\n    }\n  },\n  \"files\": 2,\n  \"includeVendor\": false,\n  \"limitations\": [\n    \"one\",\n    \"two\"\n  ],\n  \"schemaVersion\": 1\n}\n",
+   "value": {
+    "entries": {
+     "source000000": {
+      "path": "a",
+      "sourceBytes": 4
+     },
+     "source000001": {
+      "path": "b",
+      "sourceBytes": 0
+     }
+    },
+    "files": 2,
+    "includeVendor": false,
+    "limitations": [
+     "one",
+     "two"
+    ],
+    "schemaVersion": 1
+   }
+  },
+  {
+   "text": "[\n  [\n    1,\n    2\n  ],\n  [\n    3,\n    4\n  ]\n]\n",
+   "value": [
+    [
+     1,
+     2
+    ],
+    [
+     3,
+     4
+    ]
+   ]
+  },
+  {
+   "text": "{\n  \"m\": -9223372036854775808,\n  \"n\": 18446744073709551615,\n  \"z\": 0\n}\n",
+   "value": {
+    "m": -9223372036854775808,
+    "n": 18446744073709551615,
+    "z": 0
+   }
+  }
+ ],
+ "environments": [
+  {
+   "ambient": {
+    "HOME": "/home/someone"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "nothing ambient on Linux",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/home/someone/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/home/someone/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/Users/someone"
+   },
+   "existing": false,
+   "linux": false,
+   "name": "nothing ambient on a Mac",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/Users/someone/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "en_US.UTF-8",
+     "LC_ALL": "en_US.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/Users/someone/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h",
+    "PATH": "/opt/bin:/usr/bin"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a path",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/opt/bin:/usr/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h",
+    "PATH": ""
+   },
+   "existing": false,
+   "linux": true,
+   "name": "an empty path",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "CARGO_HOME": "/c",
+    "HOME": "/h",
+    "RUSTUP_HOME": "/r"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "Cargo and rustup homes",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/c",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/r",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "CARGO_HOME": "",
+    "HOME": "/h",
+    "RUSTUP_HOME": ""
+   },
+   "existing": false,
+   "linux": false,
+   "name": "empty Cargo and rustup homes",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "en_US.UTF-8",
+     "LC_ALL": "en_US.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h",
+    "SSL_CERT_DIR": "/d",
+    "SSL_CERT_FILE": "/f",
+    "TMPDIR": "/t"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "certificate and temporary directories",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off",
+     "SSL_CERT_DIR": "/d",
+     "SSL_CERT_FILE": "/f",
+     "TMPDIR": "/t"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h",
+    "SSL_CERT_FILE": ""
+   },
+   "existing": false,
+   "linux": true,
+   "name": "an empty certificate file",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off",
+     "SSL_CERT_FILE": ""
+    }
+   }
+  },
+  {
+   "ambient": {
+    "CARGO_TARGET_DIR": "/y",
+    "CI": "true",
+    "GH_TOKEN": "t",
+    "GITHUB_TOKEN": "t",
+    "GIT_CONFIG_GLOBAL": "/x",
+    "GIT_DIR": "/g",
+    "HOME": "/h",
+    "LANG": "fr_FR",
+    "LC_ALL": "fr_FR",
+    "NO_COLOR": "",
+    "NPM_TOKEN": "t",
+    "PYTHONPATH": "/p",
+    "PYTHONSTARTUP": "/s",
+    "RUSTFLAGS": "-C x",
+    "SEMGREP_APP_TOKEN": "t",
+    "SSL_CERT": "n",
+    "TMP": "/q"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "credentials and hooks",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h"
+   },
+   "existing": true,
+   "linux": true,
+   "name": "a home that exists",
+   "result": {
+    "code": "FileExistsError"
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h/"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home with a trailing separator",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home that is the root",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "//"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home of two separators",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "///"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home of three separators",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "//h/x"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home that starts with two separators",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "//h/x/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "//h/x/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "///h/x"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home that starts with three separators",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/x/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/x/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h//x///y"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home with doubled separators inside",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/x/y/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/x/y/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h/./x/."
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home with current-directory steps",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/x/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/x/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/h/../x"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home with a parent step",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/h/../x/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/h/../x/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": ""
+   },
+   "existing": false,
+   "linux": true,
+   "name": "an empty home",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "h/x"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a relative home",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "h/x/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "h/x/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "."
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home that is the current directory",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": ".cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": ".rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "HOME": "/caf\u00e9"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "a home outside ASCII",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/caf\u00e9/.cargo",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/caf\u00e9/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "CARGO_HOME": "/c",
+    "RUSTUP_HOME": "/r"
+   },
+   "existing": false,
+   "linux": true,
+   "name": "no home but both tool homes",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/c",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/r",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  },
+  {
+   "ambient": {
+    "CARGO_HOME": "/c",
+    "HOME": ""
+   },
+   "existing": false,
+   "linux": true,
+   "name": "an empty home and one tool home",
+   "result": {
+    "mode": 448,
+    "variables": {
+     "CARGO_HOME": "/c",
+     "GIT_CONFIG_GLOBAL": "/dev/null",
+     "GIT_CONFIG_SYSTEM": "/dev/null",
+     "GIT_TERMINAL_PROMPT": "0",
+     "HOME": "<output>/home",
+     "LANG": "C.UTF-8",
+     "LC_ALL": "C.UTF-8",
+     "NO_COLOR": "1",
+     "PATH": "/usr/bin:/bin",
+     "PIP_CONFIG_FILE": "/dev/null",
+     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+     "PYTHONDONTWRITEBYTECODE": "1",
+     "PYTHONNOUSERSITE": "1",
+     "RUSTUP_HOME": "/.rustup",
+     "SEMGREP_SEND_METRICS": "off"
+    }
+   }
+  }
+ ],
+ "executables": [
+  {
+   "layout": {
+    "a/git": "program"
+   },
+   "name": "in the only directory",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/a/git"
+   }
+  },
+  {
+   "layout": {
+    "a/other": "program",
+    "b/git": "program"
+   },
+   "name": "in the second directory",
+   "path": [
+    "a",
+    "b"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/b/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program",
+    "b/git": "program"
+   },
+   "name": "in both directories",
+   "path": [
+    "a",
+    "b"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/a/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "plain",
+    "b/git": "program"
+   },
+   "name": "the first is not executable",
+   "path": [
+    "a",
+    "b"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/b/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "directory",
+    "b/git": "program"
+   },
+   "name": "the first is a directory",
+   "path": [
+    "a",
+    "b"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/b/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "plain"
+   },
+   "name": "only a file that is not executable",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "directory"
+   },
+   "name": "only a directory",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "a/other": "program"
+   },
+   "name": "nowhere",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "b/git": "program"
+   },
+   "name": "a directory that is missing",
+   "path": [
+    "a",
+    "b"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/b/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "link",
+    "a/real": "program"
+   },
+   "name": "a link to the program",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/a/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "link",
+    "a/real": "plain"
+   },
+   "name": "a link to a file that is not executable",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "link"
+   },
+   "name": "a link to nothing",
+   "path": [
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program"
+   },
+   "name": "an empty search path",
+   "path": [],
+   "program": "git",
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   }
+  },
+  {
+   "layout": {
+    "a/npm": "program"
+   },
+   "name": "another program",
+   "path": [
+    "a"
+   ],
+   "program": "npm",
+   "result": {
+    "path": "<base>/a/npm"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program"
+   },
+   "name": "another program that is missing",
+   "path": [
+    "a"
+   ],
+   "program": "npm",
+   "result": {
+    "code": "missing_security_prerequisite_npm"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program"
+   },
+   "name": "the same directory twice",
+   "path": [
+    "a",
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/a/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program"
+   },
+   "name": "an empty entry before the directory",
+   "path": [
+    "",
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "<base>/a/git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program",
+    "git": "program"
+   },
+   "name": "an empty entry and the program in the working directory",
+   "path": [
+    "",
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "git"
+   }
+  },
+  {
+   "layout": {
+    "a/git": "program",
+    "rel/git": "program"
+   },
+   "name": "a relative entry with the program",
+   "path": [
+    "rel",
+    "a"
+   ],
+   "program": "git",
+   "result": {
+    "path": "rel/git"
+   }
+  },
+  {
+   "layout": {
+    "rel/git": "program"
+   },
+   "name": "a relative entry alone",
+   "path": [
+    "rel"
+   ],
+   "program": "git",
+   "result": {
+    "path": "rel/git"
+   }
+  }
+ ],
+ "runs": [
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "first"
+    }
+   ],
+   "files": {
+    "01-first.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-first.stdout": {
+     "mode": 384,
+     "text": "hello"
+    }
+   },
+   "name": "one command that prints",
+   "report": null,
+   "results": [
+    {
+     "output": "hello",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf hello"
+     ],
+     "check": "first"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "quiet"
+    }
+   ],
+   "files": {
+    "01-quiet.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-quiet.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command that prints nothing",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "quiet"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "both"
+    }
+   ],
+   "files": {
+    "01-both.stderr": {
+     "mode": 384,
+     "text": "err"
+    },
+    "01-both.stdout": {
+     "mode": 384,
+     "text": "out"
+    }
+   },
+   "name": "a command that prints to both streams",
+   "report": null,
+   "results": [
+    {
+     "output": "out",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf out; printf err >&2"
+     ],
+     "check": "both"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "one"
+    },
+    {
+     "exitStatus": 0,
+     "name": "two"
+    },
+    {
+     "exitStatus": 0,
+     "name": "three"
+    }
+   ],
+   "files": {
+    "01-one.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-one.stdout": {
+     "mode": 384,
+     "text": "1"
+    },
+    "02-two.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-two.stdout": {
+     "mode": 384,
+     "text": "2"
+    },
+    "03-three.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "03-three.stdout": {
+     "mode": 384,
+     "text": "3"
+    }
+   },
+   "name": "three commands in turn",
+   "report": null,
+   "results": [
+    {
+     "output": "1",
+     "status": 0
+    },
+    {
+     "output": "2",
+     "status": 0
+    },
+    {
+     "output": "3",
+     "status": 0
+    }
+   ],
+   "sequence": 3,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf 1"
+     ],
+     "check": "one"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf 2"
+     ],
+     "check": "two"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf 3"
+     ],
+     "check": "three"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "n"
+    },
+    {
+     "exitStatus": 0,
+     "name": "tenth"
+    }
+   ],
+   "files": {
+    "01-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "03-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "03-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "04-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "04-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "05-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "05-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "06-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "06-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "07-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "07-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "08-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "08-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "09-n.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "09-n.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "10-tenth.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "10-tenth.stdout": {
+     "mode": 384,
+     "text": "x"
+    }
+   },
+   "name": "a tenth command",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "",
+     "status": 0
+    },
+    {
+     "output": "x",
+     "status": 0
+    }
+   ],
+   "sequence": 10,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "n"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf x"
+     ],
+     "check": "tenth"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "same"
+    },
+    {
+     "exitStatus": 0,
+     "name": "same"
+    }
+   ],
+   "files": {
+    "01-same.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-same.stdout": {
+     "mode": 384,
+     "text": "a"
+    },
+    "02-same.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-same.stdout": {
+     "mode": 384,
+     "text": "b"
+    }
+   },
+   "name": "the same name twice",
+   "report": null,
+   "results": [
+    {
+     "output": "a",
+     "status": 0
+    },
+    {
+     "output": "b",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf a"
+     ],
+     "check": "same"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf b"
+     ],
+     "check": "same"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "fails"
+    }
+   ],
+   "files": {
+    "01-fails.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-fails.stdout": {
+     "mode": 384,
+     "text": "seen"
+    }
+   },
+   "name": "a failing command",
+   "report": null,
+   "results": [
+    {
+     "code": "scanner_command_failed_fails"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf seen; exit 1"
+     ],
+     "check": "fails"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "fails"
+    }
+   ],
+   "files": {
+    "01-fails.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-fails.stdout": {
+     "mode": 384,
+     "text": "seen"
+    }
+   },
+   "name": "a failing command that is accepted",
+   "report": null,
+   "results": [
+    {
+     "output": "seen",
+     "status": 1
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      0,
+      1
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf seen; exit 1"
+     ],
+     "check": "fails"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 2,
+     "name": "odd"
+    }
+   ],
+   "files": {
+    "01-odd.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-odd.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a status outside the accepted ones",
+   "report": null,
+   "results": [
+    {
+     "code": "scanner_command_failed_odd"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      0,
+      1
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "exit 2"
+     ],
+     "check": "odd"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "inverse"
+    }
+   ],
+   "files": {
+    "01-inverse.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-inverse.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "success where only failure is accepted",
+   "report": null,
+   "results": [
+    {
+     "code": "scanner_command_failed_inverse"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      1
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "inverse"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 255,
+     "name": "last"
+    }
+   ],
+   "files": {
+    "01-last.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-last.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "status 255",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": 255
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      255
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "exit 255"
+     ],
+     "check": "last"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 3,
+     "name": "fails"
+    },
+    {
+     "exitStatus": 0,
+     "name": "next"
+    }
+   ],
+   "files": {
+    "01-fails.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-fails.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stdout": {
+     "mode": 384,
+     "text": "after"
+    }
+   },
+   "name": "a command after a failed one",
+   "report": null,
+   "results": [
+    {
+     "code": "scanner_command_failed_fails"
+    },
+    {
+     "output": "after",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "exit 3"
+     ],
+     "check": "fails"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf after"
+     ],
+     "check": "next"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": -9,
+     "name": "killed"
+    }
+   ],
+   "files": {
+    "01-killed.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-killed.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command killed by a signal",
+   "report": null,
+   "results": [
+    {
+     "code": "scanner_command_failed_killed"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "kill -9 $$"
+     ],
+     "check": "killed"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": -9,
+     "name": "killed"
+    }
+   ],
+   "files": {
+    "01-killed.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-killed.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command killed by a signal that is accepted",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": -9
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      -9
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "kill -9 $$"
+     ],
+     "check": "killed"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": -15,
+     "name": "ended"
+    }
+   ],
+   "files": {
+    "01-ended.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-ended.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command ended by TERM",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": -15
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      0,
+      -15
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "kill -15 $$"
+     ],
+     "check": "ended"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "reads"
+    }
+   ],
+   "files": {
+    "01-reads.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-reads.stdout": {
+     "mode": 384,
+     "text": "given\ntext\n"
+    }
+   },
+   "name": "input for the command",
+   "report": null,
+   "results": [
+    {
+     "output": "given\ntext\n",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "cat"
+     ],
+     "check": "reads",
+     "input": "given\ntext\n"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "ignores"
+    }
+   ],
+   "files": {
+    "01-ignores.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-ignores.stdout": {
+     "mode": 384,
+     "text": "done"
+    }
+   },
+   "name": "input nobody reads",
+   "report": null,
+   "results": [
+    {
+     "output": "done",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf done"
+     ],
+     "check": "ignores",
+     "input": "unread"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "empty"
+    }
+   ],
+   "files": {
+    "01-empty.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-empty.stdout": {
+     "mode": 384,
+     "text": "end"
+    }
+   },
+   "name": "no input is an empty stream",
+   "report": null,
+   "results": [
+    {
+     "output": "end",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "cat; printf end"
+     ],
+     "check": "empty"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "variables"
+    }
+   ],
+   "files": {
+    "01-variables.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-variables.stdout": {
+     "mode": 384,
+     "text": "en_US.UTF-8|0|1|off|<output>/home|unsetunset"
+    }
+   },
+   "name": "the fixed environment",
+   "report": null,
+   "results": [
+    {
+     "output": "en_US.UTF-8|0|1|off|<output>/home|unsetunset",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf '%s|%s|%s|%s|%s|%s' \"$LANG\" \"$GIT_TERMINAL_PROMPT\" \"$NO_COLOR\" \"$SEMGREP_SEND_METRICS\" \"$HOME\" \"${GH_TOKEN-unset}${CARGO_PKG_NAME-unset}\""
+     ],
+     "check": "variables"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "with"
+    },
+    {
+     "exitStatus": 0,
+     "name": "without"
+    }
+   ],
+   "files": {
+    "01-with.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-with.stdout": {
+     "mode": 384,
+     "text": "once"
+    },
+    "02-without.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-without.stdout": {
+     "mode": 384,
+     "text": "unset"
+    }
+   },
+   "name": "a variable for one command",
+   "report": null,
+   "results": [
+    {
+     "output": "once",
+     "status": 0
+    },
+    {
+     "output": "unset",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf \"$EXTRA\""
+     ],
+     "check": "with",
+     "variables": {
+      "EXTRA": "once"
+     }
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf \"${EXTRA-unset}\""
+     ],
+     "check": "without"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "replaced"
+    }
+   ],
+   "files": {
+    "01-replaced.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-replaced.stdout": {
+     "mode": 384,
+     "text": "0 C"
+    }
+   },
+   "name": "a fixed variable replaced for one command",
+   "report": null,
+   "results": [
+    {
+     "output": "0 C",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf \"$NO_COLOR $LANG\""
+     ],
+     "check": "replaced",
+     "variables": {
+      "LANG": "C",
+      "NO_COLOR": "0"
+     }
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "where"
+    }
+   ],
+   "files": {
+    "01-where.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-where.stdout": {
+     "mode": 384,
+     "text": "<root>\n"
+    }
+   },
+   "name": "the root is the working directory",
+   "report": null,
+   "results": [
+    {
+     "output": "<root>\n",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "pwd -P"
+     ],
+     "check": "where"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "where"
+    }
+   ],
+   "files": {
+    "01-where.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-where.stdout": {
+     "mode": 384,
+     "text": "<root>/below\n"
+    }
+   },
+   "name": "another working directory",
+   "report": null,
+   "results": [
+    {
+     "output": "<root>/below\n",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "pwd -P"
+     ],
+     "below": true,
+     "check": "where"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "next"
+    }
+   ],
+   "files": {
+    "01-missing.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-missing.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stdout": {
+     "mode": 384,
+     "text": "after"
+    }
+   },
+   "name": "a program that is missing",
+   "report": null,
+   "results": [
+    {
+     "code": "FileNotFoundError"
+    },
+    {
+     "output": "after",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/nonexistent/program"
+     ],
+     "check": "missing"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf after"
+     ],
+     "check": "next"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-plain.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-plain.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a program that is not executable",
+   "report": null,
+   "results": [
+    {
+     "code": "PermissionError"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/etc/hosts"
+     ],
+     "check": "plain"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "an empty name",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": ""
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name with a separator",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "a/b"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name that leaves the directory",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": ".."
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name that is the directory",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "."
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name with a backslash",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "a\\b"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name with a control character",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "a\tb"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "a b"
+    }
+   ],
+   "files": {
+    "01-a b.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-a b.stdout": {
+     "mode": 384,
+     "text": "spaced"
+    }
+   },
+   "name": "a name with a space",
+   "report": null,
+   "results": [
+    {
+     "output": "spaced",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf spaced"
+     ],
+     "check": "a b"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "a.b"
+    }
+   ],
+   "files": {
+    "01-a.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-a.stdout": {
+     "mode": 384,
+     "text": "pointed"
+    }
+   },
+   "name": "a name with a point",
+   "report": null,
+   "results": [
+    {
+     "output": "pointed",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf pointed"
+     ],
+     "check": "a.b"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "a."
+    }
+   ],
+   "files": {
+    "01-a.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-a.stdout": {
+     "mode": 384,
+     "text": "pointed"
+    }
+   },
+   "name": "a name that ends with a point",
+   "report": null,
+   "results": [
+    {
+     "output": "pointed",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf pointed"
+     ],
+     "check": "a."
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": ".a"
+    }
+   ],
+   "files": {
+    "01-.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-.stdout": {
+     "mode": 384,
+     "text": "pointed"
+    }
+   },
+   "name": "a name that starts with a point",
+   "report": null,
+   "results": [
+    {
+     "output": "pointed",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf pointed"
+     ],
+     "check": ".a"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "caf\u00e9"
+    }
+   ],
+   "files": {
+    "01-caf\u00e9.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-caf\u00e9.stdout": {
+     "mode": 384,
+     "text": "accented"
+    }
+   },
+   "name": "a name outside ASCII",
+   "report": null,
+   "results": [
+    {
+     "output": "accented",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf accented"
+     ],
+     "check": "caf\u00e9"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name too long for a file",
+   "report": null,
+   "results": [
+    {
+     "code": "OSError"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name of 512 characters",
+   "report": null,
+   "results": [
+    {
+     "code": "OSError"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {},
+   "name": "a name of 513 characters",
+   "report": null,
+   "results": [
+    {
+     "code": "invalid_scanner_check_name"
+    }
+   ],
+   "sequence": 0,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [
+    "01-taken.stdout"
+   ],
+   "checks": [],
+   "files": {
+    "01-taken.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "an output file that exists",
+   "report": null,
+   "results": [
+    {
+     "code": "FileExistsError"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "taken"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [
+    "01-taken.stderr"
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "next"
+    }
+   ],
+   "files": {
+    "01-taken.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-taken.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stdout": {
+     "mode": 384,
+     "text": "after"
+    }
+   },
+   "name": "an error file that exists",
+   "report": null,
+   "results": [
+    {
+     "code": "FileExistsError"
+    },
+    {
+     "output": "after",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "true"
+     ],
+     "check": "taken"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf after"
+     ],
+     "check": "next"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "full"
+    }
+   ],
+   "files": {
+    "01-full.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-full.stdout": {
+     "mode": 384,
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "name": "output at the limit",
+   "report": 64,
+   "results": [
+    {
+     "output": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 64 /dev/zero | tr '\\0' x"
+     ],
+     "check": "full"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "next"
+    }
+   ],
+   "files": {
+    "01-over.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-over.stdout": {
+     "mode": 384,
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "02-next.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stdout": {
+     "mode": 384,
+     "text": "after"
+    }
+   },
+   "name": "output a byte past the limit",
+   "report": 64,
+   "results": [
+    {
+     "code": "command_stdout_limit_exceeded"
+    },
+    {
+     "output": "after",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 65 /dev/zero | tr '\\0' x"
+     ],
+     "check": "over"
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf after"
+     ],
+     "check": "next"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "full"
+    }
+   ],
+   "files": {
+    "01-full.stderr": {
+     "mode": 384,
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "01-full.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "errors at the limit",
+   "report": 64,
+   "results": [
+    {
+     "output": "",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 64 /dev/zero | tr '\\0' x >&2"
+     ],
+     "check": "full"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-over.stderr": {
+     "mode": 384,
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    "01-over.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "errors a byte past the limit",
+   "report": 64,
+   "results": [
+    {
+     "code": "command_stderr_limit_exceeded"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 65 /dev/zero | tr '\\0' x >&2"
+     ],
+     "check": "over"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-parts.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-parts.stdout": {
+     "mode": 384,
+     "text": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   },
+   "name": "output past the limit in two parts",
+   "report": 64,
+   "results": [
+    {
+     "code": "command_stdout_limit_exceeded"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf '%040d' 0; sleep 0.3; printf '%040d' 0"
+     ],
+     "check": "parts"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-parts.stderr": {
+     "mode": 384,
+     "text": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "01-parts.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "errors past the limit in two parts",
+   "report": 64,
+   "results": [
+    {
+     "code": "command_stderr_limit_exceeded"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf '%040d' 0 >&2; sleep 0.3; printf '%040d' 0 >&2"
+     ],
+     "check": "parts"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 3,
+     "name": "closes"
+    }
+   ],
+   "files": {
+    "01-closes.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-closes.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command that closes its streams and goes on",
+   "report": null,
+   "results": [
+    {
+     "output": "",
+     "status": 3
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "accepted": [
+      3
+     ],
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "exec >&- 2>&-; sleep 0.3; exit 3"
+     ],
+     "check": "closes",
+     "timeout": 10
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-closes.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-closes.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command that closes its streams and passes its time",
+   "report": null,
+   "results": [
+    {
+     "code": "command_timed_out"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "exec >&- 2>&-; sleep 5"
+     ],
+     "check": "closes",
+     "timeout": 0.3
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "large"
+    }
+   ],
+   "files": {
+    "01-large.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-large.stdout": {
+     "bytes": 1048576,
+     "mode": 384
+    }
+   },
+   "name": "a megabyte of output",
+   "report": null,
+   "results": [
+    {
+     "bytes": 1048576,
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 1048576 /dev/zero | tr '\\0' x"
+     ],
+     "check": "large"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "large"
+    }
+   ],
+   "files": {
+    "01-large.stderr": {
+     "bytes": 1048576,
+     "mode": 384
+    },
+    "01-large.stdout": {
+     "bytes": 1048576,
+     "mode": 384
+    }
+   },
+   "name": "a megabyte of output and of errors at once",
+   "report": null,
+   "results": [
+    {
+     "bytes": 1048576,
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "head -c 1048576 /dev/zero | tr '\\0' x; head -c 1048576 /dev/zero | tr '\\0' y >&2"
+     ],
+     "check": "large"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "large"
+    }
+   ],
+   "files": {
+    "01-large.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-large.stdout": {
+     "mode": 384,
+     "text": "1048576\n"
+    }
+   },
+   "name": "a megabyte of input",
+   "report": null,
+   "results": [
+    {
+     "output": "1048576\n",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "wc -c | tr -d ' '"
+     ],
+     "check": "large",
+     "fill": 1048576
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "next"
+    }
+   ],
+   "files": {
+    "01-slow.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-slow.stdout": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "02-next.stdout": {
+     "mode": 384,
+     "text": "after"
+    }
+   },
+   "name": "a command past its time",
+   "report": null,
+   "results": [
+    {
+     "code": "command_timed_out"
+    },
+    {
+     "output": "after",
+     "status": 0
+    }
+   ],
+   "sequence": 2,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "sleep 20"
+     ],
+     "check": "slow",
+     "timeout": 0.3
+    },
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf after"
+     ],
+     "check": "next"
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-stubborn.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-stubborn.stdout": {
+     "mode": 384,
+     "text": ""
+    }
+   },
+   "name": "a command that ignores TERM past its time",
+   "report": null,
+   "results": [
+    {
+     "code": "command_timed_out"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "trap '' TERM; sleep 20"
+     ],
+     "check": "stubborn",
+     "timeout": 0.3
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-orphan.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-orphan.stdout": {
+     "mode": 384,
+     "text": "started"
+    }
+   },
+   "name": "a child that outlives its parent",
+   "report": null,
+   "results": [
+    {
+     "code": "command_timed_out"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "sleep 20 & printf started"
+     ],
+     "check": "orphan",
+     "timeout": 0.3
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "detached"
+    }
+   ],
+   "files": {
+    "01-detached.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-detached.stdout": {
+     "mode": 384,
+     "text": "started"
+    }
+   },
+   "name": "a child that outlives its parent without the streams",
+   "report": null,
+   "results": [
+    {
+     "output": "started",
+     "status": 0
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "sleep 3 >/dev/null 2>&1 </dev/null & printf started"
+     ],
+     "check": "detached",
+     "timeout": 10
+    }
+   ],
+   "timed": true
+  },
+  {
+   "before": [],
+   "checks": [],
+   "files": {
+    "01-partial.stderr": {
+     "mode": 384,
+     "text": ""
+    },
+    "01-partial.stdout": {
+     "mode": 384,
+     "text": "early"
+    }
+   },
+   "name": "output before the time passes is kept",
+   "report": null,
+   "results": [
+    {
+     "code": "command_timed_out"
+    }
+   ],
+   "sequence": 1,
+   "steps": [
+    {
+     "argv": [
+      "/bin/sh",
+      "-c",
+      "printf early; sleep 20"
+     ],
+     "check": "partial",
+     "timeout": 0.3
+    }
+   ],
+   "timed": true
+  }
+ ],
+ "snapshots": [
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "tracked files",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "alpha\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "tracked and untracked files",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "alpha\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     },
+     "dir/deep": {
+      "mode": 448
+     },
+     "dir/deep/er": {
+      "mode": 448
+     },
+     "dir/deep/er/c.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "gamma\n"
+     },
+     "new.txt": {
+      "bytes": 4,
+      "mode": 384,
+      "text": "new\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\",\n  \"dir/deep/er/c.txt\": \"ae9a6306a205417afddd14316cc1d0d5e04a98f1be10865dce643925ee070ce2\",\n  \"new.txt\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "file",
+     "new.txt",
+     "new\n"
+    ],
+    [
+     "file",
+     "dir/deep/er/c.txt",
+     "gamma\n"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an ignored file",
+   "result": {
+    "directory": "source",
+    "files": {
+     ".gitignore": {
+      "bytes": 15,
+      "mode": 384,
+      "text": "ignored/\n*.log\n"
+     },
+     "kept": {
+      "bytes": 2,
+      "mode": 384,
+      "text": "k\n"
+     }
+    },
+    "manifest": "{\n  \".gitignore\": \"33e45938e83d9ffd00a78453599af866d902f2317238fd212fb58d535025e22b\",\n  \"kept\": \"19732980d68fbd00358a0a4d98246c960400b87e4fa2a2e155db98be2b42ed6c\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     ".gitignore",
+     "ignored/\n*.log\n"
+    ],
+    [
+     "file",
+     "ignored/x",
+     "x\n"
+    ],
+    [
+     "file",
+     "trace.log",
+     "t\n"
+    ],
+    [
+     "file",
+     "kept",
+     "k\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an ignored file that is tracked",
+   "result": {
+    "directory": "source",
+    "files": {
+     ".gitignore": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "*.log\n"
+     },
+     "trace.log": {
+      "bytes": 2,
+      "mode": 384,
+      "text": "t\n"
+     }
+    },
+    "manifest": "{\n  \".gitignore\": \"318d9a16533732a69cda7bb7b174ee392fdd15be3d72a114cd8f2d51f3eab510\",\n  \"trace.log\": \"fe8edeeb98cc6d3b93cf2d57000254b84bd9eba34b4df7ce4b87db8b937b7703\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "trace.log",
+     "t\n"
+    ],
+    [
+     "add",
+     "trace.log"
+    ],
+    [
+     "file",
+     ".gitignore",
+     "*.log\n"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a changed tracked file",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a.txt": {
+      "bytes": 8,
+      "mode": 384,
+      "text": "changed\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"7f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "file",
+     "a.txt",
+     "changed\n"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a deleted tracked file",
+   "result": {
+    "directory": "source",
+    "files": {
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "a.txt"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "every tracked file deleted",
+   "result": {
+    "directory": "source",
+    "files": {},
+    "manifest": "{}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "a.txt"
+    ],
+    [
+     "remove",
+     "dir"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an empty file",
+   "result": {
+    "directory": "source",
+    "files": {
+     "empty": {
+      "bytes": 0,
+      "mode": 384,
+      "text": ""
+     },
+     "full": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "f"
+     }
+    },
+    "manifest": "{\n  \"empty\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n  \"full\": \"252f10c83610ebca1a059c0bae8255eba2f95be4d1d7bcfa89d7248a82d9f111\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "empty",
+     ""
+    ],
+    [
+     "file",
+     "full",
+     "f"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "only an empty file",
+   "result": {
+    "directory": "source",
+    "files": {
+     "empty": {
+      "bytes": 0,
+      "mode": 384,
+      "text": ""
+     }
+    },
+    "manifest": "{\n  \"empty\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "empty",
+     ""
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "no files at all",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an executable file",
+   "result": {
+    "directory": "source",
+    "files": {
+     "run.sh": {
+      "bytes": 10,
+      "mode": 384,
+      "text": "#!/bin/sh\n"
+     }
+    },
+    "manifest": "{\n  \"run.sh\": \"a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "run.sh",
+     "#!/bin/sh\n"
+    ],
+    [
+     "mode",
+     "run.sh",
+     493
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a file nobody else may read",
+   "result": {
+    "directory": "source",
+    "files": {
+     "private": {
+      "bytes": 2,
+      "mode": 384,
+      "text": "p\n"
+     }
+    },
+    "manifest": "{\n  \"private\": \"fd6641673e7f3bf6e80e4bc5401fcb2821a1e117206c8e1c65cef23a58dc37ff\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "private",
+     "p\n"
+    ],
+    [
+     "mode",
+     "private",
+     384
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "names that sort by code point",
+   "result": {
+    "directory": "source",
+    "files": {
+     "C": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "2"
+     },
+     "_": {
+      "bytes": 2,
+      "mode": 384,
+      "text": "10"
+     },
+     "a": {
+      "mode": 448
+     },
+     "a-": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "4"
+     },
+     "a.b": {
+      "bytes": 2,
+      "mode": 384,
+      "text": "11"
+     },
+     "a/z": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "3"
+     },
+     "a0": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "5"
+     },
+     "b": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     },
+     "z": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "7"
+     },
+     "\u00e9": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "6"
+     },
+     "\uffee": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "9"
+     },
+     "\ud83d\ude00": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "8"
+     }
+    },
+    "manifest": "{\n  \"C\": \"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35\",\n  \"_\": \"4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5\",\n  \"a-\": \"4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a\",\n  \"a.b\": \"4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8\",\n  \"a/z\": \"4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce\",\n  \"a0\": \"ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d\",\n  \"b\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\n  \"z\": \"7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451\",\n  \"\\u00e9\": \"e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683\",\n  \"\\uffee\": \"19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7\",\n  \"\\ud83d\\ude00\": \"2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "b",
+     "1"
+    ],
+    [
+     "file",
+     "C",
+     "2"
+    ],
+    [
+     "file",
+     "a/z",
+     "3"
+    ],
+    [
+     "file",
+     "a-",
+     "4"
+    ],
+    [
+     "file",
+     "a0",
+     "5"
+    ],
+    [
+     "file",
+     "\u00e9",
+     "6"
+    ],
+    [
+     "file",
+     "z",
+     "7"
+    ],
+    [
+     "file",
+     "\ud83d\ude00",
+     "8"
+    ],
+    [
+     "file",
+     "\uffee",
+     "9"
+    ],
+    [
+     "file",
+     "_",
+     "10"
+    ],
+    [
+     "file",
+     "a.b",
+     "11"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a name with a space and a quote",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a b": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     },
+     "d e": {
+      "mode": 448
+     },
+     "d e/f g": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "3"
+     },
+     "it's \"q\"": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "2"
+     }
+    },
+    "manifest": "{\n  \"a b\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\n  \"d e/f g\": \"4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce\",\n  \"it's \\\"q\\\"\": \"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a b",
+     "1"
+    ],
+    [
+     "file",
+     "it's \"q\"",
+     "2"
+    ],
+    [
+     "file",
+     "d e/f g",
+     "3"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a name with a tab",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "tab\tname",
+     "3"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a name with a newline",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "line\nbreak",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a name with a backslash",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "back\\slash",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a tracked link to a file",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "target",
+     "t\n"
+    ],
+    [
+     "link",
+     "link",
+     "target"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an untracked link to a file",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "target",
+     "t\n"
+    ],
+    [
+     "link",
+     "link",
+     "target"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a link to nothing",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "kept",
+     "k\n"
+    ],
+    [
+     "link",
+     "dangling",
+     "nowhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a link to a directory",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "real/f",
+     "f\n"
+    ],
+    [
+     "link",
+     "alias",
+     "real"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a tracked file below a directory that became a link",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "d/f",
+     "f\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "d"
+    ],
+    [
+     "file",
+     "elsewhere/f",
+     "other\n"
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a tracked file two levels below a directory that became a link",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "d/e/f",
+     "f\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "d"
+    ],
+    [
+     "file",
+     "elsewhere/e/f",
+     "other\n"
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a tracked file whose directory became a link to nothing",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "d/f",
+     "f\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "d"
+    ],
+    [
+     "link",
+     "d",
+     "nowhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a tracked file that became a directory",
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "tree": [
+    [
+     "file",
+     "f",
+     "f\n"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "f"
+    ],
+    [
+     "file",
+     "f/inside",
+     "i\n"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a repository inside the tree",
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "tree": [
+    [
+     "file",
+     "kept",
+     "k\n"
+    ],
+    [
+     "repository",
+     "nested"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an untracked repository inside the tree",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "kept",
+     "k\n"
+    ],
+    [
+     "repository",
+     "nested"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "a file at the size limit",
+   "result": {
+    "directory": "source",
+    "files": {
+     "big": {
+      "bytes": 16,
+      "mode": 384,
+      "text": "ffffffffffffffff"
+     }
+    },
+    "manifest": "{\n  \"big\": \"6534b338bcb91cf173444c24ed8bc0f1b7065face0ea95cdd1b936556c6860ed\"\n}\n"
+   },
+   "tree": [
+    [
+     "fill",
+     "big",
+     16
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "a file a byte past the size limit",
+   "result": {
+    "code": "tool_file_size"
+   },
+   "tree": [
+    [
+     "fill",
+     "big",
+     17
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "a tree at the size limit",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 16,
+      "mode": 384,
+      "text": "ffffffffffffffff"
+     },
+     "b": {
+      "bytes": 16,
+      "mode": 384,
+      "text": "ffffffffffffffff"
+     },
+     "c": {
+      "bytes": 8,
+      "mode": 384,
+      "text": "ffffffff"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6534b338bcb91cf173444c24ed8bc0f1b7065face0ea95cdd1b936556c6860ed\",\n  \"b\": \"6534b338bcb91cf173444c24ed8bc0f1b7065face0ea95cdd1b936556c6860ed\",\n  \"c\": \"a44ba123189855990795e3260a64b34cdae6b29bf1c941818a34cba8bbc45575\"\n}\n"
+   },
+   "tree": [
+    [
+     "fill",
+     "a",
+     16
+    ],
+    [
+     "fill",
+     "b",
+     16
+    ],
+    [
+     "fill",
+     "c",
+     8
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "a tree a byte past the size limit",
+   "result": {
+    "code": "security_source_size"
+   },
+   "tree": [
+    [
+     "fill",
+     "a",
+     16
+    ],
+    [
+     "fill",
+     "b",
+     16
+    ],
+    [
+     "fill",
+     "c",
+     9
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "as many files as allowed",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     },
+     "b": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "2"
+     },
+     "c": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "3"
+     },
+     "d": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "4"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\n  \"b\": \"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35\",\n  \"c\": \"4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce\",\n  \"d\": \"4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ],
+    [
+     "file",
+     "c",
+     "3"
+    ],
+    [
+     "file",
+     "d",
+     "4"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "one file too many",
+   "result": {
+    "code": "security_source_count"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ],
+    [
+     "file",
+     "c",
+     "3"
+    ],
+    [
+     "file",
+     "d",
+     "4"
+    ],
+    [
+     "file",
+     "e",
+     "5"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": {
+    "files": 4,
+    "source": 16,
+    "tree": 40
+   },
+   "listing": null,
+   "name": "one deleted file too many",
+   "result": {
+    "code": "security_source_count"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ],
+    [
+     "file",
+     "c",
+     "3"
+    ],
+    [
+     "file",
+     "d",
+     "4"
+    ],
+    [
+     "file",
+     "e",
+     "5"
+    ],
+    [
+     "add",
+     "."
+    ],
+    [
+     "remove",
+     "e"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "final-source-inventory"
+    }
+   ],
+   "label": "final-source",
+   "limits": null,
+   "listing": null,
+   "name": "another label",
+   "result": {
+    "directory": "final-source",
+    "files": {
+     "a.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "alpha\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "",
+   "limits": null,
+   "listing": null,
+   "name": "an empty label",
+   "result": {
+    "code": "invalid_source_snapshot_label"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "a.b",
+   "limits": null,
+   "listing": null,
+   "name": "a label with a point",
+   "result": {
+    "code": "invalid_source_snapshot_label"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "a/b",
+   "limits": null,
+   "listing": null,
+   "name": "a label with a separator",
+   "result": {
+    "code": "invalid_source_snapshot_label"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "..",
+   "limits": null,
+   "listing": null,
+   "name": "a label that leaves the directory",
+   "result": {
+    "code": "invalid_source_snapshot_label"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "a b-inventory"
+    }
+   ],
+   "label": "a b",
+   "limits": null,
+   "listing": null,
+   "name": "a label with a space",
+   "result": {
+    "directory": "a b",
+    "files": {
+     "a.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "alpha\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "a\nb",
+   "limits": null,
+   "listing": null,
+   "name": "a label with a control character",
+   "result": {
+    "code": "invalid_source_snapshot_label"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [],
+   "label": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll",
+   "limits": null,
+   "listing": null,
+   "name": "a label too long for a file name",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "caf\u00e9-inventory"
+    }
+   ],
+   "label": "caf\u00e9",
+   "limits": null,
+   "listing": null,
+   "name": "a label outside ASCII",
+   "result": {
+    "directory": "caf\u00e9",
+    "files": {
+     "a.txt": {
+      "bytes": 6,
+      "mode": 384,
+      "text": "alpha\n"
+     },
+     "dir": {
+      "mode": 448
+     },
+     "dir/b.txt": {
+      "bytes": 5,
+      "mode": 384,
+      "text": "beta\n"
+     }
+    },
+    "manifest": "{\n  \"a.txt\": \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\",\n  \"dir/b.txt\": \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a label taken twice",
+   "result": {
+    "code": "FileExistsError"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": true
+  },
+  {
+   "before": [
+    "source"
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a destination that exists",
+   "result": {
+    "code": "FileExistsError"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [
+    "source-manifest.json"
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "a manifest that exists",
+   "result": {
+    "code": "FileExistsError"
+   },
+   "tree": [
+    [
+     "file",
+     "a.txt",
+     "alpha\n"
+    ],
+    [
+     "file",
+     "dir/b.txt",
+     "beta\n"
+    ],
+    [
+     "add",
+     "."
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQA=",
+   "name": "a listing of one name",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBhAA==",
+   "name": "a listing that names a file twice",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YgBhAA==",
+   "name": "a listing out of order",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     },
+     "b": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "2"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\n  \"b\": \"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBi",
+   "name": "a listing without its last terminator",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     },
+     "b": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "2"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\",\n  \"b\": \"d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQAA",
+   "name": "a listing with two terminators at its end",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQAAYgA=",
+   "name": "a listing with an empty name inside",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "file",
+     "b",
+     "2"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "AGEA",
+   "name": "a listing that starts with a terminator",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "",
+   "name": "an empty listing",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "AA==",
+   "name": "a listing of one terminator",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "//4A",
+   "name": "a listing that is not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBnb25lAA==",
+   "name": "a listing with a name that is missing",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "Z29uZQA=",
+   "name": "a listing of only missing names",
+   "result": {
+    "directory": "source",
+    "files": {},
+    "manifest": "{}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "Li4vYQA=",
+   "name": "a listed name that climbs out",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "L2V0Yy9ob3N0cwA=",
+   "name": "a listed name that is absolute",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC8vYQA=",
+   "name": "a listed name with a doubled separator",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC8A",
+   "name": "a listed name with a trailing separator",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "Li9kL2EA",
+   "name": "a listed name with a current-directory step",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC8uL2EA",
+   "name": "a listed name with a current-directory step inside",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "LgA=",
+   "name": "a listed name that is the directory",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YVxiAA==",
+   "name": "a listed name with a backslash",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a\\b",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQliAA==",
+   "name": "a listed name with a control character",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "a\tb",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YX9iAA==",
+   "name": "a listed name with a delete character",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a\u007fb": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\\u007fb\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a\u007fb",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubi9tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbS9ra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2sA",
+   "name": "a listed name of 512 characters",
+   "result": {
+    "directory": "source",
+    "files": {
+     "d": {
+      "mode": 448
+     },
+     "d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": {
+      "mode": 448
+     },
+     "d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm": {
+      "mode": 448
+     },
+     "d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm/kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm/kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm/kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubi9tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbS9ra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2trAA==",
+   "name": "a listed name of 513 characters",
+   "result": {
+    "code": "security_source_path"
+   },
+   "tree": [
+    [
+     "file",
+     "d/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm/kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9mAA==",
+   "name": "a listed file below a linked directory",
+   "result": {
+    "code": "security_source_parent_link"
+   },
+   "tree": [
+    [
+     "file",
+     "elsewhere/f",
+     "x"
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9lL2YA",
+   "name": "a listed file two levels below a linked directory",
+   "result": {
+    "code": "security_source_parent_link"
+   },
+   "tree": [
+    [
+     "file",
+     "elsewhere/e/f",
+     "x"
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "dG9wL2QvZgA=",
+   "name": "a listed file below a directory linked one level down",
+   "result": {
+    "code": "security_source_parent_link"
+   },
+   "tree": [
+    [
+     "file",
+     "elsewhere/f",
+     "x"
+    ],
+    [
+     "link",
+     "top/d",
+     "../elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBkL2YA",
+   "name": "a listed file below a directory linked to nothing",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ],
+    [
+     "link",
+     "d",
+     "nowhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9sAA==",
+   "name": "a listed link below a linked directory",
+   "result": {
+    "code": "security_source_parent_link"
+   },
+   "tree": [
+    [
+     "file",
+     "elsewhere/f",
+     "x"
+    ],
+    [
+     "link",
+     "elsewhere/l",
+     "f"
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9mAA==",
+   "name": "a listed empty file below a linked directory",
+   "result": {
+    "code": "security_source_parent_link"
+   },
+   "tree": [
+    [
+     "file",
+     "elsewhere/f",
+     ""
+    ],
+    [
+     "link",
+     "d",
+     "elsewhere"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "bAA=",
+   "name": "a listed link to an empty file",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "e",
+     ""
+    ],
+    [
+     "link",
+     "l",
+     "e"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "bAA=",
+   "name": "a listed link to a file that is gone",
+   "result": {
+    "code": "OSError"
+   },
+   "tree": [
+    [
+     "file",
+     "e",
+     ""
+    ],
+    [
+     "link",
+     "l",
+     "e"
+    ],
+    [
+     "remove",
+     "e"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZAA=",
+   "name": "a listed directory",
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBkAA==",
+   "name": "a listed empty directory",
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "tree": [
+    [
+     "directory",
+     "d"
+    ],
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBzAA==",
+   "name": "a listed pipe",
+   "result": {
+    "code": "security_source_type"
+   },
+   "tree": [
+    [
+     "fifo",
+     "s"
+    ],
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": null,
+   "name": "an untracked pipe",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "fifo",
+     "s"
+    ],
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YS9iAA==",
+   "name": "a listed file below a file",
+   "result": {
+    "directory": "source",
+    "files": {},
+    "manifest": "{}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "YQBhL2IA",
+   "name": "a listed file and a file below it",
+   "result": {
+    "directory": "source",
+    "files": {
+     "a": {
+      "bytes": 1,
+      "mode": 384,
+      "text": "1"
+     }
+    },
+    "manifest": "{\n  \"a\": \"6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b\"\n}\n"
+   },
+   "tree": [
+    [
+     "file",
+     "a",
+     "1"
+    ]
+   ],
+   "twice": false
+  },
+  {
+   "before": [],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "label": "source",
+   "limits": null,
+   "listing": "ZC9hAGQA",
+   "name": "a listed directory and a file below it",
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "tree": [
+    [
+     "file",
+     "d/a",
+     "1"
+    ]
+   ],
+   "twice": false
+  }
+ ]
+}

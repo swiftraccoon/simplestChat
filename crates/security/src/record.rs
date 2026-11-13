@@ -52,6 +52,52 @@ pub(crate) fn safe_name(value: &str) -> bool {
             .all(|part| !matches!(part, "" | "." | ".."))
 }
 
+/// A document as the reference writes one to be read: keys in order, two
+/// spaces a level, ASCII only, and a line end after it.
+pub(crate) fn pretty(value: &Value) -> String {
+    let mut text = String::new();
+    spread(value, 0, &mut text);
+    text.push('\n');
+    text
+}
+
+fn spread(value: &Value, depth: usize, text: &mut String) {
+    let open = |text: &mut String, index: usize| {
+        text.push_str(if index == 0 { "\n" } else { ",\n" });
+        text.push_str(&"  ".repeat(depth + 1));
+    };
+    let close = |text: &mut String, bracket: char| {
+        text.push('\n');
+        text.push_str(&"  ".repeat(depth));
+        text.push(bracket);
+    };
+    match value {
+        Value::Array(items) if !items.is_empty() => {
+            text.push('[');
+            for (index, item) in items.iter().enumerate() {
+                open(text, index);
+                spread(item, depth + 1, text);
+            }
+            close(text, ']');
+        }
+        Value::Object(fields) if !fields.is_empty() => {
+            let mut names: Vec<&String> = fields.keys().collect();
+            names.sort_unstable();
+            text.push('{');
+            for (index, name) in names.into_iter().enumerate() {
+                open(text, index);
+                text.push_str(&quoted(name));
+                text.push_str(": ");
+                spread(&fields[name], depth + 1, text);
+            }
+            close(text, '}');
+        }
+        Value::String(string) => text.push_str(&quoted(string)),
+        // Nothing, a truth value, a number, or a list or record of nothing.
+        other => text.push_str(&other.to_string()),
+    }
+}
+
 /// A JSON string as the reference writes one: ASCII only, with the short
 /// escapes for the quote, the backslash and five control characters.
 pub(crate) fn quoted(text: &str) -> String {
