@@ -507,13 +507,15 @@ fn a_command_whose_evidence_cannot_be_kept_is_stopped() {
         Context::new(&scratch.0, &scratch.0, Limits::REVIEWED, &caller).expect("a context");
     let started = Instant::now();
     let argv = ["/bin/sh", "-c", "printf said; sleep 30"];
-    let stopped = context.pump(&argv, &Run::default(), (Refusing, Refusing));
+    let room = (Limits::REVIEWED.report, Limits::REVIEWED.report);
+    let stopped = context.pump(&argv, &Run::default(), (Refusing, Refusing), room);
     assert_eq!(stopped, Err(Failure::Fixed("tool_entry_unavailable")));
     assert!(started.elapsed() < Duration::from_secs(10));
     let quiet = context.pump(
         &["/bin/sh", "-c", "exit 4"],
         &Run::default(),
         (Refusing, Refusing),
+        room,
     );
     assert_eq!(quiet, Ok(4));
 }

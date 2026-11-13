@@ -1,0 +1,6070 @@
+{
+ "fixture": [
+  [
+   "example",
+   "1.0",
+   "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+   "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "MIT-0"
+  ]
+ ],
+ "legacy": [
+  [
+   "basedpyright",
+   "1.40.2",
+   "913fdc12587d87d82fb487ecc3e5a209dabab7be28982168f86d04c8518b7b8c",
+   "3a53aeb93a86675ded0e12bc27bd8476c1742356de07ad8cab67bff18110c690",
+   "MIT"
+  ],
+  [
+   "certifi",
+   "2026.10.19",
+   "a5c0be3a42daeef0edfaf58e6ea5b7550f3e4e8eb35420f72e902df9bcf00f5c",
+   "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b",
+   "MPL-2.0"
+  ],
+  [
+   "meson",
+   "1.12.1",
+   "690a6190f8fe2f15822a341150963bcb79615657460e0b8cab755ce1912aeb22",
+   "930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02",
+   "Apache-2.0"
+  ]
+ ],
+ "metadata": [
+  {
+   "content": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT OR Apache-2.0\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression of two licences",
+   "package": "example",
+   "result": {
+    "license": "MIT OR Apache-2.0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "License-Expression: MIT\nVersion: 1.0\nName: example\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression before the name",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TWV0YWRhdGEtVmVyc2lvbjogMi40DQpOYW1lOiBleGFtcGxlDQpWZXJzaW9uOiAxLjANCkxpY2Vuc2UtRXhwcmVzc2lvbjogTUlUDQoNCkEgZGVzY3JpcHRpb24uDQo="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "lines that end with a carriage return and a line feed",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TWV0YWRhdGEtVmVyc2lvbjogMi40DU5hbWU6IGV4YW1wbGUNVmVyc2lvbjogMS4wDUxpY2Vuc2UtRXhwcmVzc2lvbjogTUlUDQ1BIGRlc2NyaXB0aW9uLg0="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "lines that end with a carriage return",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQ0KVmVyc2lvbjogMS4wDUxpY2Vuc2UtRXhwcmVzc2lvbjogTUlUCg0KYm9keQ=="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "lines that end in three ways",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "fields without a body",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "fields without a last line end",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "fields and a blank line alone",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "NAME: example\nversion: 1.0\nlicense-expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "field names in other cases",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name:example\nVersion:1.0\nLicense-Expression:MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "values without a space",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: \t  example\nVersion:\t1.0\nLicense-Expression:   MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "values after tabs and wide space",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: Ex_Ample\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name in another spelling",
+   "package": "ex-ample",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: ex._-ample\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name with runs of separators",
+   "package": "ex-ample",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: \u212aelvin\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name with the Kelvin sign",
+   "package": "kelvin",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: other\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "another name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example \nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name with space after it",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name:\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name that is empty",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.1\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "another version",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 01.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a version in another spelling",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0 \nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a version with space after it",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0RC1\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a version in capitals",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0rc1"
+  },
+  {
+   "content": "Version: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "no name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "no version",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two names",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nname: other\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two names in two cases",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two versions",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two expressions",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: other\nVersion: 1.0\nLicense-Expression: MIT\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two expressions and another name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression:\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression that is empty",
+   "package": "example",
+   "result": {
+    "license": ""
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT  \n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression with space after it",
+   "package": "example",
+   "result": {
+    "license": "MIT  "
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT OR\n  Apache-2.0\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression over two lines",
+   "package": "example",
+   "result": {
+    "license": "MIT OR  Apache-2.0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\n\tOR\n Apache-2.0\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression over three lines",
+   "package": "example",
+   "result": {
+    "license": "MIT\tOR Apache-2.0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression:\n MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression on the line after its name",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name:\n example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name on the line after its field",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\n   \nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a line of spaces among the fields",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\n  \n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a line of spaces after the expression",
+   "package": "example",
+   "result": {
+    "license": "MIT  "
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": " Name: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a continued line first",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "\tx\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a tab first",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a blank line first",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nnot a field\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a line without a colon among the fields",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nnot a field\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a line without a colon after the fields",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense Expression: MIT\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a field name with a space",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name : example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a space before the colon",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\n: nothing\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a field without a name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nX-(odd)!#$%&'*+/=?^_`{|}~.name: x\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a field name with marks",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nAut\u00f6r: x\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a field name outside ASCII",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "From someone Thu Jan  1 00:00:00 1970\nMetadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an envelope line first",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nFrom someone\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an envelope line among the fields",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nFrom someone\n\nbody\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an envelope line last",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\nFrom someone\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an envelope line in the body",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nFrom: someone\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a field named From",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: =?utf-8?q?MIT?=\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an encoded word as the expression",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: =?utf-8?q?example?=\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an encoded word as the name",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: =?utf-8?b?MS4w?=\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an encoded word as the version",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT =? x\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "the start of an encoded word in the expression",
+   "package": "example",
+   "result": {
+    "license": "MIT =? x"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nSummary: =?utf-8?q?caf=C3=A9?=\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an encoded word in another field",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nAuthor: Jos\u00e9\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an author outside ASCII",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVQKQXV0aG9yOiBKb3PpCgpib2R5Cg=="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an author in Latin-1",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\u00a0OR caf\u00e9\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression outside ASCII",
+   "package": "example",
+   "result": {
+    "license": "MIT\u00a0OR caf\u00e9"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVT//iDpIPCfCgpib2R5Cg=="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression that is no UTF-8",
+   "package": "example",
+   "result": {
+    "license": "MIT\ufffd\ufffd \ufffd \ufffd"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBs6QpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVQKCmJvZHkK"
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a name that is no UTF-8",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVQKCv/+AGJvZHkK"
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a body that is no UTF-8",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\n\nLicense-Expression: MIT\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "fields in the body",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\nLicense-Expression: GPL-3.0-only\nName: other\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression in the fields and one in the body",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nLicense-Expression: MIT\n\nVersion: 1.0\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a version in the body",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nContent-Type: text/plain; charset=utf-8\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a content type of plain text",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nContent-Type: multipart/mixed\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a content type of parts without a boundary",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nContent-Type: multipart/mixed; boundary=b\n\n--b\nX: y\n\npart\n--b--\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a content type of parts that are there",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nContent-Type: multipart/mixed; boundary=b\n\nno parts\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a content type of parts that never start",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nDescription-Content-Type: text/markdown\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a description's content type",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\nVersion: 1.0\nLicense-Expression: MIT\nContent-Transfer-Encoding: base64\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a transfer encoding",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: exa\fmple\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a form feed in the name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Name: example\fVersion: 1.0\nLicense-Expression: MIT\n\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a form feed between fields",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVQACgo="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a null in the expression",
+   "package": "example",
+   "result": {
+    "license": "MIT\u0000"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": {
+    "base64": "TmFtZTogZXhhbXBsZQpWZXJzaW9uOiAxLjAKTGljZW5zZS1FeHByZXNzaW9uOiBNSVQNT1I6IHgKCg=="
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a carriage return inside the expression",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "nothing",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_size"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a blank line alone",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "\njust a body\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "a body alone",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": 89,
+   "name": "as many bytes as are read",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": 88,
+   "name": "one byte more than is read",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_size"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence that was reviewed",
+   "package": "example",
+   "result": {
+    "license": "MIT-0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limit": null,
+   "name": "an old licence that was reviewed, among other wheels",
+   "package": "example",
+   "result": {
+    "license": "MIT-0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed for another wheel",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_reviewed_wheel_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.1\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed for another version",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.1"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence in other bytes",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence that nobody reviewed",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed under another version",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "9.9",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed under another name",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "other",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: Example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed under the name as it is written",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "Example",
+     "1.0",
+     "bcc886e36b07d64e34ec78d46d8da103ae5af90344e17c9713a62f217e04f06a",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence reviewed twice, the second for the wheel",
+   "package": "example",
+   "result": {
+    "license": "MIT-0"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "0000000000000000000000000000000000000000000000000000000000000000",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "ISC"
+    ],
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an old licence of another name",
+   "package": "other",
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense-Expression: MIT\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "an expression beside a reviewed old licence",
+   "package": "example",
+   "result": {
+    "license": "MIT"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "1cc95f298d99cdf7b8359380470e0b59ee033b2084b2c990acc0736062cb8908",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  },
+  {
+   "content": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense-Expression: MIT\nLicense-Expression: MIT\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limit": null,
+   "name": "two expressions beside a reviewed old licence",
+   "package": "example",
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "reviews": [
+    [
+     "example",
+     "1.0",
+     "66816899878d5fac78a3e8a9e68babf86d83844cc22b201b9560711ad5519942",
+     "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+     "MIT-0"
+    ]
+   ],
+   "version": "1.0"
+  }
+ ],
+ "names": [
+  {
+   "filename": "example-1.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "Example-1.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex_ample-1.0-py3-none-any.whl",
+   "result": {
+    "name": "ex-ample",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex.ample-1.0-py3-none-any.whl",
+   "result": {
+    "name": "ex-ample",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex__ample-1.0-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "ex-ample-1.0-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "_example_-1.0-py3-none-any.whl",
+   "result": {
+    "name": "-example-",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "..example-1.0-py3-none-any.whl",
+   "result": {
+    "name": "-example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example2-1.0-py3-none-any.whl",
+   "result": {
+    "name": "example2",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "2-1.0-py3-none-any.whl",
+   "result": {
+    "name": "2",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "-1.0-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-1a-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-a1-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0--py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-1-2-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-01_x.y-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-01.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0.0"
+   }
+  },
+  {
+   "filename": "example-1.0rc1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0rc1"
+   }
+  },
+  {
+   "filename": "example-1.0RC1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0rc1"
+   }
+  },
+  {
+   "filename": "example-1.0.post1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0.post1"
+   }
+  },
+  {
+   "filename": "example-1!2.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1!2.0"
+   }
+  },
+  {
+   "filename": "example-1.0+local.1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0+local.1"
+   }
+  },
+  {
+   "filename": "example-1.0+Local_1-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0+local.1"
+   }
+  },
+  {
+   "filename": "example-v1.0-py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example- 1.0 -py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.x-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example--py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py2.py3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-cp312-abi3-macosx_11_0_arm64.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-py3..py2-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none.-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0--none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3--any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-3py-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py.3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py+3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-_py-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-py_3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-any.whl.zip",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.tar.gz.zip",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-no ne-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-any.WHL",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-any.whl ",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-any.whl.metadata",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "ex ample-1.0-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "ex+ample-1.0-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "ex\u00e4mple-1.0-py3-none-any.whl",
+   "result": {
+    "name": "ex\u00e4mple",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "\u212aelvin-1.0-py3-none-any.whl",
+   "result": {
+    "name": "kelvin",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-p\u00ff3-none-any.whl",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0-\u0663-py3-none-any.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-py3-none-any-extra.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "example-1.0-1-py3-none-any-extra.whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": ".whl",
+   "result": {
+    "code": "InvalidWheelFilename"
+   }
+  },
+  {
+   "filename": "",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.tar.gz",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "Example-1.0.tar.gz",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex_ample-1.0.tar.gz",
+   "result": {
+    "name": "ex-ample",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex-ample-1.0.tar.gz",
+   "result": {
+    "name": "ex-ample",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex-ample-extra-1.0.tar.gz",
+   "result": {
+    "name": "ex-ample-extra",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0.zip",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0.tar.bz2",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.tgz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.tar",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.egg",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example.tar.gz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "-1.0.tar.gz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-.tar.gz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-01.0.tar.gz",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0rc1.zip",
+   "result": {
+    "name": "example",
+    "version": "1.0rc1"
+   }
+  },
+  {
+   "filename": "example-1.0-1.tar.gz",
+   "result": {
+    "name": "example-1-0",
+    "version": "1"
+   }
+  },
+  {
+   "filename": "example-v1.0.tar.gz",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example- 1.0.tar.gz",
+   "result": {
+    "name": "example",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.x.tar.gz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "ex ample-1.0.tar.gz",
+   "result": {
+    "name": "ex ample",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "ex\u00e4mple-1.0.tar.gz",
+   "result": {
+    "name": "ex\u00e4mple",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "example-1.0.TAR.GZ",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.tar.gz.sig",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": ".tar.gz",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": ".zip",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "example-1.0.whl.zip",
+   "result": {
+    "code": "InvalidSdistFilename"
+   }
+  },
+  {
+   "filename": "a--1.0.tar.gz",
+   "result": {
+    "name": "a-",
+    "version": "1.0"
+   }
+  },
+  {
+   "filename": "__-1.0.tar.gz",
+   "result": {
+    "name": "-",
+    "version": "1.0"
+   }
+  }
+ ],
+ "normal": [
+  {
+   "result": {
+    "normal": "1"
+   },
+   "version": "1"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "1.0"
+  },
+  {
+   "result": {
+    "normal": "1.0.0"
+   },
+   "version": "1.0.0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "01.0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "1.00"
+  },
+  {
+   "result": {
+    "normal": "7.8.9"
+   },
+   "version": "007.008.0009"
+  },
+  {
+   "result": {
+    "normal": "0"
+   },
+   "version": "0"
+  },
+  {
+   "result": {
+    "normal": "0"
+   },
+   "version": "00"
+  },
+  {
+   "result": {
+    "normal": "0.0"
+   },
+   "version": "0.0"
+  },
+  {
+   "result": {
+    "normal": "2026.10.19"
+   },
+   "version": "2026.10.19"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0a1"
+  },
+  {
+   "result": {
+    "normal": "1.0a0"
+   },
+   "version": "1.0a"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0A1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0alpha1"
+  },
+  {
+   "result": {
+    "normal": "1.0a0"
+   },
+   "version": "1.0ALPHA"
+  },
+  {
+   "result": {
+    "normal": "1.0b2"
+   },
+   "version": "1.0b2"
+  },
+  {
+   "result": {
+    "normal": "1.0b2"
+   },
+   "version": "1.0beta2"
+  },
+  {
+   "result": {
+    "normal": "1.0rc3"
+   },
+   "version": "1.0c3"
+  },
+  {
+   "result": {
+    "normal": "1.0rc4"
+   },
+   "version": "1.0rc4"
+  },
+  {
+   "result": {
+    "normal": "1.0rc5"
+   },
+   "version": "1.0pre5"
+  },
+  {
+   "result": {
+    "normal": "1.0rc6"
+   },
+   "version": "1.0preview6"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0.a1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0-a1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0_a1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0a.1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0a-1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0a_1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1"
+   },
+   "version": "1.0a01"
+  },
+  {
+   "result": {
+    "normal": "1.0a0"
+   },
+   "version": "1.0a."
+  },
+  {
+   "result": {
+    "normal": "1.0a0"
+   },
+   "version": "1.0a-"
+  },
+  {
+   "result": {
+    "normal": "1.0rc0"
+   },
+   "version": "1.0rc_"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0al"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0be"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0prev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0.post1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0post1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0-post1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0_post1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post0"
+   },
+   "version": "1.0.post"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0.post.1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post0"
+   },
+   "version": "1.0.post."
+  },
+  {
+   "result": {
+    "normal": "1.0.post0"
+   },
+   "version": "1.0.post-"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0-1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0-01"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0-1-1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0-"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0.rev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0.r1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post0"
+   },
+   "version": "1.0r"
+  },
+  {
+   "result": {
+    "normal": "1.0.post4"
+   },
+   "version": "1.0-r4"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0.dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0-dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0_dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev0"
+   },
+   "version": "1.0.dev"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0.dev.1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev0"
+   },
+   "version": "1.0.dev-"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0.dev01"
+  },
+  {
+   "result": {
+    "normal": "1.0a1.post1.dev1"
+   },
+   "version": "1.0a1.post1.dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1.dev1"
+   },
+   "version": "1.0.post1.dev1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0.dev1.post1"
+  },
+  {
+   "result": {
+    "normal": "1.0a0.dev1"
+   },
+   "version": "1.0a.dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0b0.dev0"
+   },
+   "version": "1.0b-dev"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1.dev1"
+   },
+   "version": "1.0-1.dev1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1.post1"
+   },
+   "version": "1.0a1-1"
+  },
+  {
+   "result": {
+    "normal": "1.0a1.dev2"
+   },
+   "version": "1.0a-1.dev2"
+  },
+  {
+   "result": {
+    "normal": "1.0.post0.dev0"
+   },
+   "version": "1.0.post.dev"
+  },
+  {
+   "result": {
+    "normal": "1!1.0"
+   },
+   "version": "1!1.0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "0!1.0"
+  },
+  {
+   "result": {
+    "normal": "1"
+   },
+   "version": "000!1"
+  },
+  {
+   "result": {
+    "normal": "12!1"
+   },
+   "version": "012!1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "!1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1!"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1!!1"
+  },
+  {
+   "result": {
+    "normal": "1.0+abc"
+   },
+   "version": "1.0+abc"
+  },
+  {
+   "result": {
+    "normal": "1.0+abc.1"
+   },
+   "version": "1.0+abc.1"
+  },
+  {
+   "result": {
+    "normal": "1.0+abc.1"
+   },
+   "version": "1.0+abc-1"
+  },
+  {
+   "result": {
+    "normal": "1.0+abc.1"
+   },
+   "version": "1.0+abc_1"
+  },
+  {
+   "result": {
+    "normal": "1.0+abc"
+   },
+   "version": "1.0+ABC"
+  },
+  {
+   "result": {
+    "normal": "1.0+1.0a"
+   },
+   "version": "1.0+001.0A"
+  },
+  {
+   "result": {
+    "normal": "1.0+0"
+   },
+   "version": "1.0+0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+a..b"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+a b"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+.a"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+a."
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0+a+b"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "v1.0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "V1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "vv1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "v"
+  },
+  {
+   "result": {
+    "normal": "1.0rc1"
+   },
+   "version": "1.0RC1"
+  },
+  {
+   "result": {
+    "normal": "1.0.post1"
+   },
+   "version": "1.0.POST1"
+  },
+  {
+   "result": {
+    "normal": "1.0.dev1"
+   },
+   "version": "1.0.DEV1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1..0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1."
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": ".1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0."
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0a1b2"
+  },
+  {
+   "result": {
+    "normal": "1.0rc0"
+   },
+   "version": "1.0rc"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0rca"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.x"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "one"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1,0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "1.0 "
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": " 1.0"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "\t1.0\n"
+  },
+  {
+   "result": {
+    "normal": "1.0"
+   },
+   "version": "1.0\u00a0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1. 0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0 a1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0.*"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1e3"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0_"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "-1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0--1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0.-1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1_0"
+  },
+  {
+   "result": {
+    "normal": "1.post0"
+   },
+   "version": "1-0"
+  },
+  {
+   "result": {
+    "normal": "1.0a0"
+   },
+   "version": "1.0-a"
+  },
+  {
+   "result": {
+    "normal": "1.0b1"
+   },
+   "version": "1.0-b-1"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "\u0661.0"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0\u00e9"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0a\u0661"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": "1.0\u017f"
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": ""
+  },
+  {
+   "result": {
+    "code": "InvalidVersion"
+   },
+   "version": " "
+  },
+  {
+   "result": {
+    "normal": "1111111111111111111111111111111111111111"
+   },
+   "version": "1111111111111111111111111111111111111111"
+  },
+  {
+   "result": {
+    "normal": "1.0+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "version": "1.0+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "result": {
+    "normal": "1.0a1.dev1+local.7"
+   },
+   "version": "1.0a1.dev1+local.7"
+  },
+  {
+   "result": {
+    "normal": "1!2.3rc4.post5.dev6+seven.8"
+   },
+   "version": "1!2.3rc4.post5.dev6+seven.8"
+  }
+ ],
+ "python": [
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "one wheel",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.1.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.1.tar.gz\", \"hashes\": {\"sha256\": \"2222222222222222222222222222222222222222222222222222222222222222\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a wheel among files that are not locked",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "two wheels of one metadata",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "wheelSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: Apache-2.0\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limits": [
+    "16777216",
+    "1048576",
+    "1048576"
+   ],
+   "name": "two wheels of two metadata",
+   "package": "example",
+   "requests": 3,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "kind": "wheel",
+      "license": "Apache-2.0",
+      "metadataSha256": "09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "wheelSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a wheel and a source distribution",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "artifactSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "excluded": "wheel-only-installation",
+      "kind": "sdist",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a source distribution alone",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_missing"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.zip\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.zip\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a source distribution in a zip",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "artifactSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "excluded": "wheel-only-installation",
+      "kind": "sdist",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0.zip"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a source distribution with metadata of its own",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "artifactSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "excluded": "wheel-only-installation",
+      "kind": "sdist",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"other-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/other-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a source distribution of another name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_sdist_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.1.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.1.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a source distribution of another version",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_sdist_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"Example-01.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/Example-01.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a source distribution of the version in another spelling",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "artifactSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "excluded": "wheel-only-installation",
+      "kind": "sdist",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/Example-01.0.tar.gz"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.egg\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.egg\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file that is neither",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "InvalidSdistFilename"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file without a version",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "InvalidSdistFilename"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a hash the index does not list",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_unresolved_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "no file that is locked",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_unresolved_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "no files at all",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_unresolved_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "the same wheel listed twice",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: Apache-2.0\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576",
+    "1048576"
+   ],
+   "name": "one hash under two names",
+   "package": "example",
+   "requests": 3,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "kind": "wheel",
+      "license": "Apache-2.0",
+      "metadataSha256": "09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"other-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/other-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel of another name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.1-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.1-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel of another version",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/Example-01.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"Example-01.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/Example-01.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a wheel of the name and version in another spelling",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/Example-01.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-1-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-1-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-1-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a wheel with a build tag",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-1-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose name is none",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "InvalidWheelFilename"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.x-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.x-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose version is none",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "InvalidWheelFilename"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/ex-ample/",
+    "https://files.pythonhosted.org/packages/ab/cd/ex_ample-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"Ex.Ample\", \"files\": [{\"filename\": \"ex_ample-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/ex_ample-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"c59460da73e56b2334fcce2a25a2ed7c66d3282f245660daa51d91cd1986a035\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: ex_ample\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a package with separators in its name",
+   "package": "ex-ample",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "c59460da73e56b2334fcce2a25a2ed7c66d3282f245660daa51d91cd1986a035",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/ex_ample-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"other\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index of another name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_index_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index without a name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": [\"example\"], \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index whose name is no text",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index without files",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": {\"0\": {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}}, \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index whose files are a record",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {
+    "MAX_INDEX_FILES": 2
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "as many files as an index may list",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-0.8-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.8-py3-none-any.whl\", \"hashes\": {\"sha256\": \"2222222222222222222222222222222222222222222222222222222222222222\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {
+    "MAX_INDEX_FILES": 2
+   },
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "one file more than an index may list",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_index_count"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "[{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}]",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index that is a list",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "<html>",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index that is no JSON",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"example\", \"name\": \"example\", \"files\": []}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index with a key twice",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "DuplicateJsonError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "gone",
+     "code": "404",
+     "status": 22
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "an index that cannot be fetched",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_registry_fetch"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [\"example-1.0-py3-none-any.whl\", {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file that is no record",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file without hashes",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": [\"1111111111111111111111111111111111111111111111111111111111111111\"], \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file whose hashes are a list",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"blake2b\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file with another kind of hash alone",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": 1}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file whose hash is no text",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file without a name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": 5, \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a file whose name is no text",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a file that is not locked, without an address",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"http://example.org/x\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a file that is not locked, with any address",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-0.9-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-0.9-py3-none-any.whl\", \"hashes\": {\"sha256\": \"1111111111111111111111111111111111111111111111111111111111111111\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a file that is not locked, without metadata",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file without an address",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": [\"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\"], \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file whose address is no text",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"http://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file without encryption",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://pypi.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file of another host",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/x?/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file with a query",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl#sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file with a fragment",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/x#/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file whose fragment ends with its name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/other-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file under another name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/not-example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file whose address only ends with its name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a locked file directly below the host",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "HTTPS://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"HTTPS://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a locked file with a scheme in capitals",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "HTTPS://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/a b/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/a b/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a locked file with a space in its address",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/a b/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/x#\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a locked file with an empty fragment",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_wheel_origin"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel without metadata",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": false, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata is not offered",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": true, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata is offered without a hash",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"blake2b\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata has another kind of hash",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "KeyError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": 5}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata hash is no text",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "ValueError"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata hash is short",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_metadata_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940A4692383712906539810971183EA28CD734494FC8F145DCE200EFA602BC4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata hash is in capitals",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_metadata_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\\n\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel whose metadata hash has a line end",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_metadata_hash"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: Apache-2.0\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata of another hash",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_metadata_integrity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "gone",
+     "code": "404",
+     "status": 22
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata that cannot be fetched",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_registry_fetch"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"910a831892ee2867d87041440147c5af36720403b483f9c506949a026e5459a6\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: other\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata of another package",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_metadata_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"e34c5677fcea89fd18e51d40c949fd6d8de4b8f3e2fae735a9d6df700525191c\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\nmore\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata without an expression",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_metadata_fields"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"a4eb8433a551fe3277acbdbf2e9c91a37f18ea49134e27bcf4cf5235cf6162e6\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "not a field\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata that is no metadata",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_metadata_format"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp313-cp313-win_amd64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp313-cp313-win_amd64.whl\", \"hashes\": {\"sha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata fetched once for three wheels",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "wheelSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     },
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp313-cp313-win_amd64.whl",
+      "wheelSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: Apache-2.0\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216",
+    "1048576",
+    "1048576"
+   ],
+   "name": "a wheel listed before and after a source distribution",
+   "package": "example",
+   "requests": 3,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT",
+      "metadataSha256": "1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     },
+     {
+      "artifactSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "excluded": "wheel-only-installation",
+      "kind": "sdist",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz"
+     },
+     {
+      "kind": "wheel",
+      "license": "Apache-2.0",
+      "metadataSha256": "09d0527a1bb2a5729f1bc29b56119c0e7e9b8d467bcd4a8f8fbb09305d0af6e4",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl",
+      "wheelSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata with a reviewed old licence",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "evidence": [
+     {
+      "kind": "wheel",
+      "license": "MIT-0",
+      "metadataSha256": "9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3",
+      "source": "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl",
+      "wheelSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+     }
+    ]
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"9bbc93d2bb5088c934b42400c5efb85ba70244d02ab1dca778dcae246cb0bdd3\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.1\nName: example\nVersion: 1.0\nLicense: An old free text\nClassifier: License :: OSI Approved\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "metadata with an old licence reviewed for another wheel",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_reviewed_wheel_identity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-macosx_11_0_arm64.whl\", \"hashes\": {\"sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\nA description.\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   ],
+   "limits": [
+    "16777216",
+    "1048576"
+   ],
+   "name": "a second wheel after a first that failed",
+   "package": "example",
+   "requests": 2,
+   "result": {
+    "code": "dependency_python_metadata_integrity"
+   },
+   "version": "1.0"
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"other-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/other-1.0.tar.gz\", \"hashes\": {\"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"1940a4692383712906539810971183ea28cd734494fc8f145dce200efa602bc4\"}, \"requires-python\": \">=3.9\", \"size\": 1234, \"yanked\": false}], \"versions\": [\"1.0\"]}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "bounds": {},
+   "hashes": [
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   ],
+   "limits": [
+    "16777216"
+   ],
+   "name": "a wheel after a source distribution of another name",
+   "package": "example",
+   "requests": 1,
+   "result": {
+    "code": "dependency_python_sdist_identity"
+   },
+   "version": "1.0"
+  }
+ ],
+ "reviewed": {
+  "MAX_CACHE": 67108864,
+  "MAX_FETCHES": 512,
+  "MAX_INDEX": 16777216,
+  "MAX_INDEX_FILES": 50000,
+  "MAX_METADATA": 1048576,
+  "MAX_SECONDS": 240
+ }
+}

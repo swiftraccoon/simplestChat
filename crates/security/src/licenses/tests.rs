@@ -24,8 +24,9 @@ use std::collections::BTreeSet;
 const RECORDED: &str = include_str!("recorded_locks.json");
 
 /// A requirement is a plain pin; a lock's version is the number three; a
-/// lock entry holds no fraction, which has no one spelling.
-const STRICTER: [(&str, &str); 4] = [
+/// lock entry holds no fraction, which has no one spelling; a lock is UTF-8
+/// from its first byte.
+const STRICTER: [(&str, &str); 6] = [
     (
         "a specifier in parentheses",
         "dependency_python_exact_version",
@@ -36,17 +37,19 @@ const STRICTER: [(&str, &str); 4] = [
         "dependency_npm_lock_version",
     ),
     ("a fraction among the fields", "dependency_npm_lock"),
+    ("a lock after a byte order mark", "dependency_npm_lock"),
+    ("a lock in UTF-16", "dependency_npm_lock"),
 ];
 
 fn recorded() -> Value {
     serde_json::from_str(RECORDED).expect("the recording is JSON")
 }
 
-fn text(value: &Value) -> &str {
+pub(super) fn text(value: &Value) -> &str {
     value.as_str().expect("a recorded string")
 }
 
-fn list(value: &Value) -> &[Value] {
+pub(super) fn list(value: &Value) -> &[Value] {
     value.as_array().expect("a recorded list")
 }
 
@@ -157,7 +160,7 @@ fn every_recorded_version_is_judged_alike() {
 
 /// The bytes of a recorded file: text, base64, or one character repeated
 /// before the rest.
-fn content(spec: &Value) -> Vec<u8> {
+pub(super) fn content(spec: &Value) -> Vec<u8> {
     if let Some(text) = spec.as_str() {
         return text.as_bytes().to_vec();
     }
@@ -193,7 +196,7 @@ fn every_recorded_npm_lock_is_read_alike() {
     let recording = recorded();
     let mut tally = Tally::default();
     for case in list(&recording["npm"]) {
-        let found = npm_dependencies("web/package-lock.json", text(&case["content"]).as_bytes());
+        let found = npm_dependencies("web/package-lock.json", &content(&case["content"]));
         let judged = found.map(|found| listed(&found));
         settle(
             "npm",
@@ -203,7 +206,7 @@ fn every_recorded_npm_lock_is_read_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(14, 19, 2));
+    assert_eq!(tally, Tally(14, 20, 4));
 }
 
 #[test]

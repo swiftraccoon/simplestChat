@@ -5,8 +5,17 @@
 //! complete declarations: an installed path or a pinned requirement with
 //! everything that identifies it. Nothing is installed, built or evaluated,
 //! and a lock in any other form than the maintained one is refused.
+//!
+//! What a registry says of one declaration is asked in `registry`, which
+//! holds the session and the npm registry's word, and in `python`, which
+//! reads the package index, the names of artifacts and their metadata.
 
+mod artifact;
+mod metadata;
+mod python;
+mod registry;
 mod requirement;
+mod version;
 
 use crate::{
     Fault, Result, files,
@@ -15,6 +24,9 @@ use crate::{
     record::{self, safe_name},
     require, scope,
 };
+pub use metadata::{REVIEWED, Reviewed};
+pub use python::python_licenses;
+pub use registry::{Bounds, Evidence, Registry, npm_license};
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, path::Path};
 
@@ -360,5 +372,9 @@ pub fn require_audited_locks(
     Ok(())
 }
 
+#[cfg(test)]
+mod python_tests;
+#[cfg(test)]
+mod registry_tests;
 #[cfg(test)]
 mod tests;

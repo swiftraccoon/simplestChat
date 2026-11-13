@@ -253,6 +253,21 @@ fn created(path: &Path) -> Outcome<File> {
     Ok(opened.map_err(|error| files::unusable(&error))?)
 }
 
+/// A writer that hands on what it is given to whoever asked the question.
+struct Handed(mpsc::Sender<Vec<u8>>);
+
+impl Write for Handed {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let sent = self.0.send(bytes.to_vec());
+        sent.map(|()| bytes.len())
+            .map_err(|_| std::io::ErrorKind::BrokenPipe.into())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// How a stream ended.
 enum Event {
     Closed,
@@ -392,7 +407,8 @@ impl Context {
         let started = Instant::now();
         let output = created(&kept)?;
         let error = created(&self.output.join(format!("{stem}.stderr")))?;
-        let status = self.pump(argv, how, (output, error))?;
+        let room = (self.limits.report, self.limits.report);
+        let status = self.pump(argv, how, (output, error), room)?;
         let elapsed = (started.elapsed().as_secs_f64() * 1000.0).round() / 1000.0;
         self.checks.push(vec![
             ("name", name.into()),
@@ -409,16 +425,36 @@ impl Context {
         Ok((status, files::bounded(&kept, self.limits.report, false)?))
     }
 
+    /// Run `argv` and answer its exit status, whatever it is, and what it
+    /// printed. Nothing it says is kept as evidence and no check is
+    /// recorded: whoever asks judges the answer and records what was
+    /// learned. The command may print `room.0` bytes and complain in
+    /// `room.1`.
+    pub fn ask<S: AsRef<OsStr>>(
+        &self,
+        argv: &[S],
+        how: &Run<'_>,
+        room: (u64, u64),
+    ) -> Outcome<(i32, Vec<u8>)> {
+        let (hand, handed) = mpsc::channel();
+        let kept: (Box<dyn Write + Send>, Box<dyn Write + Send>) =
+            (Box::new(Handed(hand)), Box::new(std::io::sink()));
+        let status = self.pump(argv, how, kept, room)?;
+        // Both streams were closed, so everything printed has been handed on.
+        Ok((status, handed.try_iter().flatten().collect()))
+    }
+
     /// Run the command to its end, or stop it at its deadline or when a
-    /// stream passes the report limit. A command is over when both streams
-    /// are closed and its leader has exited, so one that leaves a descendant
-    /// holding a stream runs until the deadline. What it prints goes to the
-    /// two `kept` writers, standard output first.
+    /// stream says more than its `room`. A command is over when both
+    /// streams are closed and its leader has exited, so one that leaves a
+    /// descendant holding a stream runs until the deadline. What it prints
+    /// goes to the two `kept` writers, standard output first.
     fn pump<S: AsRef<OsStr>, W: Write + Send + 'static>(
         &self,
         argv: &[S],
         how: &Run<'_>,
         kept: (W, W),
+        room: (u64, u64),
     ) -> Outcome<i32> {
         let (program, arguments) = argv
             .split_first()
@@ -438,7 +474,6 @@ impl Context {
             .map_err(|error| files::unusable(&error))?;
         let pid = Pid::from_child(&child);
         let (sender, events) = mpsc::channel();
-        let limit = self.limits.report;
         let mut open = 0;
         if let Some(mut stream) = child.stdin.take() {
             let input = how.input.to_vec();
@@ -447,12 +482,12 @@ impl Context {
         }
         if let Some(stream) = child.stdout.take() {
             let (events, over) = (sender.clone(), "command_stdout_limit_exceeded");
-            std::thread::spawn(move || copied(stream, kept.0, limit, over, &events));
+            std::thread::spawn(move || copied(stream, kept.0, room.0, over, &events));
             open += 1;
         }
         if let Some(stream) = child.stderr.take() {
             let over = "command_stderr_limit_exceeded";
-            std::thread::spawn(move || copied(stream, kept.1, limit, over, &sender));
+            std::thread::spawn(move || copied(stream, kept.1, room.1, over, &sender));
             open += 1;
         }
         let deadline = Instant::now() + how.within;

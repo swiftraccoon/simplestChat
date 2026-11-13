@@ -6,8 +6,8 @@
 //! commands and takes its private copy of the sources, `secrets` turns that
 //! copy into what a secret scanner must read, `environment` builds the
 //! hash-locked Python environment of the scanners that need one, `licenses`
-//! reads the dependency declarations of the npm and Python locks, and `fast`
-//! holds the checks of the fast tier.
+//! reads the dependency declarations of the npm and Python locks and asks
+//! the registries about them, and `fast` holds the checks of the fast tier.
 
 pub mod context;
 pub mod environment;

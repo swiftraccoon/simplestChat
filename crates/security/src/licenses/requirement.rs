@@ -6,6 +6,7 @@
 //! library knows and then refused what was no exact pin; here whatever is no
 //! plain `name==version` is refused in one step, under the same code.
 
+use super::version::normal;
 use crate::{Fault, Result, policy::space, record::quoted, require};
 use std::collections::BTreeSet;
 
@@ -45,93 +46,6 @@ pub(crate) fn canonical(name: &str) -> String {
         spelled.push('-');
     }
     spelled
-}
-
-/// The length of the digits `text` starts with.
-fn digits(text: &str) -> usize {
-    text.bytes().take_while(u8::is_ascii_digit).count()
-}
-
-/// Whether `text` starts, whatever its case, with `word`.
-fn starts(text: &str, word: &str) -> bool {
-    text.get(..word.len())
-        .is_some_and(|start| start.eq_ignore_ascii_case(word))
-}
-
-/// The lengths a labelled segment of a version may take at the start of
-/// `text`: a separator or none, one of `labels`, a separator or none, and a
-/// number or none.
-fn labelled(text: &str, labels: &[&str]) -> Vec<usize> {
-    let separator = |text: &str| usize::from(text.starts_with(['-', '_', '.']));
-    let mut lengths = Vec::new();
-    for lead in 0..=separator(text) {
-        for label in labels.iter().filter(|label| starts(&text[lead..], label)) {
-            let named = lead + label.len();
-            for gap in 0..=separator(&text[named..]) {
-                lengths.push(named + gap);
-                let number = digits(&text[named + gap..]);
-                if number > 0 {
-                    lengths.push(named + gap + number);
-                }
-            }
-        }
-    }
-    lengths
-}
-
-/// Whether `text` is the rest of a version from `stage` on: a pre-release,
-/// a post-release, a development release and a local label, each or none,
-/// in that order.
-fn rest(text: &str, stage: u8) -> bool {
-    let lengths = match stage {
-        0 => labelled(
-            text,
-            &["alpha", "a", "beta", "b", "preview", "pre", "c", "rc"],
-        ),
-        1 => {
-            let mut lengths = labelled(text, &["post", "rev", "r"]);
-            let implicit = text.strip_prefix('-').map_or(0, digits);
-            if implicit > 0 {
-                lengths.push(1 + implicit);
-            }
-            lengths
-        }
-        2 => labelled(text, &["dev"]),
-        _ => {
-            let label = text.strip_prefix('+').unwrap_or("");
-            let plain = |segment: &str| {
-                !segment.is_empty() && segment.bytes().all(|byte| byte.is_ascii_alphanumeric())
-            };
-            return text.is_empty() || label.split(['-', '_', '.']).all(plain);
-        }
-    };
-    rest(text, stage + 1)
-        || lengths
-            .into_iter()
-            .any(|length| rest(&text[length..], stage + 1))
-}
-
-/// Whether `text` is a version: `v` or none, an epoch or none, a release of
-/// numbers between points, and the rest.
-fn version(text: &str) -> bool {
-    let text = text.strip_prefix(['v', 'V']).unwrap_or(text);
-    let epoch = digits(text);
-    let text = match text[epoch..].strip_prefix('!') {
-        Some(release) if epoch > 0 => release,
-        _ => text,
-    };
-    let mut at = 0;
-    loop {
-        let number = digits(&text[at..]);
-        if number == 0 {
-            return false;
-        }
-        at += number;
-        match text[at..].strip_prefix('.') {
-            Some(next) if digits(next) > 0 => at += 1,
-            _ => return rest(&text[at..], 0),
-        }
-    }
 }
 
 /// The names a marker may ask about, as they are spelled today.
@@ -347,7 +261,7 @@ pub(crate) fn pin(line: &str) -> Result<Pin> {
     let stop = |character: char| matches!(character, ' ' | '\t' | ';');
     let length = after.find(stop).unwrap_or(after.len());
     let (written, after) = after.split_at(length);
-    require(version(written), INEXACT.0)?;
+    require(normal(written).is_some(), INEXACT.0)?;
     let after = after.trim_start_matches([' ', '\t']);
     let mut requirement = format!("{name}=={written}");
     if let Some(conditions) = after.strip_prefix(';') {
