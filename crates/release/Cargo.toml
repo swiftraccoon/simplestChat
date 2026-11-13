@@ -22,7 +22,7 @@ rawzip = "=0.5.2"
 regex = "1.13.1"
 rustix = { version = "1.1.5", features = ["fs", "process", "system", "termios"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "=2.1.1", default-features = false, features = ["deserialize"] }
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
 simplestchat-ci = { path = "../ci" }
@@ -30,7 +30,7 @@ simplestchat-ops = { path = "../../ops", default-features = false }
 simplestchat-toolkit = { path = "../toolkit" }
 tar = { version = "=0.4.46", default-features = false }
 tokio = { version = "1.53.3", features = ["full"] }
-toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+toml = { version = "=1.2.0", default-features = false, features = ["parse", "serde", "std"] }
 url = "2.5.8"
 
 [dev-dependencies]
