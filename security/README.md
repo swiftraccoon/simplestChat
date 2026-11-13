@@ -31,6 +31,25 @@ path. Interrupted installation does not publish a usable prefix. Installation
 does not merge new tools into an unrelated or incomplete prefix; an explicit
 `--directory` selects a separate installation.
 
+`simplestchat-security tools install` and `tools path` (`crates/security`) are
+the same installer in Rust, with the same options, lock and default directory:
+
+```sh
+cargo run --locked -q -p simplestchat-security -- tools install
+cargo run --locked -q -p simplestchat-security -- tools path semgrep-core
+```
+
+It writes the same files and a byte-identical receipt, so either installer
+verifies and reuses a directory the other published. It downloads with
+`/usr/bin/curl`, which is given none of the caller's environment and accepts
+only HTTPS, redirects included, within the same three attempts, delays and
+three-minute bound; nothing is parsed before the archive has the locked digest.
+A lock address must be spelled plainly: lower-case scheme and host, and a path
+of ASCII letters, digits and `-._~/%+@`. A cut or damaged archive is refused
+even where its selected members could still be read. Directories below `bin`
+are created for the owner alone. A failure is one line,
+`Security tool setup failed: CODE`, with a fixed code and status 1.
+
 The current RustSec Git database also stays outside that cache, at
 `.cache/security-rustsec-db`, so pruning cannot leave an unusable advisory
 database directory. Cargo Audit still refreshes it on every invocation; a missing

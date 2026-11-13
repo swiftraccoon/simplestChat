@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "load_tests", "xtask", "ops", "crates/toolkit", "crates/ci", "crates/release", "crates/lobby-seed",
+    "crates/security",
 ]
 # Nothing built or unpacked under these directories is a member: the native
 # toolchain helpers build `bindgen-cli` under `target/`, and the vendored crates

@@ -250,6 +250,15 @@ crates/lobby-seed/**
 !crates/lobby-seed/src/
 crates/lobby-seed/src/**
 !crates/lobby-seed/src/*.rs
+!crates/security/
+crates/security/**
+!crates/security/Cargo.toml
+!crates/security/src/
+crates/security/src/**
+!crates/security/src/*.rs
+!crates/security/src/tools/
+crates/security/src/tools/**
+!crates/security/src/tools/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

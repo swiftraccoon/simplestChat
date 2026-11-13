@@ -116,7 +116,7 @@ including its port when using Vite or a second instance.
 
 ## Workspace layout
 
-The Cargo workspace has seven crates. The root package `simplestchat` (`src/`) is
+The Cargo workspace has nine crates. The root package `simplestchat` (`src/`) is
 the server library and the `simplestChat` binary. `simplestchat-load-test`
 (`load_tests/`) is the `load_test` generator. `simplestchat-ops` (`ops/`) holds
 the bounded host and guest operations and the Ops artifact tools. `xtask`
@@ -136,8 +136,13 @@ process groups and signals, retained executable identities, the reserved
 output-replay child, the owned disposable PostgreSQL and loopback server test
 environment behind `test-env`, and the default route's media address behind
 `media-ip`. A binary that hosts the CI command runner routes that child's
-single argument, `__replay`, before parsing anything else. New crates go under
-`crates/`.
+single argument, `__replay`, before parsing anything else.
+`simplestchat-lobby-seed` (`crates/lobby-seed/`) is the library behind
+`simplestchat-ops release seed-lobby`. `simplestchat-security`
+(`crates/security/`) is the security gate's own tooling, run as
+`cargo run --locked -q -p simplestchat-security -- <command>`; its `tools`
+commands install the [checksum-pinned scanners](../security/README.md) and
+verify an installation before use. New crates go under `crates/`.
 
 ## Native and web build
 

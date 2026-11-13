@@ -28,14 +28,14 @@ const FLAGS: OFlag = OFlag::O_RDONLY
 const MAX_ANCESTORS: usize = 32;
 const MAX_DIRECTORIES: usize = 32;
 const MAX_FILES: usize = 256;
-const MAX_LIVE_FILES: usize = 16;
+const MAX_LIVE_FILES: usize = 17;
 const MAX_FILE: u64 = 1024 * 1024;
 const MAX_LOCK: u64 = 4 * MAX_FILE;
 const MAX_TOTAL: u64 = 16 * MAX_FILE;
 const MAX_ENTRIES: usize = 8192;
 const MAX_NAMES: usize = 1024 * 1024;
 const MAX_DEPTH: usize = 8;
-const FIXED: [&str; 15] = [
+const FIXED: [&str; 16] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -47,6 +47,7 @@ const FIXED: [&str; 15] = [
     "crates/ci/Cargo.toml",
     "crates/release/Cargo.toml",
     "crates/lobby-seed/Cargo.toml",
+    "crates/security/Cargo.toml",
     "vendor/mediasoup-0.29.0/Cargo.toml",
     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
     "load_tests/src/lib.rs",
@@ -561,8 +562,8 @@ impl Input {
 /// Hash the fixed discovery manifests/config and the Ops Rust, capacity-library
 /// and lobby-seeding roots.
 /// Unselected workspace/vendor source is not a compiler-input closure. The tree
-/// retains at most 32 ancestor, 32 selected-directory and 16 regular-file owners
-/// (80), plus one enumeration cursor or visible-binding descriptor at a time.
+/// retains at most 32 ancestor, 32 selected-directory and 17 regular-file owners
+/// (81), plus one enumeration cursor or visible-binding descriptor at a time.
 /// Up to 256 file records retain stamps/digests. Rust leaves are closed after
 /// initial hashing and completely rehashed through anchored parents at the final
 /// fence; this is a checked new open, not continuous original-file custody.

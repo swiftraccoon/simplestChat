@@ -633,7 +633,7 @@ toolchain resolved, registry accessed, artifact generated or candidate run.
 
 The `workspace-ops-capacity-lobby-v3` inventory selects original bytes of `Cargo.toml`,
 `Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the
-Ops/load-test/xtask/toolkit/CI/release/lobby-seed manifests, the two current
+Ops/load-test/xtask/toolkit/CI/release/lobby-seed/security manifests, the two current
 mediasoup path-patch manifests, and every regular `*.rs` under `ops/src`, the
 load-test library entry and capacity dispatcher, Rust files under its `capacity`,
 `capacity_run` and `owned_process` directories, and those under
@@ -656,8 +656,9 @@ directory owners, including the source root. Selected source names are bounded
 ASCII components; links and special files are refused. Enumerations have a
 combined 8,192-entry/1 MiB name budget and 255-byte entry-name limit. Source-path
 ancestors have at most 32 retained owners, shared across every file. The bound
-is 80 retained File handles plus one transient enumeration/binding handle:
-32 ancestors, 32 selected directories and 16 regular-file owners. Fixed discovery
+is 81 retained File handles plus one transient enumeration/binding handle:
+32 ancestors, 32 selected directories and 17 regular-file owners (the 16 fixed
+discovery files and one Rust leaf at a time). Fixed discovery
 files retain their original descriptors. Each Rust leaf is hashed and explicitly
 closed before admitting the next; its anchored parent, original full stamp and
 digest remain. Final verification opens that same visible inode without following

@@ -331,6 +331,26 @@ cargo run -q -p xtask -- test-env \
   -- --include-ignored --test-threads=1
 ```
 
+### Pinned scanner installation
+
+`simplestchat-security` installs the security gate's scanners
+([security tool inputs](../security/README.md)). Its tests download nothing.
+They replay `crates/security/src/tools/recorded_tools.json`, the answers of
+`build/security_tools.py` for 135 lock documents, 112 archives built with that
+interpreter's own tar, gzip, xz and ZIP writers, and 81 installation scenarios
+against scripted transport answers: the verdict of every step, the requests
+and delays it made, and every file it left, the receipt byte for byte.
+Fourteen addresses and two damaged archives that the reference accepted are
+refused, and the tests name them. What the recording cannot hold is tested
+directly: the exact curl command line, how a finished transfer is judged, a
+child process that answers, runs late, writes too much or never ends, file
+creation and ownership, the two command forms, and the executable's output
+and exit statuses.
+
+```sh
+cargo test --locked -p simplestchat-security -- --test-threads=1
+```
+
 ### Runtime secret exposure regressions
 
 The `runtime_canary` Rust tests submit unique inert values through the real

@@ -132,6 +132,7 @@ COPY crates/toolkit/Cargo.toml crates/toolkit/Cargo.toml
 COPY crates/ci/Cargo.toml crates/ci/Cargo.toml
 COPY crates/release/Cargo.toml crates/release/Cargo.toml
 COPY crates/lobby-seed/Cargo.toml crates/lobby-seed/Cargo.toml
+COPY crates/security/Cargo.toml crates/security/Cargo.toml
 COPY ops/Cargo.toml ops/Cargo.toml
 COPY vendor ./vendor
 COPY build/security_vendor.py ./build/
@@ -143,7 +144,7 @@ RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /
 # so a source-only build compiles this crate alone instead of the whole graph.
 # The member stubs stay in place: Cargo loads every workspace manifest, and
 # the load-test stage copies the real sources over them.
-RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crates/release/src crates/lobby-seed/src ops/src \
+RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crates/release/src crates/lobby-seed/src crates/security/src ops/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
@@ -154,6 +155,8 @@ RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crate
     && printf '' > crates/ci/src/lib.rs \
     && printf 'fn main() {}\n' > crates/release/src/main.rs \
     && printf '' > crates/lobby-seed/src/lib.rs \
+    && printf 'fn main() {}\n' > crates/security/src/main.rs \
+    && printf '' > crates/security/src/lib.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
     && printf '' > ops/src/lib.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
