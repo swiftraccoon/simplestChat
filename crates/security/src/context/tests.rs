@@ -224,6 +224,39 @@ fn a_search_path_that_is_unset_is_the_system_directories() {
     assert_eq!(missing, Err(Failure::Prerequisite("no-such-program")));
 }
 
+/// The locale every command is given on this platform.
+const LOCALE: &str = if cfg!(target_os = "linux") {
+    "C.UTF-8"
+} else {
+    "en_US.UTF-8"
+};
+
+/// What a command said under `locale`, as the recording, made on a Mac, has
+/// it.
+fn recorded_locale(said: &str, locale: &str) -> String {
+    said.replace(locale, "en_US.UTF-8")
+}
+
+#[test]
+fn what_a_command_says_is_compared_in_the_recorded_locale() {
+    let elsewhere = recorded_locale("C.UTF-8|0|1|off|<output>/home|unsetunset", "C.UTF-8");
+    assert_eq!(elsewhere, "en_US.UTF-8|0|1|off|<output>/home|unsetunset");
+    assert_eq!(recorded_locale("0 C", "C.UTF-8"), "0 C");
+    assert_eq!(
+        recorded_locale("en_US.UTF-8|0", "en_US.UTF-8"),
+        "en_US.UTF-8|0"
+    );
+    let recording = recorded();
+    let printed = |case: &&Value| text(&case["name"]) == "the fixed environment";
+    let case = list(&recording["runs"])
+        .iter()
+        .find(printed)
+        .expect("the case");
+    let kept = text(&case["files"]["01-variables.stdout"]["text"]);
+    assert_eq!(kept, text(&case["results"][0]["output"]));
+    assert!(kept.starts_with("en_US.UTF-8|"));
+}
+
 /// What an output directory holds besides the home: each file's mode and its
 /// text, or its size when it is long.
 fn evidence(output: &Path, root: &Path) -> Value {
@@ -242,7 +275,8 @@ fn evidence(output: &Path, root: &Path) -> Value {
         if content.len() <= 256 {
             let text = String::from_utf8(content).expect("evidence that is text");
             let text = text.replace(spelled(root), "<root>");
-            file["text"] = text.replace(spelled(output), "<output>").into();
+            let text = text.replace(spelled(output), "<output>");
+            file["text"] = recorded_locale(&text, LOCALE).into();
         } else {
             file["bytes"] = content.len().into();
         }
@@ -285,11 +319,6 @@ fn step(context: &mut Context, step: &Value, below: &Path) -> super::Outcome<(i3
 #[test]
 fn every_recorded_command_is_run_alike() {
     let scratch = Scratch::new("cr");
-    let locale = if cfg!(target_os = "linux") {
-        "C.UTF-8"
-    } else {
-        "en_US.UTF-8"
-    };
     let mut tally = Tally::default();
     for (index, case) in list(&recorded()["runs"]).iter().enumerate() {
         let name = text(&case["name"]);
@@ -323,7 +352,7 @@ fn every_recorded_command_is_run_alike() {
                     let printed = String::from_utf8(printed).expect("output that is text");
                     let printed = printed.replace(spelled(&root), "<root>");
                     let printed = printed.replace(spelled(&output), "<output>");
-                    json!({"status": status, "output": printed.replace(locale, "en_US.UTF-8")})
+                    json!({"status": status, "output": recorded_locale(&printed, LOCALE)})
                 }
                 Err(failure) => json!({"code": failure.to_string()}),
             });
