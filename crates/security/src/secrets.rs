@@ -166,13 +166,22 @@ pub fn free(path: &Path) -> Result<u64> {
     Ok(usage.f_bavail.saturating_mul(usage.f_frsize))
 }
 
-/// Where the scanner's input and its configuration are.
+/// Where the scanner's input and its configuration are, and what the input
+/// covers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Neutral {
     /// The directory of projections under neutral names.
     pub inputs: PathBuf,
     /// The configuration whose fixture paths are those neutral names.
     pub configuration: PathBuf,
+    /// How many files were projected.
+    pub files: usize,
+    /// The bytes of those files.
+    pub source_bytes: u64,
+    /// The bytes of their projections.
+    pub projection_bytes: u64,
+    /// The SHA-256 of the coverage evidence.
+    pub coverage_sha256: String,
 }
 
 /// Project every selected file of the snapshot `source`, which the manifest
@@ -257,6 +266,7 @@ pub fn neutral_snapshot(
         projections == expected,
         "secret_projection_coverage_changed",
     )?;
+    let paths_len = paths.len();
     let mapped = pretty(&Value::Object(paths));
     files::write_private(&output.join("secret-paths.json"), mapped.as_bytes(), 0o600)?;
     let [first, second, third] = LIMITATIONS;
@@ -271,6 +281,7 @@ pub fn neutral_snapshot(
         "limitations": [first, second, third, HISTORY],
     });
     let coverage = pretty(&coverage);
+    let (files, coverage_sha256) = (paths_len, digest(coverage.as_bytes()));
     files::write_private(
         &output.join("secret-coverage.json"),
         coverage.as_bytes(),
@@ -302,6 +313,10 @@ pub fn neutral_snapshot(
     Ok(Neutral {
         inputs,
         configuration,
+        files,
+        source_bytes: sources,
+        projection_bytes: projections,
+        coverage_sha256,
     })
 }
 

@@ -1,0 +1,6643 @@
+{
+ "environments": {
+  "secrets": [
+   "CARGO_HOME=/h/.cargo",
+   "GIT_CONFIG_GLOBAL=/dev/null",
+   "GIT_CONFIG_SYSTEM=/dev/null",
+   "GIT_TERMINAL_PROMPT=0",
+   "HOME=<output>/home",
+   "LANG=en_US.UTF-8",
+   "LC_ALL=en_US.UTF-8",
+   "NO_COLOR=1",
+   "PATH=<path>",
+   "PIP_CONFIG_FILE=/dev/null",
+   "PIP_DISABLE_PIP_VERSION_CHECK=1",
+   "PYTHONDONTWRITEBYTECODE=1",
+   "PYTHONNOUSERSITE=1",
+   "RUSTUP_HOME=/h/.rustup",
+   "SEMGREP_SEND_METRICS=off"
+  ],
+  "workflows": [
+   "CARGO_HOME=/h/.cargo",
+   "GIT_CONFIG_GLOBAL=/dev/null",
+   "GIT_CONFIG_SYSTEM=/dev/null",
+   "GIT_TERMINAL_PROMPT=0",
+   "HOME=<output>/home",
+   "LANG=en_US.UTF-8",
+   "LC_ALL=en_US.UTF-8",
+   "NO_COLOR=1",
+   "PATH=/usr/bin:/bin",
+   "PIP_CONFIG_FILE=/dev/null",
+   "PIP_DISABLE_PIP_VERSION_CHECK=1",
+   "PYTHONDONTWRITEBYTECODE=1",
+   "PYTHONNOUSERSITE=1",
+   "RUSTUP_HOME=/h/.rustup",
+   "SEMGREP_SEND_METRICS=off"
+  ]
+ },
+ "secrets": [
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a clean tree without a base",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a clean tree and range",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "second",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<second>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a clean tree with the head for a base",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "other",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 1,
+     "name": "diff-base",
+     "rangeScan": "skipped_base_not_an_ancestor"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a base that is no ancestor",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "unknown",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 128,
+     "name": "diff-base",
+     "rangeScan": "skipped_base_not_an_ancestor"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a base that is unknown",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "side",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 1,
+     "name": "diff-base",
+     "rangeScan": "skipped_base_not_an_ancestor"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a base beside the head with an ancestor in common",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "000000000000000000000000000000000000000g",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base with one letter past f",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "HEAD",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base that is a name",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "abc1234",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base that is short",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base in capitals",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "0000000000000000000000000000000000000000\n",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base with a line end after it",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "an empty base",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "gggggggggggggggggggggggggggggggggggggggg",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a base of forty letters past f",
+   "result": {
+    "code": "invalid_security_diff_base"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "0123456789abcdef0123456789abcdef01234567",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 128,
+     "name": "diff-base",
+     "rangeScan": "skipped_base_not_an_ancestor"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a base of forty digits and letters",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 230296,
+     "projectionCoverageSha256": "02f2b9edb811365e4718dc8a13e2065afd4332e6f817bc0373b44850be3ce0ac",
+     "sourceBytes": 150,
+     "sourceFiles": 7
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": true,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem vendor/README.md vendor/lib/x.c ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "the vendored tree is scanned too",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "010e427fe9fb9b5271454ac74c913f0463c3bed1f4267169f3dfca0878e40bec",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "edadea81aeb35e10a878263f24534e6f53add9c3",
+    "other": "db7f758aef8004b87a538196fd448149562dae7c",
+    "second": "c7bfae782a1f660202cec9364c3c21dce3199b0f",
+    "side": "a298964a4241061a19b6ecece2bbc844c173ca73"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree without vendored files",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": false
+  },
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "a2d29459afd8b56a4fbaa7491e413a4af7be1e68839f1188e5efea23567bad4a",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "edadea81aeb35e10a878263f24534e6f53add9c3",
+    "other": "db7f758aef8004b87a538196fd448149562dae7c",
+    "second": "c7bfae782a1f660202cec9364c3c21dce3199b0f",
+    "side": "a298964a4241061a19b6ecece2bbc844c173ca73"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": true,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree without vendored files, scanned with them",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": false
+  },
+  {
+   "base": "first",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164681,
+     "projectionCoverageSha256": "71c17202ed86c0fd4846d624618c6d273bc53997e97637d4106a42a9a4e233cb",
+     "sourceBytes": 291,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "744f6d4232c1121cefd964cce88d4809df9d551c",
+    "other": "64d613f88cae787891243e68bba73c7077fe15f4",
+    "second": "24a8f9975d7ecdf150000e9d3714a89cca3e68c0",
+    "side": "0758d4f5269ffdb0353f1b63882e1a2217064642"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a reviewed fixture",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "public-fixture:02f77e9abfb1d22dc17d25411d6e3f5d9f1225b9b262795cc73a75a07c093260",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "gitleaks",
+     "scope": "tests/fixture.pem"
+    }
+   ],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "commits": {
+    "first": "744f6d4232c1121cefd964cce88d4809df9d551c",
+    "other": "64d613f88cae787891243e68bba73c7077fe15f4",
+    "second": "24a8f9975d7ecdf150000e9d3714a89cca3e68c0",
+    "side": "0758d4f5269ffdb0353f1b63882e1a2217064642"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: tests/fixture.pem\"\ncondition = \"AND\"\npaths = [\"(^|/)tests/fixture\\\\.pem$\"]\nregexTarget = \"line\"\nregexes = [\"BEGIN PUBLIC KEY\"]\n",
+   "includeVendor": false,
+   "left": [
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [],
+   "name": "a fixture without its review",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164660,
+     "projectionCoverageSha256": "2bdc590ae6061d07604a3fb2e3438f4fec7ae56264bd0fdd174fee5abf7e59e8",
+     "sourceBytes": 270,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "a8db720731fe736256817d6bd191658fac4cda67",
+    "other": "baac03d771ce587a4ca0029a375de11a39a29d2a",
+    "second": "9eb2c06fe7ca8377092bbc9b2cad868c30f4f6ba",
+    "side": "c41e7ca71aed11bb86c57be7c8924871e899d885"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/x.c\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/x\\\\.c$\"]\nregexTarget = \"line\"\nregexes = [\"int x\"]\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a vendored fixture without a review",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "commits": {
+    "first": "a8db720731fe736256817d6bd191658fac4cda67",
+    "other": "baac03d771ce587a4ca0029a375de11a39a29d2a",
+    "second": "9eb2c06fe7ca8377092bbc9b2cad868c30f4f6ba",
+    "side": "c41e7ca71aed11bb86c57be7c8924871e899d885"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\n[extend]\nuseDefault = true\n[[allowlists]]\ndescription = \"Public fixture: vendor/lib/x.c\"\ncondition = \"AND\"\npaths = [\"^vendor/lib/x\\\\.c$\"]\nregexTarget = \"line\"\nregexes = [\"int x\"]\n",
+   "includeVendor": true,
+   "left": [
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [],
+   "name": "a vendored fixture without a review, scanned with the vendored tree",
+   "result": {
+    "code": "unreviewed_gitleaks_allowlist"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {},
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    }
+   ],
+   "commits": {
+    "first": "8f4cee9380ddf328fca3bb982bd70031d105fdbe",
+    "other": "c47895f0ff4aa4d95c0373122fe2c9b0362672b0",
+    "second": "9864e7605d2f8c3eb1e847c44ea71a503d850071",
+    "side": "76cff066abc36e10a99dc57f433c2918079eb02f"
+   },
+   "configuration": "title = \n",
+   "includeVendor": false,
+   "left": [
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [],
+   "name": "a configuration that is no TOML",
+   "result": {
+    "code": "TOMLDecodeError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that finds nothing in the canary",
+   "result": {
+    "code": "secret_detector_selftest_count"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     0,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that exits with success",
+   "result": {
+    "code": "scanner_command_failed_gitleaks-selftest"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     1,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 1,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that exits with one",
+   "result": {
+    "code": "scanner_command_failed_gitleaks-selftest"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"},{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that finds the canary twice",
+   "result": {
+    "code": "secret_detector_selftest_count"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"generic-api-key\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that finds it by another rule",
+   "result": {
+    "code": "secret_detector_selftest_identity"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"ghp_x\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that does not redact",
+   "result": {
+    "code": "secret_detector_selftest_identity"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\",\"Match\":\"@canary@\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that prints the canary beside the finding",
+   "result": {
+    "code": "secret_detector_selftest_identity"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/content000001\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that finds it in another file",
+   "result": {
+    "code": "secret_detector_selftest_identity"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"@2@/../secret-canary-inputs/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that names the file through a parent",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that names no file",
+   "result": {
+    "code": "KeyError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":7}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector whose file is a number",
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"RuleID\":\"github-pat\",\"Secret\":\"REDACTED\",\"File\":\"\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector whose file is empty",
+   "result": {
+    "code": "invalid_tool_string"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[{\"Secret\":\"REDACTED\",\"File\":\"@2@/content000000\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that names no rule",
+   "result": {
+    "code": "secret_detector_selftest_identity"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "[[]]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector whose finding is a list",
+   "result": {
+    "code": "scanner_object_expected"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "{}"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector whose report is a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     "["
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector whose report is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-selftest": [
+     10,
+     ""
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "name": "gitleaks-selftest"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    }
+   ],
+   "name": "a detector that reports nothing at all",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     0,
+     "[{\"RuleID\":\"generic-api-key\",\"Secret\":\"REDACTED\",\"File\":\"x\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding in the tree",
+   "result": {
+    "code": "secret_findings_present"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     1,
+     "[]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 1,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree scan that fails",
+   "result": {
+    "code": "scanner_command_failed_gitleaks-tree"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     0,
+     "{}"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree scan whose report is a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     0,
+     "null"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree scan whose report is nothing",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     0,
+     "["
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree scan whose report is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-tree": [
+     0,
+     ""
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    }
+   ],
+   "name": "a tree scan that reports nothing at all",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {
+    "gitleaks-range": [
+     0,
+     "[{\"RuleID\":\"generic-api-key\",\"Secret\":\"REDACTED\",\"File\":\"x\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding in the range",
+   "result": {
+    "code": "secret_findings_present"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {
+    "gitleaks-range": [
+     1,
+     "[]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 1,
+     "name": "gitleaks-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    }
+   ],
+   "name": "a range scan that fails",
+   "result": {
+    "code": "scanner_command_failed_gitleaks-diff"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "other",
+   "behaviours": {
+    "gitleaks-range": [
+     0,
+     "[{\"RuleID\":\"generic-api-key\",\"Secret\":\"REDACTED\",\"File\":\"x\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 1,
+     "name": "diff-base",
+     "rangeScan": "skipped_base_not_an_ancestor"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding in a range that is not scanned",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "first",
+   "behaviours": {
+    "gitleaks-working": [
+     0,
+     "[{\"RuleID\":\"generic-api-key\",\"Secret\":\"REDACTED\",\"File\":\"x\"}]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "diff-base"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-diff"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "git",
+      ".",
+      "--log-opts=<first>..HEAD -- . :(top,exclude)vendor/**",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-range",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding in the working tree",
+   "result": {
+    "code": "secret_findings_present"
+   },
+   "reviews": [],
+   "vendored": true
+  },
+  {
+   "base": "none",
+   "behaviours": {
+    "gitleaks-working": [
+     2,
+     "[]"
+    ]
+   },
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "source-inventory"
+    },
+    {
+     "exitStatus": 10,
+     "expectedFinding": "github-pat",
+     "name": "gitleaks-selftest",
+     "projectionSha256": "1d94f2a92b557423abd442af523f0c1f7f69550b4692b9687c3790b898bed032",
+     "sourceSha256": "1e7f7109f24c2cd7f4c9387687267774bac1dce0fff5e79102927a8de2d72436"
+    },
+    {
+     "exitStatus": 0,
+     "name": "gitleaks-tree",
+     "projectionBytes": 164524,
+     "projectionCoverageSha256": "f4fc95dd03acfb5ac7fa06dfd07036d389fcce0c2ca44234b04fec07adff603e",
+     "sourceBytes": 134,
+     "sourceFiles": 5
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-git-dir"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-index"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-vendor-paths"
+    },
+    {
+     "exitStatus": 0,
+     "name": "secret-diff-scope"
+    },
+    {
+     "exitStatus": 2,
+     "name": "gitleaks-working-diff"
+    }
+   ],
+   "commits": {
+    "first": "08e5014bfdae148b09cd73d04aef5c35349e607a",
+    "other": "16941eb1a74d6ba2458d28754575f4a0506e9746",
+    "second": "70b46e053f498ae52c5fa905d2dbd610f0b57bbb",
+    "side": "2afb6d702d6c8ff2cf105cc947a7214f784bc4b5"
+   },
+   "configuration": "title = \"Reviewed secrets policy\"\nallowlists = []\n[extend]\nuseDefault = true\n",
+   "includeVendor": false,
+   "left": [
+    "secret-canary-inputs",
+    "secret-canary.original",
+    "secret-canary.toml",
+    "secret-configuration.toml",
+    "secret-coverage.json",
+    "secret-diff-index",
+    "secret-inputs",
+    "secret-paths.json",
+    "source",
+    "source-manifest.json"
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-canary-inputs",
+      "--config",
+      "<output>/secret-canary.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3",
+      "--exit-code=10"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-selftest",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "dir",
+      "<output>/secret-inputs",
+      "--config",
+      "<output>/secret-configuration.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "gitleaks-tree",
+     "stdin": ""
+    },
+    {
+     "added": [
+      "GIT_DIR=<root>/.git",
+      "GIT_INDEX_FILE=<output>/secret-diff-index",
+      "GIT_WORK_TREE=<output>/source"
+     ],
+     "argv": [
+      "git",
+      "<output>/source",
+      "--pre-commit",
+      "--config",
+      "<root>/security/gitleaks.toml",
+      "--redact=100",
+      "--ignore-gitleaks-allow",
+      "--gitleaks-ignore-path",
+      "/dev/null",
+      "--log-level=warn",
+      "--no-banner",
+      "--report-format=json",
+      "--report-path=-",
+      "--max-target-megabytes=0",
+      "--max-decode-depth=3"
+     ],
+     "cwd": "<root>",
+     "index": "security/gitleaks.toml src/a.rs src/b.rs tests/fixture.pem ",
+     "lost": [],
+     "program": "gitleaks-working",
+     "stdin": ""
+    }
+   ],
+   "name": "a working scan that fails",
+   "result": {
+    "code": "scanner_command_failed_gitleaks-working-diff"
+   },
+   "reviews": [],
+   "vendored": true
+  }
+ ],
+ "today": "2026-09-30",
+ "workflows": [
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor",
+     "reviewedFindings": 0
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "nothing found",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    1,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "actionlint"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    }
+   ],
+   "name": "workflows that do not parse",
+   "result": {
+    "code": "scanner_command_failed_actionlint"
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    "note\n"
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor",
+     "reviewedFindings": 0
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a syntax checker that says something",
+   "result": {
+    "held": true
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 14,
+     "name": "zizmor",
+     "reviewedFindings": 1
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a reviewed finding and the status of a finding",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    14,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor",
+     "reviewedFindings": 1
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a reviewed finding and success",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    0,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 13,
+     "name": "zizmor",
+     "reviewedFindings": 2
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "two reviewed findings",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    13,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}, {\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 14,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding without a review",
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [],
+   "zizmor": [
+    14,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a finding without a review and success",
+   "result": {
+    "code": "unreviewed_zizmor_finding"
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 14,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "the status of a finding and an empty report",
+   "result": {
+    "code": "zizmor_unsuccessful_empty_report"
+   },
+   "reviews": [],
+   "zizmor": [
+    14,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 11,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status eleven and an empty report",
+   "result": {
+    "code": "zizmor_unsuccessful_empty_report"
+   },
+   "reviews": [],
+   "zizmor": [
+    11,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 12,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status twelve and an empty report",
+   "result": {
+    "code": "zizmor_unsuccessful_empty_report"
+   },
+   "reviews": [],
+   "zizmor": [
+    12,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 13,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status thirteen and an empty report",
+   "result": {
+    "code": "zizmor_unsuccessful_empty_report"
+   },
+   "reviews": [],
+   "zizmor": [
+    13,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 11,
+     "name": "zizmor",
+     "reviewedFindings": 1
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status eleven and a reviewed finding",
+   "result": {
+    "held": true
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    11,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 1,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status one",
+   "result": {
+    "code": "scanner_command_failed_zizmor"
+   },
+   "reviews": [],
+   "zizmor": [
+    1,
+    "[]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 10,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status ten",
+   "result": {
+    "code": "scanner_command_failed_zizmor"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    10,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 15,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "status fifteen",
+   "result": {
+    "code": "scanner_command_failed_zizmor"
+   },
+   "reviews": [
+    {
+     "expires": "2026-10-30",
+     "fingerprint": "template-injection:0a52707c3cfcbe71d1d92290ce3ace273d510ec07b50cd6ebf338d8cde0f1910",
+     "owner": "maintainer",
+     "rationale": "Fixture only.",
+     "reachability": "Fixture only.",
+     "review": "https://example.org/reviews/1",
+     "scanner": "zizmor",
+     "scope": ".github/workflows/ci.yml#jobs/build/steps/3"
+    }
+   ],
+   "zizmor": [
+    15,
+    "[{\"ident\": \"template-injection\", \"locations\": [{\"symbolic\": {\"kind\": \"Primary\", \"key\": {\"Local\": {\"verbatim_path\": \".github/workflows/ci.yml\"}}, \"route\": {\"route\": [{\"Key\": \"jobs\"}, {\"Key\": \"build\"}, {\"Key\": \"steps\"}, {\"Index\": 3}]}}, \"concrete\": {\"feature\": \"run: echo ${{ github.event.issue.title }}\"}}]}]"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a report that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "["
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a report of nothing at all",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    ""
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 0,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a report that is a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "zizmor": [
+    0,
+    "{}"
+   ]
+  },
+  {
+   "actionlint": [
+    0,
+    ""
+   ],
+   "checks": [
+    {
+     "exitStatus": 0,
+     "name": "actionlint"
+    },
+    {
+     "exitStatus": 14,
+     "name": "zizmor"
+    }
+   ],
+   "log": [
+    {
+     "added": [],
+     "argv": [],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "actionlint",
+     "stdin": ""
+    },
+    {
+     "added": [],
+     "argv": [
+      "--offline",
+      "--pedantic",
+      "--no-ignores",
+      "--no-config",
+      "--strict-collection",
+      "--collect=all",
+      "--format=json-v1",
+      ".github"
+     ],
+     "cwd": "<root>",
+     "index": "",
+     "lost": [],
+     "program": "zizmor",
+     "stdin": ""
+    }
+   ],
+   "name": "a report that is a record and the status of a finding",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "reviews": [],
+   "zizmor": [
+    14,
+    "{}"
+   ]
+  }
+ ]
+}

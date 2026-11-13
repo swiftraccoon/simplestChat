@@ -536,7 +536,14 @@ fn a_command_needs_a_program() {
     let (root, output) = (scratch.0.join("root"), scratch.0.join("output"));
     std::fs::create_dir(&root).expect("a root");
     std::fs::create_dir(&output).expect("an output directory");
-    let mut context = Context::new(&root, &output, Limits::REVIEWED, &caller).expect("a context");
+    let limits = Limits {
+        files: 7,
+        ..Limits::REVIEWED
+    };
+    let mut context = Context::new(&root, &output, limits, &caller).expect("a context");
+    assert_eq!(context.limits(), &limits);
+    context.annotate([("nothing", "to add to".into())]);
+    assert!(context.checks().is_empty());
     let none: [&str; 0] = [];
     let refused = context.run("nothing", &none, &Run::default());
     assert_eq!(refused, Err(Failure::Fixed("invalid_scanner_command")));
@@ -546,6 +553,13 @@ fn a_command_needs_a_program() {
     assert_eq!(ran, Ok((0, b"said".to_vec())));
     let names: Vec<&Value> = context.checks().iter().map(|note| &note[0].1).collect();
     assert_eq!(names, ["noted", "says"]);
+    context.annotate([("more", 1.into()), ("still", 2.into())]);
+    let (first, last) = (&context.checks()[0], &context.checks()[1]);
+    assert_eq!((first.len(), last.len()), (2, 5));
+    assert_eq!(
+        (&last[3], &last[4]),
+        (&("more", 1.into()), &("still", 2.into()))
+    );
 }
 
 #[test]

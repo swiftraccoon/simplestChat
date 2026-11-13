@@ -360,6 +360,18 @@ impl Context {
         self.checks.push(note);
     }
 
+    /// Add fields to the line recorded last.
+    pub fn annotate(&mut self, fields: impl IntoIterator<Item = (&'static str, Value)>) {
+        if let Some(last) = self.checks.last_mut() {
+            last.extend(fields);
+        }
+    }
+
+    /// The bounds of the invocation.
+    pub fn limits(&self) -> &Limits {
+        &self.limits
+    }
+
     /// Run `argv` as the check `name` and answer its exit status and what it
     /// printed. Both streams are kept in new private files numbered in the
     /// order of the commands; the status and the time taken are recorded

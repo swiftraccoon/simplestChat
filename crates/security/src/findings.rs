@@ -30,21 +30,21 @@ const STALE: Fault = Fault("cargo_database_stale");
 const DIRECTIVES: [&str; 2] = ["squawk-disable-assume-in-transaction", "squawk-ignore"];
 const MICROSECONDS: i128 = 1_000_000;
 
-fn object(value: &Value) -> Result<&Map<String, Value>> {
+pub(crate) fn object(value: &Value) -> Result<&Map<String, Value>> {
     match value {
         Value::Object(fields) => Ok(fields),
         _ => Err(Fault("scanner_object_expected")),
     }
 }
 
-fn list(value: &Value) -> Result<&[Value]> {
+pub(crate) fn list(value: &Value) -> Result<&[Value]> {
     match value {
         Value::Array(items) => Ok(items),
         _ => Err(Fault("scanner_list_expected")),
     }
 }
 
-fn field<'a>(fields: &'a Map<String, Value>, name: &str) -> Result<&'a Value> {
+pub(crate) fn field<'a>(fields: &'a Map<String, Value>, name: &str) -> Result<&'a Value> {
     fields.get(name).ok_or(MISSING)
 }
 
