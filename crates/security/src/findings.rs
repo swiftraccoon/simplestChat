@@ -49,7 +49,7 @@ pub(crate) fn field<'a>(fields: &'a Map<String, Value>, name: &str) -> Result<&'
 }
 
 /// Whether a value counts as set: anything but null, false, zero and empty.
-fn set(value: &Value) -> bool {
+pub(crate) fn set(value: &Value) -> bool {
     match value {
         Value::Null => false,
         Value::Bool(flag) => *flag,
@@ -72,7 +72,7 @@ fn whole(value: &Value) -> Option<i128> {
 }
 
 /// JSON of one spelling: sorted keys, no spaces, ASCII only, whole numbers.
-fn canonical(value: &Value, text: &mut String) -> Result<()> {
+pub(crate) fn canonical(value: &Value, text: &mut String) -> Result<()> {
     match value {
         Value::Null => text.push_str("null"),
         Value::Bool(flag) => text.push_str(if *flag { "true" } else { "false" }),

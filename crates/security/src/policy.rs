@@ -171,7 +171,7 @@ pub struct Exception {
 
 /// White space as the reference strips and matches it: Unicode white space
 /// and the four information separators.
-fn space(character: char) -> bool {
+pub(crate) fn space(character: char) -> bool {
     character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 

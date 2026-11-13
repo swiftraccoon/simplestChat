@@ -9,6 +9,88 @@ pub(crate) const MAX_DOCUMENT: u64 = 1024 * 1024;
 const MAX_STRING: usize = 2048;
 const MAX_NAME: usize = 512;
 
+/// A value read with every record's keys distinct.
+struct Distinct;
+
+impl<'de> serde::de::DeserializeSeed<'de> for Distinct {
+    type Value = Value;
+
+    fn deserialize<D: serde::Deserializer<'de>>(
+        self,
+        source: D,
+    ) -> std::result::Result<Value, D::Error> {
+        source.deserialize_any(self)
+    }
+}
+
+impl<'de> serde::de::Visitor<'de> for Distinct {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a JSON value")
+    }
+
+    fn visit_bool<E>(self, flag: bool) -> std::result::Result<Value, E> {
+        Ok(flag.into())
+    }
+
+    fn visit_i64<E>(self, number: i64) -> std::result::Result<Value, E> {
+        Ok(number.into())
+    }
+
+    fn visit_u64<E>(self, number: u64) -> std::result::Result<Value, E> {
+        Ok(number.into())
+    }
+
+    fn visit_f64<E>(self, number: f64) -> std::result::Result<Value, E> {
+        Ok(number.into())
+    }
+
+    fn visit_str<E>(self, text: &str) -> std::result::Result<Value, E> {
+        Ok(text.into())
+    }
+
+    fn visit_unit<E>(self) -> std::result::Result<Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(
+        self,
+        mut items: A,
+    ) -> std::result::Result<Value, A::Error> {
+        let mut list = Vec::new();
+        while let Some(item) = items.next_element_seed(Distinct)? {
+            list.push(item);
+        }
+        Ok(list.into())
+    }
+
+    fn visit_map<A: serde::de::MapAccess<'de>>(
+        self,
+        mut pairs: A,
+    ) -> std::result::Result<Value, A::Error> {
+        let mut fields = Map::new();
+        while let Some(key) = pairs.next_key::<String>()? {
+            let value = pairs.next_value_seed(Distinct)?;
+            if fields.insert(key, value).is_some() {
+                return Err(serde::de::Error::custom("a key given twice"));
+            }
+        }
+        Ok(fields.into())
+    }
+}
+
+/// A JSON document none of whose records names a key twice: the reference
+/// refuses such a record rather than choose one of its values.
+pub(crate) fn strict(content: &[u8]) -> Result<Value> {
+    use serde::de::DeserializeSeed as _;
+    let mut source = serde_json::Deserializer::from_slice(content);
+    let value = Distinct.deserialize(&mut source);
+    let value = value.map_err(|_| Fault("invalid_tool_json"))?;
+    source.end().map_err(|_| Fault("invalid_tool_json"))?;
+    Ok(value)
+}
+
 /// A JSON document, or the one code for bytes that are none.
 pub(crate) fn document(content: &[u8]) -> Result<Value> {
     serde_json::from_slice(content).map_err(|_| Fault("invalid_tool_json"))

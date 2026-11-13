@@ -276,6 +276,9 @@ crates/security/src/fast/**
 !crates/security/src/environment/
 crates/security/src/environment/**
 !crates/security/src/environment/*.rs
+!crates/security/src/licenses/
+crates/security/src/licenses/**
+!crates/security/src/licenses/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

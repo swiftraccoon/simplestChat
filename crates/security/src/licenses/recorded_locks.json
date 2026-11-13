@@ -1,0 +1,4610 @@
+{
+ "allowed": [
+  {
+   "name": "three licences",
+   "result": {
+    "allowed": [
+     "Apache-2.0",
+     "BSD-3-Clause",
+     "MIT"
+    ]
+   },
+   "text": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"BSD-3-Clause\"]\n"
+  },
+  {
+   "name": "one licence beside other settings",
+   "result": {
+    "allowed": [
+     "MIT"
+    ]
+   },
+   "text": "[graph]\nall-features = true\n[licenses]\nconfidence-threshold = 0.9\nallow = [\"MIT\"]\n[bans]\nmultiple-versions = \"deny\"\n"
+  },
+  {
+   "name": "a licence twice",
+   "result": {
+    "code": "dependency_license_policy"
+   },
+   "text": "[licenses]\nallow = [\"MIT\", \"MIT\"]\n"
+  },
+  {
+   "name": "no licences",
+   "result": {
+    "code": "dependency_license_policy"
+   },
+   "text": "[licenses]\nallow = []\n"
+  },
+  {
+   "name": "a licence that is a number",
+   "result": {
+    "code": "ValueError"
+   },
+   "text": "[licenses]\nallow = [7]\n"
+  },
+  {
+   "name": "a licence that is empty",
+   "result": {
+    "allowed": [
+     ""
+    ]
+   },
+   "text": "[licenses]\nallow = [\"\"]\n"
+  },
+  {
+   "name": "licences that are text",
+   "result": {
+    "code": "ValueError"
+   },
+   "text": "[licenses]\nallow = \"MIT\"\n"
+  },
+  {
+   "name": "no allow list",
+   "result": {
+    "code": "KeyError"
+   },
+   "text": "[licenses]\nconfidence-threshold = 0.9\n"
+  },
+  {
+   "name": "no licences table",
+   "result": {
+    "code": "KeyError"
+   },
+   "text": "[bans]\nmultiple-versions = 'deny'\n"
+  },
+  {
+   "name": "a licences table that is a list",
+   "result": {
+    "code": "ValueError"
+   },
+   "text": "licenses = []\n"
+  },
+  {
+   "name": "a policy that is no TOML",
+   "result": {
+    "code": "TOMLDecodeError"
+   },
+   "text": "[licenses\n"
+  },
+  {
+   "name": "a policy that is not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "text": {
+    "base64": "W2xpY2Vuc2VzXQphbGxvdyA9IFsn/yddCg=="
+   }
+  },
+  {
+   "name": "an empty policy",
+   "result": {
+    "code": "tool_file_size"
+   },
+   "text": ""
+  },
+  {
+   "name": "no policy",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "text": null
+  }
+ ],
+ "audited": [
+  {
+   "current": {},
+   "includeVendor": false,
+   "name": "no files",
+   "names": [],
+   "previous": {},
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "web/package-lock.json": "new"
+   },
+   "includeVendor": false,
+   "name": "only maintained locks",
+   "names": [
+    "build/python-requirements.txt",
+    "web/package-lock.json"
+   ],
+   "previous": {
+    "web/package-lock.json": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/package-lock.json": "same"
+   },
+   "includeVendor": false,
+   "name": "another lock that did not change",
+   "names": [
+    "tools/package-lock.json"
+   ],
+   "previous": {
+    "tools/package-lock.json": "same"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/package-lock.json": "new"
+   },
+   "includeVendor": false,
+   "name": "another lock that changed",
+   "names": [
+    "tools/package-lock.json"
+   ],
+   "previous": {
+    "tools/package-lock.json": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/package-lock.json": "new"
+   },
+   "includeVendor": false,
+   "name": "another lock that is new",
+   "names": [
+    "tools/package-lock.json"
+   ],
+   "previous": {},
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {},
+   "includeVendor": false,
+   "name": "another lock that is gone",
+   "names": [
+    "tools/package-lock.json"
+   ],
+   "previous": {
+    "tools/package-lock.json": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {},
+   "includeVendor": false,
+   "name": "another lock that is nowhere",
+   "names": [
+    "tools/package-lock.json"
+   ],
+   "previous": {},
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/npm-shrinkwrap.json": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed npm-shrinkwrap.json",
+   "names": [
+    "tools/npm-shrinkwrap.json"
+   ],
+   "previous": {
+    "tools/npm-shrinkwrap.json": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed yarn.lock",
+   "names": [
+    "tools/yarn.lock"
+   ],
+   "previous": {
+    "tools/yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/pnpm-lock.yaml": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed pnpm-lock.yaml",
+   "names": [
+    "tools/pnpm-lock.yaml"
+   ],
+   "previous": {
+    "tools/pnpm-lock.yaml": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/Pipfile.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed Pipfile.lock",
+   "names": [
+    "tools/Pipfile.lock"
+   ],
+   "previous": {
+    "tools/Pipfile.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/poetry.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed poetry.lock",
+   "names": [
+    "tools/poetry.lock"
+   ],
+   "previous": {
+    "tools/poetry.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/uv.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed uv.lock",
+   "names": [
+    "tools/uv.lock"
+   ],
+   "previous": {
+    "tools/uv.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/pdm.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed pdm.lock",
+   "names": [
+    "tools/pdm.lock"
+   ],
+   "previous": {
+    "tools/pdm.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/pylock.toml": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed pylock.toml",
+   "names": [
+    "tools/pylock.toml"
+   ],
+   "previous": {
+    "tools/pylock.toml": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/pylock.dev.toml": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed pylock.dev.toml",
+   "names": [
+    "tools/pylock.dev.toml"
+   ],
+   "previous": {
+    "tools/pylock.dev.toml": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/requirements.txt": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed requirements.txt",
+   "names": [
+    "tools/requirements.txt"
+   ],
+   "previous": {
+    "tools/requirements.txt": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/dev-requirements.txt": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed dev-requirements.txt",
+   "names": [
+    "tools/dev-requirements.txt"
+   ],
+   "previous": {
+    "tools/dev-requirements.txt": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/requirements-dev.txt": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed requirements-dev.txt",
+   "names": [
+    "tools/requirements-dev.txt"
+   ],
+   "previous": {
+    "tools/requirements-dev.txt": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/my_requirements_2.txt": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed my_requirements_2.txt",
+   "names": [
+    "tools/my_requirements_2.txt"
+   ],
+   "previous": {
+    "tools/my_requirements_2.txt": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/Cargo.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named Cargo.lock",
+   "names": [
+    "tools/Cargo.lock"
+   ],
+   "previous": {
+    "tools/Cargo.lock": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/requirements.in": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named requirements.in",
+   "names": [
+    "tools/requirements.in"
+   ],
+   "previous": {
+    "tools/requirements.in": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/requirements.txt.bak": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named requirements.txt.bak",
+   "names": [
+    "tools/requirements.txt.bak"
+   ],
+   "previous": {
+    "tools/requirements.txt.bak": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/Requirements.txt": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named Requirements.txt",
+   "names": [
+    "tools/Requirements.txt"
+   ],
+   "previous": {
+    "tools/Requirements.txt": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/pylock.toml.bak": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named pylock.toml.bak",
+   "names": [
+    "tools/pylock.toml.bak"
+   ],
+   "previous": {
+    "tools/pylock.toml.bak": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/xpylock.dev.toml": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named xpylock.dev.toml",
+   "names": [
+    "tools/xpylock.dev.toml"
+   ],
+   "previous": {
+    "tools/xpylock.dev.toml": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/package-lock.json5": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named package-lock.json5",
+   "names": [
+    "tools/package-lock.json5"
+   ],
+   "previous": {
+    "tools/package-lock.json5": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/yarn.lock.old": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named yarn.lock.old",
+   "names": [
+    "tools/yarn.lock.old"
+   ],
+   "previous": {
+    "tools/yarn.lock.old": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "tools/go.sum": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed file named go.sum",
+   "names": [
+    "tools/go.sum"
+   ],
+   "previous": {
+    "tools/go.sum": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed lock at the root",
+   "names": [
+    "yarn.lock"
+   ],
+   "previous": {
+    "yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "vendor/lib/yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed lock below the vendored tree",
+   "names": [
+    "vendor/lib/yarn.lock"
+   ],
+   "previous": {
+    "vendor/lib/yarn.lock": "old"
+   },
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "current": {
+    "vendor/lib/yarn.lock": "new"
+   },
+   "includeVendor": true,
+   "name": "a changed lock below the vendored tree when it is selected",
+   "names": [
+    "vendor/lib/yarn.lock"
+   ],
+   "previous": {
+    "vendor/lib/yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "src/vendor/yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed lock below a directory named like the vendored tree",
+   "names": [
+    "src/vendor/yarn.lock"
+   ],
+   "previous": {
+    "src/vendor/yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "tools/../yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "a changed lock with a name that is no canonical path",
+   "names": [
+    "tools/../yarn.lock"
+   ],
+   "previous": {
+    "tools/../yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  },
+  {
+   "current": {
+    "a/yarn.lock": "same",
+    "b/yarn.lock": "new"
+   },
+   "includeVendor": false,
+   "name": "two other locks and the second changed",
+   "names": [
+    "a/yarn.lock",
+    "b/yarn.lock"
+   ],
+   "previous": {
+    "a/yarn.lock": "same",
+    "b/yarn.lock": "old"
+   },
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   }
+  }
+ ],
+ "graphs": [
+  {
+   "files": {},
+   "name": "nothing at all",
+   "result": {
+    "dependencies": []
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "one requirement file",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/python-requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "ops/ansible/requirements.txt": "--require-hashes\n--only-binary=:all:\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nb==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+    "security/requirements.txt": "b==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+    "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt": "b==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+    "web/e2e/package-lock.json": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+    "web/package-lock.json": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}"
+   },
+   "name": "every maintained lock",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/e2e/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     },
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/python-requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "ops/ansible/requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "identity": "[\"b==2\",[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+      "license": "",
+      "manifest": "ops/ansible/requirements.txt",
+      "name": "b",
+      "source": "",
+      "version": "2"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "identity": "[\"b==2\",[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+      "license": "",
+      "manifest": "security/requirements.txt",
+      "name": "b",
+      "source": "",
+      "version": "2"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "identity": "[\"b==2\",[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+      "license": "",
+      "manifest": "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+      "name": "b",
+      "source": "",
+      "version": "2"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "ops/ansible/requirements.txt": "-r base.txt\nb==2 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+   },
+   "name": "an include beside the file",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "ops/ansible/base.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "identity": "[\"b==2\",[\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+      "license": "",
+      "manifest": "ops/ansible/requirements.txt",
+      "name": "b",
+      "source": "",
+      "version": "2"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "-r ../shared/base.txt\n",
+    "ops/shared/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "an include above the file",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "ops/shared/base.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "ops/ansible/requirements.txt": "-r    base.txt   \n"
+   },
+   "name": "an include with space around it",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "ops/ansible/base.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/one.txt": "-r sub/two.txt\n",
+    "ops/ansible/requirements.txt": "-r one.txt\n",
+    "ops/ansible/sub/two.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "an include of an include",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "ops/ansible/sub/two.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "-r base.txt\n"
+   },
+   "name": "an include that is missing",
+   "result": {
+    "code": "dependency_requirements_missing_include"
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "-r requirements.txt\n"
+   },
+   "name": "an include of itself",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/one.txt": "-r requirements.txt\n",
+    "ops/ansible/requirements.txt": "-r one.txt\n"
+   },
+   "name": "includes in a circle",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "-r ../../outside.txt\n"
+   },
+   "name": "an include that climbs out",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/extra.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r ../../../build/extra.txt\n"
+   },
+   "name": "an include that climbs three times",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "-r /etc/requirements.txt\n"
+   },
+   "name": "an include that is absolute",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r ./base.txt\n"
+   },
+   "name": "an include with a current-directory step",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/base.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-rbase.txt\n"
+   },
+   "name": "an include written without a space",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "--requirement base.txt\n"
+   },
+   "name": "an include written in full",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
+    "build/i01.txt": "-r i02.txt\n",
+    "build/i02.txt": "-r i03.txt\n",
+    "build/i03.txt": "-r i04.txt\n",
+    "build/i04.txt": "-r i05.txt\n",
+    "build/i05.txt": "-r i06.txt\n",
+    "build/i06.txt": "-r i07.txt\n",
+    "build/i07.txt": "-r i08.txt\n",
+    "build/i08.txt": "-r i09.txt\n",
+    "build/i09.txt": "-r i10.txt\n",
+    "build/i10.txt": "-r i11.txt\n",
+    "build/i11.txt": "-r i12.txt\n",
+    "build/i12.txt": "-r i13.txt\n",
+    "build/i13.txt": "-r i14.txt\n",
+    "build/i14.txt": "-r i15.txt\n",
+    "build/i15.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r i01.txt\n"
+   },
+   "name": "sixteen files deep",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/i15.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/i01.txt": "-r i02.txt\n",
+    "build/i02.txt": "-r i03.txt\n",
+    "build/i03.txt": "-r i04.txt\n",
+    "build/i04.txt": "-r i05.txt\n",
+    "build/i05.txt": "-r i06.txt\n",
+    "build/i06.txt": "-r i07.txt\n",
+    "build/i07.txt": "-r i08.txt\n",
+    "build/i08.txt": "-r i09.txt\n",
+    "build/i09.txt": "-r i10.txt\n",
+    "build/i10.txt": "-r i11.txt\n",
+    "build/i11.txt": "-r i12.txt\n",
+    "build/i12.txt": "-r i13.txt\n",
+    "build/i13.txt": "-r i14.txt\n",
+    "build/i14.txt": "-r i15.txt\n",
+    "build/i15.txt": "-r i16.txt\n",
+    "build/i16.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r i01.txt\n"
+   },
+   "name": "seventeen files deep",
+   "result": {
+    "code": "dependency_requirements_include"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the same requirement in two files",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/python-requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     },
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "security/requirements.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/base.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "-r base.txt\n-r base.txt\n"
+   },
+   "name": "the same file included twice",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "pypi",
+      "hashes": [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "identity": "[\"a==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+      "license": "",
+      "manifest": "build/base.txt",
+      "name": "a",
+      "source": "",
+      "version": "1"
+     }
+    ]
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "a>=1\n"
+   },
+   "name": "a requirement that is none",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "files": {
+    "web/package-lock.json": "{\"name\": \"web\", \"lockfileVersion\": 2, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}}}"
+   },
+   "name": "a lock of another version",
+   "result": {
+    "code": "dependency_npm_lock_version"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--index-url https://example.org/simple\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "another option in a file",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  }
+ ],
+ "hashes": [
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+ ],
+ "lines": [
+  {
+   "content": "a==1\nb==2\n",
+   "name": "two requirements",
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \\\n    --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nb==2\n",
+   "name": "a continued requirement",
+   "result": {
+    "lines": [
+     "a==1      --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa      --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "# head\n\na==1  # tail\n   \n#\n b==2 \n",
+   "name": "comments and blank lines",
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#fragment\n",
+   "name": "a number sign inside a line",
+   "result": {
+    "lines": [
+     "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ]
+   }
+  },
+  {
+   "content": "# one \\\na==1\n",
+   "name": "a continued comment",
+   "result": {
+    "lines": []
+   }
+  },
+  {
+   "content": "a==1 \\\r\n --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n",
+   "name": "a backslash before a carriage return",
+   "result": {
+    "lines": [
+     "a==1 \\",
+     "--hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ]
+   }
+  },
+  {
+   "content": "a==1\r\nb==2\rc==3\n",
+   "name": "carriage returns",
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2",
+     "c==3"
+    ]
+   }
+  },
+  {
+   "content": "a==1\u000bb==2\fc==3\u001cd==4\u001de==5\u001ef==6\u0085g==7\u2028h==8\u2029i==9",
+   "name": "other line ends",
+   "result": {
+    "lines": [
+     "a==1",
+     "b==2",
+     "c==3",
+     "d==4",
+     "e==5",
+     "f==6",
+     "g==7",
+     "h==8",
+     "i==9"
+    ]
+   }
+  },
+  {
+   "content": "a==1",
+   "name": "no last line end",
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": "a==1 \\",
+   "name": "a backslash at the end",
+   "result": {
+    "lines": [
+     "a==1 \\"
+    ]
+   }
+  },
+  {
+   "content": "a==1 \\ \nb==2\n",
+   "name": "a backslash alone",
+   "result": {
+    "lines": [
+     "a==1 \\",
+     "b==2"
+    ]
+   }
+  },
+  {
+   "content": "",
+   "name": "nothing",
+   "result": {
+    "lines": []
+   }
+  },
+  {
+   "content": "# a\n# b\n",
+   "name": "only comments",
+   "result": {
+    "lines": []
+   }
+  },
+  {
+   "content": "--require-hashes\n--only-binary=:all:\n-r other.txt\na==1\n",
+   "name": "options",
+   "result": {
+    "lines": [
+     "--require-hashes",
+     "--only-binary=:all:",
+     "-r other.txt",
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": {
+    "base64": "YT09MQr/Cg=="
+   },
+   "name": "bytes that are not UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   }
+  },
+  {
+   "content": "\ufeffa==1\n",
+   "name": "a byte order mark",
+   "result": {
+    "lines": [
+     "\ufeffa==1"
+    ]
+   }
+  },
+  {
+   "content": {
+    "repeat": "#",
+    "then": "\na==1",
+    "times": 2097147
+   },
+   "name": "exactly the size limit",
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": {
+    "repeat": "#",
+    "then": "\na==1",
+    "times": 2097148
+   },
+   "name": "a byte past the size limit",
+   "result": {
+    "code": "dependency_requirements_size"
+   }
+  },
+  {
+   "content": {
+    "repeat": "\n",
+    "then": "a==1",
+    "times": 9999
+   },
+   "name": "exactly the line limit",
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  },
+  {
+   "content": {
+    "repeat": "\n",
+    "then": "a==1",
+    "times": 10000
+   },
+   "name": "a line past the limit",
+   "result": {
+    "code": "dependency_requirements_count"
+   }
+  },
+  {
+   "content": {
+    "repeat": "\r\n",
+    "then": "a==1",
+    "times": 9999
+   },
+   "name": "exactly the line limit with carriage returns",
+   "result": {
+    "lines": [
+     "a==1"
+    ]
+   }
+  }
+ ],
+ "npm": [
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "one package",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}}}",
+   "name": "only the root",
+   "result": {
+    "dependencies": []
+   }
+  },
+  {
+   "content": "{\"lockfileVersion\": 3, \"packages\": {\"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "no root",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/@scope/name\": {\"version\": \"2.0.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a scoped package",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/@scope/name\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"2.0.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "@scope/name",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "2.0.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/a/node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}, \"node_modules/left-pad\": {\"version\": \"1.2.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a nested package",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/a/node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     },
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.2.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.2.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/alias\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"name\": \"left-pad\"}}}",
+   "name": "a package with its own name",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/alias\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"name\":\"left-pad\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"dev\": true, \"optional\": true, \"peer\": true, \"engines\": {\"node\": \">=18\"}, \"bin\": {\"left\": \"bin.js\"}}}}",
+   "name": "a development, optional and peer package",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"bin\":{\"left\":\"bin.js\"},\"dev\":true,\"engines\":{\"node\":\">=18\"},\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"optional\":true,\"peer\":true,\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\"}}}",
+   "name": "a package without a licence, an address or an integrity",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       ""
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"version\":\"1.3.0\"}]",
+      "license": "",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"license\": \"MIT\"}}}",
+   "name": "a package without a version",
+   "result": {
+    "code": "KeyError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": 1, \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a package whose version is a number",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": {\"type\": \"MIT\"}}}}",
+   "name": "a package whose licence is a record",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"name\": 7}}}",
+   "name": "a package whose name is a number",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": []}}",
+   "name": "a package that is a list",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"resolved\": \"packages/left-pad\", \"link\": true}}}",
+   "name": "a linked package",
+   "result": {
+    "code": "dependency_npm_path"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"link\": false}}}",
+   "name": "a package whose link is false",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"link\":false,\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"link\": 1}}}",
+   "name": "a package whose link is a number",
+   "result": {
+    "code": "dependency_npm_path"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"packages/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a workspace package",
+   "result": {
+    "code": "dependency_npm_path"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a path that ends with the directory",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/caf\\u00e9\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"MIT \\u2603\"}}}",
+   "name": "a path outside ASCII",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/caf\\u00e9\",{\"integrity\":\"sha512-abc==\",\"license\":\"MIT \\u2603\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "MIT \u2603",
+      "manifest": "web/package-lock.json",
+      "name": "caf\u00e9",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"license\": \"WTFPL\", \"integrity\": \"sha512-abc==\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"version\": \"1.3.0\"}}}",
+   "name": "keys in another order",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"size\": 12, \"deprecated\": null, \"os\": [\"darwin\", \"linux\"]}}}",
+   "name": "a number and nothing among the fields",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"deprecated\":null,\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"os\":[\"darwin\",\"linux\"],\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"size\":12,\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\", \"size\": 1.5}}}",
+   "name": "a fraction among the fields",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"size\":1.5,\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 2, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "lock version two",
+   "result": {
+    "code": "dependency_npm_lock_version"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": \"3\", \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a lock version that is text",
+   "result": {
+    "code": "dependency_npm_lock_version"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3.0, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}",
+   "name": "a lock version that is a fraction",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"packages\": {}}",
+   "name": "no lock version",
+   "result": {
+    "code": "dependency_npm_lock_version"
+   }
+  },
+  {
+   "content": "{\"lockfileVersion\": 3}",
+   "name": "no packages",
+   "result": {
+    "code": "KeyError"
+   }
+  },
+  {
+   "content": "{\"lockfileVersion\": 3, \"packages\": []}",
+   "name": "packages that are a list",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "[]",
+   "name": "a lock that is a list",
+   "result": {
+    "code": "ValueError"
+   }
+  },
+  {
+   "content": "{",
+   "name": "a lock that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   }
+  },
+  {
+   "content": "",
+   "name": "an empty lock",
+   "result": {
+    "code": "JSONDecodeError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}}x",
+   "name": "a lock with something after it",
+   "result": {
+    "code": "JSONDecodeError"
+   }
+  },
+  {
+   "content": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\", \"version\": \"0.0.0\"}, \"node_modules/left-pad\": {\"version\": \"1.3.0\", \"resolved\": \"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\", \"integrity\": \"sha512-abc==\", \"license\": \"WTFPL\"}}} \n\t ",
+   "name": "a lock with space after it",
+   "result": {
+    "dependencies": [
+     {
+      "ecosystem": "npm",
+      "hashes": [
+       "sha512-abc=="
+      ],
+      "identity": "[\"node_modules/left-pad\",{\"integrity\":\"sha512-abc==\",\"license\":\"WTFPL\",\"resolved\":\"https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz\",\"version\":\"1.3.0\"}]",
+      "license": "WTFPL",
+      "manifest": "web/package-lock.json",
+      "name": "left-pad",
+      "source": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      "version": "1.3.0"
+     }
+    ]
+   }
+  },
+  {
+   "content": "{\"lockfileVersion\": 3, \"packages\": {\"node_modules/a\": {\"version\": \"1\", \"version\": \"2\"}}}",
+   "name": "a package with a key twice",
+   "result": {
+    "code": "DuplicateJsonError"
+   }
+  },
+  {
+   "content": "{\"lockfileVersion\": 3, \"packages\": {\"node_modules/a\": {\"version\": \"1\"}, \"node_modules/a\": {\"version\": \"2\"}}}",
+   "name": "a lock with a key twice",
+   "result": {
+    "code": "DuplicateJsonError"
+   }
+  }
+ ],
+ "requirements": [
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name and a version",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"requests==2.31.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "two hashes",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "identity": "[\"requests==2.31.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "the same hash twice",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"requests==2.31.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "requests==2.31.0 \t  --hash=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\t--hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "name": "three hashes after wide space",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "identity": "[\"requests==2.31.0\",[\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ",
+   "name": "a hash with space after it",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"requests==2.31.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "requests==2.31.0",
+   "name": "no hash",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a hash of another kind",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a short hash",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a long hash",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "name": "a hash in capitals",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+   "name": "a hash with a letter past f",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --no-binary",
+   "name": "a hash and something after it",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0--hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a hash without space before it",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "--hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa requests==2.31.0",
+   "name": "a hash first",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": " --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "only a hash",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --hash=sha256:zz",
+   "name": "a hash and then one that is none",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "requests==2.31.0 --hash=sha256:zz --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a hash that is none and then one",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "Requests==2.31.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name in capitals",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"Requests==2.31.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "requests",
+    "source": "",
+    "version": "2.31.0"
+   }
+  },
+  {
+   "line": "zope.interface==6.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name with a point",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"zope.interface==6.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "zope-interface",
+    "source": "",
+    "version": "6.0"
+   }
+  },
+  {
+   "line": "ruamel_yaml==0.18 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name with an underscore",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"ruamel_yaml==0.18\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "ruamel-yaml",
+    "source": "",
+    "version": "0.18"
+   }
+  },
+  {
+   "line": "a-_.b__c..d==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name with runs of separators",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"a-_.b__c..d==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "a-b-c-d",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name of one letter",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "3to2==1.1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name that starts with a digit",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"3to2==1.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "3to2",
+    "source": "",
+    "version": "1.1"
+   }
+  },
+  {
+   "line": "x.==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name that ends with a point",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "-x==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name that starts with a hyphen",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x y==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name with a space in it",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "caf\u00e9==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a name outside ASCII",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "no name",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "  x == 1.0   --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "space around the operator",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   }
+  },
+  {
+   "line": "x\t==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a tab before the operator",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   }
+  },
+  {
+   "line": "x==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version of one number",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==01.02.003 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version with leading zeros",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==01.02.003\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "01.02.003"
+   }
+  },
+  {
+   "line": "certifi==2026.10.19 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a date for a version",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"certifi==2026.10.19\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "certifi",
+    "source": "",
+    "version": "2026.10.19"
+   }
+  },
+  {
+   "line": "x==1.0rc1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a release candidate",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0rc1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0rc1"
+   }
+  },
+  {
+   "line": "x==1.0.post1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a post release",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.post1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.post1"
+   }
+  },
+  {
+   "line": "x==1.0.dev0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a development release",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.dev0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.dev0"
+   }
+  },
+  {
+   "line": "x==1!2.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "an epoch",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1!2.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1!2.0"
+   }
+  },
+  {
+   "line": "x==1.0+local.1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a local version",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+local.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+local.1"
+   }
+  },
+  {
+   "line": "x==1.0RC1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version in capitals",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0RC1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0RC1"
+   }
+  },
+  {
+   "line": "x==v1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version with a letter v",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==v1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "v1.0"
+   }
+  },
+  {
+   "line": "x==one --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version that is no version",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1.* --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a wildcard version",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x>=1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a version at least",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x~=1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a compatible version",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x===1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "an arbitrary equality",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x!=1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "an excluded version",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x==1.0,!=1.1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "two specifiers",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x==1.0,==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "the same specifier twice",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "no specifier",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x (==1.0) --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a specifier in parentheses",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   }
+  },
+  {
+   "line": "x[security]==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "an extra",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x[]==1.0 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "empty extras",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   }
+  },
+  {
+   "line": "x @ https://example.org/x-1.0.tar.gz --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "an address",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "x==1 ; python_version < '3.13' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version < \\\"3.13\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1;python_version<'3.13' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker without space",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version < \\\"3.13\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1; python_full_version >= \"3.12\" --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker in double quotes",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_full_version >= \\\"3.12\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; python_version >= '3.12' and sys_platform == 'linux' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker of two parts",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version >= \\\"3.12\\\" and sys_platform == \\\"linux\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt' or sys_platform == 'win32' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an alternative",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"nt\\\" or sys_platform == \\\"win32\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'nt' or sys_platform == 'win32') and python_version > '3' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a group",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; (os_name == \\\"nt\\\" or sys_platform == \\\"win32\\\") and python_version > \\\"3\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; ((os_name == 'nt')) or (sys_platform == 'win32' and (python_version > '3' or python_version < '2')) --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with nested groups",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"nt\\\" or (sys_platform == \\\"win32\\\" and (python_version > \\\"3\\\" or python_version < \\\"2\\\"))\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'nt') --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker that is one group",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"nt\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'a' or os_name == 'b') --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker that is one group of two",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" or os_name == \\\"b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a' and ((os_name == 'b' or os_name == 'c')) --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a doubled group after and",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" and (os_name == \\\"b\\\" or os_name == \\\"c\\\")\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; ((os_name == 'a' or os_name == 'b')) and os_name == 'c' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a doubled group before and",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; (os_name == \\\"a\\\" or os_name == \\\"b\\\") and os_name == \\\"c\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a' and (((os_name == 'b' or os_name == 'c'))) --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a tripled group",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" and (os_name == \\\"b\\\" or os_name == \\\"c\\\")\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'a') and (os_name == 'b') --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker of two groups of one",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" and os_name == \\\"b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a' and os_name == 'b' or os_name == 'c' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with and before or",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" and os_name == \\\"b\\\" or os_name == \\\"c\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; ((os_name == 'a' or os_name == 'b') and os_name == 'c') or os_name == 'd' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a group of a group and more",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; ((os_name == \\\"a\\\" or os_name == \\\"b\\\") and os_name == \\\"c\\\") or os_name == \\\"d\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; 'a' in extras --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on the extras",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"a\\\" in extras\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; 'g' in dependency_groups and 'h' not in dependency_groups --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on the dependency groups",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"g\\\" in dependency_groups and \\\"h\\\" not in dependency_groups\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ;\t os_name\t==   'a'  \t --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with tabs and wide space",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; () --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an empty group",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'a')(os_name == 'b') --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a group and nothing between",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a' andos_name == 'b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker that joins with a word run together",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a'and os_name == 'b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker whose word touches a quote",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\" and os_name == \\\"b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; 'a'in os_name --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with in touching a quote",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"a\\\" in os_name\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_namein 'a' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a name touching in",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; '3.13' > python_version --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with the value first",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"3.13\\\" > python_version\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; platform_machine in 'x86_64 arm64' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with in",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; platform_machine in \\\"x86_64 arm64\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; 'arm' not in platform_machine --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with not in",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"arm\\\" not in platform_machine\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; 'arm' not   in platform_machine --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with not  in",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"arm\\\" not in platform_machine\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; python_version ~= '3.12' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a compatible operator",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version ~= \\\"3.12\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; python_version === '3.12' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an arbitrary equality",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version === \\\"3.12\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; python_version <= '4' and python_version != '3.0' and python_version >= '3' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with every comparison",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; python_version <= \\\"4\\\" and python_version != \\\"3.0\\\" and python_version >= \\\"3\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; extra == 'Foo_Bar' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on an extra",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; extra == \\\"foo-bar\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; extra == 'a_.' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on an extra that ends with separators",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; extra == \\\"a-\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; extra == '._-a..b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on an extra that starts with separators",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; extra == \\\"-a-b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; extra == '-_.' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker on an extra of separators",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; extra == \\\"-\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1\t; os_name == 'a' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker after a tab",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a' and_ os_name == 'b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker joined by a word and an underscore",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; 'Foo_Bar' == extra --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with the extra's value first",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"foo-bar\\\" == extra\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; python_implementation == 'CPython' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an old name",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; platform_python_implementation == \\\"CPython\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os.name == 'nt' and sys.platform == 'win32' and platform.machine == 'x' and platform.version == 'y' and platform.python_implementation == 'z' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with pointed names",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"nt\\\" and sys_platform == \\\"win32\\\" and platform_machine == \\\"x\\\" and platform_version == \\\"y\\\" and platform_python_implementation == \\\"z\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; implementation_name == 'a' and implementation_version == 'b' and platform_release == 'c' and platform_system == 'd' and platform_python_implementation == 'e' and platform_version == 'f' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with every name",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; implementation_name == \\\"a\\\" and implementation_version == \\\"b\\\" and platform_release == \\\"c\\\" and platform_system == \\\"d\\\" and platform_python_implementation == \\\"e\\\" and platform_version == \\\"f\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; PYTHON_VERSION < '3.13' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker in capitals",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt' AND sys_platform == 'win32' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker joined in capitals",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; flavour == 'a' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an unknown name",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; 'a' == 'b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker of two values",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; \\\"a\\\" == \\\"b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == sys_platform --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker of two names",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == sys_platform\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'a\"b' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with a quote in its value",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == 'a\\\"b'\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == \"a'b\" --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an apostrophe in its value",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"a'b\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == '' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an empty value",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == ' a  b ' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with space in its value",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\" a  b \\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'caf\u00e9' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker outside ASCII",
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1; os_name == \\\"caf\\u00e9\\\"\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker without a value",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name 'nt' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker without an operator",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; (os_name == 'nt' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an open group",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker with an open quote",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker that is empty",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt' sys_platform == 'x' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker joined by nothing",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt' and --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker that ends with and",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x==1 ; os_name == 'nt' ; sys_platform == 'x' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "two markers",
+   "result": {
+    "code": "InvalidRequirement"
+   }
+  },
+  {
+   "line": "x[a]==1 ; os_name == 'nt' --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "name": "a marker after an extra",
+   "result": {
+    "code": "dependency_python_exact_version"
+   }
+  },
+  {
+   "line": "",
+   "name": "an empty line",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  },
+  {
+   "line": "   ",
+   "name": "only space",
+   "result": {
+    "code": "dependency_python_hash"
+   }
+  }
+ ],
+ "versions": [
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1"
+   },
+   "version": "1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   },
+   "version": "1.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.0.0.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.0.0.0"
+   },
+   "version": "1.0.0.0.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "0"
+   },
+   "version": "0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==00\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "00"
+   },
+   "version": "00"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==2026.10.19\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "2026.10.19"
+   },
+   "version": "2026.10.19"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a1"
+   },
+   "version": "1.0a1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a"
+   },
+   "version": "1.0a"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0b2\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0b2"
+   },
+   "version": "1.0b2"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0c3\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0c3"
+   },
+   "version": "1.0c3"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0rc4\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0rc4"
+   },
+   "version": "1.0rc4"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0alpha1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0alpha1"
+   },
+   "version": "1.0alpha1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0beta1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0beta1"
+   },
+   "version": "1.0beta1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0pre1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0pre1"
+   },
+   "version": "1.0pre1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0preview1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0preview1"
+   },
+   "version": "1.0preview1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.a1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.a1"
+   },
+   "version": "1.0.a1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-a1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-a1"
+   },
+   "version": "1.0-a1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0_a1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0_a1"
+   },
+   "version": "1.0_a1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a.1"
+   },
+   "version": "1.0a.1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a-1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a-1"
+   },
+   "version": "1.0a-1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a_1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a_1"
+   },
+   "version": "1.0a_1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.post1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.post1"
+   },
+   "version": "1.0.post1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0post1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0post1"
+   },
+   "version": "1.0post1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-post1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-post1"
+   },
+   "version": "1.0-post1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0_post1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0_post1"
+   },
+   "version": "1.0_post1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.post\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.post"
+   },
+   "version": "1.0.post"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.post.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.post.1"
+   },
+   "version": "1.0.post.1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-1"
+   },
+   "version": "1.0-1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0-1-1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.rev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.rev1"
+   },
+   "version": "1.0.rev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.r1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.r1"
+   },
+   "version": "1.0.r1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0r\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0r"
+   },
+   "version": "1.0r"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.dev1"
+   },
+   "version": "1.0.dev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0dev1"
+   },
+   "version": "1.0dev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-dev1"
+   },
+   "version": "1.0-dev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0_dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0_dev1"
+   },
+   "version": "1.0_dev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.dev\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.dev"
+   },
+   "version": "1.0.dev"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.dev.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.dev.1"
+   },
+   "version": "1.0.dev.1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0a1.post1.dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0a1.post1.dev1"
+   },
+   "version": "1.0a1.post1.dev1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.post1.dev1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.post1.dev1"
+   },
+   "version": "1.0.post1.dev1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0.dev1.post1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1!1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1!1.0"
+   },
+   "version": "1!1.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==0!1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "0!1.0"
+   },
+   "version": "0!1.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==12!1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "12!1"
+   },
+   "version": "12!1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "!1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1!"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1!!1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+abc\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+abc"
+   },
+   "version": "1.0+abc"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+abc.1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+abc.1"
+   },
+   "version": "1.0+abc.1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+abc-1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+abc-1"
+   },
+   "version": "1.0+abc-1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+abc_1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+abc_1"
+   },
+   "version": "1.0+abc_1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+ABC\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+ABC"
+   },
+   "version": "1.0+ABC"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+a..b"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+a b"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+.a"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+a."
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==v1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "v1.0"
+   },
+   "version": "v1.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==V1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "V1.0"
+   },
+   "version": "V1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "vv1.0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0RC1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0RC1"
+   },
+   "version": "1.0RC1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0A1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0A1"
+   },
+   "version": "1.0A1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.POST1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.POST1"
+   },
+   "version": "1.0.POST1"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0.DEV1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0.DEV1"
+   },
+   "version": "1.0.DEV1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1..0"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1."
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": ".1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0."
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0a1b2"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0rc\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0rc"
+   },
+   "version": "1.0rc"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0rca"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.x"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "one"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1,0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   },
+   "version": "1.0 "
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0"
+   },
+   "version": " 1.0"
+  },
+  {
+   "result": {
+    "code": "dependency_python_exact_version"
+   },
+   "version": "1.0.*"
+  },
+  {
+   "result": {
+    "code": "dependency_python_exact_version"
+   },
+   "version": "1.*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0.*.1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0a1.*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0.dev1.*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0+a.*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0.post1.*"
+  },
+  {
+   "result": {
+    "code": "dependency_python_exact_version"
+   },
+   "version": "1!1.*"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1e3"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0-"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0_"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "-1.0"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0--1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0.-1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1_0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1-0\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1-0"
+   },
+   "version": "1-0"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-a\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-a"
+   },
+   "version": "1.0-a"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0-b-1\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0-b-1"
+   },
+   "version": "1.0-b-1"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "\u0661.0"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.\u00b2"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0\u00e9"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": "1.0a\u0661"
+  },
+  {
+   "result": {
+    "code": "InvalidRequirement"
+   },
+   "version": ""
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1111111111111111111111111111111111111111\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1111111111111111111111111111111111111111"
+   },
+   "version": "1111111111111111111111111111111111111111"
+  },
+  {
+   "result": {
+    "ecosystem": "pypi",
+    "hashes": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "identity": "[\"x==1.0+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]]",
+    "license": "",
+    "manifest": "requirements.txt",
+    "name": "x",
+    "source": "",
+    "version": "1.0+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "version": "1.0+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+ ],
+ "wheels": [
+  {
+   "files": {},
+   "name": "no locks",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "--require-hashes\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock without the option",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": "# --only-binary=:all:\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option in a comment",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "   --only-binary=:all:   \na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option after space",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "--only-binary=:all: --require-hashes\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option and another on its line",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "ops/ansible/requirements.txt": "--only-binary=a\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a lock with the option for one package",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "a vendored lock without the option",
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/python-requirements.txt": ""
+   },
+   "name": "an empty lock",
+   "result": {
+    "code": "tool_file_size"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "python -m pip --isolated install --disable-pip-version-check \\\n    --require-hashes --only-binary=:all: --requirement security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with its installer",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock without an installer",
+   "result": {
+    "code": "FileNotFoundError"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "python -m pip --isolated install --disable-pip-version-check \\\n    --require-hashes --requirement security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer that builds",
+   "result": {
+    "code": "dependency_security_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "python -m pip --isolated install --disable-pip-version-check \\\n    --only-binary=:all: --requirement security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer without hashes",
+   "result": {
+    "code": "dependency_security_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "pip install --require-hashes \\\n      --only-binary=:all: \\\n\t--requirement   security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer over continued lines",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "--require-hashes\n--only-binary=:all:\n--requirement security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer over lines that are not continued",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "pip install --require-hashes --only-binary=:all: --requirement security/requirements.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer on one line",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "python -m pip --isolated install --disable-pip-version-check \\\n    --require-hashes --only-binary=:all: --requirement other.txt\n",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock with an installer of another lock",
+   "result": {
+    "code": "dependency_security_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "true\n",
+    "security/requirements.txt": "--require-hashes\n--only-binary=:all:\na==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "the scanner lock itself carrying the option",
+   "result": {
+    "code": "dependency_security_wheel_only_policy"
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "true\n"
+   },
+   "name": "an installer alone",
+   "result": {
+    "held": true
+   }
+  },
+  {
+   "files": {
+    "build/check-security.sh": "",
+    "security/requirements.txt": "a==1 --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "name": "an empty installer",
+   "result": {
+    "code": "tool_file_size"
+   }
+  }
+ ]
+}
