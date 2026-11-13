@@ -26,7 +26,10 @@ if [[ ! -f "$security_env/ready" ]]; then
     printf 'Rebuilding an incomplete scanner environment: %s\n' "$security_env" >&2
     stale="$(readlink -- "$security_env" || true)"
     rm -rf -- "$security_env"
-    if [[ -n "$stale" && "$stale" == "$security_root"/.install.* ]]; then
+    # Only a staging directory that sits in this cache itself. The link's text
+    # is compared, never resolved, so nothing it leads to through `..` or
+    # below another staging directory is removed.
+    if [[ -n "$stale" && "${stale%/*}" == "$security_root" && "${stale##*/}" == .install.* ]]; then
       rm -rf -- "$stale"
     fi
   fi
