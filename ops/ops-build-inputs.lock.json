@@ -20,15 +20,15 @@
     {
       "suite": "noble-security",
       "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/binary-amd64/Packages.xz",
-      "sha256": "1eb91a5ace60312e3abfae347d048c0a17d6a0eb0b898b34f03d61c4f884d1e0",
-      "bytes": 1160084,
+      "sha256": "b54fa6f53e08407e5289e8723a16ed6b13482bb5bb93a988e5768e2c78c82956",
+      "bytes": 1195092,
       "xzMembers": 1
     },
     {
       "suite": "noble-updates",
       "url": "https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages.xz",
-      "sha256": "1632bdc68349c6547bda6c393dfe17af1293feda58b22614df5d7293a43411ce",
-      "bytes": 1444008,
+      "sha256": "dacadafcd277ddc605dd1763129bc4a3fb3ca44540fb3c2aa84031780d2f4c7b",
+      "bytes": 1449768,
       "xzMembers": 1
     }
   ],
@@ -389,10 +389,10 @@
     {
       "name": "libc-dev-bin",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc-dev-bin_2.39-0ubuntu8.9_amd64.deb",
-      "sha256": "77db23aba4582d034d9a95e4818a16e7e51a2d4fb17a9204439688e288d67f4c",
-      "bytes": 20402,
-      "version": "2.39-0ubuntu8.9",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc-dev-bin_2.39-0ubuntu8.12_amd64.deb",
+      "sha256": "74ac21dab2a0a6524a2cf9de623adf1bb1f7d9b672e6b0f70adec0c40452bae3",
+      "bytes": 20450,
+      "version": "2.39-0ubuntu8.12",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
@@ -402,10 +402,10 @@
     {
       "name": "libc6",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6_2.39-0ubuntu8.9_amd64.deb",
-      "sha256": "ff5557d99b51f761c4b7c92368b9cc45565eda17df9bf9eb4b134d09825008be",
-      "bytes": 3264314,
-      "version": "2.39-0ubuntu8.9",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6_2.39-0ubuntu8.12_amd64.deb",
+      "sha256": "d821b41fc59cb4978ecd53bc83e5c964ac15d305c8d2ac4c8a35aebe55010fb9",
+      "bytes": 3264258,
+      "version": "2.39-0ubuntu8.12",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
@@ -415,10 +415,10 @@
     {
       "name": "libc6-dev",
       "format": "ubuntu-deb",
-      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.9_amd64.deb",
-      "sha256": "e13d5fcc1b2a86f75bca8e0026a8e39f24fe97ca86e92be79991f8697eb1306f",
-      "bytes": 2125612,
-      "version": "2.39-0ubuntu8.9",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.12_amd64.deb",
+      "sha256": "d81dd6dc9d515762cc93f338efa6219252acf3e2e87b5b89dd7dc517741e6eed",
+      "bytes": 2124506,
+      "version": "2.39-0ubuntu8.12",
       "archiveRoot": "",
       "component": "",
       "dependencies": [
