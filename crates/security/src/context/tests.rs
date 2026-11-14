@@ -487,6 +487,60 @@ fn the_time_taken_is_in_seconds_to_the_millisecond() {
     assert!((thousandths.round() - thousandths).abs() < 1e-6, "{taken}");
 }
 
+#[test]
+fn work_done_here_is_kept_as_a_command_is() {
+    let scratch = Scratch::new("cw");
+    let output = scratch.0.join("output");
+    std::fs::create_dir(&output).expect("an output directory");
+    let mut context =
+        Context::new(&scratch.0, &output, Limits::REVIEWED, &caller).expect("a context");
+    let ran = context.run("first", &["/bin/sh", "-c", "exit 0"], &Run::default());
+    assert_eq!(ran, Ok((0, Vec::new())));
+    let said = |failure: &Failure| format!("it failed: {failure}\n");
+    // The work is done in the context it is kept in.
+    let seen = |context: &Context| match context.checks().len() {
+        1 => Ok(()),
+        _ => Err(Failure::Fixed("another_context")),
+    };
+    assert_eq!(context.step("second", seen, said), Ok(()));
+    let failing = |_: &Context| Err(Failure::Fixed("a_code"));
+    let failed = context.step("third", failing, said);
+    assert_eq!(failed, Err(Failure::Command("third")));
+    let refused = context.step("a.name", failing, said);
+    assert_eq!(refused, Err(Failure::Fixed("invalid_scanner_check_name")));
+    assert_eq!(context.sequence, 3);
+    let lines: Vec<(&Value, &Value, bool)> = context
+        .checks()
+        .iter()
+        .map(|line| {
+            let named: Vec<&str> = line.iter().map(|(field, _)| *field).collect();
+            assert_eq!(named, ["name", "exitStatus", "elapsedSeconds"]);
+            let taken = line[2].1.as_f64().expect("seconds");
+            (&line[0].1, &line[1].1, (0.0..5.0).contains(&taken))
+        })
+        .collect();
+    let expected = [json!("first"), json!("second"), json!("third")];
+    let (ended, failed) = (json!(0), json!(1));
+    assert_eq!(
+        lines,
+        [
+            (&expected[0], &ended, true),
+            (&expected[1], &ended, true),
+            (&expected[2], &failed, true),
+        ]
+    );
+    let empty = json!({"mode": 0o600, "text": ""});
+    assert_eq!(
+        evidence(&output, &scratch.0),
+        json!({
+            "01-first.stdout": empty, "01-first.stderr": empty,
+            "02-second.stdout": empty, "02-second.stderr": empty,
+            "03-third.stdout": empty,
+            "03-third.stderr": {"mode": 0o600, "text": "it failed: a_code\n"},
+        })
+    );
+}
+
 /// Evidence that cannot be kept.
 struct Refusing;
 

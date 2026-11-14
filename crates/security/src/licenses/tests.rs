@@ -13,11 +13,8 @@ use super::{
     Dependency, PYTHON_LOCKS, allowed_licenses, dependencies, npm_dependencies,
     require_audited_locks, require_wheel_only, requirement, requirement_lines,
 };
-use crate::{
-    Result,
-    policy::space,
-    scratch::{Scratch, base64},
-};
+pub(super) use crate::scratch::content;
+use crate::{Result, policy::space, scratch::Scratch};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
@@ -165,21 +162,6 @@ fn every_recorded_version_is_judged_alike() {
         );
     }
     assert_eq!(tally, Tally(61, 41, 0));
-}
-
-/// The bytes of a recorded file: text, base64, or one character repeated
-/// before the rest.
-pub(super) fn content(spec: &Value) -> Vec<u8> {
-    if let Some(text) = spec.as_str() {
-        return text.as_bytes().to_vec();
-    }
-    if let Some(encoded) = spec.get("base64") {
-        return base64(text(encoded));
-    }
-    let times = usize::try_from(spec["times"].as_u64().expect("a count"));
-    let mut written = text(&spec["repeat"]).repeat(times.expect("a small count"));
-    written.push_str(text(&spec["then"]));
-    written.into_bytes()
 }
 
 #[test]

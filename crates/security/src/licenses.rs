@@ -141,7 +141,7 @@ pub fn npm_dependencies(path: &str, content: &[u8]) -> Result<BTreeSet<Dependenc
 /// line feed, a carriage return or both, a vertical tab, a form feed, a
 /// file, group or record separator, a next line, or a line or paragraph
 /// separator.
-fn splitlines(text: &str) -> Vec<&str> {
+pub(crate) fn splitlines(text: &str) -> Vec<&str> {
     const ENDS: [char; 10] = [
         '\n', '\r', '\u{b}', '\u{c}', '\u{1c}', '\u{1d}', '\u{1e}', '\u{85}', '\u{2028}',
         '\u{2029}',

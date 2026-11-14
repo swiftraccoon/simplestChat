@@ -18,15 +18,13 @@ use super::{
 use crate::{
     context::{Context, Failure, Limits, Outcome},
     fast::Programs,
-    scratch::Scratch,
+    scratch::{Scratch, host_git, repository, written},
 };
 use serde_json::{Map, Value, json};
 use std::{
-    collections::BTreeMap,
     ffi::OsString,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 const RECORDED: &str = include_str!("recorded_review.json");
@@ -63,92 +61,6 @@ impl Programs for Tools {
     }
 }
 
-/// Where the host keeps git.
-fn host_git() -> PathBuf {
-    let search = std::env::var_os("PATH").expect("a search path");
-    let found = std::env::split_paths(&search)
-        .map(|directory| directory.join("git"))
-        .find(|candidate| candidate.is_file());
-    found.expect("git on the search path")
-}
-
-/// Write `files` below `root`: a file that is null is removed.
-fn written(root: &Path, files: &Map<String, Value>) {
-    for (path, spec) in files {
-        let target = root.join(path);
-        if spec.is_null() {
-            std::fs::remove_file(&target).expect("a file to remove");
-            continue;
-        }
-        std::fs::create_dir_all(target.parent().expect("a parent")).expect("directories");
-        std::fs::write(&target, content(spec)).expect("a file");
-    }
-}
-
-/// One recorded repository: its commits by name and the files it ends with.
-struct Repository {
-    commits: BTreeMap<&'static str, String>,
-    files: BTreeMap<String, Value>,
-}
-
-/// Build the repository of `case` in `root` as the recorder built it: a
-/// first commit, an unrelated one, a second on the main line and
-/// uncommitted work, every commit with the recording's fixed stamp.
-fn repository(root: &Path, git: &Path, recording: &Value, case: &Value) -> Repository {
-    let run = |arguments: &[&str]| {
-        let stamp = recording["stamp"].as_object().expect("a stamp");
-        let done = Command::new(git)
-            .args(arguments)
-            .current_dir(root)
-            .env_clear()
-            .env("PATH", "/usr/bin:/bin")
-            .env("HOME", root)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_SYSTEM", "/dev/null")
-            .envs(stamp.iter().map(|(name, value)| (name, text(value))))
-            .output()
-            .expect("git runs");
-        assert!(done.status.success(), "git {arguments:?}");
-        String::from_utf8(done.stdout)
-            .expect("text")
-            .trim()
-            .to_owned()
-    };
-    let empty = Map::new();
-    let tree = |value: &Value| value.as_object().cloned();
-    let first = tree(&case["first"]).unwrap_or_else(|| tree(&recording["tree"]).expect("a tree"));
-    let mut files: BTreeMap<String, Value> = first.clone().into_iter().collect();
-    let mut commits = BTreeMap::new();
-    run(&["init", "-q", "-b", "main"]);
-    written(root, &first);
-    run(&["add", "-A"]);
-    run(&["commit", "-q", "--allow-empty", "-m", "first"]);
-    commits.insert("first", run(&["rev-parse", "HEAD"]));
-    commits.insert("tree", run(&["rev-parse", "HEAD^{tree}"]));
-    run(&["checkout", "-q", "--orphan", "other"]);
-    run(&["commit", "-q", "--allow-empty", "-m", "other"]);
-    commits.insert("other", run(&["rev-parse", "HEAD"]));
-    run(&["checkout", "-q", "main"]);
-    if let Some(second) = case["second"].as_object() {
-        written(root, second);
-        files.extend(second.clone());
-        run(&["add", "-A"]);
-        run(&["commit", "-q", "--allow-empty", "-m", "second"]);
-    }
-    commits.insert("second", run(&["rev-parse", "HEAD"]));
-    let ignored: Vec<&str> = list(&case["ignored"]).iter().map(text).collect();
-    if !ignored.is_empty() {
-        let rules: String = ignored.iter().map(|path| format!("{path}\n")).collect();
-        std::fs::write(root.join(".gitignore"), &rules).expect("rules");
-        files.insert(".gitignore".to_owned(), rules.into());
-    }
-    let working = case["working"].as_object().unwrap_or(&empty);
-    written(root, working);
-    files.extend(working.clone());
-    files.retain(|path, spec| !spec.is_null() && !ignored.contains(&path.as_str()));
-    Repository { commits, files }
-}
-
 /// The code here for an exception of the reference's interpreter.
 fn named(code: &str) -> &str {
     match code {
@@ -178,10 +90,13 @@ fn staged(base: &Path, git: &Path, recording: &Value, case: &Value) -> Staged {
         std::fs::create_dir_all(directory).expect("a directory");
     }
     let repository = repository(&root, git, recording, case);
-    let recorded = case["commits"].as_object().expect("commits");
-    assert_eq!(recorded.len(), repository.commits.len(), "{name}");
-    for (commit, named) in &repository.commits {
-        assert_eq!(text(&recorded[*commit]), named, "{name}: {commit}");
+    for (commit, named) in case["commits"].as_object().expect("commits") {
+        let built = repository.commits.get(commit.as_str());
+        assert_eq!(
+            built.map(String::as_str),
+            Some(text(named)),
+            "{name}: {commit}"
+        );
     }
     written(&snapshot, &repository.files.clone().into_iter().collect());
     let log = base.join("log");

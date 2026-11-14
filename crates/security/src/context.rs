@@ -246,6 +246,15 @@ pub fn executable(name: &'static str, path: Option<&OsStr>) -> Outcome<PathBuf> 
         .ok_or(Failure::Prerequisite(name))
 }
 
+/// A check that has begun: where what it prints is kept, the files of its
+/// two streams and when it began.
+struct Opened {
+    printed: PathBuf,
+    output: File,
+    error: File,
+    started: Instant,
+}
+
 /// A new private file; a name that exists is never reused.
 fn created(path: &Path) -> Outcome<File> {
     let mut options = OpenOptions::new();
@@ -422,32 +431,51 @@ impl Context {
         argv: &[S],
         how: &Run<'_>,
     ) -> Outcome<(i32, Vec<u8>)> {
+        let opened = self.opened(name)?;
+        let room = (self.limits.report, self.limits.report);
+        let status = self.pump(argv, how, (opened.output, opened.error), room)?;
+        self.timed(name, status, opened.started);
+        if !how.accepted.contains(&status) {
+            return Err(Failure::Command(name));
+        }
+        let size = opened.printed.metadata();
+        if size.map_err(|error| files::unusable(&error))?.len() == 0 {
+            return Ok((status, Vec::new()));
+        }
+        let printed = files::bounded(&opened.printed, self.limits.report, false)?;
+        Ok((status, printed))
+    }
+
+    /// Begin the check `name`: its two evidence files, new, private and
+    /// numbered in the order of the checks.
+    fn opened(&mut self, name: &'static str) -> Outcome<Opened> {
         require(
             safe_name(name) && !name.contains(['/', '.']),
             "invalid_scanner_check_name",
         )?;
         self.sequence += 1;
         let stem = format!("{:02}-{name}", self.sequence);
-        let kept = self.output.join(format!("{stem}.stdout"));
+        let printed = self.output.join(format!("{stem}.stdout"));
         let started = Instant::now();
-        let output = created(&kept)?;
+        let output = created(&printed)?;
         let error = created(&self.output.join(format!("{stem}.stderr")))?;
-        let room = (self.limits.report, self.limits.report);
-        let status = self.pump(argv, how, (output, error), room)?;
+        Ok(Opened {
+            printed,
+            output,
+            error,
+            started,
+        })
+    }
+
+    /// Record that the check `name` ended with `status`, and how long it
+    /// took since `started`.
+    fn timed(&mut self, name: &'static str, status: i32, started: Instant) {
         let elapsed = (started.elapsed().as_secs_f64() * 1000.0).round() / 1000.0;
         self.checks.push(vec![
             ("name", name.into()),
             ("exitStatus", status.into()),
             ("elapsedSeconds", elapsed.into()),
         ]);
-        if !how.accepted.contains(&status) {
-            return Err(Failure::Command(name));
-        }
-        let size = kept.metadata().map_err(|error| files::unusable(&error))?;
-        if size.len() == 0 {
-            return Ok((status, Vec::new()));
-        }
-        Ok((status, files::bounded(&kept, self.limits.report, false)?))
     }
 
     /// Run `argv` and answer its exit status, whatever it is, and what it
@@ -467,6 +495,27 @@ impl Context {
         let status = self.pump(argv, how, kept, room)?;
         // Both streams were closed, so everything printed has been handed on.
         Ok((status, handed.try_iter().flatten().collect()))
+    }
+
+    /// Do `work` as the check `name` and keep it as a command is kept: two
+    /// private files numbered in the order of the commands, the second
+    /// holding what `complaint` makes of the failure when the work fails,
+    /// and a line of the summary with the status 0 or 1 and the time taken.
+    /// A failure is answered as the failure of that command.
+    pub fn step(
+        &mut self,
+        name: &'static str,
+        work: impl FnOnce(&Self) -> Outcome<()>,
+        complaint: impl FnOnce(&Failure) -> String,
+    ) -> Outcome<()> {
+        let mut opened = self.opened(name)?;
+        let outcome = work(self);
+        if let Err(failure) = &outcome {
+            let complained = opened.error.write_all(complaint(failure).as_bytes());
+            complained.map_err(|error| files::unusable(&error))?;
+        }
+        self.timed(name, i32::from(outcome.is_err()), opened.started);
+        outcome.map_err(|_| Failure::Command(name))
     }
 
     /// Run the command to its end, or stop it at its deadline or when a

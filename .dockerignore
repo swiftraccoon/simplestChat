@@ -279,6 +279,9 @@ crates/security/src/environment/**
 !crates/security/src/licenses/
 crates/security/src/licenses/**
 !crates/security/src/licenses/*.rs
+!crates/security/src/actions/
+crates/security/src/actions/**
+!crates/security/src/actions/*.rs
 !crates/security/src/spdx/
 crates/security/src/spdx/**
 !crates/security/src/spdx/*.rs

@@ -8,9 +8,11 @@
 //! hash-locked Python environment of the scanners that need one, `licenses`
 //! reads the dependency declarations of the npm and Python locks, asks the
 //! registries about them and reviews the licences of what a change declares
-//! anew, `spdx` judges a licence expression against an allowlist, and `fast`
-//! holds the checks of the fast tier.
+//! anew, `actions` reviews the actions a change pins anew, `spdx` judges a
+//! licence expression against an allowlist, and `fast` holds the checks of
+//! the fast tier.
 
+pub mod actions;
 pub mod context;
 pub mod environment;
 pub mod fast;
