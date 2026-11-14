@@ -78,7 +78,7 @@ fn spelled(path: &Path) -> &str {
 /// A `curl` that logs how it was run and answers its calls in order from
 /// numbered files. Its arguments are logged in hexadecimal, each ended by a
 /// zero byte, because one of them holds a line end.
-fn curl(directory: &Path, log: &Path) -> String {
+pub(super) fn curl(directory: &Path, log: &Path) -> String {
     let (directory, log) = (spelled(directory), spelled(log));
     [
         "#!/bin/sh".to_owned(),

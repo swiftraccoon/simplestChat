@@ -405,6 +405,9 @@ test('context excludes local-only descendants while retaining production inputs'
     '!crates/security/src/licenses/',
     'crates/security/src/licenses/**',
     '!crates/security/src/licenses/*.rs',
+    '!crates/security/src/spdx/',
+    'crates/security/src/spdx/**',
+    '!crates/security/src/spdx/*.rs',
   ]) assert.ok(ignoreRules.includes(rule), 'the fixed Rust controller needs narrow traversal');
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
@@ -433,6 +436,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/security/src/environment/private.env',
     'crates/security/src/environment/recorded_environment.json',
     'crates/security/src/licenses/private.env', 'crates/security/src/licenses/recorded_locks.json',
+    'crates/security/src/spdx/private.env', 'crates/security/src/spdx/recorded_spdx.json',
     'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
     'ops/src/release/attestation/acquire/private.env',
     'ops/src/release/attestation/acquire/retained.json',
@@ -616,7 +620,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/security/src/findings.rs', 'crates/security/src/context.rs',
     'crates/security/src/secrets.rs', 'crates/security/src/fast.rs',
     'crates/security/src/environment.rs', 'crates/security/src/licenses.rs',
-    'crates/security/src/licenses/requirement.rs',
+    'crates/security/src/licenses/requirement.rs', 'crates/security/src/spdx.rs',
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',

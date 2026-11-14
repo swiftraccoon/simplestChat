@@ -71,8 +71,17 @@ fn named<'a>(code: &'a str, group: &str) -> &'a str {
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Tally(usize, usize, usize);
 
-fn settle(group: &str, name: &str, reference: &Value, judged: Result<Value>, tally: &mut Tally) {
-    let refused = judged.as_ref().err().map(|fault| fault.0);
+/// Hold one answer to the recording. The answer fails with a fault or, where
+/// a tree is read through a command, with the failure of an invocation.
+fn settle<E: ToString>(
+    group: &str,
+    name: &str,
+    reference: &Value,
+    judged: std::result::Result<Value, E>,
+    tally: &mut Tally,
+) {
+    let refused = judged.as_ref().err().map(ToString::to_string);
+    let refused = refused.as_deref();
     if let Some((_, code)) = STRICTER.iter().find(|(case, _)| *case == name) {
         assert!(reference.get("code").is_none(), "{group}: {name}");
         assert_eq!(refused, Some(*code), "{group}: {name}");
@@ -334,8 +343,8 @@ fn what_is_read_is_what_pip_reads() {
         if OTHERWISE_THAN_PIP.contains(&name) {
             assert_ne!(read, pip, "{name}");
             let load = |path: &str| Ok((path == PYTHON_LOCKS[0]).then(|| bytes.clone()));
-            let refused = dependencies(&load).err().map(|fault| fault.0);
-            assert_eq!(refused, Some("dependency_python_hash"), "{name}");
+            let refused = dependencies(&load).err().map(|failure| failure.to_string());
+            assert_eq!(refused.as_deref(), Some("dependency_python_hash"), "{name}");
             otherwise += 1;
         } else {
             assert_eq!(read, pip, "{name}");
@@ -378,5 +387,6 @@ fn a_lock_and_a_tree_declare_at_most_ten_thousand_dependencies() {
     let found = dependencies(&tree(5_000, 5_000));
     assert_eq!(found.map(|found| found.len()), Ok(10_000));
     let refused = dependencies(&tree(5_000, 5_001));
-    assert_eq!(refused.err().map(|fault| fault.0), Some("dependency_count"));
+    let refused = refused.err().map(|failure| failure.to_string());
+    assert_eq!(refused.as_deref(), Some("dependency_count"));
 }

@@ -9,16 +9,21 @@
 //! What a registry says of one declaration is asked in `registry`, which
 //! holds the session and the npm registry's word, and in `python`, which
 //! reads the package index, the names of artifacts and their metadata.
+//! `review` compares a change with its base commit and holds each new
+//! declaration to the licences the policy allows.
 
 mod artifact;
 mod metadata;
 mod python;
 mod registry;
 mod requirement;
+mod review;
 mod version;
 
 use crate::{
-    Fault, Result, files,
+    Fault, Result,
+    context::Outcome,
+    files,
     findings::{canonical, object, set},
     policy::space,
     record::{self, safe_name},
@@ -27,6 +32,7 @@ use crate::{
 pub use metadata::{REVIEWED, Reviewed};
 pub use python::python_licenses;
 pub use registry::{Bounds, Evidence, Registry, npm_license};
+pub use review::{CONTROLLER, Controller, Review, check};
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, path::Path};
 
@@ -86,7 +92,7 @@ pub struct Dependency {
 }
 
 /// Reads a path of a tree, or answers that the tree has no such file.
-pub type Load<'a> = &'a dyn Fn(&str) -> Result<Option<Vec<u8>>>;
+pub type Load<'a> = &'a dyn Fn(&str) -> Outcome<Option<Vec<u8>>>;
 
 /// Every installed path of the npm lock `content` at `path`: development,
 /// optional and nested packages too, and never a link.
@@ -235,13 +241,16 @@ fn python_dependencies(
     load: Load<'_>,
     depth: usize,
     found: &mut BTreeSet<Dependency>,
-) -> Result<()> {
+) -> Outcome<()> {
     require(
         depth < MAX_INCLUDES && safe_name(path) && !path.contains('$'),
         "dependency_requirements_include",
     )?;
     let Some(content) = load(path)? else {
-        return require(depth == 0, "dependency_requirements_missing_include");
+        return Ok(require(
+            depth == 0,
+            "dependency_requirements_missing_include",
+        )?);
     };
     for line in requirement_lines(&content)? {
         if matches!(line.as_str(), "--require-hashes" | "--only-binary=:all:") {
@@ -268,7 +277,7 @@ fn python_dependencies(
 }
 
 /// Every declaration of the maintained locks of one tree.
-pub fn dependencies(load: Load<'_>) -> Result<BTreeSet<Dependency>> {
+pub fn dependencies(load: Load<'_>) -> Outcome<BTreeSet<Dependency>> {
     let mut found = BTreeSet::new();
     for path in NPM_LOCKS {
         if let Some(content) = load(path)? {
@@ -346,7 +355,7 @@ pub fn require_audited_locks(
     current: Load<'_>,
     previous: Load<'_>,
     include_vendor: bool,
-) -> Result<()> {
+) -> Outcome<()> {
     for path in names {
         let maintained =
             NPM_LOCKS.contains(&path.as_str()) || PYTHON_LOCKS.contains(&path.as_str());
@@ -376,5 +385,7 @@ pub fn require_audited_locks(
 mod python_tests;
 #[cfg(test)]
 mod registry_tests;
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod tests;

@@ -375,6 +375,31 @@ impl Context {
         self.checks.push(note);
     }
 
+    /// Record a line of the summary that is completed later, and answer
+    /// where it is.
+    pub fn begin(&mut self, note: Note) -> usize {
+        self.checks.push(note);
+        self.checks.len() - 1
+    }
+
+    /// Set fields of the line at `place`: a field the line holds already
+    /// takes the new value.
+    pub fn complete(
+        &mut self,
+        place: usize,
+        fields: impl IntoIterator<Item = (&'static str, Value)>,
+    ) {
+        let Some(line) = self.checks.get_mut(place) else {
+            return;
+        };
+        for (name, value) in fields {
+            match line.iter_mut().find(|(held, _)| *held == name) {
+                Some(field) => field.1 = value,
+                None => line.push((name, value)),
+            }
+        }
+    }
+
     /// Add fields to the line recorded last.
     pub fn annotate(&mut self, fields: impl IntoIterator<Item = (&'static str, Value)>) {
         if let Some(last) = self.checks.last_mut() {

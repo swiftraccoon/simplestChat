@@ -1,0 +1,4876 @@
+{
+ "controller": [
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "the reviewed wheel",
+   "reviewed": true
+  },
+  {
+   "dependency": {
+    "ecosystem": "npm",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "another ecosystem",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "build/python-requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "another lock",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-core",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "another name",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.1"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "another version",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "sdist",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "a source distribution",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "evidence of no kind",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-only",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "another licence",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "gpl-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "the licence in another case",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "no licence",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "name": "another wheel",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "9297d04b256c09bb4b76edf974f5b537a720cc18dac9a2f0efc20bb4510d214b",
+    "source": "https://files.pythonhosted.org/x"
+   },
+   "name": "no wheel",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "metadataSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "other metadata",
+   "reviewed": false
+  },
+  {
+   "dependency": {
+    "ecosystem": "pypi",
+    "manifest": "ops/ansible/requirements.txt",
+    "name": "ansible-lint",
+    "version": "26.9.0"
+   },
+   "evidence": {
+    "kind": "wheel",
+    "license": "GPL-3.0-or-later",
+    "source": "https://files.pythonhosted.org/x",
+    "wheelSha256": "4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50"
+   },
+   "name": "no metadata",
+   "reviewed": false
+  }
+ ],
+ "reviews": [
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "head",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "nothing changed since the head",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "nothing changed since the first commit",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package added in a commit",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "head",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package added in the working tree",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   }
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "head",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package added in a commit, compared with the head",
+   "printed": {
+    "01-dependency-base.stdout": "225fd972c97ea3efd84263c234ab01ce446cb90a646e67792fa922883ab19a9d",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "ec7ca904603fe807267ad12b4b1db1cd08e3471e71e42be5b8234930636d6d17",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"9df1f0a889c3c3ad746a41990152e81285fc76ac\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "b33741eb85c12c5029ae9c9f3ef8b52ac34e0c8f",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package removed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/kept/2.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"kept\", \"version\": \"2.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/kept/-/kept-2.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "7bdfcac4e5f588e397d8405797b69f4537bba54d",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package of another version",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"2c1ce4e132118905bbed4279b0a37b2f7636827bdf7c61378e58a007ab127f76\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"5eda140e4675b0fa08b70e59a0c8bb1396e0e9f01d682ecaf5c982eb6fc4388b\",\n          \"source\": \"https://registry.npmjs.org/kept/2.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"kept\",\n      \"version\": \"2.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"2.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-2.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/kept/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"kept\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\", \"integrity\": \"sha512-two\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "75141b3bc3bf2e5781a567ce445a90622715dfc0",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package whose integrity alone changed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"6fb932b108aa7ac3523a4c8d8567963d6400acba2631d62e2367e510b4ff81f2\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"697cf5cf9d1058932f9cf5a695171d214167835fc0b54a1e70466ca0e8614b84\",\n          \"source\": \"https://registry.npmjs.org/kept/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"kept\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-two\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"GPL-3.0-only\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "c972da1f9f9320907cfba7184c3c4c0fb5c4f856",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package of a licence that is not allowed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"7f27bb454623b5920dcec9cb90a44d6929cefbe747bc12c61d3db9a45a90ff25\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"GPL-3.0-only\",\n          \"metadataSha256\": \"2849bc55a755584933979f9b83bed2789495db88af810c6d9fecb4da5e98b650\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_not_allowed"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"GPL-3.0-only\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"(GPL-3.0-only OR MIT)\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "8706013885b6c0bb2c9bb705c77510184bdc145a",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package of a choice of licences",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"b2ae47be10e9232814ceed8cb59f7dee974fa0e4ab430ed46be57f6328d53cee\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"(GPL-3.0-only OR MIT)\",\n          \"metadataSha256\": \"5f931d219e036353f572c9a8a3913c9ce5b78ff3ece7f595ee837f837dba9b97\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"(GPL-3.0-only OR MIT)\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"Apache-2.0 WITH LLVM-exception\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "2bd2224424afe02abe192f4663b1216dbe6584bc",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package of a licence with an exception",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"262520dd46ba5f9fbcf4707920f29c290ebaded9e0dd9d2e23d5eba4f3d62783\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"Apache-2.0 WITH LLVM-exception\",\n          \"metadataSha256\": \"e4f4a2f3ac9c8436051e341a376e2c73be8cb0b169f5c1ef2d4ff443f1369d6a\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"Apache-2.0 WITH LLVM-exception\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT AND\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "07ccd770e29d458d00d0f9374f8c457a203844f9",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package of a licence that is no expression",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"9834ea9c00549d065a593ca307408330b5017595a4aceb7acc5efbf7f08bb038\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT AND\",\n          \"metadataSha256\": \"2d87ab3f05dc173d55025e17cd0cd1bba256c02246da0fc8a35f8ac3cfa9b8f6\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "image_license_depth"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT AND\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"ISC\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package the registry knows otherwise",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_npm_license_identity"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "gone",
+     "code": "404",
+     "status": 22
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an npm package the registry does not answer for",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_registry_fetch"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/a/1.0.0",
+    "https://registry.npmjs.org/b/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"a\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/a/-/a-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "{\"name\": \"b\", \"version\": \"1.0.0\", \"license\": \"GPL-3.0-only\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/b/-/b-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "08befc20e8973dd6c0acf9c9c50a49e2391b1be0",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "two npm packages, the second not allowed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"22de9d69508d05f126ea7f3c517f418765dc14e8e318812b593a005ae0aa8dbb\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"b50a2c142ec80fb5e5d60ef63080d96d89a1806a410dab43578e4aaef6a4a0ad\",\n          \"source\": \"https://registry.npmjs.org/a/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"a\",\n      \"version\": \"1.0.0\"\n    },\n    {\n      \"declarationSha256\": \"f99717c08d872dc59d1dd7041104f1076d96e87cb19c8a0f7f2bcfe766f495d8\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"GPL-3.0-only\",\n          \"metadataSha256\": \"5c9c0c5c613118868eb59ffda32298a52b83136c3b8d142a6b685d1819b4c697\",\n          \"source\": \"https://registry.npmjs.org/b/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"b\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_not_allowed"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/b\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/b/-/b-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"GPL-3.0-only\"\n    },\n    \"node_modules/a\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/a/-/a-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/a/2.0.0",
+    "https://registry.npmjs.org/a/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"a\", \"version\": \"2.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/a/-/a-2.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "{\"name\": \"a\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/a/-/a-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 2,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 2,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "aacdef3428f027e63dd3aaca433522afc8e61efa",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "two npm packages of one name at two paths",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"a6b71200103edc1601918e64b4acb0bdb21e71efa1b82dc800583eafc0bd8be8\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"f59fd50f454d844502524228ede1d9c1dfe585ca4a13e167d089468cbcde8861\",\n          \"source\": \"https://registry.npmjs.org/a/2.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"a\",\n      \"version\": \"2.0.0\"\n    },\n    {\n      \"declarationSha256\": \"e3105cc8ced7516831f2aeb23f8ba751ea1fc7d35020434609315692e5fb3b6d\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"b50a2c142ec80fb5e5d60ef63080d96d89a1806a410dab43578e4aaef6a4a0ad\",\n          \"source\": \"https://registry.npmjs.org/a/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"a\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\"name\": \"web\", \"lockfileVersion\": 3, \"packages\": {\"\": {\"name\": \"web\"}, \"node_modules/kept\": {\"version\": \"1.0.0\", \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\", \"integrity\": \"sha512-one\", \"license\": \"MIT\"}, \"node_modules/a\": {\"version\": \"2.0.0\", \"resolved\": \"https://registry.npmjs.org/a/-/a-2.0.0.tgz\", \"integrity\": \"sha512-one\", \"license\": \"MIT\"}, \"node_modules/b/node_modules/a\": {\"version\": \"1.0.0\", \"resolved\": \"https://registry.npmjs.org/a/-/a-1.0.0.tgz\", \"integrity\": \"sha512-one\", \"license\": \"MIT\"}}}"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [
+    "curl"
+   ],
+   "name": "an npm package added, without curl",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "missing_security_prerequisite_curl"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [
+    "curl"
+   ],
+   "name": "nothing changed, without curl",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [
+    "git"
+   ],
+   "name": "nothing changed, without git",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "missing_security_prerequisite_git"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "45248c1f4a8e4cccb009c4594142965d1b81012a",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an empty lock now",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "tool_file_size"
+   },
+   "second": {
+    "build/python-requirements.txt": ""
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "c839985c5c829d077576bb0680841b3f34a3cc1f",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock that is a directory now",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "IsADirectoryError"
+   },
+   "second": {
+    "build/python-requirements.txt": null,
+    "build/python-requirements.txt/inner.txt": "x\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "d81ffce21ab7d9b81117e917abe1540fb1ebb95a",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a package in the second npm lock",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "239162d1777dfbce977947718dc32ea163a21e6b7b882ca1951bb513aa9e563d",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/e2e/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/e2e/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 2,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "c654d091debcc4087b48672d4b3a1588b38f5eb6",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package added",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"342d54f3210888d7921c463204d1ad3ab24c4aedfcc52fb0143d13f2e5582d40\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nexample==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0.tar.gz\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\", \"hashes\": {\"sha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}, {\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 2,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "91dc1d36d718925dee4b86e9824a68f4febc235e",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package with a wheel and a source distribution",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"59140ec9931d99c79a9b7bed302210ef44b16fc4de50adb95c90821f9fa0fdeb\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"artifactSha256\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n          \"excluded\": \"wheel-only-installation\",\n          \"kind\": \"sdist\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0.tar.gz\"\n        },\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nexample==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \\\n    --hash=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"c5b1d26c0ab21fcf669eae182f81894dbbbbcc2ff70c9dd236eb8b739037c7bc\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: GPL-3.0-only\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "c654d091debcc4087b48672d4b3a1588b38f5eb6",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package of a licence that is not allowed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"342d54f3210888d7921c463204d1ad3ab24c4aedfcc52fb0143d13f2e5582d40\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"GPL-3.0-only\",\n          \"metadataSha256\": \"c5b1d26c0ab21fcf669eae182f81894dbbbbcc2ff70c9dd236eb8b739037c7bc\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_not_allowed"
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nexample==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-win_amd64.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\"}}, {\"filename\": \"example-1.0-cp312-cp312-win_amd64.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-win_amd64.whl\", \"hashes\": {\"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}, \"core-metadata\": {\"sha256\": \"c5b1d26c0ab21fcf669eae182f81894dbbbbcc2ff70c9dd236eb8b739037c7bc\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: GPL-3.0-only\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9b1c4e052a9a5445f961c78ded9757fff8612a7a",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package with one wheel that is not allowed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"8d408da502bd09811e137e90be16b866ed5a3371190a5bf8e3d4fdf58851b1cc\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        },\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"GPL-3.0-only\",\n          \"metadataSha256\": \"c5b1d26c0ab21fcf669eae182f81894dbbbbcc2ff70c9dd236eb8b739037c7bc\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-cp312-cp312-win_amd64.whl\",\n          \"wheelSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_not_allowed"
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nexample==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \\\n    --hash=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/kept/",
+    "https://files.pythonhosted.org/packages/ab/cd/kept-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"kept\", \"files\": [{\"filename\": \"kept-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/kept-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"18b930b7c86eb15b5a4d23a9b56d83258bb20267aef4bd9e72dc2baa72b8467a\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: kept\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 2,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "256a4bf980e488444ec9978544f0007ba706fce3",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package whose marker alone changed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"6e3668cf58ec2c405d40fb84bb17cd78551258fa286f14a8155fd78f892973c8\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"18b930b7c86eb15b5a4d23a9b56d83258bb20267aef4bd9e72dc2baa72b8467a\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/kept-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"kept\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 ; os_name == 'nt' \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0",
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 2,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 3,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "a57864eb07f69c303e599545129c8bdd3a36c2bf",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package and an npm package",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    },\n    {\n      \"declarationSha256\": \"342d54f3210888d7921c463204d1ad3ab24c4aedfcc52fb0143d13f2e5582d40\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/python-requirements.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nexample==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/example/",
+    "https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"example\", \"files\": [{\"filename\": \"example-1.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}, \"core-metadata\": {\"sha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: example\nVersion: 1.0\nLicense-Expression: MIT\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 2,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "864aed0765d4fd8ac4822e3ca8e6a5dab5a5a15d",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a Python package in an included file",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b8898f96e7ee1554b1a0fc073508051651a1de15aceaabd738cf6dd5de67ed20",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"342d54f3210888d7921c463204d1ad3ab24c4aedfcc52fb0143d13f2e5582d40\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"2ce4825ca042ddaa09239781790727cc18b21abec92f47511bb456713ce58676\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/example-1.0-py3-none-any.whl\",\n          \"wheelSha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n        }\n      ],\n      \"manifest\": \"build/extra.txt\",\n      \"name\": \"example\",\n      \"version\": \"1.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "build/extra.txt": "example==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-r extra.txt\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://pypi.org/simple/ansible-lint/",
+    "https://files.pythonhosted.org/packages/ab/cd/ansible_lint-26.9.0-py3-none-any.whl.metadata"
+   ],
+   "answers": [
+    {
+     "body": "{\"meta\": {\"api-version\": \"1.1\"}, \"name\": \"ansible-lint\", \"files\": [{\"filename\": \"ansible_lint-26.9.0-py3-none-any.whl\", \"url\": \"https://files.pythonhosted.org/packages/ab/cd/ansible_lint-26.9.0-py3-none-any.whl\", \"hashes\": {\"sha256\": \"4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50\"}, \"core-metadata\": {\"sha256\": \"281a51edb32a500f480a5ad935fd0af3c83efbdd5942a36bfa7619bd4da3bf39\"}}]}",
+     "code": "200",
+     "status": 0
+    },
+    {
+     "body": "Metadata-Version: 2.4\nName: ansible-lint\nVersion: 26.9.0\nLicense-Expression: GPL-3.0-or-later\n\n",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "c0fb878abeaa01d0ccfde9291a3d4e4006a6dcc6",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "the controller's linter with metadata that nobody reviewed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "e597058fab732e2466ea45a6f90ef2408f608e46ab3ab7da3ade8e5a4d7e201c",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1ba75a7754519201db0cbab834f46c1b2c0f131a36e8912aff72f32a79c347db\",\n      \"ecosystem\": \"pypi\",\n      \"evidence\": [\n        {\n          \"kind\": \"wheel\",\n          \"license\": \"GPL-3.0-or-later\",\n          \"metadataSha256\": \"281a51edb32a500f480a5ad935fd0af3c83efbdd5942a36bfa7619bd4da3bf39\",\n          \"source\": \"https://files.pythonhosted.org/packages/ab/cd/ansible_lint-26.9.0-py3-none-any.whl\",\n          \"wheelSha256\": \"4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50\"\n        }\n      ],\n      \"manifest\": \"ops/ansible/requirements.txt\",\n      \"name\": \"ansible-lint\",\n      \"version\": \"26.9.0\"\n    }\n  ],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_not_allowed"
+   },
+   "second": {
+    "ops/ansible/requirements.txt": "--require-hashes\n--only-binary=:all:\nansible-lint==26.9.0 \\\n    --hash=sha256:4d01903fca9c42f7ce2b366ea5503d0701a27b3c6fdf684276a72888eea57f50\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "other",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 1,
+     "name": "dependency-base-ancestor",
+     "rangeScan": "skipped_base_not_an_ancestor",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is no ancestor",
+   "printed": {
+    "01-dependency-base.stdout": "4b370dfae651c71a25d627cda64790843d2edc49bf0910f4853a9390354d7f86",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"2b864d4ba91860d5702dcbf1bab664da9b3d8202\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "unknown",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 128,
+     "name": "dependency-base",
+     "rangeScan": "skipped_base_not_an_ancestor",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base nobody knows",
+   "printed": {
+    "01-dependency-base.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"0000000000000000000000000000000000000000\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "tree",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 128,
+     "name": "dependency-base",
+     "rangeScan": "skipped_base_not_an_ancestor",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is a tree",
+   "printed": {
+    "01-dependency-base.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"61d22b3fc578da21891cc3b867e142d48ec1e30d\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "main",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is a branch",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_diff_base"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "0123abc",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is a short name",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_diff_base"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base in capitals",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_diff_base"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is empty",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base with a line end",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_diff_base"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "--all",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is an option",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_diff_base"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "second",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "9df1f0a889c3c3ad746a41990152e81285fc76ac",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a base that is the head by its name",
+   "printed": {
+    "01-dependency-base.stdout": "225fd972c97ea3efd84263c234ab01ce446cb90a646e67792fa922883ab19a9d",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "ec7ca904603fe807267ad12b4b1db1cd08e3471e71e42be5b8234930636d6d17",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"9df1f0a889c3c3ad746a41990152e81285fc76ac\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "33d53b82293de78f5c34a2d881e2441994638a5d",
+    "other": "f9f02f94799fba92f33ea333e1987ec67c63a6bf",
+    "second": "33d53b82293de78f5c34a2d881e2441994638a5d",
+    "tree": "de7f23f2319587dce9751f32a09abffcd870f842"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "no licence policy",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "872377b16a74648c5ecc02bd1642042bd3a076b1",
+    "other": "a8a9469b8d0c4d453106087d38abdf12a4edca48",
+    "second": "872377b16a74648c5ecc02bd1642042bd3a076b1",
+    "tree": "8f84a887e11b9063045cd463e558dec6b36d69e6"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = []\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a licence policy that allows nothing",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_license_policy"
+   },
+   "second": null,
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "34d01761bc0eacc1cccefd206a4e44a08fb60c21",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock that may build from source",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_python_wheel_only_policy"
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "2351164f4acf68a31c89a50a3904ebf09e107681",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock of another tool that changed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "2b26eeb4a4673e7929992c82faf3040011732f9eadad9674765caedfc35f2c85"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   },
+   "second": {
+    "yarn.lock": "# yarn lockfile v1\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "head",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock of another tool that is not yet tracked",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "9fb565779be6c21de69d1c5b2333e990cc05382f4dc62c62f551bb3da7a098f5"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   },
+   "second": null,
+   "working": {
+    "yarn.lock": "# yarn lockfile v1\n"
+   }
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "faf9c80b47d2607be412eaed86a4ce96b9ee63ad",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a requirement file with a backslash in its name",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "a9b82fd6942eb102a3369044003c7f77983a1205f04d938c0474c6f74b10a170"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_current_path"
+   },
+   "second": {
+    "tools/odd\\requirements.txt": "anything==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "f97591034c96c4d4646abea377685e71df2fe180",
+    "other": "29ab3370c5733da7416d5371c20f5ce6561192c9",
+    "second": "a524a9976e5f12d5641e7c5c117378e47578cd05",
+    "tree": "57ff19216dca002bee196cf49ff2d34a9a57931d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "tools/odd\\requirements.txt": "anything==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a requirement file with a backslash in its name that was removed",
+   "printed": {
+    "01-dependency-base.stdout": "29e271ee32be606045093ecfeb7bbd34b2464bbdfc80bf0841e97bcded712eef",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "a9b82fd6942eb102a3369044003c7f77983a1205f04d938c0474c6f74b10a170",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_current_path"
+   },
+   "second": {
+    "tools/odd\\requirements.txt": null
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "3b9b84d5a890941adf863363ea3b4616aae1bc3d",
+    "other": "fe8c80104c98a07012c9406bdf6102a7ab79a256",
+    "second": "22721b653bea7fd4b2480143d8e07b92c46b3c13",
+    "tree": "f065a1b8b3a8c93d929a4862cb14ea9af6b33867"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "07-dependency-base-lock.stderr",
+    "07-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-r requirements-extra.txt\n",
+    "build/requirements-extra.txt": "extra==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an included requirement file that the audit rule holds too",
+   "printed": {
+    "01-dependency-base.stdout": "7c7e08918b49265d5fe89743a583bb16c5211b50f7f591adfc2acb7a35daaa7b",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "5173d36e97815ca0c8e625960142dd04cec3137c61b029df1160a0088c253b94",
+    "04-dependency-current-files.stdout": "5173d36e97815ca0c8e625960142dd04cec3137c61b029df1160a0088c253b94",
+    "05-dependency-base-lock.stdout": "3aa59e30c14c3fde9d5bbed4224fe45b2e9a5917d00a0cbf3899703e1b57dd0c",
+    "06-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "07-dependency-base-lock.stdout": "9b1feb8ecbf8946312600a73a43819a83b93570457b9e07542f7115e87450767"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"3b9b84d5a890941adf863363ea3b4616aae1bc3d\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "3b9b84d5a890941adf863363ea3b4616aae1bc3d",
+    "other": "fe8c80104c98a07012c9406bdf6102a7ab79a256",
+    "second": "0bd76c29e0bc2a04c27084d8032cd510ccc97c73",
+    "tree": "f065a1b8b3a8c93d929a4862cb14ea9af6b33867"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n-r requirements-extra.txt\n",
+    "build/requirements-extra.txt": "extra==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an included requirement file that changed",
+   "printed": {
+    "01-dependency-base.stdout": "7c7e08918b49265d5fe89743a583bb16c5211b50f7f591adfc2acb7a35daaa7b",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "5173d36e97815ca0c8e625960142dd04cec3137c61b029df1160a0088c253b94",
+    "04-dependency-current-files.stdout": "5173d36e97815ca0c8e625960142dd04cec3137c61b029df1160a0088c253b94",
+    "05-dependency-base-lock.stdout": "3aa59e30c14c3fde9d5bbed4224fe45b2e9a5917d00a0cbf3899703e1b57dd0c"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   },
+   "second": {
+    "build/requirements-extra.txt": "extra==2.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "c9d8012937dc45c9937c3ea587f695fc15e5d960",
+    "other": "437c871177bf922b0aa2e30119d2fa5ae57d9369",
+    "second": "193f6081d9889fcdffe589aaa302fb2c19e85d9b",
+    "tree": "3bc01e5fc9dd2a002289701f0b3cf2f5ba476fe2"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "07-dependency-base-lock.stderr",
+    "07-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n",
+    "yarn.lock": "# yarn lockfile v1\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock of another tool that is as it was",
+   "printed": {
+    "01-dependency-base.stdout": "e1d75bcf84738b93f2fb00b2d967a11f565c5bc2965413d1e9e2d8dfeecba607",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "2b26eeb4a4673e7929992c82faf3040011732f9eadad9674765caedfc35f2c85",
+    "04-dependency-current-files.stdout": "2b26eeb4a4673e7929992c82faf3040011732f9eadad9674765caedfc35f2c85",
+    "05-dependency-base-lock.stdout": "b75ee05c80095fa74f5301f6798b0cc41b111da69bd23fe67308ecbed24f9f1f",
+    "06-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "07-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"c9d8012937dc45c9937c3ea587f695fc15e5d960\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "c9d8012937dc45c9937c3ea587f695fc15e5d960",
+    "other": "437c871177bf922b0aa2e30119d2fa5ae57d9369",
+    "second": "cfcbaa1059e76bc1ff09b915d1a9940df3124e40",
+    "tree": "3bc01e5fc9dd2a002289701f0b3cf2f5ba476fe2"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n",
+    "yarn.lock": "# yarn lockfile v1\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock of another tool that was removed",
+   "printed": {
+    "01-dependency-base.stdout": "e1d75bcf84738b93f2fb00b2d967a11f565c5bc2965413d1e9e2d8dfeecba607",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "2b26eeb4a4673e7929992c82faf3040011732f9eadad9674765caedfc35f2c85",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"c9d8012937dc45c9937c3ea587f695fc15e5d960\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "yarn.lock": null
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "53ca96428f48193d59ccc3c0f2c4581a7d5f35da",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a requirement file nobody audits that changed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "8b17387b1a7b4eaa9cb537a2b2c77d50b5f1d72076818525219986162c157fac"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   },
+   "second": {
+    "tools/requirements-dev.txt": "anything==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "f5ae7e551a919fcd9c7662e06672b5adb9139183",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a vendored lock that changed",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "c64355b8f3ca7b427e87c5416a4da58542519709811d0d399ecf0b14ac2a10c1",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "vendor/lib/yarn.lock": "# yarn lockfile v1\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "f5ae7e551a919fcd9c7662e06672b5adb9139183",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": true,
+   "missing": [],
+   "name": "a vendored lock that changed, with the vendor scan",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "c64355b8f3ca7b427e87c5416a4da58542519709811d0d399ecf0b14ac2a10c1"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_unaudited_lock_changed"
+   },
+   "second": {
+    "vendor/lib/yarn.lock": "# yarn lockfile v1\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "head",
+   "checks": [
+    {
+     "changedDependencies": 0,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 0,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "06-dependency-base-lock.stderr",
+    "06-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [
+    "yarn.lock"
+   ],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an ignored lock of another tool",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b36aca09c0dd5e45134b7c9a472f4bcc1af9eb527eb1619227477e26fd031dc6",
+    "05-dependency-base-lock.stdout": "7e202186c8d8b3aab44d3136108d532b777099033ac0e89eebafb901af7cc799",
+    "06-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"6028794deb24846dd36814b6c7a2c83abf686663\",\n  \"dependencies\": [],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": null,
+   "working": {
+    "yarn.lock": "# ignored\n"
+   }
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "a8a5a250f86c7e066b3c9d147a3916a1b5940d1a",
+    "other": "d2a592e2ddea8f79521fcdf964820eed14d14666",
+    "second": "38aec7b1094b05a3bdfebf92e561161348ab9841",
+    "tree": "cd285df5a96bde71cdd999a1e0d74d0541149579"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n",
+    "web/package-lock.json": "{"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock that is no lock in the base",
+   "printed": {
+    "01-dependency-base.stdout": "718a9051804089f37510cef51b9156630ca11faaebfedb767445ec99bb49e8b9",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "f8ae60aa7a0ae2a87f163432429386471f9201e1",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock that is no lock now",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "second": {
+    "web/package-lock.json": "{"
+   },
+   "working": null
+  },
+  {
+   "addresses": [
+    "https://registry.npmjs.org/added/1.0.0"
+   ],
+   "answers": [
+    {
+     "body": "{\"name\": \"added\", \"version\": \"1.0.0\", \"license\": \"MIT\", \"dist\": {\"tarball\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\", \"integrity\": \"sha512-one\"}}",
+     "code": "200",
+     "status": 0
+    }
+   ],
+   "base": "first",
+   "checks": [
+    {
+     "changedDependencies": 1,
+     "exitStatus": 0,
+     "name": "changed-dependency-licenses",
+     "registryRequests": 1,
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-lock",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "b719bd9d102274449a1a2a0f3be8467502bd8933",
+    "other": "4ccbd38e341bea166c70fa616be2c56b3c5609a0",
+    "second": "16d01e77218cb3e0754e3a6d10009338e1717248",
+    "tree": "51919f91d1e14784c6906542a8e5eb2f5d21ffdd"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "05-dependency-base-lock.stderr",
+    "05-dependency-base-lock.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+    "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+    "src/main.rs": "fn main() {}\n"
+   },
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a lock that was not there before",
+   "printed": {
+    "01-dependency-base.stdout": "c6454842dfd481e40456303d5fbab2b1dcccdd01a49c6011e4e47e7d97a0837d",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "53a8fe60321082b44c82000ce6e9c3172b18f7daa62544c41780cd2c52a9ae80",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "05-dependency-base-lock.stdout": "d4fee29b091d1baaedd6c7cb114e588ea54a7d5c17b41042d5ab53fe9442cf8d"
+   },
+   "receipt": "{\n  \"allowedLicenses\": [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"MIT\"\n  ],\n  \"baseRevision\": \"b719bd9d102274449a1a2a0f3be8467502bd8933\",\n  \"dependencies\": [\n    {\n      \"declarationSha256\": \"1fc2b5f006e4a084d34e8826de45c77123401b54c5fe457263af30a6b0bf3610\",\n      \"ecosystem\": \"npm\",\n      \"evidence\": [\n        {\n          \"license\": \"MIT\",\n          \"metadataSha256\": \"a775ddfe722cee6391487758f6c05763de3b1ee6518dd55207772e8a1d19f924\",\n          \"source\": \"https://registry.npmjs.org/added/1.0.0\"\n        }\n      ],\n      \"manifest\": \"web/package-lock.json\",\n      \"name\": \"added\",\n      \"version\": \"1.0.0\"\n    }\n  ],\n  \"passed\": true,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "passed": true
+   },
+   "second": {
+    "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/added\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/added/-/added-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "first",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-ancestor",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-base-files",
+     "timed": true
+    },
+    {
+     "exitStatus": 0,
+     "name": "dependency-current-files",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "6028794deb24846dd36814b6c7a2c83abf686663",
+    "other": "2b864d4ba91860d5702dcbf1bab664da9b3d8202",
+    "second": "8360f1cf0ff4649d0fe021d124a8756be1d1e7fd",
+    "tree": "61d22b3fc578da21891cc3b867e142d48ec1e30d"
+   },
+   "evidence": [
+    "01-dependency-base.stderr",
+    "01-dependency-base.stdout",
+    "02-dependency-base-ancestor.stderr",
+    "02-dependency-base-ancestor.stdout",
+    "03-dependency-base-files.stderr",
+    "03-dependency-base-files.stdout",
+    "04-dependency-current-files.stderr",
+    "04-dependency-current-files.stdout",
+    "dependency-licenses.json"
+   ],
+   "first": null,
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "a requirement that is none now",
+   "printed": {
+    "01-dependency-base.stdout": "d908d9a10a5e9c6bdfd0daee7557517d65018ba5256af8307d9981649ce2b9fd",
+    "02-dependency-base-ancestor.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "03-dependency-base-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168",
+    "04-dependency-current-files.stdout": "b5d7683626669cc2c7c3ed1c73da803b7bc7b661efac9c8d736bc8b8788c0168"
+   },
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "dependency_python_hash"
+   },
+   "second": {
+    "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept>=1\n"
+   },
+   "working": null
+  },
+  {
+   "addresses": [],
+   "answers": [],
+   "base": "head",
+   "checks": [
+    {
+     "exitStatus": 1,
+     "name": "changed-dependency-licenses",
+     "timed": true
+    }
+   ],
+   "commits": {
+    "first": "cf8e9bf31c0bb9c45aab212b933aed5c3cb60ee4",
+    "other": "8d92d007ef1d2196824adf4b29fd2c40a0664b6f",
+    "second": "cf8e9bf31c0bb9c45aab212b933aed5c3cb60ee4",
+    "tree": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+   },
+   "evidence": [
+    "dependency-licenses.json"
+   ],
+   "first": {},
+   "ignored": [],
+   "includeVendor": false,
+   "missing": [],
+   "name": "an empty repository",
+   "printed": {},
+   "receipt": "{\n  \"dependencies\": [],\n  \"passed\": false,\n  \"schemaVersion\": 1\n}\n",
+   "receiptMode": 384,
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "second": null,
+   "working": null
+  }
+ ],
+ "stamp": {
+  "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00",
+  "GIT_AUTHOR_EMAIL": "a@example.invalid",
+  "GIT_AUTHOR_NAME": "a",
+  "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00",
+  "GIT_COMMITTER_EMAIL": "a@example.invalid",
+  "GIT_COMMITTER_NAME": "a"
+ },
+ "tree": {
+  "build/python-requirements.txt": "--require-hashes\n--only-binary=:all:\nkept==1.0 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+  "deny.toml": "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Apache-2.0 WITH LLVM-exception\"]\n",
+  "src/main.rs": "fn main() {}\n",
+  "web/package-lock.json": "{\n  \"name\": \"web\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n    \"\": {\n      \"name\": \"web\",\n      \"version\": \"0.0.0\"\n    },\n    \"node_modules/kept\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/kept/-/kept-1.0.0.tgz\",\n      \"integrity\": \"sha512-one\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+ }
+}

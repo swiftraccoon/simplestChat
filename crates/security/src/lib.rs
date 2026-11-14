@@ -6,8 +6,10 @@
 //! commands and takes its private copy of the sources, `secrets` turns that
 //! copy into what a secret scanner must read, `environment` builds the
 //! hash-locked Python environment of the scanners that need one, `licenses`
-//! reads the dependency declarations of the npm and Python locks and asks
-//! the registries about them, and `fast` holds the checks of the fast tier.
+//! reads the dependency declarations of the npm and Python locks, asks the
+//! registries about them and reviews the licences of what a change declares
+//! anew, `spdx` judges a licence expression against an allowlist, and `fast`
+//! holds the checks of the fast tier.
 
 pub mod context;
 pub mod environment;
@@ -21,6 +23,7 @@ pub mod scope;
 #[cfg(test)]
 pub(crate) mod scratch;
 pub mod secrets;
+pub mod spdx;
 pub mod tools;
 
 /// A fixed failure code. It never carries scanner output, report contents or
