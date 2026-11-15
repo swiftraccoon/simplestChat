@@ -300,6 +300,9 @@ crates/security/src/semgrep/**
 !crates/security/src/spdx/
 crates/security/src/spdx/**
 !crates/security/src/spdx/*.rs
+!crates/security/src/tier/
+crates/security/src/tier/**
+!crates/security/src/tier/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

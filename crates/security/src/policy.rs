@@ -101,7 +101,12 @@ impl Date {
 
     /// The day it is now in UTC.
     pub fn today() -> Self {
-        let seconds = std::time::SystemTime::now()
+        Self::at(std::time::SystemTime::now())
+    }
+
+    /// The day it is at `moment` in UTC.
+    pub fn at(moment: std::time::SystemTime) -> Self {
+        let seconds = moment
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());
         Self::of_epoch_second(seconds).unwrap_or(Self::MIN)

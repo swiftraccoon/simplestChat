@@ -1,0 +1,5377 @@
+{
+ "cases": [
+  {
+   "arguments": [
+    "fast",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the vendored tree where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "GITHUB_ACTIONS",
+   "name": "the vendored tree in a hosted workflow",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "ACT",
+   "name": "the vendored tree in a local workflow",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"all\",\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the vendored tree where the marker of automation is empty",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": ""
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "native",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "ACT",
+   "name": "the vendored tree and the native check where the marker is empty",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"native\",\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": ""
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "prefix",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the vendored tree and the mutation check where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"mutation\",\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a deep check for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "native",
+    "--engine",
+    "podman"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the native check for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "all",
+    "--base",
+    "0000000000000000000000000000000000000000",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the usual deep check for the fast tier, said aloud",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--openssl-prefix",
+    "prefix"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an OpenSSL prefix for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--mutation-tool-platform",
+    "linux-x86_64"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a platform of the mutation tool for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--mutation-tool-platform",
+    "darwin-x86_64",
+    "--openssl-prefix",
+    "prefix",
+    "--deep-check",
+    "all"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "every deep option for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a deep check and the vendored tree for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "GITHUB_ACTIONS",
+   "name": "a deep check and the vendored tree for the fast tier where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--mutation-tool-platform",
+    "linux-x86_64",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "ACT",
+   "name": "a platform and the vendored tree for the fast tier where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "native"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the native check without the vendored tree",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"native\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"native_scan_requires_include_vendor\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "native",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the native check with the vendored tree where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"native\",\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "native",
+    "--engine",
+    "podman"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "another engine and the native check without the vendored tree",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"native\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"native_scan_requires_include_vendor\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--base",
+    "1111111111111111111111111111111111111111",
+    "--mutation-tool-platform",
+    "darwin-x86_64",
+    "--deep-check",
+    "native"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the native check without the vendored tree, with a base and a platform",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"native\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"native_scan_requires_include_vendor\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence/gate"
+   ],
+   "marker": null,
+   "name": "evidence that is there already",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "raised": "FileExistsError"
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [],
+   "marker": null,
+   "name": "evidence without its parent",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "raised": "FileNotFoundError"
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": [
+    "link",
+    "evidence"
+   ],
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "evidence named through a link",
+   "output": "link/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "no tier",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "slow"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "another tier",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "everything"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "another deep check",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "nat"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a deep check cut short",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fas"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a tier cut short",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--engine",
+    "pod"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an engine cut short",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--mutation-tool-platform",
+    "linux"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a platform cut short",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--engine",
+    "nerdctl"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "another engine",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--mutation-tool-platform",
+    "darwin-arm64"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "another platform of the mutation tool",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--quick"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an option nobody knows",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--base"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a base without its commit",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation",
+    "--base",
+    "-x"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a base that begins like an option",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation",
+    "--base",
+    "a",
+    "--base",
+    "b"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an option given twice",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation",
+    "--base",
+    ""
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a base that is empty",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "--deep-check",
+    "mutation",
+    "fast"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an option before the tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation",
+    "--include"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an option cut short",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--deep-check",
+    "mutation",
+    "--base=abc"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an option joined to its value",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "an-image"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an image for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "an-image"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an image for the deep tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"all\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "one",
+    "two"
+   ],
+   "kept": {},
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "two images",
+   "output": "evidence/gate",
+   "outputMode": null,
+   "printed": "",
+   "result": {
+    "exit": 2
+   },
+   "summary": null,
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "image"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the image tier without an image",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security image: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"image\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the image tier with the vendored tree",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security image: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"image\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"image_vendor_option_not_applicable\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "image",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "the image tier without an image and with the vendored tree",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security image: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"image\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"image_vendor_option_not_applicable\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "image",
+    "an-image",
+    "--include-vendor"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": "CI",
+   "name": "the image tier with the vendored tree where automation runs",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security image: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"image\",\n  \"deepCheck\": null,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"failure\": \"vendor_source_scan_local_only\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--image-tools",
+    "tools"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "image tools for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_tools_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--image-tools",
+    "tools"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "image tools for the deep tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"all\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_tools_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--image-database-cache",
+    "cache"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an image database for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_database_cache_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "an-image",
+    "--image-tools",
+    "tools"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an image and image tools for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--image-tools",
+    "tools",
+    "--image-database-cache",
+    "cache"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "image tools and an image database for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_tools_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--image-database-cache",
+    "cache",
+    "--deep-check",
+    "native"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "an image database and a deep check for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_image_database_cache_argument\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--artifact-dir",
+    "artifacts",
+    "--deep-check",
+    "mutation"
+   ],
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a directory of artifacts for the fast tier",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"security_deep_arguments\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  }
+ ],
+ "deep": [
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "the mutation check alone, which fails",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "the mutation check alone, which passes",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 0 ;;\nesac\nexit 97\n",
+   "status": 0,
+   "statuses": {
+    "asan": 0,
+    "mutation": 0,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": null,
+    "includeVendor": false,
+    "passed": true,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "everything without the vendored tree",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "all",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "06-mutation-policy.stderr",
+    "06-mutation-policy.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "everything with the vendored tree",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "all",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--engine",
+    "podman",
+    "--base",
+    "3333333333333333333333333333333333333333",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "podman",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "06-mutation-policy.stderr",
+    "06-mutation-policy.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "everything with the vendored tree and another engine",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "all",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "the native suites alone",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 0,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": null,
+    "includeVendor": true,
+    "passed": true,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native",
+    "--engine",
+    "podman"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "podman",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "podman",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "the native suites alone with another engine",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 0,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": null,
+    "includeVendor": true,
+    "passed": true,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "the mutation check with the vendored tree",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "summary.json"
+   ],
+   "name": "a vendored tree that is not as recorded",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 1 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 1
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 1,
+      "name": "vendor-integrity"
+     }
+    ],
+    "deepCheck": "all",
+    "failure": "scanner_command_failed_vendor-integrity",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "summary.json"
+   ],
+   "name": "a vendored tree whose check is stopped",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 143 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 143
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 143,
+      "name": "vendor-integrity"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_vendor-integrity",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that fails",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 2 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 2,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 2,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "scanner_command_failed_native-prepare",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "summary.json"
+   ],
+   "name": "a preparation that reports nothing",
+   "report": null,
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    :\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "FileNotFoundError",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports no document",
+   "report": "{",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "JSONDecodeError",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports a list",
+   "report": "[]",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '[]' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "scanner_report_object",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports no image",
+   "report": "{}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "KeyError",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports an image that is no text",
+   "report": "{\"imageId\": 7}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": 7}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "invalid_tool_string",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports an image without a name",
+   "report": "{\"imageId\": \"\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "invalid_tool_string",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports a very long image",
+   "report": "{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "invalid_tool_string",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports the longest image",
+   "report": "{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 0,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": null,
+    "includeVendor": true,
+    "passed": true,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a preparation that reports more than the image",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\", \"more\": [1]}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\", \"more\": [1]}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 0,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": null,
+    "includeVendor": true,
+    "passed": true,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "an address sanitizer suite that fails",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 1 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 1,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 1,
+      "name": "native-asan"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "scanner_command_failed_native-asan",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "an undefined behaviour suite that fails",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 1 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 1,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 1,
+      "name": "native-ubsan"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "scanner_command_failed_native-ubsan",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--deep-check",
+    "native"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a replay suite that fails",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 1 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 1,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 1,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "native",
+    "failure": "scanner_command_failed_native-replay",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--include-vendor",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/native_security.py",
+     "prepare",
+     "--engine",
+     "docker",
+     "--output",
+     "<place>/evidence/gate/native-preparation"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "asan",
+     "--output",
+     "<place>/evidence/gate/native-asan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "ubsan",
+     "--output",
+     "<place>/evidence/gate/native-ubsan"
+    ],
+    [
+     "build/native_security.py",
+     "run",
+     "--engine",
+     "docker",
+     "--image",
+     "sha256:abababababababababababababababababababababababababababababababab",
+     "--mode",
+     "replay",
+     "--output",
+     "<place>/evidence/gate/native-replay"
+    ]
+   ],
+   "install": null,
+   "installs": [],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-native-prepare.stderr",
+    "02-native-prepare.stdout",
+    "03-native-asan.stderr",
+    "03-native-asan.stdout",
+    "04-native-ubsan.stderr",
+    "04-native-ubsan.stdout",
+    "05-native-replay.stderr",
+    "05-native-replay.stdout",
+    "native-preparation",
+    "native-preparation/report.json",
+    "summary.json"
+   ],
+   "name": "a replay suite that fails before the mutation check",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 3 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 3,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-prepare"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-asan"
+     },
+     {
+      "exitStatus": 0,
+      "name": "native-ubsan"
+     },
+     {
+      "exitStatus": 3,
+      "name": "native-replay"
+     }
+    ],
+    "deepCheck": "all",
+    "failure": "scanner_command_failed_native-replay",
+    "includeVendor": true,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ]
+   ],
+   "install": "tool_archive_digest",
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "summary.json"
+   ],
+   "name": "a mutation tool that cannot be installed",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "tool_archive_digest",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--mutation-tool-platform",
+    "darwin-x86_64",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "darwin-x86_64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "darwin-x86_64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a mutation tool for a named platform",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/missing"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL that is not there",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "FileNotFoundError",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {
+    "OPENSSL_DIR": "<place>/static"
+   },
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL named by the environment",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {
+    "OPENSSL_DIR": "<place>/missing"
+   },
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/static"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL named twice",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {
+    "OPENSSL_DIR": "<place>/missing"
+   },
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL named by the environment that is not there",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "FileNotFoundError",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<root>/target/openssl-4.1.0",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL at its usual place",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {},
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation",
+    "--openssl-prefix",
+    "<place>/linked"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL named through a link",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  },
+  {
+   "ambient": {
+    "OPENSSL_DIR": "<place>/linked/../linked"
+   },
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation"
+   ],
+   "calls": [
+    [
+     "build/security_vendor.py",
+     "verify",
+     "--root",
+     "<root>",
+     "--cache",
+     "<place>/evidence/gate/vendor-cache",
+     "--output",
+     "<place>/evidence/gate/vendor"
+    ],
+    [
+     "build/security_mutation.py",
+     "--tools-directory",
+     "<place>/evidence/gate/mutation-tools",
+     "--tool-platform",
+     "linux-aarch64",
+     "--openssl-prefix",
+     "<place>/static",
+     "--output",
+     "<place>/evidence/gate/mutation"
+    ]
+   ],
+   "install": null,
+   "installs": [
+    {
+     "directory": "<place>/evidence/gate/mutation-tools",
+     "names": [
+      "cargo-mutants"
+     ],
+     "platform": "linux-aarch64"
+    }
+   ],
+   "kept": [
+    "01-vendor-integrity.stderr",
+    "01-vendor-integrity.stdout",
+    "02-mutation-policy.stderr",
+    "02-mutation-policy.stdout",
+    "summary.json"
+   ],
+   "name": "a static OpenSSL named through a link by the environment",
+   "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  build/security_mutation.py:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "status": 1,
+   "statuses": {
+    "asan": 0,
+    "mutation": 1,
+    "prepare": 0,
+    "replay": 0,
+    "ubsan": 0,
+    "vendor": 0
+   },
+   "summary": {
+    "checks": [
+     {
+      "exitStatus": 0,
+      "name": "vendor-integrity"
+     },
+     {
+      "exitStatus": 1,
+      "name": "mutation-policy"
+     }
+    ],
+    "deepCheck": "mutation",
+    "failure": "scanner_command_failed_mutation-policy",
+    "includeVendor": false,
+    "passed": false,
+    "schemaVersion": 1,
+    "tier": "deep"
+   }
+  }
+ ],
+ "image": "sha256:abababababababababababababababababababababababababababababababab",
+ "summaries": [
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a tier that passed without a check",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--deep-check",
+    "mutation"
+   ],
+   "checks": [],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a deep tier that passed without a check",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"mutation\",\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "one check",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast",
+    "--base",
+    "2222222222222222222222222222222222222222"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "a"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.0
+     ]
+    ],
+    [
+     [
+      "name",
+      "b"
+     ],
+     [
+      "exitStatus",
+      14
+     ],
+     [
+      "elapsedSeconds",
+      0.001
+     ]
+    ],
+    [
+     [
+      "name",
+      "c"
+     ],
+     [
+      "exitStatus",
+      -9
+     ],
+     [
+      "elapsedSeconds",
+      1.5
+     ]
+    ],
+    [
+     [
+      "name",
+      "d"
+     ],
+     [
+      "exitStatus",
+      1
+     ],
+     [
+      "elapsedSeconds",
+      12.345
+     ]
+    ],
+    [
+     [
+      "name",
+      "e"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      3599.999
+     ]
+    ],
+    [
+     [
+      "name",
+      "f"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      100.0
+     ]
+    ],
+    [
+     [
+      "name",
+      "g"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.1
+     ]
+    ]
+   ],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "checks with times of every shape",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": [\n    {\n      \"name\": \"a\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"b\",\n      \"exitStatus\": 14,\n      \"elapsedSeconds\": 0.001\n    },\n    {\n      \"name\": \"c\",\n      \"exitStatus\": -9,\n      \"elapsedSeconds\": 1.5\n    },\n    {\n      \"name\": \"d\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 12.345\n    },\n    {\n      \"name\": \"e\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 3599.999\n    },\n    {\n      \"name\": \"f\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 100.0\n    },\n    {\n      \"name\": \"g\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.1\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep",
+    "--include-vendor"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "zizmor"
+     ],
+     [
+      "exitStatus",
+      14
+     ],
+     [
+      "elapsedSeconds",
+      2.25
+     ],
+     [
+      "reviewedFindings",
+      34
+     ]
+    ],
+    [
+     [
+      "name",
+      "gitleaks-selftest"
+     ],
+     [
+      "exitStatus",
+      10
+     ],
+     [
+      "elapsedSeconds",
+      0.5
+     ],
+     [
+      "expectedFinding",
+      "github-pat"
+     ],
+     [
+      "sourceSha256",
+      "abababababababababababababababababababababababababababababababab"
+     ]
+    ],
+    [
+     [
+      "name",
+      "migration-review"
+     ],
+     [
+      "newFiles",
+      16
+     ],
+     [
+      "exitStatus",
+      0
+     ]
+    ],
+    [
+     [
+      "name",
+      "openssl-freshness"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "pinnedVersion",
+      "4.1.0"
+     ],
+     [
+      "latestVersion",
+      "4.1.0"
+     ]
+    ],
+    [
+     [
+      "name",
+      "changed-dependency-licenses"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "skipped",
+      null
+     ],
+     [
+      "changedDependencies",
+      0
+     ],
+     [
+      "truth",
+      true
+     ],
+     [
+      "lie",
+      false
+     ]
+    ]
+   ],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "checks with what they learned",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"all\",\n  \"includeVendor\": true,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": [\n    {\n      \"name\": \"zizmor\",\n      \"exitStatus\": 14,\n      \"elapsedSeconds\": 2.25,\n      \"reviewedFindings\": 34\n    },\n    {\n      \"name\": \"gitleaks-selftest\",\n      \"exitStatus\": 10,\n      \"elapsedSeconds\": 0.5,\n      \"expectedFinding\": \"github-pat\",\n      \"sourceSha256\": \"abababababababababababababababababababababababababababababababab\"\n    },\n    {\n      \"name\": \"migration-review\",\n      \"newFiles\": 16,\n      \"exitStatus\": 0\n    },\n    {\n      \"name\": \"openssl-freshness\",\n      \"exitStatus\": 0,\n      \"pinnedVersion\": \"4.1.0\",\n      \"latestVersion\": \"4.1.0\"\n    },\n    {\n      \"name\": \"changed-dependency-licenses\",\n      \"exitStatus\": 0,\n      \"skipped\": null,\n      \"changedDependencies\": 0,\n      \"truth\": true,\n      \"lie\": false\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "semgrep"
+     ],
+     [
+      "exitStatus",
+      1
+     ],
+     [
+      "elapsedSeconds",
+      30.5
+     ]
+    ],
+    [
+     [
+      "name",
+      "semgrep-diagnosis"
+     ],
+     [
+      "exitStatus",
+      1
+     ],
+     [
+      "passed",
+      false
+     ],
+     [
+      "findingCount",
+      2
+     ],
+     [
+      "findings",
+      [
+       {
+        "line": 3,
+        "path": "src/a.rs",
+        "rule": "one"
+       },
+       {
+        "line": 40000,
+        "path": "web/src/b.ts",
+        "rule": "two"
+       }
+      ]
+     ],
+     [
+      "findingsTruncated",
+      false
+     ]
+    ]
+   ],
+   "failure": "semgrep_source_check_failed",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a diagnosis with findings",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"semgrep_source_check_failed\",\n  \"checks\": [\n    {\n      \"name\": \"semgrep\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 30.5\n    },\n    {\n      \"name\": \"semgrep-diagnosis\",\n      \"exitStatus\": 1,\n      \"passed\": false,\n      \"findingCount\": 2,\n      \"findings\": [\n        {\n          \"line\": 3,\n          \"path\": \"src/a.rs\",\n          \"rule\": \"one\"\n        },\n        {\n          \"line\": 40000,\n          \"path\": \"web/src/b.ts\",\n          \"rule\": \"two\"\n        }\n      ],\n      \"findingsTruncated\": false\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "semgrep-diagnosis"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "passed",
+      true
+     ],
+     [
+      "findingCount",
+      0
+     ],
+     [
+      "findings",
+      []
+     ],
+     [
+      "findingsTruncated",
+      false
+     ],
+     [
+      "nothing",
+      {}
+     ]
+    ]
+   ],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a diagnosis with nothing found and a list of nothing",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": [\n    {\n      \"name\": \"semgrep-diagnosis\",\n      \"exitStatus\": 0,\n      \"passed\": true,\n      \"findingCount\": 0,\n      \"findings\": [],\n      \"findingsTruncated\": false,\n      \"nothing\": {}\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "semgrep-diagnosis"
+     ],
+     [
+      "exitStatus",
+      1
+     ],
+     [
+      "passed",
+      false
+     ],
+     [
+      "findingCount",
+      1
+     ],
+     [
+      "findings",
+      [
+       {
+        "line": 3,
+        "path": "src/a.rs",
+        "rule": "one"
+       }
+      ]
+     ],
+     [
+      "findingsTruncated",
+      false
+     ]
+    ]
+   ],
+   "failure": "semgrep_source_check_failed",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a diagnosis whose findings name their fields in another order",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"semgrep_source_check_failed\",\n  \"checks\": [\n    {\n      \"name\": \"semgrep-diagnosis\",\n      \"exitStatus\": 1,\n      \"passed\": false,\n      \"findingCount\": 1,\n      \"findings\": [\n        {\n          \"rule\": \"one\",\n          \"path\": \"src/a.rs\",\n          \"line\": 3\n        }\n      ],\n      \"findingsTruncated\": false\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-identity"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "revision",
+      "caf\u00e9 \u2028 \ud83d\udd12 \"quoted\" back\\slash \u007f"
+     ],
+     [
+      "sourceSha256",
+      "tab\there\nline\r\u0000\u001f\b\f/"
+     ]
+    ]
+   ],
+   "failure": null,
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "text that is no plain ASCII",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: passed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 0
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"failure\": null,\n  \"checks\": [\n    {\n      \"name\": \"source-identity\",\n      \"exitStatus\": 0,\n      \"revision\": \"caf\\u00e9 \\u2028 \\ud83d\\udd12 \\\"quoted\\\" back\\\\slash \\u007f\",\n      \"sourceSha256\": \"tab\\there\\nline\\r\\u0000\\u001f\\b\\f/\"\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "actionlint"
+     ],
+     [
+      "exitStatus",
+      1
+     ],
+     [
+      "elapsedSeconds",
+      0.25
+     ]
+    ]
+   ],
+   "failure": "scanner_command_failed_actionlint",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a check that failed",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_actionlint\",\n  \"checks\": [\n    {\n      \"name\": \"actionlint\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.25\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "deep"
+   ],
+   "checks": [],
+   "failure": "missing_security_prerequisite_git",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a prerequisite that is missing",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security deep: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"deep\",\n  \"deepCheck\": \"all\",\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"missing_security_prerequisite_git\",\n  \"checks\": []\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": "FileNotFoundError",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a file that is gone",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"FileNotFoundError\",\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": "ValueError",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a value that is none",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"ValueError\",\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": "KeyError",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a key that is missing",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"KeyError\",\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": "RuntimeError",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "a failure while running",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"RuntimeError\",\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  },
+  {
+   "arguments": [
+    "fast"
+   ],
+   "checks": [
+    [
+     [
+      "name",
+      "source-revision"
+     ],
+     [
+      "exitStatus",
+      0
+     ],
+     [
+      "elapsedSeconds",
+      0.012
+     ]
+    ]
+   ],
+   "failure": "UnicodeDecodeError",
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "summary.json": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "link": null,
+   "made": [
+    "evidence"
+   ],
+   "marker": null,
+   "name": "text that is no text",
+   "output": "evidence/gate",
+   "outputMode": 448,
+   "printed": "Security fast: failed; evidence: <place>/evidence/gate\n",
+   "result": {
+    "status": 1
+   },
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"tier\": \"fast\",\n  \"deepCheck\": null,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"failure\": \"UnicodeDecodeError\",\n  \"checks\": [\n    {\n      \"name\": \"source-revision\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.012\n    }\n  ]\n}\n",
+   "value": "1"
+  }
+ ]
+}

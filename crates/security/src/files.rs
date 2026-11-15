@@ -54,8 +54,10 @@ pub(crate) fn private_directory(path: &Path) -> Result<()> {
     )
 }
 
-/// Create `path` and nothing else, and have its bytes on disk before it is
-/// published.
+/// Create `path` and nothing else, and hand its bytes to the disk before it
+/// is published. That is the system's own synchronization, as the reference
+/// asked for it: on a Mac the standard library's asks the drive to empty its
+/// cache as well, which costs a snapshot of the sources ten seconds.
 pub(crate) fn write_private(path: &Path, content: &[u8], mode: u32) -> Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -64,6 +66,6 @@ pub(crate) fn write_private(path: &Path, content: &[u8], mode: u32) -> Result<()
         .open(path)
         .map_err(|error| unusable(&error))?;
     file.write_all(content)
-        .and_then(|()| file.sync_all())
+        .and_then(|()| Ok(rustix::fs::fsync(&file)?))
         .map_err(|error| unusable(&error))
 }

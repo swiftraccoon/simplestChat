@@ -636,6 +636,21 @@ impl<'a> Budget<'a> {
     }
 }
 
+/// The channel that the toolchain file below `source` pins, when it is
+/// three numbers.
+pub(crate) fn channel(source: &Path) -> Result<Option<String>> {
+    let pinned = files::bounded(&source.join("rust-toolchain.toml"), MAX_REPORT, false)?;
+    let pinned = std::str::from_utf8(&pinned).ok();
+    let pinned: Option<Value> = pinned.and_then(|text| toml::from_str(text).ok());
+    let channel = pinned
+        .as_ref()
+        .and_then(|file| file["toolchain"]["channel"].as_str());
+    let number = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+    Ok(channel
+        .filter(|channel| channel.split('.').count() == 3 && channel.split('.').all(number))
+        .map(str::to_owned))
+}
+
 /// The variables that the builds of the private copy `source` run with:
 /// the pinned compiler that `rustup` names for the copy's toolchain file
 /// before anything else on the search path, a target directory inside the
@@ -650,17 +665,9 @@ fn environment(
     ambient: &dyn Fn(&str) -> Option<OsString>,
 ) -> Outcome<Vec<(&'static str, OsString)>> {
     let toolchain = Fault("mutation_rust_toolchain");
-    let pinned = files::bounded(&source.join("rust-toolchain.toml"), MAX_REPORT, false)?;
-    let pinned = std::str::from_utf8(&pinned).map_err(|_| toolchain)?;
-    let pinned: Value = toml::from_str(pinned).map_err(|_| toolchain)?;
-    let channel = pinned["toolchain"]["channel"].as_str().ok_or(toolchain)?;
-    let number = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
-    require(
-        channel.split('.').count() == 3 && channel.split('.').all(number),
-        toolchain.0,
-    )?;
+    let channel = channel(source)?.ok_or(toolchain)?;
     let rustup = programs.prerequisite("rustup")?;
-    let arguments = ["which", "--toolchain", channel, "cargo"].map(OsStr::new);
+    let arguments = ["which", "--toolchain", channel.as_str(), "cargo"].map(OsStr::new);
     let mut argv = vec![rustup.as_os_str()];
     argv.extend(arguments);
     let (_, found) = context.run("rust-toolchain", &argv, &Run::default())?;

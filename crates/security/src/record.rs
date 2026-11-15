@@ -207,7 +207,8 @@ pub(crate) fn pretty(value: &Value) -> String {
     text
 }
 
-fn spread(value: &Value, depth: usize, text: &mut String) {
+/// Add `value` to `text` as it is written `depth` levels deep.
+pub(crate) fn spread(value: &Value, depth: usize, text: &mut String) {
     let open = |text: &mut String, index: usize| {
         text.push_str(if index == 0 { "\n" } else { ",\n" });
         text.push_str(&"  ".repeat(depth + 1));

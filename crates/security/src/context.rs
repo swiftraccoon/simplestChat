@@ -706,6 +706,17 @@ impl Context {
         pumped(&mut command, how.input, patience, kept, room, &mut || true)
     }
 
+    /// Have every later command look in `directory` before anywhere else
+    /// on its search path.
+    pub fn prefer(&mut self, directory: &Path) {
+        if let Some((_, search)) = self.variables.iter_mut().find(|(name, _)| *name == "PATH") {
+            let mut first = directory.as_os_str().to_owned();
+            first.push(":");
+            first.push(&*search);
+            *search = first;
+        }
+    }
+
     /// Copy every tracked and every unignored file into a new private
     /// directory, with a manifest of their SHA-256 beside it, and answer the
     /// directory. `git` lists the files.

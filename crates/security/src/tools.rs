@@ -59,6 +59,21 @@ impl Limits {
 }
 
 /// The four platforms a lock may name, from the kernel's own two names.
+/// The lock's name for the platform this host is.
+pub fn host() -> Result<&'static str> {
+    let name = rustix::system::uname();
+    let text = |part: &std::ffi::CStr| part.to_str().map(str::to_owned).unwrap_or_default();
+    platform(&text(name.sysname()), &text(name.machine()))
+}
+
+/// The version that the lock at `path` gives the tool `name`, and the
+/// lock's digest.
+pub fn locked(path: &std::path::Path, name: &str) -> Result<(String, String)> {
+    let lock = lock::Lock::load(path)?;
+    let tool = lock.tools.get(name).ok_or(Fault("unknown_tool"))?;
+    Ok((tool.version.clone(), lock.digest))
+}
+
 fn platform(system: &str, machine: &str) -> Result<&'static str> {
     let (system, machine) = (system.to_lowercase(), machine.to_lowercase());
     match (system.as_str(), machine.as_str()) {

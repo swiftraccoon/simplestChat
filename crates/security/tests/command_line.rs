@@ -56,7 +56,11 @@ fn a_command_that_is_not_one_is_told_the_usage() {
         let output = run(arguments);
         assert_eq!(output.status.code(), Some(2), "{arguments:?}");
         assert!(output.stdout.is_empty(), "{arguments:?}");
-        assert!(text(&output.stderr).starts_with("usage: simplestchat-security tools"));
+        let usage = text(&output.stderr);
+        let whole = usage.starts_with("usage: simplestchat-security fast|deep|tools|rulesets ");
+        let own = usage.starts_with("usage: simplestchat-security tools ");
+        assert!(whole || own, "{arguments:?}: {usage}");
+        assert_eq!(whole, !matches!(arguments, ["tools", ..]), "{arguments:?}");
     }
 }
 
@@ -197,5 +201,65 @@ fn a_verified_installation_is_answered_with_its_paths() {
     assert_eq!(
         text(&output.stderr),
         "Security tool setup failed: tool_not_installed\n"
+    );
+}
+
+fn gate(arguments: &[&str], variables: &[(&str, &Path)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_simplestchat-security"));
+    command.args(arguments).env_clear().env("CI", "1");
+    for (name, value) in variables {
+        command.env(name, value);
+    }
+    command.output().expect("the executable runs")
+}
+
+#[test]
+fn a_tier_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["fast", "--quick"][..],
+        &["deep", "--deep-check"],
+        &["fast", "an-image"],
+        &["deep", "--engine", "nerdctl"],
+    ] {
+        let output = gate(arguments, &[]);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let complaint = text(&output.stderr);
+        assert!(
+            complaint.starts_with("usage: simplestchat-security fast|deep "),
+            "{complaint}"
+        );
+    }
+}
+
+#[test]
+fn a_tier_that_is_refused_says_so_in_one_line_and_leaves_its_summary() {
+    let scratch = Scratch::new("tier");
+    let evidence = scratch.0.join("gate");
+    let named = evidence.to_str().expect("a path");
+    let home = [("HOME", scratch.0.as_path())];
+    let output = gate(&["fast", "--include-vendor", "--output", named], &home);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(text(&output.stderr), "");
+    let real = evidence.canonicalize().expect("the evidence");
+    let line = format!("Security fast: failed; evidence: {}\n", real.display());
+    assert_eq!(text(&output.stdout), line);
+    let summary = std::fs::read_to_string(evidence.join("summary.json")).expect("a summary");
+    assert!(summary.contains("\"failure\": \"vendor_source_scan_local_only\""));
+    let again = gate(&["fast", "--include-vendor", "--output", named], &home);
+    assert_eq!(again.status.code(), Some(1));
+    assert_eq!(text(&again.stdout), "");
+    assert_eq!(
+        text(&again.stderr),
+        "Security gate failed: tool_entry_unavailable\n"
+    );
+    let other = scratch.0.join("other");
+    let named = other.to_str().expect("a path");
+    let homeless = gate(&["deep", "--include-vendor", "--output", named], &[]);
+    assert_eq!(homeless.status.code(), Some(1));
+    assert_eq!(text(&homeless.stdout), "");
+    assert_eq!(
+        text(&homeless.stderr),
+        "Security gate failed: security_home_unset\n"
     );
 }

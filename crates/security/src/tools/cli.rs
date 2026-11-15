@@ -1,7 +1,7 @@
 //! `tools install [--tools NAME...] [--directory DIR] [--platform NAME]` and
 //! `tools path NAME [--directory DIR] [--platform NAME]`.
 
-use super::{Curl, Fault, Limits, Result, Site, Transport, install, path, platform};
+use super::{Curl, Fault, Limits, Result, Site, Transport, host, install, path};
 use std::{
     io::Write,
     os::unix::ffi::OsStrExt,
@@ -69,12 +69,6 @@ pub(super) fn parse(arguments: &[String]) -> Option<Request> {
         }
     }
     (installing || request.name.is_some()).then_some(request)
-}
-
-fn host() -> Result<&'static str> {
-    let name = rustix::system::uname();
-    let text = |part: &std::ffi::CStr| part.to_str().map(str::to_owned).unwrap_or_default();
-    platform(&text(name.sysname()), &text(name.machine()))
 }
 
 pub(super) fn execute(

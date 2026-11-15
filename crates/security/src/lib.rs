@@ -14,8 +14,9 @@
 //! sources with the reviewed local rules, `migrations` lints new migrations
 //! in the mode they run in, `mutation` holds the tests of the pure policy
 //! functions to every change of them, `fast` holds the checks of the fast
-//! tier, and `rulesets` reconciles the repository's rulesets on GitHub with
-//! their policy.
+//! tier, `tier` composes the tiers and reads their command line, and
+//! `rulesets` reconciles the repository's rulesets on GitHub with their
+//! policy.
 
 pub mod actions;
 pub mod context;
@@ -36,6 +37,7 @@ pub(crate) mod scratch;
 pub mod secrets;
 pub mod semgrep;
 pub mod spdx;
+pub mod tier;
 pub mod tools;
 
 /// A fixed failure code. It never carries scanner output, report contents or
