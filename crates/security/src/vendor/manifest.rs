@@ -111,7 +111,7 @@ pub(crate) fn string(value: &Document) -> Verdict<&str> {
         .ok_or_else(|| problem("Expected a JSON string"))
 }
 
-fn array(value: &Document) -> Verdict<&[Document]> {
+pub(crate) fn array(value: &Document) -> Verdict<&[Document]> {
     value
         .items()
         .ok_or_else(|| problem("Expected a JSON array"))
@@ -192,7 +192,7 @@ fn text<'a>(record: &'a Document, name: &str) -> Verdict<&'a str> {
 }
 
 /// Refuse a value that is declared twice.
-fn unique<'a>(mut values: impl Iterator<Item = &'a str>, label: &str) -> Verdict<()> {
+pub(crate) fn unique<'a>(mut values: impl Iterator<Item = &'a str>, label: &str) -> Verdict<()> {
     let mut seen: Vec<&str> = Vec::new();
     if values.any(|value| {
         seen.contains(&value) || {

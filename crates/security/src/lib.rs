@@ -30,6 +30,7 @@ pub mod findings;
 pub mod licenses;
 pub mod migrations;
 pub mod mutation;
+pub mod native;
 pub mod openssl;
 pub mod policy;
 pub(crate) mod record;

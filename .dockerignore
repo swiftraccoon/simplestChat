@@ -312,6 +312,9 @@ crates/security/src/vendor/**
 !crates/security/src/awslc/
 crates/security/src/awslc/**
 !crates/security/src/awslc/*.rs
+!crates/security/src/native/
+crates/security/src/native/**
+!crates/security/src/native/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml
