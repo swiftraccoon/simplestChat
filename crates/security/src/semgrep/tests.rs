@@ -18,15 +18,11 @@ use crate::{
     Fault,
     context::{Context, Limits},
     scope::require_local_vendor,
-    scratch::{Scratch, content, host_git, repository, written},
+    scratch::{Scratch, asked, content, host_git, kept, repository, said, scripted, written},
 };
 use serde_json::{Value, json};
 use std::{
-    cell::Cell,
-    collections::BTreeSet,
-    ffi::OsString,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
+    cell::Cell, collections::BTreeSet, ffi::OsString, os::unix::fs::PermissionsExt, path::Path,
 };
 
 const RECORDED: &str = include_str!("recorded_semgrep.json");
@@ -233,100 +229,12 @@ fn every_recorded_output_is_placed_alike() {
     assert_eq!(tally, Tally(7, 10, 1, 0));
 }
 
-/// An engine that logs its arguments in hexadecimal, each ended by a zero
-/// byte, and where it runs, and answers its calls in order from files.
-fn engine(directory: &Path, log: &Path) -> String {
-    let (directory, log) = (directory.display(), log.display());
-    [
-        "#!/bin/sh".to_owned(),
-        format!("count=$(cat '{directory}/engine.count')"),
-        format!("echo $((count + 1)) > '{directory}/engine.count'"),
-        "printf '%s\\t%s\\n' \\".to_owned(),
-        "  \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" \"$(pwd -P)\" \\"
-            .to_owned(),
-        format!("  >> '{log}'"),
-        format!("cat '{directory}/engine'.$count.out"),
-        format!("exit \"$(cat '{directory}/engine'.$count.status)\""),
-        String::new(),
-    ]
-    .join("\n")
-}
-
-/// Write the engine into `tools` with the recorded `answers` to its calls,
-/// and answer where it is.
-pub(super) fn scripted(tools: &Path, log: &Path, answers: &Value) -> PathBuf {
-    for (number, answer) in list(answers).iter().enumerate() {
-        let said = tools.join(format!("engine.{number}.out"));
-        std::fs::write(said, content(&answer[1])).expect("an answer");
-        let status = tools.join(format!("engine.{number}.status"));
-        std::fs::write(status, format!("{}\n", answer[0])).expect("a status");
-    }
-    std::fs::write(tools.join("engine.count"), "0\n").expect("a count");
-    let program = tools.join("semgrep-core");
-    std::fs::write(&program, engine(tools, log)).expect("an engine");
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("a mode");
-    program
-}
-
-/// The calls the engine logged, with the place of the case written as the
-/// recording writes it.
-pub(super) fn asked(log: &Path, place: &str) -> Value {
-    let logged = std::fs::read_to_string(log).unwrap_or_default();
-    let call = |line: &str| {
-        let (arguments, directory) = line.split_once('\t').expect("a logged call");
-        let bytes: Vec<u8> = (0..arguments.len() / 2)
-            .map(|at| u8::from_str_radix(&arguments[2 * at..2 * at + 2], 16).expect("hex"))
-            .collect();
-        let arguments = bytes.strip_suffix(&[0]).expect("an end");
-        let argv: Vec<String> = arguments
-            .split(|byte| *byte == 0)
-            .map(|argument| String::from_utf8_lossy(argument).replace(place, "<place>"))
-            .collect();
-        json!({"argv": argv, "directory": directory.replace(place, "<place>")})
-    };
-    json!(logged.lines().map(call).collect::<Vec<_>>())
-}
-
-/// What a check left in its evidence directory: every entry with its mode,
-/// and the text of the JSON evidence, of what the commands complained and
-/// of the files `said` names. The directories `closed` are listed and not
-/// entered.
-pub(super) fn kept(output: &Path, place: &str, closed: &[&str], said: &[&str]) -> (Value, Value) {
-    fn walk(root: &Path, directory: &Path, closed: &[&str], entries: &mut Vec<PathBuf>) {
-        for entry in std::fs::read_dir(directory).expect("a directory") {
-            let path = entry.expect("an entry").path();
-            let below = path.strip_prefix(root).expect("below");
-            if path.is_dir() && !closed.iter().any(|closed| below == Path::new(closed)) {
-                walk(root, &path, closed, entries);
-            }
-            entries.push(path);
-        }
-    }
-    let (mut entries, mut listed, mut texts) = (Vec::new(), json!({}), json!({}));
-    if output.is_dir() {
-        walk(output, output, closed, &mut entries);
-    }
-    for path in entries {
-        let below = path
-            .strip_prefix(output)
-            .expect("below")
-            .to_string_lossy()
-            .into_owned();
-        let mode = path
-            .symlink_metadata()
-            .expect("an entry")
-            .permissions()
-            .mode()
-            & 0o777;
-        listed[&below] = json!({"mode": mode, "directory": path.is_dir()});
-        let evidence = below.ends_with(".json") && !below.ends_with("source-manifest.json");
-        let read = evidence || below.ends_with(".stderr") || said.contains(&below.as_str());
-        if path.is_file() && read {
-            let text = std::fs::read_to_string(&path).expect("text");
-            texts[&below] = text.replace(place, "<place>").into();
-        }
-    }
-    (listed, texts)
+/// Whether the evidence `below` a scan's directory is text that is
+/// compared: the JSON evidence but the inventory, and what a command
+/// complained.
+pub(super) fn compared(below: &str) -> bool {
+    let evidence = below.ends_with(".json") && !below.ends_with("source-manifest.json");
+    evidence || below.ends_with(".stderr")
 }
 
 #[test]
@@ -351,7 +259,7 @@ fn every_recorded_check_is_made_alike() {
             std::fs::create_dir_all(place.join(text(made))).expect("a directory");
         }
         let log = place.join("log");
-        let program = scripted(&tools, &log, &case["answers"]);
+        let program = scripted(&tools, &log, "semgrep-core", "engine", &case["answers"]);
         let digests = strings(&case["digests"]);
         let reads = Cell::new(0);
         let digest = || {
@@ -385,7 +293,11 @@ fn every_recorded_check_is_made_alike() {
                 check(&mut context, &engine, &git, include_vendor)
             });
         let place = place.to_string_lossy().into_owned();
-        let (listed, texts) = kept(&output, &place, &["home", "source"], &[]);
+        let closed = ["home", "source"];
+        let (listed, texts) = (
+            kept(&output, &closed),
+            said(&output, &place, &closed, compared),
+        );
         let unmade = matches!(
             case["result"].get("code").map(text),
             Some("semgrep_output_exists" | "semgrep_output_in_source")

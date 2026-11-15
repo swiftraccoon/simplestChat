@@ -11,11 +11,11 @@ use super::{
     summary::{
         ERRORS, KINDS, MAX_DEPTH, MAX_ENGINE_REPORTS, MAX_ITEMS, MAX_NODES, MAX_REPORT, diagnosis,
     },
-    tests::{asked, kept, list, scripted, strings, text, tree},
+    tests::{compared, list, strings, text, tree},
 };
 use crate::{
     context::{Context, Limits, Note},
-    scratch::{Scratch, content, host_git, repository},
+    scratch::{Scratch, asked, content, host_git, kept, repository, said, scripted},
 };
 use serde_json::{Map, Value, json};
 use std::{cell::Cell, ffi::OsString, os::unix::fs::DirBuilderExt};
@@ -143,7 +143,7 @@ fn every_recorded_step_of_the_gate_is_made_alike() {
             made.expect("a private directory");
         }
         let log = place.join("log");
-        let program = scripted(&tools, &log, &case["answers"]);
+        let program = scripted(&tools, &log, "semgrep-core", "engine", &case["answers"]);
         let digests = strings(&case["digests"]);
         let reads = Cell::new(0);
         let digest = || {
@@ -181,9 +181,13 @@ fn every_recorded_step_of_the_gate_is_made_alike() {
         assert_eq!(json!(orders), case["orders"], "{name}");
         let place = place.to_string_lossy().into_owned();
         let closed = ["home", "semgrep/home", "semgrep/source"];
-        let (listed, texts) = kept(&evidence, &place, &closed, &["01-semgrep.stdout"]);
-        assert_eq!(listed, case["kept"], "{name}");
-        assert_eq!(texts, case["texts"], "{name}");
+        assert_eq!(kept(&evidence, &closed), case["kept"], "{name}");
+        let read = |below: &str| compared(below) || below == "01-semgrep.stdout";
+        assert_eq!(
+            said(&evidence, &place, &closed, read),
+            case["texts"],
+            "{name}"
+        );
         assert_eq!(asked(&log, &place), case["asked"], "{name}");
         match case["result"].get("code").map(text) {
             Some(code) => {

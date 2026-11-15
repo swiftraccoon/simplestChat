@@ -1,0 +1,4339 @@
+{
+ "checks": [
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [],
+   "name": "no new migrations",
+   "result": {},
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "one transactional migration",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "two transactional migrations",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "one concurrent index",
+   "result": {},
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql",
+      "<place>/evidence/migration-context/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_b ON t (b);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "migration-context/041_b.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "two concurrent indexes in two migrations",
+   "result": {},
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migration-context/041_b.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_b ON t (b);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    },
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    },
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "a transactional migration and a concurrent index",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "02-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/042_c.sql",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    },
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/043_d.sql",
+      "<place>/evidence/migration-context/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    },
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "migrations/041_b.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/042_c.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "migrations/043_d.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/041_b.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "migration-context/043_d.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/043_d.sql",
+    "migrations/042_c.sql",
+    "migrations/041_b.sql",
+    "migrations/040_a.sql"
+   ],
+   "name": "migrations in the order they are given",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "02-squawk-concurrent-index.stderr": "",
+    "migration-context/041_b.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migration-context/043_d.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"lock_timeout\", \"5s\"), (\"statement_timeout\", \"250ms\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index with the lock timeout first",
+   "result": {},
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET lock_timeout = '5s';\nSET statement_timeout = '250ms';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040 a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040 a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040 a.sql"
+   ],
+   "name": "a migration with a space in its name",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index without the timeouts",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index without the source",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a transactional migration without the source",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\nDROP TABLE t;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index and a second statement",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "SELECT 1;\n-- no-transaction\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a marker on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "migrations/041_b.sql": "SELECT 1;\n-- no-transaction\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "a bad second migration after a good first",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a migration that is not there",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a migration that is empty",
+   "result": {
+    "code": "tool_file_size"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": {
+     "base64": "U0VMRUNUICf/JzsK"
+    },
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a migration that is no UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[{\"rule_name\": \"adding-field-with-default\", \"file\": \"x\"}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "findings in a transactional migration",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     1,
+     "[{\"rule_name\": \"adding-field-with-default\"}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 1,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "findings and a failed scanner",
+   "result": {
+    "code": "scanner_command_failed_squawk-transactional"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     2,
+     ""
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 2,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a failed scanner",
+   "result": {
+    "code": "scanner_command_failed_squawk-transactional"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[{\"rule_name\": \"require-concurrent-index-creation\"}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "findings in a concurrent index",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[{\"rule_name\": \"x\"}]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "findings in the transactional migrations before a concurrent index",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[{\"rule_name\": \"x\"}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    },
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    },
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "02-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "findings in a concurrent index after clean transactional migrations",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "02-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "{}"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report that is a record",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "null"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report that is null",
+   "result": {
+    "code": "scanner_list_expected"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "no findings"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report that is no JSON",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     ""
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report that is empty",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     " [ ]\n"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report with space around it",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[null]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report of an empty finding",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     {
+      "base64": "77u/W10="
+     }
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report after a byte order mark",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[{\"a\": 1, \"a\": 2}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report that names a key twice",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": {
+     "mode": 438,
+     "text": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n"
+    },
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a migration that others may write",
+   "result": {},
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": {
+     "mode": 438,
+     "text": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+    },
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index that others may write",
+   "result": {},
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-concurrent-index.toml",
+      "--pg-version=18.6",
+      "--reporter=json",
+      "<place>/evidence/migration-context/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-concurrent-index"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": {
+     "mode": 438,
+     "text": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+    }
+   },
+   "kept": {
+    "01-squawk-concurrent-index.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-concurrent-index.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    },
+    "squawk-concurrent-index.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index with a source that others may write",
+   "result": {},
+   "texts": {
+    "01-squawk-concurrent-index.stderr": "",
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "squawk-concurrent-index.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = false\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[NaN]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a report of a number that is none",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]NaN"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/040_a.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "an empty report after a number that is none",
+   "result": {
+    "code": "JSONDecodeError"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/old/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_b ON t (b);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context": {
+     "directory": true,
+     "mode": 448
+    },
+    "migration-context/040_a.sql": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/old/040_a.sql"
+   ],
+   "name": "two migrations of one name in two places",
+   "result": {
+    "code": "FileExistsError"
+   },
+   "texts": {
+    "migration-context/040_a.sql": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": {
+     "base64": "/2ZuIHJ1bigpIHsKICAgIGxldCBtYWludGVuYW5jZSA9IFBnQ29ubmVjdE9wdGlvbnM6OmZyb21fc3RyKHVybCkKICAgIC5jb250ZXh0KCJpbnZhbGlkIERBVEFCQVNFX1VSTCIpPwogICAgLm9wdGlvbnMoWygic3RhdGVtZW50X3RpbWVvdXQiLCAiMTBtaW4iKSwgKCJsb2NrX3RpbWVvdXQiLCAiMW1pbiIpXSk7CiAgICBsZXQgYyA9IFBnQ29ubmVjdGlvbjo6Y29ubmVjdF93aXRoKCZtYWludGVuYW5jZSkuYXdhaXQ/Owp9Cg=="
+    }
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index with a source that is no UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": ""
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index with an empty source",
+   "result": {
+    "code": "tool_file_size"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [],
+   "checks": [],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect(url).await?;\n}\n"
+   },
+   "kept": {
+    "home": {
+     "directory": true,
+     "mode": 448
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql"
+   ],
+   "name": "a concurrent index whose connection is never made",
+   "result": {
+    "code": "migration_timeout_connection_missing"
+   },
+   "texts": {}
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[{\"rule_name\": \"x\"}]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "findings in the transactional migrations and no timeouts",
+   "result": {
+    "code": "migration_policy_findings"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  },
+  {
+   "answers": [
+    [
+     0,
+     "[]"
+    ],
+    [
+     0,
+     "[]"
+    ]
+   ],
+   "asked": [
+    {
+     "argv": [
+      "--config",
+      "<place>/evidence/squawk-transactional.toml",
+      "--pg-version=18.6",
+      "--assume-in-transaction",
+      "--reporter=json",
+      "<place>/root/migrations/041_b.sql"
+     ],
+     "directory": "<place>/evidence/home"
+    }
+   ],
+   "checks": [
+    {
+     "elapsedSeconds": true,
+     "exitStatus": 0,
+     "name": "squawk-transactional"
+    }
+   ],
+   "files": {
+    "migrations/040_a.sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n",
+    "migrations/041_b.sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n",
+    "src/db.rs": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+   },
+   "kept": {
+    "01-squawk-transactional.stderr": {
+     "directory": false,
+     "mode": 384
+    },
+    "01-squawk-transactional.stdout": {
+     "directory": false,
+     "mode": 384
+    },
+    "home": {
+     "directory": true,
+     "mode": 448
+    },
+    "squawk-transactional.toml": {
+     "directory": false,
+     "mode": 384
+    }
+   },
+   "migrations": [
+    "migrations/040_a.sql",
+    "migrations/041_b.sql"
+   ],
+   "name": "clean transactional migrations and no timeouts",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "texts": {
+    "01-squawk-transactional.stderr": "",
+    "squawk-transactional.toml": "excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\nassume_in_transaction = true\npg_version = \"18.6\"\n"
+   }
+  }
+ ],
+ "contexts": [
+  {
+   "name": "the repository's own connection",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "dXNlIGFueWhvdzo6e0NvbnRleHQsIGJhaWx9Owp1c2Ugc3FseDo6Q29ubmVjdGlvbiBhcyBfOwp1c2Ugc3FseDo6cG9zdGdyZXM6OntQZ0Nvbm5lY3RPcHRpb25zLCBQZ1Bvb2wsIFBnUG9vbE9wdGlvbnMsIFBnU3NsTW9kZX07CnVzZSBzdGQ6Om5ldDo6SXBBZGRyOwp1c2Ugc3RkOjpzdHI6OkZyb21TdHI7CnVzZSBzdGQ6OnRpbWU6OkR1cmF0aW9uOwp1c2UgdHJhY2luZzo6aW5mbzsKCi8vIFByb2Nlc3Mtd2lkZSBjb3VudGVycyBsZXQgZXJyb3IgY29udmVyc2lvbnMgY2xhc3NpZnkgYSBTUUx4IGVycm9yIGJlZm9yZSBpdHMKLy8gcHJpdmF0ZSBkZXRhaWxzIGFyZSByZWRhY3RlZCwgd2l0aG91dCB0aHJlYWRpbmcgYSBtZXRyaWNzIGhhbmRsZSB0aHJvdWdoIGFsbAovLyB0cmFuc2FjdGlvbnMuIFRoZXNlIGNvdW50IGluc3RydW1lbnRlZCBib3VuZGFyaWVzLCBub3Qgc3RhdGVtZW50cyBvciByZXRyaWVzLgpjb25zdCBFUlJPUl9LSU5EUzogWyZzdHI7IDldID0gWwogICAgInBvb2xfdGltZW91dCIsCiAgICAicG9vbF9jbG9zZWQiLAogICAgImNvbm5lY3Rpb24iLAogICAgImxvY2tfdGltZW91dCIsCiAgICAiY2FuY2VsbGVkIiwKICAgICJzZXJpYWxpemF0aW9uIiwKICAgICJkZWFkbG9jayIsCiAgICAiY29uc3RyYWludCIsCiAgICAib3RoZXIiLApdOwpzdGF0aWMgREFUQUJBU0VfRVJST1JTOiBbc3RkOjpzeW5jOjphdG9taWM6OkF0b21pY1U2NDsgOV0gPQogICAgW2NvbnN0IHsgc3RkOjpzeW5jOjphdG9taWM6OkF0b21pY1U2NDo6bmV3KDApIH07IDldOwoKZm4gZXJyb3Jfa2luZChlcnJvcjogJnNxbHg6OkVycm9yKSAtPiB1c2l6ZSB7CiAgICBtYXRjaCBlcnJvciB7CiAgICAgICAgc3FseDo6RXJyb3I6OlBvb2xUaW1lZE91dCA9PiAwLAogICAgICAgIHNxbHg6OkVycm9yOjpQb29sQ2xvc2VkID0+IDEsCiAgICAgICAgc3FseDo6RXJyb3I6OklvKF8pIHwgc3FseDo6RXJyb3I6OlRscyhfKSB8IHNxbHg6OkVycm9yOjpQcm90b2NvbChfKSA9PiAyLAogICAgICAgIHNxbHg6OkVycm9yOjpEYXRhYmFzZShlcnJvcikgPT4gbWF0Y2ggZXJyb3IuY29kZSgpLmFzX2RlcmVmKCkgewogICAgICAgICAgICBTb21lKCI1NVAwMyIpID0+IDMsCiAgICAgICAgICAgIFNvbWUoIjU3MDE0IikgPT4gNCwKICAgICAgICAgICAgU29tZSgiNDAwMDEiKSA9PiA1LAogICAgICAgICAgICBTb21lKCI0MFAwMSIpID0+IDYsCiAgICAgICAgICAgIFNvbWUoY29kZSkgaWYgY29kZS5zdGFydHNfd2l0aCgiMjMiKSA9PiA3LAogICAgICAgICAgICBTb21lKGNvZGUpIGlmIGNvZGUuc3RhcnRzX3dpdGgoIjA4IikgPT4gMiwKICAgICAgICAgICAgXyA9PiA4LAogICAgICAgIH0sCiAgICAgICAgXyA9PiA4LAogICAgfQp9CgovLy8gQ291bnQgYSBmYWlsdXJlIGF0IG9uZSBlcnJvci1jb252ZXJzaW9uIGJvdW5kYXJ5LCBiZWZvcmUgcmVkYWN0aW5nIGRldGFpbHMuCi8vLyBEbyBub3QgY2FsbCB0aGlzIHR3aWNlIHdoaWxlIHByb3BhZ2F0aW5nIHRoZSBzYW1lIGVycm9yLgpwdWIoY3JhdGUpIGZuIHJlY29yZF9lcnJvcihlcnJvcjogJnNxbHg6OkVycm9yKSB7CiAgICBEQVRBQkFTRV9FUlJPUlNbZXJyb3Jfa2luZChlcnJvcildLmZldGNoX2FkZCgxLCBzdGQ6OnN5bmM6OmF0b21pYzo6T3JkZXJpbmc6OlJlbGF4ZWQpOwp9CgpwdWIoY3JhdGUpIGZuIGFwcGVuZF9lcnJvcl9tZXRyaWNzKG91dDogJm11dCBTdHJpbmcpIHsKICAgIHVzZSBzdGQ6OmZtdDo6V3JpdGUgYXMgXzsKICAgIGxldCBfID0gd3JpdGVsbiEoCiAgICAgICAgb3V0LAogICAgICAgICIjIEhFTFAgc2ltcGxlc3RjaGF0X2RhdGFiYXNlX2Vycm9yc190b3RhbCBEYXRhYmFzZSBlcnJvcnMgYXQgaW5zdHJ1bWVudGVkIEFQSSBjb252ZXJzaW9uIGJvdW5kYXJpZXMsIG5vdCBhbGwgc3RhdGVtZW50czsgY2FuY2VsbGVkIGluY2x1ZGVzIHN0YXRlbWVudCBkZWFkbGluZXNcbiMgVFlQRSBzaW1wbGVzdGNoYXRfZGF0YWJhc2VfZXJyb3JzX3RvdGFsIGNvdW50ZXIiCiAgICApOwogICAgZm9yIChraW5kLCBjb3VudGVyKSBpbiBFUlJPUl9LSU5EUy5pdGVyKCkuemlwKCZEQVRBQkFTRV9FUlJPUlMpIHsKICAgICAgICBsZXQgXyA9IHdyaXRlbG4hKAogICAgICAgICAgICBvdXQsCiAgICAgICAgICAgICJzaW1wbGVzdGNoYXRfZGF0YWJhc2VfZXJyb3JzX3RvdGFse3traW5kPVwie2tpbmR9XCJ9fSB7fSIsCiAgICAgICAgICAgIGNvdW50ZXIubG9hZChzdGQ6OnN5bmM6OmF0b21pYzo6T3JkZXJpbmc6OlJlbGF4ZWQpCiAgICAgICAgKTsKICAgIH0KfQoKLy8vIEV2ZXJ5IG1pZ3JhdGlvbiB1bmRlciBgbWlncmF0aW9ucy9gLCByZWFkIGF0IGNvbXBpbGUgdGltZSwgc28gYFJVTl9NSUdSQVRJT05TYAovLy8gYXBwbGllcyB0aGUgc2V0IHRoaXMgYmluYXJ5IHdhcyBidWlsdCB3aXRoIHdoYXRldmVyIGl0cyB3b3JraW5nIGRpcmVjdG9yeS4KLy8vIFRoZSBtYWNybyB0cmFja3MgdGhlIGZpbGVzIGl0IGVtYmVkZGVkOyB0aGUgYnVpbGQgc2NyaXB0IG1ha2VzIENhcmdvCi8vLyByZWNvbXBpbGUgd2hlbiBhIG5ldyBvbmUgYXBwZWFycy4KcHViKGNyYXRlKSBzdGF0aWMgTUlHUkFUT1I6IHNxbHg6Om1pZ3JhdGU6Ok1pZ3JhdG9yID0gc3FseDo6bWlncmF0ZSEoIi4vbWlncmF0aW9ucyIpOwoKcHViKGNyYXRlKSBhc3luYyBmbiBjb25uZWN0KHNldHRpbmdzOiAmY3JhdGU6OmNvbmZpZzo6RGF0YWJhc2UpIC0+IGFueWhvdzo6UmVzdWx0PE9wdGlvbjxQZ1Bvb2w+PiB7CiAgICBsZXQgU29tZSh1cmwpID0gJnNldHRpbmdzLnVybCBlbHNlIHsKICAgICAgICBpbmZvISgiREFUQUJBU0VfVVJMIG5vdCBzZXQg4oCUIHJ1bm5pbmcgd2l0aG91dCBkYXRhYmFzZSAoYW5vbnltb3VzLW9ubHkgbW9kZSkiKTsKICAgICAgICByZXR1cm4gT2soTm9uZSk7CiAgICB9OwogICAgbGV0IHVybCA9IHVybC5leHBvc2Vfc2VjcmV0KCk7CgogICAgbGV0IG9wdGlvbnMgPSBQZ0Nvbm5lY3RPcHRpb25zOjpmcm9tX3N0cih1cmwpLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/OwogICAgbGV0IG9wdGlvbnMgPSB3aXRoX3J1bnRpbWVfdGltZW91dHMob3B0aW9ucyk7CiAgICByZXF1aXJlX3ZlcmlmaWVkX3JlbW90ZV9kYXRhYmFzZSgmb3B0aW9ucyk/OwoKICAgIC8vIEEgc21hbGwgd2FybSBmbG9vciBrZWVwcyB0aGUgZmlyc3QgcmVxdWVzdCBhZnRlciBhbiBpZGxlIHBlcmlvZCBmcm9tCiAgICAvLyBwYXlpbmcgYSBmdWxsIGNvbm5lY3QgKFRMUyBvbiByZW1vdGUgaG9zdHMpIGluc2lkZSB0aGUgYWNxdWlyZSBidWRnZXQuCiAgICAvLyBUaGUgZGVmYXVsdCBwcmUtYWNxdWlyZSBwaW5nIGlzIHJldGFpbmVkIGRlbGliZXJhdGVseTogb25lIGV4dHJhCiAgICAvLyByb3VuZCB0cmlwIGlzIGNoZWFwZXIgdGhhbiBhIHVzZXItZmFjaW5nIGZhaWx1cmUgb24gYSBzdGFsZSBjb25uZWN0aW9uCiAgICAvLyBhZnRlciBhIGRhdGFiYXNlIHJlc3RhcnQuCiAgICBsZXQgcG9vbCA9IFBnUG9vbE9wdGlvbnM6Om5ldygpCiAgICAgICAgLm1heF9jb25uZWN0aW9ucyhzZXR0aW5ncy5tYXhfY29ubmVjdGlvbnMpCiAgICAgICAgLm1pbl9jb25uZWN0aW9ucyhzZXR0aW5ncy5taW5fY29ubmVjdGlvbnMpCiAgICAgICAgLmlkbGVfdGltZW91dChEdXJhdGlvbjo6ZnJvbV9zZWNzKDYwMCkpCiAgICAgICAgLm1heF9saWZldGltZShEdXJhdGlvbjo6ZnJvbV9zZWNzKDE4MDApKQogICAgICAgIC5hY3F1aXJlX3RpbWVvdXQoc2V0dGluZ3MuYWNxdWlyZV90aW1lb3V0KQogICAgICAgIC5hY3F1aXJlX3Nsb3dfdGhyZXNob2xkKER1cmF0aW9uOjpmcm9tX21pbGxpcyg1MDApKQogICAgICAgIC5jb25uZWN0X3dpdGgob3B0aW9ucykKICAgICAgICAuYXdhaXQ/OwoKICAgIGluZm8hKCJDb25uZWN0ZWQgdG8gUG9zdGdyZVNRTCIpOwoKICAgIGlmIHNldHRpbmdzLnJ1bl9taWdyYXRpb25zIHsKICAgICAgICAvLyBBbiBpbnRlcnJ1cHRlZCBjb25jdXJyZW50IGJ1aWxkIG1heSBsZWF2ZSBhbiBpbnZhbGlkIG5hbWVkIGluZGV4LiBOZXZlcgogICAgICAgIC8vIGxldCBJRiBOT1QgRVhJU1RTIG1hcmsgaXRzIG1pZ3JhdGlvbiBjb21wbGV0ZSB3aXRob3V0IHJlcGFpcmluZyBpdC4KICAgICAgICB2ZXJpZnlfY2hhdF9pbmRleGVzKCZwb29sLCBmYWxzZSkuYXdhaXQ/OwogICAgICAgIC8vIE1haW50ZW5hbmNlIGJ1ZGdldHMsIG5vdCB0aGUgcnVudGltZSdzIDEwIHMgc3RhdGVtZW50IGRlYWRsaW5lOiBhIGxhcmdlCiAgICAgICAgLy8gaW5kZXggYnVpbGQgb3IgYmFja2ZpbGwgbXVzdCBub3QgZmFpbCBhdCBhIGxpbWl0IG1lYW50IGZvciByZXF1ZXN0cy4KICAgICAgICBsZXQgbWFpbnRlbmFuY2UgPSBQZ0Nvbm5lY3RPcHRpb25zOjpmcm9tX3N0cih1cmwpCiAgICAgICAgICAgIC5jb250ZXh0KCJpbnZhbGlkIERBVEFCQVNFX1VSTCIpPwogICAgICAgICAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLCAoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgICAgICBsZXQgbXV0IGNvbm5lY3Rpb24gPSBzcWx4Ojpwb3N0Z3Jlczo6UGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87CiAgICAgICAgTUlHUkFUT1IucnVuKCZtdXQgY29ubmVjdGlvbikuYXdhaXQ/OwogICAgICAgIHNxbHg6OkNvbm5lY3Rpb246OmNsb3NlKGNvbm5lY3Rpb24pLmF3YWl0PzsKICAgICAgICBpbmZvISgiRGF0YWJhc2UgbWlncmF0aW9ucyBhcHBsaWVkIik7CiAgICB9CgogICAgdmVyaWZ5X3NjaGVtYSgmcG9vbCkuYXdhaXQ/OwogICAgT2soU29tZShwb29sKSkKfQoKLy8vIE9uZSBjb2x1bW4gZnJvbSBlYWNoIHRhYmxlIHRoZSBuZXdlc3QgbWlncmF0aW9ucyBzaGFwZWQuIEEgZGVwbG95bWVudCB0aGF0IHJhbgovLy8gdGhlIGJpbmFyeSBhZ2FpbnN0IGFuIHVubWlncmF0ZWQgZGF0YWJhc2UgZmFpbHMgaGVyZSwgYXQgc3RhcnR1cCwgd2l0aCBhIG1lc3NhZ2UKLy8vIG5hbWluZyB0aGUgZ2FwLCBpbnN0ZWFkIG9mIG9uIHRoZSBmaXJzdCByZXF1ZXN0IHRoYXQgdG91Y2hlcyBpdC4KY29uc3QgRVhQRUNURURfQ09MVU1OUzogWygmc3RyLCAmc3RyKTsgMjldID0gWwogICAgKCJzZXNzaW9uX2FjY2Vzc190b2tlbnMiLCAiYXV0aF92ZXJzaW9uIiksCiAgICAoImF0dGFjaG1lbnRzIiwgImRhdGEiKSwKICAgICgiY29udGFjdHMiLCAic3RhdHVzIiksCiAgICAoInNhdmVkX3Jvb21zIiwgImZhdm9yaXRlIiksCiAgICAoImFjY291bnRfbm90aWZpY2F0aW9uX3ByZWZlcmVuY2VzIiwgInByaXZhdGVfbWVzc2FnZXMiKSwKICAgICgiY29udmVyc2F0aW9uX25vdGlmaWNhdGlvbl9wcmVmZXJlbmNlcyIsICJzbm9vemVkX3VudGlsIiksCiAgICAoImNoYXRfcGlucyIsICJtZXNzYWdlX2lkIiksCiAgICAoInB1c2hfa2V5cyIsICJwcml2YXRlX2tleSIpLAogICAgKCJwdXNoX3N1YnNjcmlwdGlvbnMiLCAiZ2VuZXJhdGlvbiIpLAogICAgKCJyb29tcyIsICJoaXN0b3J5X3JldGVudGlvbl9kYXlzIiksCiAgICAoImNoYXRfbWVzc2FnZXMiLCAiYm9keSIpLAogICAgKCJjaGF0X2luYm94IiwgImxhc3RfbWVzc2FnZV9pZCIpLAogICAgKCJjaGF0X3JlYWRfY3Vyc29ycyIsICJtZXNzYWdlX2lkIiksCiAgICAoInVzZXJzIiwgInByZWZlcmVuY2VzIiksCiAgICAoInVzZXJzIiwgInByb2ZpbGVfc3R5bGUiKSwKICAgICgidXNlcnMiLCAiYXZhdGFyX2RpZ2VzdCIpLAogICAgKCJyb29tcyIsICJuYW1lX3N0eWxlIiksCiAgICAoInJvb21zIiwgInRvcGljX3N0eWxlIiksCiAgICAoInNlc3Npb25zIiwgInJlZnJlc2hfdG9rZW5fZmFtaWx5X2hhc2giKSwKICAgICgicm9vbXMiLCAidXBkYXRlZF9hdCIpLAogICAgKCJyb29tcyIsICJpbWFnZV92ZXJzaW9uIiksCiAgICAoInJvb21fc3RhdGVzIiwgImlwX2FkZHJlc3MiKSwKICAgICgicm9vbV9yZXBvcnRzIiwgInJlc29sdmVkX2J5IiksCiAgICAoIm1vZGVyYXRpb25fZXZlbnRzIiwgInJlcG9ydF9pZCIpLAogICAgKCJpbnZpdGVzIiwgInVzZXNfbGVmdCIpLAogICAgKCJpbnZpdGVzIiwgImNvZGVfaGFzaCIpLAogICAgKCJpbnZpdGVzIiwgImlkIiksCiAgICAoImludml0ZV9yZWRlbXB0aW9ucyIsICJpbnZpdGVfaGFzaCIpLAogICAgKCJ3ZWJhdXRobl9jcmVkZW50aWFscyIsICJjcmVkZW50aWFsX2pzb24iKSwKXTsKCi8vLyBDb25jdXJyZW50IGluZGV4ZXMgYXJlIGNoZWNrZWQgYm90aCBiZWZvcmUgbWlncmF0aW9uIHJldHJ5IGFuZCBiZWZvcmUgcmVhZGluZXNzLgphc3luYyBmbiB2ZXJpZnlfY2hhdF9pbmRleGVzKHBvb2w6ICZQZ1Bvb2wsIHJlcXVpcmVkOiBib29sKSAtPiBhbnlob3c6OlJlc3VsdDwoKT4gewogICAgbGV0IGluZGV4ZXM6IFZlYzwoU3RyaW5nLCBib29sLCBib29sKT4gPSBzcWx4OjpxdWVyeV9hcygKICAgICAgICAiU0VMRUNUIGMucmVsbmFtZTo6dGV4dCwgaS5pbmRpc3ZhbGlkLCBpLmluZGlzcmVhZHkKICAgICAgICAgRlJPTSBwZ19jYXRhbG9nLnBnX2luZGV4IGkKICAgICAgICAgSk9JTiBwZ19jYXRhbG9nLnBnX2NsYXNzIGMgT04gYy5vaWQ9aS5pbmRleHJlbGlkCiAgICAgICAgIEpPSU4gcGdfY2F0YWxvZy5wZ19uYW1lc3BhY2UgbiBPTiBuLm9pZD1jLnJlbG5hbWVzcGFjZQogICAgICAgICBXSEVSRSBuLm5zcG5hbWU9J3B1YmxpYycgQU5EIGMucmVsbmFtZSBJTgogICAgICAgICAgICgnY2hhdF9tZXNzYWdlc19pbmNvbWluZ191bnJlYWQnLCdjaGF0X21lc3NhZ2VzX2NvbnZlcnNhdGlvbl9yZXBseScpIiwKICAgICkKICAgIC5mZXRjaF9hbGwocG9vbCkKICAgIC5hd2FpdAogICAgLmNvbnRleHQoImNvdWxkIG5vdCBpbnNwZWN0IGNvbmN1cnJlbnQgY2hhdCBpbmRleGVzIik/OwogICAgZm9yIChuYW1lLCB2YWxpZCwgcmVhZHkpIGluICZpbmRleGVzIHsKICAgICAgICBpZiAhdmFsaWQgfHwgIXJlYWR5IHsKICAgICAgICAgICAgYmFpbCEoImRhdGFiYXNlIGluZGV4IHtuYW1lfSBpcyBpbmNvbXBsZXRlOyByZXBhaXIgaXQgYmVmb3JlIHJlcnVubmluZyBtaWdyYXRpb25zIik7CiAgICAgICAgfQogICAgfQogICAgaWYgcmVxdWlyZWQgJiYgaW5kZXhlcy5sZW4oKSAhPSAyIHsKICAgICAgICBiYWlsISgKICAgICAgICAgICAgImRhdGFiYXNlIHNjaGVtYSBpcyBiZWhpbmQgdGhpcyBidWlsZCAobWlzc2luZyBjaGF0IGxvb2t1cCBpbmRleGVzKTsgcnVuIHRoZSBtaWdyYXRpb25zIGZpcnN0IgogICAgICAgICk7CiAgICB9CiAgICBPaygoKSkKfQoKYXN5bmMgZm4gdmVyaWZ5X3NjaGVtYShwb29sOiAmUGdQb29sKSAtPiBhbnlob3c6OlJlc3VsdDwoKT4gewogICAgLy8gRml4ZWQgaWRlbnRpZmllcnMgb25seTsgbm8gcnVudGltZSB2YWx1ZSBlbnRlcnMgdGhlIFNRTCB0ZXh0LgogICAgbGV0IGV4cGVjdGVkID0gRVhQRUNURURfQ09MVU1OUwogICAgICAgIC5pdGVyKCkKICAgICAgICAubWFwKHwodGFibGUsIGNvbHVtbil8IGZvcm1hdCEoIigne3RhYmxlfScsICd7Y29sdW1ufScpIikpCiAgICAgICAgLmNvbGxlY3Q6OjxWZWM8Xz4+KCkKICAgICAgICAuam9pbigiLCAiKTsKICAgIGxldCBzcWwgPSBmb3JtYXQhKAogICAgICAgICJTRUxFQ1QgYy50YWJsZV9uYW1lOjp0ZXh0LCBjLmNvbHVtbl9uYW1lOjp0ZXh0LCBjLmlzX251bGxhYmxlOjp0ZXh0CiAgICAgICAgIEZST00gaW5mb3JtYXRpb25fc2NoZW1hLmNvbHVtbnMgYwogICAgICAgICBKT0lOIChWQUxVRVMge2V4cGVjdGVkfSkgQVMgZSh0YWJsZV9uYW1lLCBjb2x1bW5fbmFtZSkKICAgICAgICAgICBPTiBjLnRhYmxlX25hbWUgPSBlLnRhYmxlX25hbWUgQU5EIGMuY29sdW1uX25hbWUgPSBlLmNvbHVtbl9uYW1lCiAgICAgICAgIFdIRVJFIGMudGFibGVfc2NoZW1hID0gJ3B1YmxpYyciCiAgICApOwogICAgbGV0IHByZXNlbnQ6IFZlYzwoU3RyaW5nLCBTdHJpbmcsIFN0cmluZyk+ID0gc3FseDo6cXVlcnlfYXMoc3FseDo6QXNzZXJ0U3FsU2FmZShzcWwpKQogICAgICAgIC5mZXRjaF9hbGwocG9vbCkKICAgICAgICAuYXdhaXQKICAgICAgICAuY29udGV4dCgiY291bGQgbm90IGluc3BlY3QgdGhlIGRhdGFiYXNlIHNjaGVtYSIpPzsKICAgIGxldCBtaXNzaW5nID0gc2NoZW1hX2dhcHMoJnByZXNlbnQpOwogICAgaWYgIW1pc3NpbmcuaXNfZW1wdHkoKSB7CiAgICAgICAgYmFpbCEoCiAgICAgICAgICAgICJkYXRhYmFzZSBzY2hlbWEgaXMgYmVoaW5kIHRoaXMgYnVpbGQgKG1pc3Npbmcge30pOyBydW4gdGhlIG1pZ3JhdGlvbnMgZmlyc3QiLAogICAgICAgICAgICBtaXNzaW5nLmpvaW4oIiwgIikKICAgICAgICApOwogICAgfQogICAgdmVyaWZ5X2NoYXRfaW5kZXhlcyhwb29sLCB0cnVlKS5hd2FpdAp9CgpmbiBzY2hlbWFfZ2FwcyhwcmVzZW50OiAmWyhTdHJpbmcsIFN0cmluZywgU3RyaW5nKV0pIC0+IFZlYzxTdHJpbmc+IHsKICAgIGxldCBtdXQgbWlzc2luZzogVmVjPFN0cmluZz4gPSBFWFBFQ1RFRF9DT0xVTU5TCiAgICAgICAgLml0ZXIoKQogICAgICAgIC5maWx0ZXIofCh0YWJsZSwgY29sdW1uKXwgIXByZXNlbnQuaXRlcigpLmFueSh8KHQsIGMsIF8pfCB0ID09IHRhYmxlICYmIGMgPT0gY29sdW1uKSkKICAgICAgICAubWFwKHwodGFibGUsIGNvbHVtbil8IGZvcm1hdCEoInt0YWJsZX0ue2NvbHVtbn0iKSkKICAgICAgICAuY29sbGVjdCgpOwogICAgaWYgcHJlc2VudC5pdGVyKCkuYW55KHwodGFibGUsIGNvbHVtbiwgbnVsbGFibGUpfCB7CiAgICAgICAgdGFibGUgPT0gInNlc3Npb25zIiAmJiBjb2x1bW4gPT0gInJlZnJlc2hfdG9rZW5fZmFtaWx5X2hhc2giICYmIG51bGxhYmxlICE9ICJOTyIKICAgIH0pIHsKICAgICAgICBtaXNzaW5nLnB1c2goInNlc3Npb25zLnJlZnJlc2hfdG9rZW5fZmFtaWx5X2hhc2ggTk9UIE5VTEwiLnRvX3N0cmluZygpKTsKICAgIH0KICAgIG1pc3NpbmcKfQoKZm4gcmVxdWlyZV92ZXJpZmllZF9yZW1vdGVfZGF0YWJhc2Uob3B0aW9uczogJlBnQ29ubmVjdE9wdGlvbnMpIC0+IGFueWhvdzo6UmVzdWx0PCgpPiB7CiAgICBsZXQgaG9zdCA9IG9wdGlvbnMuZ2V0X2hvc3QoKTsKICAgIC8vIFVSTCBwYXJzaW5nIHByZXNlcnZlcyBicmFja2V0cyBhcm91bmQgSVB2NiBsaXRlcmFscyBpbiB0aGlzIGFjY2Vzc29yLgogICAgbGV0IGhvc3RfaXAgPSBob3N0CiAgICAgICAgLnN0cmlwX3ByZWZpeCgnWycpCiAgICAgICAgLmFuZF90aGVuKHx2YWx1ZXwgdmFsdWUuc3RyaXBfc3VmZml4KCddJykpCiAgICAgICAgLnVud3JhcF9vcihob3N0KTsKICAgIGxldCBsb2NhbCA9IG9wdGlvbnMuZ2V0X3NvY2tldCgpLmlzX3NvbWUoKQogICAgICAgIHx8IGhvc3QuZXFfaWdub3JlX2FzY2lpX2Nhc2UoImxvY2FsaG9zdCIpCiAgICAgICAgfHwgaG9zdF9pcAogICAgICAgICAgICAucGFyc2U6OjxJcEFkZHI+KCkKICAgICAgICAgICAgLmlzX29rX2FuZCh8YWRkcmVzc3wgYWRkcmVzcy5pc19sb29wYmFjaygpKTsKCiAgICBpZiAhbG9jYWwgJiYgIW1hdGNoZXMhKG9wdGlvbnMuZ2V0X3NzbF9tb2RlKCksIFBnU3NsTW9kZTo6VmVyaWZ5RnVsbCkgewogICAgICAgIGJhaWwhKAogICAgICAgICAgICAicmVtb3RlIERBVEFCQVNFX1VSTCBob3N0IHtob3N0Oj99IG11c3Qgc2V0IHNzbG1vZGU9dmVyaWZ5LWZ1bGwgKGFuZCBzc2xyb290Y2VydCB3aGVuIHRoZSBDQSBpcyBub3QgaW4gdGhlIHN5c3RlbSB0cnVzdCBzdG9yZSkiCiAgICAgICAgKTsKICAgIH0KCiAgICBPaygoKSkKfQoKZm4gd2l0aF9ydW50aW1lX3RpbWVvdXRzKG9wdGlvbnM6IFBnQ29ubmVjdE9wdGlvbnMpIC0+IFBnQ29ubmVjdE9wdGlvbnMgewogICAgLy8gQm91bmQgZXZlcnkgcG9vbCB1c2VyJ3Mgc2VydmVyLXNpZGUgd2FpdHMuIFJvb20gd3JpdGVzIGFkZGl0aW9uYWxseSBib3VuZAogICAgLy8gdGhlIHdob2xlIHBlcnNpc3RlbmNlIHBoYXNlIHdoaWxlIHJldGFpbmluZyB0aGVpciBjb250cm9sIGdhdGUsIG5vdCB0aGVpcgogICAgLy8gY2hhdC9tZWRpYSBzdGF0ZSBsb2NrLiBQcm9kdWN0aW9uIG1pZ3JhdGlvbnMgdXNlIGEgc2VwYXJhdGUgY29ubmVjdGlvbi4KICAgIG9wdGlvbnMub3B0aW9ucyhbCiAgICAgICAgKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMHMiKSwKICAgICAgICAoImxvY2tfdGltZW91dCIsICI1cyIpLAogICAgICAgICgiaWRsZV9pbl90cmFuc2FjdGlvbl9zZXNzaW9uX3RpbWVvdXQiLCAiMTVzIiksCiAgICBdKQp9CgojW2NmZyh0ZXN0KV0KbW9kIHRlc3RzIHsKICAgIHVzZSBzdXBlcjo6KjsKCiAgICAjW3Rlc3RdCiAgICBmbiBzY2hlbWFfcmVxdWlyZXNfbm9ubnVsbGFibGVfcmVmcmVzaF9mYW1pbGllcygpIHsKICAgICAgICBsZXQgbXV0IGNvbHVtbnM6IFZlYzxfPiA9IEVYUEVDVEVEX0NPTFVNTlMKICAgICAgICAgICAgLml0ZXIoKQogICAgICAgICAgICAubWFwKHwodGFibGUsIGNvbHVtbil8ICh0YWJsZS50b19zdHJpbmcoKSwgY29sdW1uLnRvX3N0cmluZygpLCAiTk8iLnRvX3N0cmluZygpKSkKICAgICAgICAgICAgLmNvbGxlY3QoKTsKICAgICAgICBhc3NlcnQhKHNjaGVtYV9nYXBzKCZjb2x1bW5zKS5pc19lbXB0eSgpKTsKICAgICAgICBsZXQgZmFtaWx5ID0gY29sdW1ucwogICAgICAgICAgICAuaXRlcl9tdXQoKQogICAgICAgICAgICAuZmluZCh8KHRhYmxlLCBjb2x1bW4sIF8pfCB0YWJsZSA9PSAic2Vzc2lvbnMiICYmIGNvbHVtbiA9PSAicmVmcmVzaF90b2tlbl9mYW1pbHlfaGFzaCIpCiAgICAgICAgICAgIC51bndyYXAoKTsKICAgICAgICBmYW1pbHkuMiA9ICJZRVMiLmludG8oKTsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBzY2hlbWFfZ2FwcygmY29sdW1ucyksCiAgICAgICAgICAgIHZlYyFbInNlc3Npb25zLnJlZnJlc2hfdG9rZW5fZmFtaWx5X2hhc2ggTk9UIE5VTEwiXQogICAgICAgICk7CiAgICAgICAgY29sdW1ucy5yZXRhaW4ofCh0YWJsZSwgXywgXyl8IHRhYmxlICE9ICJzZXNzaW9ucyIpOwogICAgICAgIGFzc2VydF9lcSEoCiAgICAgICAgICAgIHNjaGVtYV9nYXBzKCZjb2x1bW5zKSwKICAgICAgICAgICAgdmVjIVsic2Vzc2lvbnMucmVmcmVzaF90b2tlbl9mYW1pbHlfaGFzaCJdCiAgICAgICAgKTsKICAgIH0KCiAgICAjW3Rlc3RdCiAgICBmbiBwb29sX2ZhaWx1cmVzX2FyZV9jbGFzc2lmaWVkX3dpdGhvdXRfZXJyb3JfdGV4dCgpIHsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBFUlJPUl9LSU5EU1tlcnJvcl9raW5kKCZzcWx4OjpFcnJvcjo6UG9vbFRpbWVkT3V0KV0sCiAgICAgICAgICAgICJwb29sX3RpbWVvdXQiCiAgICAgICAgKTsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBFUlJPUl9LSU5EU1tlcnJvcl9raW5kKCZzcWx4OjpFcnJvcjo6UG9vbENsb3NlZCldLAogICAgICAgICAgICAicG9vbF9jbG9zZWQiCiAgICAgICAgKTsKICAgICAgICBhc3NlcnRfZXEhKAogICAgICAgICAgICBFUlJPUl9LSU5EU1tlcnJvcl9raW5kKCZzcWx4OjpFcnJvcjo6UHJvdG9jb2woInByaXZhdGUgZGV0YWlscyIudG9fb3duZWQoKSkpXSwKICAgICAgICAgICAgImNvbm5lY3Rpb24iCiAgICAgICAgKTsKICAgICAgICBhc3NlcnRfZXEhKEVSUk9SX0tJTkRTW2Vycm9yX2tpbmQoJnNxbHg6OkVycm9yOjpSb3dOb3RGb3VuZCldLCAib3RoZXIiKTsKICAgICAgICBsZXQgbXV0IHNuYXBzaG90ID0gU3RyaW5nOjpuZXcoKTsKICAgICAgICBhcHBlbmRfZXJyb3JfbWV0cmljcygmbXV0IHNuYXBzaG90KTsKICAgICAgICBhc3NlcnQhKCFzbmFwc2hvdC5jb250YWlucygicHJpdmF0ZSBkZXRhaWxzIikpOwogICAgfQoKICAgICNbdGVzdF0KICAgIGZuIHJlamVjdHNfcmVtb3RlX2RhdGFiYXNlX3dpdGhvdXRfZnVsbF92ZXJpZmljYXRpb24oKSB7CiAgICAgICAgZm9yIHVybCBpbiBbCiAgICAgICAgICAgICJwb3N0Z3JlczovL3VzZXJAZXhhbXBsZS5jb20vY2hhdCIsCiAgICAgICAgICAgICJwb3N0Z3JlczovL3VzZXJAZXhhbXBsZS5jb20vY2hhdD9zc2xtb2RlPXJlcXVpcmUiLAogICAgICAgICAgICAicG9zdGdyZXM6Ly91c2VyQGV4YW1wbGUuY29tL2NoYXQ/c3NsbW9kZT12ZXJpZnktY2EiLAogICAgICAgICAgICAvLyBRdWVyeSBwYXJhbWV0ZXJzIG92ZXJyaWRlIHRoZSBVUkwgYXV0aG9yaXR5IGluIFNRTHg7IHZhbGlkYXRlIHRoZQogICAgICAgICAgICAvLyBlZmZlY3RpdmUgZGVzdGluYXRpb24gcmF0aGVyIHRoYW4gdHJ1c3RpbmcgdGhlIGFwcGFyZW50IGhvc3QuCiAgICAgICAgICAgICJwb3N0Z3JlczovL3VzZXJAbG9jYWxob3N0L2NoYXQ/aG9zdGFkZHI9MjAzLjAuMTEzLjEwJnNzbG1vZGU9ZGlzYWJsZSIsCiAgICAgICAgXSB7CiAgICAgICAgICAgIGxldCBvcHRpb25zID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKS51bndyYXAoKTsKICAgICAgICAgICAgYXNzZXJ0IShyZXF1aXJlX3ZlcmlmaWVkX3JlbW90ZV9kYXRhYmFzZSgmb3B0aW9ucykuaXNfZXJyKCksICJ7dXJsfSIpOwogICAgICAgIH0KICAgIH0KCiAgICAjW3Rlc3RdCiAgICBmbiBhY2NlcHRzX3JlbW90ZV9kYXRhYmFzZV93aXRoX2Z1bGxfdmVyaWZpY2F0aW9uKCkgewogICAgICAgIGxldCBvcHRpb25zID0KICAgICAgICAgICAgUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIoInBvc3RncmVzOi8vdXNlckBleGFtcGxlLmNvbS9jaGF0P3NzbG1vZGU9dmVyaWZ5LWZ1bGwiKQogICAgICAgICAgICAgICAgLnVud3JhcCgpOwogICAgICAgIGFzc2VydCEocmVxdWlyZV92ZXJpZmllZF9yZW1vdGVfZGF0YWJhc2UoJm9wdGlvbnMpLmlzX29rKCkpOwogICAgfQoKICAgICNbdGVzdF0KICAgIGZuIGFjY2VwdHNfdW5lbmNyeXB0ZWRfbG9vcGJhY2tfZGF0YWJhc2UoKSB7CiAgICAgICAgZm9yIHVybCBpbiBbCiAgICAgICAgICAgICJwb3N0Z3JlczovL3VzZXJAbG9jYWxob3N0L2NoYXQ/c3NsbW9kZT1kaXNhYmxlIiwKICAgICAgICAgICAgInBvc3RncmVzOi8vdXNlckAxMjcuMC4wLjEvY2hhdD9zc2xtb2RlPWRpc2FibGUiLAogICAgICAgICAgICAicG9zdGdyZXM6Ly91c2VyQFs6OjFdL2NoYXQ/c3NsbW9kZT1kaXNhYmxlIiwKICAgICAgICBdIHsKICAgICAgICAgICAgbGV0IG9wdGlvbnMgPSBQZ0Nvbm5lY3RPcHRpb25zOjpmcm9tX3N0cih1cmwpLnVud3JhcCgpOwogICAgICAgICAgICBhc3NlcnQhKHJlcXVpcmVfdmVyaWZpZWRfcmVtb3RlX2RhdGFiYXNlKCZvcHRpb25zKS5pc19vaygpLCAie3VybH0iKTsKICAgICAgICB9CiAgICB9CgogICAgI1t0ZXN0XQogICAgZm4gcnVudGltZV9jb25uZWN0aW9uc19oYXZlX2JvdW5kZWRfZGF0YWJhc2Vfd2FpdHMoKSB7CiAgICAgICAgbGV0IG9wdGlvbnMgPSB3aXRoX3J1bnRpbWVfdGltZW91dHMoCiAgICAgICAgICAgIFBnQ29ubmVjdE9wdGlvbnM6OmZyb21fc3RyKCJwb3N0Z3JlczovL3VzZXJAbG9jYWxob3N0L2NoYXQiKS51bndyYXAoKSwKICAgICAgICApOwogICAgICAgIGxldCBzdGFydHVwX29wdGlvbnMgPSBvcHRpb25zLmdldF9vcHRpb25zKCkuZXhwZWN0KCJib3VuZGVkIHN0YXJ0dXAgb3B0aW9ucyIpOwogICAgICAgIGFzc2VydCEoc3RhcnR1cF9vcHRpb25zLmNvbnRhaW5zKCItYyBzdGF0ZW1lbnRfdGltZW91dD0xMHMiKSk7CiAgICAgICAgYXNzZXJ0IShzdGFydHVwX29wdGlvbnMuY29udGFpbnMoIi1jIGxvY2tfdGltZW91dD01cyIpKTsKICAgICAgICBhc3NlcnQhKHN0YXJ0dXBfb3B0aW9ucy5jb250YWlucygiLWMgaWRsZV9pbl90cmFuc2FjdGlvbl9zZXNzaW9uX3RpbWVvdXQ9MTVzIikpOwogICAgfQoKICAgICNbdGVzdF0KICAgIGZuIGVtYmVkZGVkX21pZ3JhdGlvbnNfbWF0Y2hfdGhlX2RpcmVjdG9yeSgpIHsKICAgICAgICB1c2Ugc2hhMjo6e0RpZ2VzdCwgU2hhMzg0fTsKICAgICAgICBsZXQgZGlyZWN0b3J5ID0gc3RkOjpwYXRoOjpQYXRoOjpuZXcoZW52ISgiQ0FSR09fTUFOSUZFU1RfRElSIikpLmpvaW4oIm1pZ3JhdGlvbnMiKTsKICAgICAgICBsZXQgbXV0IGZpbGVzOiBWZWM8KGk2NCwgU3RyaW5nKT4gPSBzdGQ6OmZzOjpyZWFkX2RpcigmZGlyZWN0b3J5KQogICAgICAgICAgICAudW53cmFwKCkKICAgICAgICAgICAgLm1hcCh8ZW50cnl8IGVudHJ5LnVud3JhcCgpLnBhdGgoKSkKICAgICAgICAgICAgLmZpbHRlcih8cGF0aHwgcGF0aC5leHRlbnNpb24oKS5pc19zb21lX2FuZCh8ZXh0ZW5zaW9ufCBleHRlbnNpb24gPT0gInNxbCIpKQogICAgICAgICAgICAubWFwKHxwYXRofCB7CiAgICAgICAgICAgICAgICBsZXQgbmFtZSA9IHBhdGguZmlsZV9uYW1lKCkudW53cmFwKCkudG9fc3RyKCkudW53cmFwKCk7CiAgICAgICAgICAgICAgICBsZXQgdmVyc2lvbiA9IG5hbWUuc3BsaXRfb25jZSgnXycpLnVud3JhcCgpLjAucGFyc2UoKS51bndyYXAoKTsKICAgICAgICAgICAgICAgIGxldCBieXRlcyA9IHN0ZDo6ZnM6OnJlYWQoJnBhdGgpLnVud3JhcCgpOwogICAgICAgICAgICAgICAgKHZlcnNpb24sIGhleDo6ZW5jb2RlKFNoYTM4NDo6ZGlnZXN0KGJ5dGVzKSkpCiAgICAgICAgICAgIH0pCiAgICAgICAgICAgIC5jb2xsZWN0KCk7CiAgICAgICAgZmlsZXMuc29ydCgpOwogICAgICAgIGFzc2VydCEoIWZpbGVzLmlzX2VtcHR5KCkpOwogICAgICAgIGxldCBlbWJlZGRlZDogVmVjPChpNjQsIFN0cmluZyk+ID0gTUlHUkFUT1IKICAgICAgICAgICAgLml0ZXIoKQogICAgICAgICAgICAubWFwKHxtaWdyYXRpb258IChtaWdyYXRpb24udmVyc2lvbiwgaGV4OjplbmNvZGUoJm1pZ3JhdGlvbi5jaGVja3N1bSkpKQogICAgICAgICAgICAuY29sbGVjdCgpOwogICAgICAgIGFzc2VydF9lcSEoZW1iZWRkZWQsIGZpbGVzKTsKICAgIH0KfQo="
+   }
+  },
+  {
+   "name": "both timeouts",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "the lock timeout first",
+   "result": {
+    "prefix": "SET lock_timeout = '5s';\nSET statement_timeout = '250ms';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"lock_timeout\", \"5s\"), (\"statement_timeout\", \"250ms\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a borrowed address",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(&url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "the options on one line",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "the options over lines",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([\n        (\"statement_timeout\", \"10min\"),\n        (\"lock_timeout\", \"1min\"),\n    ]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "no space around the equals sign",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance=PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "lines around the equals sign",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance\n    =\n    PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a space outside ASCII before the equals sign",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlwqA9IFBnQ29ubmVjdE9wdGlvbnM6OmZyb21fc3RyKHVybCkKICAgIC5jb250ZXh0KCJpbnZhbGlkIERBVEFCQVNFX1VSTCIpPwogICAgLm9wdGlvbnMoWygic3RhdGVtZW50X3RpbWVvdXQiLCAiMTBtaW4iKSwgKCJsb2NrX3RpbWVvdXQiLCAiMW1pbiIpXSk7CiAgICBsZXQgYyA9IFBnQ29ubmVjdGlvbjo6Y29ubmVjdF93aXRoKCZtYWludGVuYW5jZSkuYXdhaXQ/Owp9Cg=="
+   }
+  },
+  {
+   "name": "two spaces after let",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let  maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a changeable binding",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let mut maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "another binding",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let options = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "another address",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(database_url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a twice borrowed address",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(&&url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a typed binding",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance: PgConnectOptions = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a longer binding",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance_options = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a binding after another word",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    outlet maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "no source",
+   "result": {
+    "code": "FileNotFoundError"
+   },
+   "source": null
+  },
+  {
+   "name": "an empty source",
+   "result": {
+    "code": "tool_file_size"
+   },
+   "source": ""
+  },
+  {
+   "name": "a source without the connection",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {}\n"
+  },
+  {
+   "name": "a source that is no UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "source": {
+    "base64": "/2ZuIHJ1bigpIHsKICAgIGxldCBtYWludGVuYW5jZSA9IFBnQ29ubmVjdE9wdGlvbnM6OmZyb21fc3RyKHVybCkKICAgIC5jb250ZXh0KCJpbnZhbGlkIERBVEFCQVNFX1VSTCIpPwogICAgLm9wdGlvbnMoWygic3RhdGVtZW50X3RpbWVvdXQiLCAiMTBtaW4iKSwgKCJsb2NrX3RpbWVvdXQiLCAiMW1pbiIpXSk7CiAgICBsZXQgYyA9IFBnQ29ubmVjdGlvbjo6Y29ubmVjdF93aXRoKCZtYWludGVuYW5jZSkuYXdhaXQ/Owp9Cg=="
+   }
+  },
+  {
+   "name": "options that are not set",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)?;\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "options that never end",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options([(\"statement_timeout\", \"10min\")\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "options set by a name",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options(TIMEOUTS);\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "options of a later statement",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)?;\n    let other = x.options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "options before the connection",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let other = x.options([(\"statement_timeout\", \"1s\"), (\"lock_timeout\", \"1s\")]);\n    let maintenance = PgConnectOptions::from_str(url).options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "two connections",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\nfn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"1s\"), (\"lock_timeout\", \"2s\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "options that end at a later bracket",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]) ;\n    connect_with(&maintenance); x([]);\n}\n"
+  },
+  {
+   "name": "empty options and later full ones",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options([]);\n    y.options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "a connection that is never made",
+   "result": {
+    "code": "migration_timeout_connection_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&options).await?;\n}\n"
+  },
+  {
+   "name": "a connection that is made by value",
+   "result": {
+    "code": "migration_timeout_connection_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a connection named in a comment",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect(url).await?;\n}\n// connect_with(&maintenance)\n"
+  },
+  {
+   "name": "no options and no connection",
+   "result": {
+    "code": "migration_timeout_connection_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([]);\n    let c = PgConnection::connect(url).await?;\n}\n"
+  },
+  {
+   "name": "only the statement timeout",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "only the lock timeout",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "no timeouts",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "the statement timeout twice",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"statement_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts and one again",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts and another option",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\"), (\"application_name\", \"x\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts and a word",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\"), x]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts and a comment",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), // long\n (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts with a comma after them",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\"),]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts without a comma",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\") (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "both timeouts parted by a tab and a carriage return",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLAkNCigibG9ja190aW1lb3V0IiwgIjFtaW4iKV0pOwogICAgbGV0IGMgPSBQZ0Nvbm5lY3Rpb246OmNvbm5lY3Rfd2l0aCgmbWFpbnRlbmFuY2UpLmF3YWl0PzsKfQo="
+   }
+  },
+  {
+   "name": "both timeouts parted by a form feed",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLAwoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgIGxldCBjID0gUGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87Cn0K"
+   }
+  },
+  {
+   "name": "both timeouts parted by a space outside ASCII",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLMKgKCJsb2NrX3RpbWVvdXQiLCAiMW1pbiIpXSk7CiAgICBsZXQgYyA9IFBnQ29ubmVjdGlvbjo6Y29ubmVjdF93aXRoKCZtYWludGVuYW5jZSkuYXdhaXQ/Owp9Cg=="
+   }
+  },
+  {
+   "name": "a timeout without space after its comma",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\",\"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with a line after its comma",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\",\n\"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with a space outside ASCII after its comma",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIswqAiMTBtaW4iKSwgKCJsb2NrX3RpbWVvdXQiLCAiMW1pbiIpXSk7CiAgICBsZXQgYyA9IFBnQ29ubmVjdGlvbjo6Y29ubmVjdF93aXRoKCZtYWludGVuYW5jZSkuYXdhaXQ/Owp9Cg=="
+   }
+  },
+  {
+   "name": "a timeout with space before its comma",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\" , \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with space inside its brackets",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([( \"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with space before its end",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\" ), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in milliseconds",
+   "result": {
+    "prefix": "SET statement_timeout = '1500ms';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"1500ms\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in seconds",
+   "result": {
+    "prefix": "SET statement_timeout = '90s';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"90s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout of one digit",
+   "result": {
+    "prefix": "SET statement_timeout = '9s';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"9s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in hours",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"1h\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in minutes written out",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10mins\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout without a unit",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"600000\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout of nought",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"0\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout that begins with nought",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"010min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout of nought seconds",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"0s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with a space before its unit",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10 min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with its unit in capitals",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10MIN\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with a fraction",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"1.5s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout below nought",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"-1s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with digits outside ASCII",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICLZodmgcyIpLCAoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgIGxldCBjID0gUGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87Cn0K"
+   }
+  },
+  {
+   "name": "a timeout that is empty",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout by a name",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", LIMIT), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout with a quote in it",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"1s'; DROP TABLE t; --\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout named in capitals",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"STATEMENT_TIMEOUT\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout of another name",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"idle_in_transaction_session_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout that begins like a name",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout_x\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout inside another pair",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([((\"statement_timeout\", \"10min\")), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "timeouts of three values",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\", \"x\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout that is only a unit",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in seconds without a number",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"s\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a unit separator before the equals sign",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlHz0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLCAoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgIGxldCBjID0gUGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87Cn0K"
+   }
+  },
+  {
+   "name": "a unit separator after the equals sign",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0fUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsICIxMG1pbiIpLCAoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgIGxldCBjID0gUGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87Cn0K"
+   }
+  },
+  {
+   "name": "a timeout with a unit separator after its comma",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": {
+    "base64": "Zm4gcnVuKCkgewogICAgbGV0IG1haW50ZW5hbmNlID0gUGdDb25uZWN0T3B0aW9uczo6ZnJvbV9zdHIodXJsKQogICAgLmNvbnRleHQoImludmFsaWQgREFUQUJBU0VfVVJMIik/CiAgICAub3B0aW9ucyhbKCJzdGF0ZW1lbnRfdGltZW91dCIsHyIxMG1pbiIpLCAoImxvY2tfdGltZW91dCIsICIxbWluIildKTsKICAgIGxldCBjID0gUGdDb25uZWN0aW9uOjpjb25uZWN0X3dpdGgoJm1haW50ZW5hbmNlKS5hd2FpdD87Cn0K"
+   }
+  },
+  {
+   "name": "a timeout with a unit and more",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10minutes\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "a timeout in milliseconds and more",
+   "result": {
+    "code": "migration_timeout_literals_required"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10msx\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  },
+  {
+   "name": "options that end without a statement end",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")])\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "options with a space before their list",
+   "result": {
+    "code": "migration_timeout_configuration_missing"
+   },
+   "source": "fn run() {\n    let maintenance = PgConnectOptions::from_str(url).options( [(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    connect_with(&maintenance)\n}\n"
+  },
+  {
+   "name": "a second binding that is the connection",
+   "result": {
+    "prefix": "SET statement_timeout = '10min';\nSET lock_timeout = '1min';\n"
+   },
+   "source": "fn run() {\n    let maintenance_budget = 1;\n    let maintenance = PgConnectOptions::from_str(url)\n    .context(\"invalid DATABASE_URL\")?\n    .options([(\"statement_timeout\", \"10min\"), (\"lock_timeout\", \"1min\")]);\n    let c = PgConnection::connect_with(&maintenance).await?;\n}\n"
+  }
+ ],
+ "modes": [
+  {
+   "name": "a plain migration",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SET LOCAL lock_timeout = '5s';\nALTER TABLE t ADD COLUMN c integer;\n"
+  },
+  {
+   "name": "an empty migration",
+   "result": {
+    "transactional": true
+   },
+   "sql": ""
+  },
+  {
+   "name": "one concurrent index",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the repository's own concurrent indexes",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- Keep quote repair bounded without blocking chat-message writes.\nCREATE INDEX CONCURRENTLY IF NOT EXISTS chat_messages_conversation_reply\n    ON chat_messages (conversation, (body->'replyTo'->>'messageId'));\n"
+  },
+  {
+   "name": "the repository's own lookup indexes",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- One concurrent index per SQLx migration keeps this outside implicit transactions.\nCREATE INDEX CONCURRENTLY IF NOT EXISTS chat_messages_incoming_unread\n    ON chat_messages (recipient_account, sent_at, id)\n    WHERE recipient_account IS NOT NULL;\n"
+  },
+  {
+   "name": "the repository's newest migration",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SET LOCAL lock_timeout = '5s';\nSET LOCAL statement_timeout = '10min';\n\n-- Opaque access tokens: one row per token a sign-in or refresh issued. Only\n-- the hex SHA-256 digest of a token's text is stored, computed by the server\n-- (`session::hash_token`, the rule refresh tokens use). Browser tabs share a\n-- session but each holds its own token, so a session has several rows; the\n-- issuer prunes a session's expired rows and keeps at most 32 live ones\n-- (`MAX_ACCESS_TOKENS_PER_SESSION` in src/auth/access_tokens.rs). A token is\n-- accepted while it and its session are unexpired and its account still has\n-- the version recorded at issue. Deleting a session deletes its tokens.\nCREATE TABLE session_access_tokens (\n    token_hash TEXT PRIMARY KEY CHECK (token_hash ~ '^[0-9a-f]{64}$'),\n    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,\n    auth_version BIGINT NOT NULL,\n    expires_at TIMESTAMPTZ NOT NULL,\n    created_at TIMESTAMPTZ NOT NULL\n);\nCREATE INDEX session_access_tokens_session\n    ON session_access_tokens (session_id, created_at);\n"
+  },
+  {
+   "name": "a unique concurrent index",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE UNIQUE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index that may exist",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY IF NOT EXISTS idx_a ON t (a);\n"
+  },
+  {
+   "name": "a unique concurrent index that may exist",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_a ON t (a, b DESC) WHERE c IS NOT NULL;\n"
+  },
+  {
+   "name": "a concurrent index in small letters",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\ncreate index concurrently idx_a on t (a);\n"
+  },
+  {
+   "name": "a concurrent index over lines",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX\n  CONCURRENTLY\tidx_a\n  ON t\n  (a,\n   b);\n"
+  },
+  {
+   "name": "a concurrent index without space before its columns",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t(a);\n"
+  },
+  {
+   "name": "a concurrent index with names in capitals",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY IDX_A ON T (A);\n"
+  },
+  {
+   "name": "a concurrent index with digits in its names",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_2 ON t_3 (a);\n"
+  },
+  {
+   "name": "a concurrent index whose name begins with a digit",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY 2idx ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index on a table whose name begins with a digit",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON 2t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a quoted name",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY \"idx\" ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index on a table of a schema",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON public.t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a method",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t USING gin (a);\n"
+  },
+  {
+   "name": "a concurrent index without a name",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index named on",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY on ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index without columns",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t;\n"
+  },
+  {
+   "name": "a concurrent index with empty columns",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t ();\n"
+  },
+  {
+   "name": "a concurrent index with an open list of columns",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t (a;\n"
+  },
+  {
+   "name": "a concurrent index with a comment after it",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n-- done\n"
+  },
+  {
+   "name": "a concurrent index with a comment before it",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- why\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a comment inside it",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a -- name\n ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a comment that holds a statement",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- DROP TABLE t;\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a comment that holds a quote",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- it's\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index with a text in its predicate",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x';\n"
+  },
+  {
+   "name": "a concurrent index with a text that holds a statement end",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x;y';\n"
+  },
+  {
+   "name": "a concurrent index with a text that holds a quote",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'it''s; fine';\n"
+  },
+  {
+   "name": "a concurrent index with a text that holds two dashes",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x -- y';\n"
+  },
+  {
+   "name": "a concurrent index with a text that holds a line end",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x\n-- y;';\n"
+  },
+  {
+   "name": "a concurrent index with an empty text",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = '';\n"
+  },
+  {
+   "name": "a concurrent index with two texts",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x' AND c = 'y;';\n"
+  },
+  {
+   "name": "a concurrent index with a text for its name",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY 'idx' ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index and a second statement",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\nDROP TABLE t;\n"
+  },
+  {
+   "name": "two concurrent indexes",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\nCREATE INDEX CONCURRENTLY idx_b ON t (b);\n"
+  },
+  {
+   "name": "a concurrent index without its end",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a)\n"
+  },
+  {
+   "name": "a concurrent index with two ends",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);;\n"
+  },
+  {
+   "name": "a concurrent index after a statement end",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\n;CREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent index with words after its end",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a); x\n"
+  },
+  {
+   "name": "a concurrent index with space around it",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n\n\n  \tCREATE INDEX CONCURRENTLY idx_a ON t (a);\n\n \n"
+  },
+  {
+   "name": "a concurrent index after a form feed",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KDENSRUFURSBJTkRFWCBDT05DVVJSRU5UTFkgaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a concurrent index after a unit separator",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KH0NSRUFURSBJTkRFWCBDT05DVVJSRU5UTFkgaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a concurrent index after a space outside ASCII",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KwqBDUkVBVEUgSU5ERVggQ09OQ1VSUkVOVExZIGlkeF9hIE9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "a concurrent index parted by spaces outside ASCII",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFwqBJTkRFWOKAg0NPTkNVUlJFTlRMWeKAqGlkeF9hIE9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "a concurrent index parted by a unit separator",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFH0lOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKTsK"
+   }
+  },
+  {
+   "name": "a concurrent index with a long s in its name",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfxb8gT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a concurrent index with a kelvin sign in its name",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhf4oSqIE9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "words with a long s",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBJRiBOT1QgRVhJxb9Uxb8gaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a word with a kelvin sign",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKSBXSEVSRSDihKogPSAxOwo="
+   }
+  },
+  {
+   "name": "a word with a dotted capital i",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIMSwTkRFWCBDT05DVVJSRU5UTFkgaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a word with a dotless i",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIMSxTkRFWCBDT05DVVJSRU5UTFkgaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "a name with a letter outside ASCII",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfw6kgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "an index that is not concurrent",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX idx_a ON t (a);\n"
+  },
+  {
+   "name": "a concurrent drop",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nDROP INDEX CONCURRENTLY idx_a;\n"
+  },
+  {
+   "name": "a concurrent reindex",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nREINDEX INDEX CONCURRENTLY idx_a;\n"
+  },
+  {
+   "name": "no statement after the marker",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\n"
+  },
+  {
+   "name": "only a comment after the marker",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\n-- nothing\n"
+  },
+  {
+   "name": "only the marker",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction"
+  },
+  {
+   "name": "a block comment after the marker",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\n/* why */\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the end of a block comment after the marker",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n*/\n"
+  },
+  {
+   "name": "a backslash after the marker",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = E'\\n';\n"
+  },
+  {
+   "name": "a dollar after the marker",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = $$x$$;\n"
+  },
+  {
+   "name": "a null byte after the marker",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKTsACg=="
+   }
+  },
+  {
+   "name": "a block comment and no index",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\n/* x */ DROP TABLE t;\n"
+  },
+  {
+   "name": "a text that never ends",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x;\n"
+  },
+  {
+   "name": "a text that ends in two quotes",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x'';\n"
+  },
+  {
+   "name": "a text that never ends before a comment",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x -- y\n;\n"
+  },
+  {
+   "name": "a quote in a comment and a text",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- it's\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x;y';\n"
+  },
+  {
+   "name": "a lone quote before a text",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = ' AND c = 'x';\n"
+  },
+  {
+   "name": "the marker with space after it",
+   "result": {
+    "code": "migration_transaction_marker_format"
+   },
+   "sql": "-- no-transaction \nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker with a carriage return",
+   "result": {
+    "code": "migration_transaction_marker_format"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24NCkNSRUFURSBJTkRFWCBDT05DVVJSRU5UTFkgaWR4X2EgT04gdCAoYSk7Cg=="
+   }
+  },
+  {
+   "name": "the marker with words after it",
+   "result": {
+    "code": "migration_transaction_marker_format"
+   },
+   "sql": "-- no-transaction please\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker as the start of a longer word",
+   "result": {
+    "code": "migration_transaction_marker_format"
+   },
+   "sql": "-- no-transactional\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker with a dash after it",
+   "result": {
+    "code": "migration_transaction_marker_format"
+   },
+   "sql": "-- no-transaction-x\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker in capitals",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "-- NO-TRANSACTION\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker without its space",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "--no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker with two spaces",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "--  no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker with three dashes",
+   "result": {
+    "transactional": true
+   },
+   "sql": "--- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker after space",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": " -- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker after an empty line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker after a byte order mark",
+   "result": {
+    "transactional": true
+   },
+   "sql": {
+    "base64": "77u/LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKTsK"
+   }
+  },
+  {
+   "name": "the marker on the second line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "-- a migration\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "the marker after a statement",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n-- no-transaction\n"
+  },
+  {
+   "name": "the marker after a statement on its line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1; -- no-transaction\n"
+  },
+  {
+   "name": "the marker at the end without a line end",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n-- no-transaction"
+  },
+  {
+   "name": "the marker in a text on its own line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT '\n-- no-transaction\n';\n"
+  },
+  {
+   "name": "the marker after a tab on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n\t--\tno-transaction\n"
+  },
+  {
+   "name": "the marker after a carriage return alone",
+   "result": {
+    "transactional": true
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7DS0tIG5vLXRyYW5zYWN0aW9uCg=="
+   }
+  },
+  {
+   "name": "the marker after a form feed on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7CgwtLSBuby10cmFuc2FjdGlvbgo="
+   }
+  },
+  {
+   "name": "the marker after a line separator",
+   "result": {
+    "transactional": true
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE74oCoLS0gbm8tdHJhbnNhY3Rpb24K"
+   }
+  },
+  {
+   "name": "the marker after a unit separator on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ch8tLSBuby10cmFuc2FjdGlvbgo="
+   }
+  },
+  {
+   "name": "a longer word than the marker on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\n-- no-transactional\n"
+  },
+  {
+   "name": "the marker with a digit after it on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\n-- no-transaction2\n"
+  },
+  {
+   "name": "the marker with an underscore after it on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\n-- no-transaction_x\n"
+  },
+  {
+   "name": "the marker with a letter outside ASCII after it on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0aW9uw6kK"
+   }
+  },
+  {
+   "name": "the marker with a point after it on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n-- no-transaction.\n"
+  },
+  {
+   "name": "the marker in capitals on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n-- No-Transaction\n"
+  },
+  {
+   "name": "the marker with a long s on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW7Fv2FjdGlvbgo="
+   }
+  },
+  {
+   "name": "three dashes before the word on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\n--- no-transaction\n"
+  },
+  {
+   "name": "the word without dashes on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\nno-transaction\n"
+  },
+  {
+   "name": "a line of two dashes before a line of the word",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n--\nno-transaction\n"
+  },
+  {
+   "name": "two dashes and the word parted by empty lines",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n--\n\n \nno-transaction\n"
+  },
+  {
+   "name": "empty lines before the marker on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n\n  \n-- no-transaction\n"
+  },
+  {
+   "name": "the marker with a combining mark after it on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0aW9uzIEK"
+   }
+  },
+  {
+   "name": "the marker with a combining mark that is a letter after it on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0aW9uzYUK"
+   }
+  },
+  {
+   "name": "the marker with a digit outside ASCII after it on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0aW9u2aEK"
+   }
+  },
+  {
+   "name": "the marker with a dotted capital i on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0xLBvbgo="
+   }
+  },
+  {
+   "name": "the marker with a dotless i on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tIG5vLXRyYW5zYWN0xLFvbgo="
+   }
+  },
+  {
+   "name": "a name that begins with a long s",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSDFv2lkeCBPTiB0IChhKTsK"
+   }
+  },
+  {
+   "name": "a name that begins with a dotless i",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSDEsWR4IE9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "a name with a dotted capital i",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSDEsGR4IE9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "a table named with a kelvin sign",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHggT04g4oSqIChhKTsK"
+   }
+  },
+  {
+   "name": "a table named with a micro sign",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHggT04gwrUgKGEpOwo="
+   }
+  },
+  {
+   "name": "the word on with a letter like o",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHggzp9OIHQgKGEpOwo="
+   }
+  },
+  {
+   "name": "an index named if",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY if ON t (a);\n"
+  },
+  {
+   "name": "an index named if that may exist",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY IF NOT EXISTS if ON t (a);\n"
+  },
+  {
+   "name": "an index that may exist without a name",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY IF NOT EXISTS ON t (a);\n"
+  },
+  {
+   "name": "an index named if on a table named not",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY IF ON NOT (a);\n"
+  },
+  {
+   "name": "an index named unique",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE UNIQUE INDEX CONCURRENTLY unique ON unique (a);\n"
+  },
+  {
+   "name": "an index named index",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY index ON index (a);\n"
+  },
+  {
+   "name": "a unique index without the word index",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE UNIQUE CONCURRENTLY idx ON t (a);\n"
+  },
+  {
+   "name": "words without space between them",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATEINDEX CONCURRENTLY idx ON t (a);\n"
+  },
+  {
+   "name": "a name and the word on without space",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idxON t (a);\n"
+  },
+  {
+   "name": "columns that are only a statement end",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t (;\n"
+  },
+  {
+   "name": "space before the statement end",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t (a) ;\n"
+  },
+  {
+   "name": "a comment after the index without a line end",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a); -- done"
+  },
+  {
+   "name": "a statement end only in a comment",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) -- ;\n"
+  },
+  {
+   "name": "a statement end in a comment and one after it",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) -- ;\n;\n"
+  },
+  {
+   "name": "a comment between a name and the word on",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx--x\n ON t (a);\n"
+  },
+  {
+   "name": "a comment that joins two words",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX--x\nCONCURRENTLY idx ON t (a);\n"
+  },
+  {
+   "name": "a text between two words",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX'x'CONCURRENTLY idx ON t (a);\n"
+  },
+  {
+   "name": "carriage returns in the body",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKTsNCg=="
+   }
+  },
+  {
+   "name": "a body of spaces outside ASCII",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KwqDigIMK"
+   }
+  },
+  {
+   "name": "words after the columns",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) INCLUDE (b) WITH (fillfactor = 70) TABLESPACE x WHERE c > 0;\n"
+  },
+  {
+   "name": "a text of two quotes in a text",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = '''';\n"
+  },
+  {
+   "name": "three quotes and a statement end",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = ''';\n"
+  },
+  {
+   "name": "a comment sign inside a text that never ends",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x --;\n"
+  },
+  {
+   "name": "two dashes and the word parted by a unit separator on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": {
+    "base64": "U0VMRUNUIDE7Ci0tH25vLXRyYW5zYWN0aW9uCg=="
+   }
+  },
+  {
+   "name": "a name that begins with an underscore",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY _idx ON _t (a);\n"
+  },
+  {
+   "name": "a name of one letter",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY i ON t (a);\n"
+  },
+  {
+   "name": "a statement that ends too early",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURR;\n"
+  },
+  {
+   "name": "only the word create",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE;\n"
+  },
+  {
+   "name": "a name with a dash",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx-a ON t (a);\n"
+  },
+  {
+   "name": "the word cut short at the end on a later line",
+   "result": {
+    "transactional": true
+   },
+   "sql": "SELECT 1;\n-- no-trans"
+  },
+  {
+   "name": "the marker with a dash after it on a later line",
+   "result": {
+    "code": "migration_transaction_marker_position"
+   },
+   "sql": "SELECT 1;\n-- no-transaction-x\n"
+  },
+  {
+   "name": "a text before the columns",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON t ''(a);\n"
+  },
+  {
+   "name": "a text after the name of the index",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx'x' ON t (a);\n"
+  },
+  {
+   "name": "the start of a block comment in the columns",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a /* open);\n"
+  },
+  {
+   "name": "the end of a block comment in the columns",
+   "result": {
+    "code": "migration_concurrent_index_syntax"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a */ shut);\n"
+  },
+  {
+   "name": "a concurrent index without a table",
+   "result": {
+    "code": "migration_requires_one_concurrent_index"
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON (a);\n"
+  },
+  {
+   "name": "a unit separator before the columns",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHggT04gdB8oYSk7Cg=="
+   }
+  },
+  {
+   "name": "a text with a quote written twice before a comment sign",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x''--y';\n"
+  },
+  {
+   "name": "two texts side by side",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'x' 'y;';\n"
+  },
+  {
+   "name": "a quoted column",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (\"a\");\n"
+  },
+  {
+   "name": "a quoted name that holds a quote, a second statement and a comment",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (\"a'\"); DROP TABLE users; --' \";\n"
+  },
+  {
+   "name": "a double quote in a text",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_a ON t (a) WHERE b = 'say \"x\"';\n"
+  },
+  {
+   "name": "a double quote in a comment",
+   "result": {
+    "transactional": false
+   },
+   "sql": "-- no-transaction\n-- the \"new\" index\nCREATE INDEX CONCURRENTLY idx_a ON t (a);\n"
+  },
+  {
+   "name": "a comment ended by a carriage return before a second statement",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYIENPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKSAtLSB4DTsgRFJPUCBUQUJMRSB1c2Vycwo7Cg=="
+   }
+  },
+  {
+   "name": "a carriage return between two words",
+   "result": {
+    "transactional": false
+   },
+   "sql": {
+    "base64": "LS0gbm8tdHJhbnNhY3Rpb24KQ1JFQVRFIElOREVYDUNPTkNVUlJFTlRMWSBpZHhfYSBPTiB0IChhKTsK"
+   }
+  },
+  {
+   "name": "a migration that is no UTF-8",
+   "result": {
+    "code": "UnicodeDecodeError"
+   },
+   "sql": {
+    "base64": "U0VMRUNUICf/JzsK"
+   }
+  }
+ ]
+}

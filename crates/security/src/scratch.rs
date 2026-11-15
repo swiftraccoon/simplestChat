@@ -1,7 +1,8 @@
 //! What the replay tests share: a directory of one test's own, removed with
-//! it, the bytes of a recorded file and the repositories the recorders built.
+//! it, the bytes of a recorded file, the repositories the recorders built,
+//! programs that answer from files, and what a check left as evidence.
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use std::{
     collections::BTreeMap,
     fs::Permissions,
@@ -103,6 +104,111 @@ pub(crate) fn written(root: &Path, files: &Map<String, Value>) {
             std::fs::set_permissions(&target, mode).expect("a mode that is set");
         }
     }
+}
+
+/// Write the program `name` into `tools` with the recorded `answers` to its
+/// calls, each a status and what is printed, and answer where it is. The
+/// program logs its arguments in hexadecimal, each ended by a zero byte,
+/// and where it runs, to `log`, and answers its calls in order from files
+/// named after `stem`.
+pub(crate) fn scripted(
+    tools: &Path,
+    log: &Path,
+    name: &str,
+    stem: &str,
+    answers: &Value,
+) -> PathBuf {
+    for (number, answer) in answers.as_array().expect("answers").iter().enumerate() {
+        let said = tools.join(format!("{stem}.{number}.out"));
+        std::fs::write(said, content(&answer[1])).expect("an answer");
+        let status = tools.join(format!("{stem}.{number}.status"));
+        std::fs::write(status, format!("{}\n", answer[0])).expect("a status");
+    }
+    std::fs::write(tools.join(format!("{stem}.count")), "0\n").expect("a count");
+    let (directory, logged) = (tools.display(), log.display());
+    let lines = [
+        "#!/bin/sh".to_owned(),
+        format!("count=$(cat '{directory}/{stem}.count')"),
+        format!("echo $((count + 1)) > '{directory}/{stem}.count'"),
+        "printf '%s\\t%s\\n' \\".to_owned(),
+        "  \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" \"$(pwd -P)\" \\"
+            .to_owned(),
+        format!("  >> '{logged}'"),
+        format!("cat '{directory}/{stem}'.$count.out"),
+        format!("exit \"$(cat '{directory}/{stem}'.$count.status)\""),
+        String::new(),
+    ];
+    let program = tools.join(name);
+    std::fs::write(&program, lines.join("\n")).expect("a program");
+    std::fs::set_permissions(&program, Permissions::from_mode(0o755)).expect("a mode");
+    program
+}
+
+/// The calls a scripted program logged, with the place of the case written
+/// as the recording writes it.
+pub(crate) fn asked(log: &Path, place: &str) -> Value {
+    let logged = std::fs::read_to_string(log).unwrap_or_default();
+    let call = |line: &str| {
+        let (arguments, directory) = line.split_once('\t').expect("a logged call");
+        let bytes: Vec<u8> = (0..arguments.len() / 2)
+            .map(|at| u8::from_str_radix(&arguments[2 * at..2 * at + 2], 16).expect("hex"))
+            .collect();
+        let arguments = bytes.strip_suffix(&[0]).expect("an end");
+        let argv: Vec<String> = arguments
+            .split(|byte| *byte == 0)
+            .map(|argument| String::from_utf8_lossy(argument).replace(place, "<place>"))
+            .collect();
+        json!({"argv": argv, "directory": directory.replace(place, "<place>")})
+    };
+    json!(logged.lines().map(call).collect::<Vec<_>>())
+}
+
+/// The entries below `output`, each from it. The directories `closed` are
+/// named and not entered.
+fn entries(output: &Path, closed: &[&str]) -> Vec<(String, PathBuf)> {
+    fn walk(root: &Path, directory: &Path, closed: &[&str], found: &mut Vec<(String, PathBuf)>) {
+        for entry in std::fs::read_dir(directory).expect("a directory") {
+            let path = entry.expect("an entry").path();
+            let below = path.strip_prefix(root).expect("below");
+            if path.is_dir() && !closed.iter().any(|closed| below == Path::new(closed)) {
+                walk(root, &path, closed, found);
+            }
+            found.push((below.to_string_lossy().into_owned(), path));
+        }
+    }
+    let mut found = Vec::new();
+    if output.is_dir() {
+        walk(output, output, closed, &mut found);
+    }
+    found
+}
+
+/// What a check left in its evidence directory: every entry with its mode.
+pub(crate) fn kept(output: &Path, closed: &[&str]) -> Value {
+    let mut listed = json!({});
+    for (below, path) in entries(output, closed) {
+        let mode = path.symlink_metadata().expect("an entry").permissions();
+        listed[&below] = json!({"mode": mode.mode() & 0o777, "directory": path.is_dir()});
+    }
+    listed
+}
+
+/// The text of the evidence files that are `wanted`, with the place of the
+/// case written as the recording writes it.
+pub(crate) fn said(
+    output: &Path,
+    place: &str,
+    closed: &[&str],
+    wanted: impl Fn(&str) -> bool,
+) -> Value {
+    let mut texts = json!({});
+    for (below, path) in entries(output, closed) {
+        if path.is_file() && wanted(&below) {
+            let text = std::fs::read_to_string(&path).expect("text");
+            texts[&below] = text.replace(place, "<place>").into();
+        }
+    }
+    texts
 }
 
 /// One recorded repository: its commits by name and the files it ends with.
