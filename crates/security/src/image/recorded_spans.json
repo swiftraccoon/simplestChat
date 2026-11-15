@@ -1,0 +1,6934 @@
+{
+ "fragments": [
+  {
+   "name": "nothing",
+   "data": {
+    "deflated": "eNoDAAAAAAE=",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "result": []
+  },
+  {
+   "name": "one byte",
+   "data": {
+    "deflated": "eNpLBAAAYgBi",
+    "bytes": 1,
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+   },
+   "result": [
+    1
+   ]
+  },
+  {
+   "name": "one line",
+   "data": {
+    "deflated": "eNrLycxL5QIABeMBsw==",
+    "bytes": 5,
+    "sha256": "c73b73af8851e9e91bc6b4dc12e7dace0a2bfb931c1d0b8b36ef367319f58cd1"
+   },
+   "result": [
+    5
+   ]
+  },
+  {
+   "name": "a file that ends with two line ends",
+   "data": {
+    "deflated": "eNrLycxL5eICAAegAb0=",
+    "bytes": 6,
+    "sha256": "6510df90ce8e62552e99f2248ef9a727feeee23471bb64e8d7a5585767bb9fca"
+   },
+   "result": [
+    6
+   ]
+  },
+  {
+   "name": "exactly one block without a line end",
+   "data": {
+    "deflated": "eNrtwTEBAAAAwqDeS28ND6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAVwPXmjMn",
+    "bytes": 100000,
+    "sha256": "7e9470bdc2048db4667681aed70b1dd034b5310feac2f34e96220565d47638b2"
+   },
+   "result": [
+    100000
+   ]
+  },
+  {
+   "name": "one block and a byte",
+   "data": {
+    "deflated": "eNrtwSEBAAAAAqDdut4bBqAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXmULSTOg",
+    "bytes": 100001,
+    "sha256": "d05f5157b586a759b30e8f57304199ec004c6202ed1bc1b5f0625c2ebde7f26b"
+   },
+   "result": [
+    100001
+   ]
+  },
+  {
+   "name": "a block that ends with two line ends",
+   "data": {
+    "deflated": "eNrtwaEBAAAIA6C+j931Nm8wAC0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwUzJnAectNwE=",
+    "bytes": 100010,
+    "sha256": "b12db307d20d065861a6cb3a9d6c9cf0735dae850cf4011f5a9a50b4c4ac8dc7"
+   },
+   "result": [
+    100000,
+    10
+   ]
+  },
+  {
+   "name": "a block that ends with two line ends and spaces between",
+   "data": {
+    "deflated": "eNrtwTEBAAAEALCbFGqS3ieDY9sMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8FFWZJ8F3G82Ng==",
+    "bytes": 100010,
+    "sha256": "60e8ccb60548034ddc2d4168be2f4e038ecc71c907aa440c8352f8af8cf6466d"
+   },
+   "result": [
+    100000,
+    10
+   ]
+  },
+  {
+   "name": "a block that ends with a return between two line ends",
+   "data": {
+    "deflated": "eNrtwbENAAAIA6DdxIPt9W7e4AAkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwEvVNWcB4aE2lA==",
+    "bytes": 100010,
+    "sha256": "838f6618b76b524e1889996547c04b778c3eb971da735765b9e9184524cb9893"
+   },
+   "result": [
+    100000,
+    10
+   ]
+  },
+  {
+   "name": "a block that ends with spaces after two line ends",
+   "data": {
+    "deflated": "eNrtwTEBAAAEALCbFGqS3ieDY9sMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8FBmRfVZ1tE13A==",
+    "bytes": 100010,
+    "sha256": "b83b4eafa6bfb465c9906afff8f6ac7f3e899590462e5927b0e2ea9d4c3a2148"
+   },
+   "result": [
+    100000,
+    10
+   ]
+  },
+  {
+   "name": "a block that ends with one line end",
+   "data": {
+    "deflated": "eNrtwaEBAAAIA6Dux+76NW8wAAkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADw1Owp7G03cQ==",
+    "bytes": 100010,
+    "sha256": "8440e39a8ba7fee24474d7fedbbee4a2a60595fc0c8412503d038013309bfbc7"
+   },
+   "result": [
+    100010
+   ]
+  },
+  {
+   "name": "a block that ends with one line end and a second follows at once",
+   "data": {
+    "deflated": "eNrtwaEBAAAIA6C+j931Nm8wAC0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwVDJnAR+hN3s=",
+    "bytes": 100011,
+    "sha256": "90908a610637452fe206cce15e2cb0fb80e58a5ba19364ec91249e64fb7cd9e6"
+   },
+   "result": [
+    100001,
+    10
+   ]
+  },
+  {
+   "name": "a block that ends with one line end and a second follows spaces",
+   "data": {
+    "deflated": "eNrtwTENADAIALB7JPOATVDPhwaOtt0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUZHvZ9Qa7wQ30Q==",
+    "bytes": 100015,
+    "sha256": "341f05054fd0cddc3276eab11d717e668f4df84a25f0b02a768bcc9b2fff62f9"
+   },
+   "result": [
+    100005,
+    10
+   ]
+  },
+  {
+   "name": "two line ends soon after a block",
+   "data": {
+    "deflated": "eNrtwbENAAAEALDdl3zB9a6QGNrOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF9lRTQAAAAAcG4BLShvzQ==",
+    "bytes": 105004,
+    "sha256": "4846f9cd761bf475b49f2e490f8b4b0f7b1618da6f38871226b4897be7807eb5"
+   },
+   "result": [
+    100004,
+    5000
+   ]
+  },
+  {
+   "name": "two line ends with text between soon after a block",
+   "data": {
+    "deflated": "eNrtwTERADAIBLD9XdKqKOqrgjuGJN0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAVnVykwcAAAAAjPvnrXA6",
+    "bytes": 105006,
+    "sha256": "3ffb7c9cc29e6684ded59315f66e922aaedb3f0842e8b3a0ee0980fa7e5fc6cb"
+   },
+   "result": [
+    100006,
+    5000
+   ]
+  },
+  {
+   "name": "two line ends after more than the reader holds",
+   "data": {
+    "deflated": "eNrtwTENAAAIA7Afl8hg6lFBwtE2AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL5qAAAAAOBc1QAAAAAA5xY9rdX7",
+    "bytes": 110002,
+    "sha256": "24297923444b80f2c813592711f594ff150e21cf1e1c355765d3391bb08391de"
+   },
+   "result": [
+    105002,
+    5000
+   ]
+  },
+  {
+   "name": "no line end within the longest look ahead",
+   "data": {
+    "deflated": "eNrtwTEBAAAAwqDeS28ND6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXgy4lMSt",
+    "bytes": 125010,
+    "sha256": "2adf5c36bb05378dc987c68160e4c020c4ac696adcd679d5ac07ec4de8940564"
+   },
+   "result": [
+    125000,
+    10
+   ]
+  },
+  {
+   "name": "no line end at all in a long file",
+   "data": {
+    "deflated": "eNrtwQENAAAAwqDeT28PBxQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPwY0wuZcw==",
+    "bytes": 300000,
+    "sha256": "29aa987eab9aee830fdd20595bcedef67e8674f4eeac6f017598e7ff8719da23"
+   },
+   "result": [
+    125000,
+    28672,
+    28672,
+    28672,
+    28672,
+    28672,
+    28672,
+    2968
+   ]
+  },
+  {
+   "name": "two line ends exactly at the longest look ahead",
+   "data": {
+    "deflated": "eNrtwaEBAAAIA6C+j931Nl+wAC0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAp2TOAq5Nw8M=",
+    "bytes": 125010,
+    "sha256": "f359340ffa02a85cb3fce9d5ac8e3b0fce717ee9c7bdc1405c6fc0e5a5a92285"
+   },
+   "result": [
+    125000,
+    10
+   ]
+  },
+  {
+   "name": "two line ends one byte past the longest look ahead",
+   "data": {
+    "deflated": "eNrtwaEBAAAIA6C+j931Nl+wAC0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAq2TOAnODxD0=",
+    "bytes": 125011,
+    "sha256": "93dc0b50c98a24188c8c5164b1b154323137936c12177547bae6342f354edfb9"
+   },
+   "result": [
+    125000,
+    11
+   ]
+  },
+  {
+   "name": "a look ahead that meets the end of the file",
+   "data": {
+    "deflated": "eNrtwTEBAAAIA6CsaoulXw0PIAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC+mr0Cc2g0TQ==",
+    "bytes": 100003,
+    "sha256": "409a846cf18381e5e3e501059b650286818fafb42510bf82b69be38e4276600f"
+   },
+   "result": [
+    100003
+   ]
+  },
+  {
+   "name": "short lines through three blocks",
+   "data": {
+    "deflated": "eNrtx7EJACAMALDdK/pcBaHo0sHzvUNIttTaGWdG5+1RIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiLyYx4opE5O",
+    "bytes": 260000,
+    "sha256": "6f9afb64529e7407c02b3d11ca0ebdfa27c5f644397c39c0ce6fbc90d90718a6"
+   },
+   "result": [
+    125000,
+    28672,
+    28672,
+    28672,
+    28672,
+    20312
+   ]
+  },
+  {
+   "name": "blank lines through three blocks",
+   "data": {
+    "deflated": "eNrtxCEBAAAIAzD/njS4ID4xMJtYZ5vUtm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btm3btu3XD15q24U=",
+    "bytes": 270000,
+    "sha256": "311557c16a07f820eee5e60bbf5a5cecd642a4d3a44cd4f5704da2191eefae60"
+   },
+   "result": [
+    100002,
+    4098,
+    4092,
+    100002,
+    4098,
+    4092,
+    53616
+   ]
+  },
+  {
+   "name": "a long line and then a token",
+   "data": {
+    "deflated": "eNrtwTEOgjAUANCdU3gEWmmpg6MTCS7uhE9AR2dO7zlM3nvnCQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwD+5vJ7TY76/P9+lDDXlSMfejlhzWcc05IjtVqMf2zWXttW++wEXyzXx",
+    "bytes": 180048,
+    "sha256": "d383f3c0323e7c019a4aea63fc0197bf5bd332483690990ed8d04ad9f00d5662"
+   },
+   "result": [
+    125000,
+    28672,
+    26376
+   ]
+  },
+  {
+   "name": "line ends alone",
+   "data": {
+    "deflated": "eNrtwTEBAAAAwqB//QMbRKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL4NHnIn2w==",
+    "bytes": 250000,
+    "sha256": "64eb54208bb5d651b9f9a264c79492968f38c71161248d99f5ac2652feea0b61"
+   },
+   "result": [
+    100000,
+    100000,
+    50000
+   ]
+  },
+  {
+   "name": "spaces alone",
+   "data": {
+    "deflated": "eNrtwYEAAAAAwyCV+VMe5FUBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHwbL7UZJw==",
+    "bytes": 250000,
+    "sha256": "ab19a36168a50071674f5d946a7dc6248ea5d622fc47da45ccc075c8ac37987a"
+   },
+   "result": [
+    125000,
+    28672,
+    28672,
+    28672,
+    28672,
+    10312
+   ]
+  }
+ ],
+ "regions": {
+  "data": "YWIKY2QKCmVmZw==",
+  "results": [
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "YQ==",
+   "YWI=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Yg==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "YWIK",
+   "YWIKYw==",
+   "YWIKY2Q=",
+   null,
+   null,
+   null,
+   null,
+   "Ygo=",
+   "Ygpj",
+   "YgpjZA==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "YWIKY2QK",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "YgpjZAo=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "YWIKY2QKCg==",
+   "YWIKY2QKCmU=",
+   "YWIKY2QKCmVm",
+   "YWIKY2QKCmVmZw==",
+   null,
+   null,
+   null,
+   "YgpjZAoK",
+   "YgpjZAoKZQ==",
+   "YgpjZAoKZWY=",
+   "YgpjZAoKZWZn",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Cg==",
+   "CmM=",
+   "CmNk",
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Yw==",
+   "Y2Q=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "ZA==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "CmNkCg==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Y2QK",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "ZAo=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "CmNkCgo=",
+   "CmNkCgpl",
+   "CmNkCgplZg==",
+   "CmNkCgplZmc=",
+   null,
+   null,
+   null,
+   "Y2QKCg==",
+   "Y2QKCmU=",
+   "Y2QKCmVm",
+   "Y2QKCmVmZw==",
+   null,
+   null,
+   null,
+   "ZAoK",
+   "ZAoKZQ==",
+   "ZAoKZWY=",
+   "ZAoKZWZn",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Cg==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Cgo=",
+   "Cgpl",
+   "CgplZg==",
+   "CgplZmc=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Cg==",
+   "CmU=",
+   "CmVm",
+   "CmVmZw==",
+   null,
+   null,
+   null,
+   null,
+   "ZQ==",
+   "ZWY=",
+   "ZWZn",
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Zg==",
+   "Zmc=",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   "Zw==",
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "spans": [
+  {
+   "name": "a token after a line end",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a token after a return and a line end",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFuwjAAAMA9En/gA5VIICEdOlVMSO1Q9sp2DUkFISL+v9o/sN6N9zXe5mteyvsQynp+jFMJ8ZrXS06PXF6WFKb/vf/mVMb7VAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAzxty+Bmny6o6fR4PH2+XYf5ud13dxPqc+3MMTRv29a6JMb12cbPvt03bp26zqv4ArtckQA==",
+     "bytes": 32935,
+     "sha256": "bcb5480a1035f0689833b0474acbcf573d4af032fb8b2a837bb0e84f90faf032"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "e89ae9f7adbff57b69830f675670a08c54b9511c75e18ec87f11cd4761954a1c",
+     "projectionSha256": "bcb5480a1035f0689833b0474acbcf573d4af032fb8b2a837bb0e84f90faf032",
+     "projectionBytes": 32935,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "e89ae9f7adbff57b69830f675670a08c54b9511c75e18ec87f11cd4761954a1c",
+       "projectionSha256": "bcb5480a1035f0689833b0474acbcf573d4af032fb8b2a837bb0e84f90faf032",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "an encoded token",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFOg1AAANC9p+gFTLR26cBgyrfRCESlKmxISIAU2hQS055e7+D63vjeu+F0aKZ521bz8nTuxrn6PjTLqanPzXwz1dX4t8e+qefuOC4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgP8L6TaLQxx9hM3L2369KVftz9d1f5v24VL0j0OZt0MxhEv6Ge6T/PVSDM99lpddEtfr5Pp0l+2SVfIQRYtfXlArbQ==",
+     "bytes": 32951,
+     "sha256": "e1f47b8ebacfb172ca2d6dab091054d3e570140071d9647a91cbc3beb2070e7f"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "8c827473eb8f98203ac63a9d93fadcefa4dc02240c67bcd402a24f0c518e19bc",
+     "projectionSha256": "e1f47b8ebacfb172ca2d6dab091054d3e570140071d9647a91cbc3beb2070e7f",
+     "projectionBytes": 32951,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32834,
+     "EndLine": 32834,
+     "StartColumn": 10,
+     "EndColumn": 73,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "8c827473eb8f98203ac63a9d93fadcefa4dc02240c67bcd402a24f0c518e19bc",
+       "projectionSha256": "e1f47b8ebacfb172ca2d6dab091054d3e570140071d9647a91cbc3beb2070e7f",
+       "startLine": 32834,
+       "endLine": 32834,
+       "startColumn": 10,
+       "endColumn": 73,
+       "status": "resolved",
+       "spanBytes": 64,
+       "spanSha256": "595ce10434685aa3c8fcea7da95379c564867c2229e0da88899cd7ae91b4bec8"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a match over three lines",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyTFuAjEUQMF+T7EX4BKEVUSzBaFHZvkKJmCQbXL+pOAGtDPle1/59rhG6x/n1MdHzaWn4zXGFkuNvmpLKv/1foml53sZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAID3nSOdcvketvO02x/W0+d2Hkr8Rh1za884jbdUf6K+/jRvhj/Y1STC",
+     "bytes": 32928,
+     "sha256": "22d187464bcb4d7d224d89dd445f34c6dff4cc4237865ec4e1f4d1330a042800"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "c75c38095f12837986a99d478022d5f174ab957bed72e9879028d9c95ba43a4d",
+     "projectionSha256": "22d187464bcb4d7d224d89dd445f34c6dff4cc4237865ec4e1f4d1330a042800",
+     "projectionBytes": 32928,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32837,
+     "StartColumn": 2,
+     "EndColumn": 10,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "c75c38095f12837986a99d478022d5f174ab957bed72e9879028d9c95ba43a4d",
+       "projectionSha256": "22d187464bcb4d7d224d89dd445f34c6dff4cc4237865ec4e1f4d1330a042800",
+       "startLine": 32835,
+       "endLine": 32837,
+       "startColumn": 2,
+       "endColumn": 10,
+       "status": "resolved",
+       "spanBytes": 41,
+       "spanSha256": "f088fa5451d07b560d2dfac053c7f9eab70a761f3cc8f0c2dd61d7b94ede8e91"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a token on a long line that the scanner cut",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFuwjAAAMCdV+QDSCSQkA6dqk5IMNAd2ZYpqWiIiCdeT//AVOluvOPwO13zXD4uoVTTfRhLiNdczTndc1nOKYx/e/vJqQy3cQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvO4BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAv1J9HXaf+/fvy3RqN13dxPqc+3MMTRu29aaJMb11cbXt103bp261eAKQ8EpN",
+     "bytes": 212926,
+     "sha256": "1c3de54e4a54124a6790703c2f360a5541a3666fed532fe159c5ed9fe442b23c"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "d383f3c0323e7c019a4aea63fc0197bf5bd332483690990ed8d04ad9f00d5662",
+     "projectionSha256": "1c3de54e4a54124a6790703c2f360a5541a3666fed532fe159c5ed9fe442b23c",
+     "projectionBytes": 212926,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32834,
+     "EndLine": 32834,
+     "StartColumn": 1870,
+     "EndColumn": 1909,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "d383f3c0323e7c019a4aea63fc0197bf5bd332483690990ed8d04ad9f00d5662",
+       "projectionSha256": "1c3de54e4a54124a6790703c2f360a5541a3666fed532fe159c5ed9fe442b23c",
+       "startLine": 32834,
+       "endLine": 32834,
+       "startColumn": 1870,
+       "endColumn": 1909,
+       "status": "ambiguous"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "coordinates with an end column of nothing",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 0,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 0,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "coordinates with a line past the end",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 99999,
+     "EndLine": 99999,
+     "StartColumn": 2,
+     "EndColumn": 4,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 99999,
+       "endLine": 99999,
+       "startColumn": 2,
+       "endColumn": 4,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "coordinates with a last line before the first",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32834,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32834,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "coordinates with a start column of nothing",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 0,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 0,
+       "endColumn": 47,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "coordinates with columns past the line",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 99,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 99,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "line nothing",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 0,
+     "EndLine": 0,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 0,
+       "endLine": 0,
+       "startColumn": 1,
+       "endColumn": 2,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "the first line of the file",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 12,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 1,
+       "endLine": 1,
+       "startColumn": 1,
+       "endColumn": 12,
+       "status": "resolved",
+       "spanBytes": 12,
+       "spanSha256": "a1129074ac7f69efcffd13e5eb75918620435340d95fc2a1871ec4d3253ada93"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a first byte that changed",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJplw5u5u68AqZSUu7/Y//B9b3xfc6/6zVv5W0KpV7v81JCvOZ6y+mey9OWwvLY209OZb4tFQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwf1MO3/MyVufTx/vxdZzWr27fN21sLnm4xNB24dDs2xjTSx93h+G57YbU76o/9EEkKw==",
+     "bytes": 32933,
+     "sha256": "adb327be86166ce87f61148bccc1410ed8aae7bf52bbe103202215a10684c0ec"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_changed"
+   }
+  },
+  {
+   "name": "a byte more",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFuwjAAAMA9r+ADlUhKQhg6VZ0qlaHdkW0MCaIhIh54fvsH1rvxvsff+ZqX8j6Esprv41RCvObVktM9l5clhel/b5ecynibKgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgeUMOx3E6Vz/7z4+vt/MwH9pNVzexPuX+FEPThm29aWJMuy6ut/1r0/apW1ePP5WIJJ4=",
+     "bytes": 32934,
+     "sha256": "ad944dfb63a2c40b096d50a7aa5c2ff065c3f6267599d7ab5cc91e5d8991a501"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_kind"
+   }
+  },
+  {
+   "name": "a byte fewer",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFuwjAAAMCdV/ABJBJISIdOFVMlGOiObNeQIBoi4v8L/tD1brzT8Dfd81y++lCW03MYS4j3vJxzeuaymlMY3/u45VSGx7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP6vz+F3GK+Ln+P3/vB57adzs22rOlaX3F1iqJuwq7Z1jOmjjetdt6mbLrXrF0zEJBw=",
+     "bytes": 32932,
+     "sha256": "a6eeea379dcac363098034029f1a0a39a5e78dc46db526f3dcb2a89d51435f0d"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_kind"
+   }
+  },
+  {
+   "name": "a last byte that changed",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOwkAAANCdr+AHTNpKSx2cjBMJDLqbu/OgJVia9gY+X//B9b3xfYw/8y2v5W0IZTsv41RCvOXtmtOSy9OawvS392tOZbxPGwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADg/4Ycvsfpsvk8Hd6Pr5dh/mp3Xd3E+pz7cwxNG/b1rokxvXSx2vfPTdunrnr8AnFYJJQ=",
+     "bytes": 32933,
+     "sha256": "29f72b25a65efa9681c421a8484d18542366369e12e4a19c0f81343c75494370"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_changed"
+   }
+  },
+  {
+   "name": "a projection that is a link",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": "link",
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "OSError",
+    "said": "[Errno 62] Too many levels of symbolic links"
+   }
+  },
+  {
+   "name": "a projection that is a pipe",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": "pipe",
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_kind"
+   }
+  },
+  {
+   "name": "a projection that is not there",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": "absent",
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory"
+   }
+  },
+  {
+   "name": "a projection that is a directory",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": "directory",
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "IsADirectoryError",
+    "said": "[Errno 21] Is a directory"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/../outside'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/../outside",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/private/content-000000'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/private/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-000000/child'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000/child",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-000001'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000001",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file 'content-000000'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+       "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+       "startLine": 1,
+       "endLine": 1,
+       "startColumn": 1,
+       "endColumn": 2,
+       "status": "resolved",
+       "spanBytes": 2,
+       "spanSha256": "243a7b77913ebb81b27635fb1fed1270b6f08cfeebc52fea59040b68cc5b3f87"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding in the file '/layers//layers/content-000000'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers//layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-00000'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-00000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-0000000'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-0000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-00000a'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-00000a",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file '/layers/content-000000\\n'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000\n",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding in the file ''",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "a finding whose file is no text",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": 7,
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON string"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is True",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": true,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is True",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": true,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is 'private-content'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": "private-content",
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is 'private-content'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": "private-content",
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is -1",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": -1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is -1",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": -1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is 268468335",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 268468335,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is 268468335",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 268468335,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is 1.0",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1.0,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is 1.0",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1.0,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is None",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": null,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is None",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": null,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose StartColumn is [1]",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": [
+      1
+     ],
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding whose EndLine is [1]",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": [
+      1
+     ],
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_coordinates"
+   }
+  },
+  {
+   "name": "a finding with the largest coordinate",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 268468334,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+       "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+       "startLine": 1,
+       "endLine": 1,
+       "startColumn": 1,
+       "endColumn": 268468334,
+       "status": "unresolved"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding without its File",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'File'"
+   }
+  },
+  {
+   "name": "a finding without its RuleID",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'RuleID'"
+   }
+  },
+  {
+   "name": "a finding without its StartLine",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "EndLine": 1,
+     "StartColumn": 1,
+     "EndColumn": 2,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'StartLine'"
+   }
+  },
+  {
+   "name": "a finding without its EndColumn",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMENgzAQALA/U7AAU3SEThCikxoEASW3v9od+rWffrfrOWPm61NyfUbrWfYz1hl1RG6zlv7b+4ia7e4LAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPC/1mPk8gWz3RaJ",
+     "bytes": 32884,
+     "sha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9a72dc6ee5665ab1364707965c4b75a6e3a58e25148d5ea02b17aa78b2a84eb5",
+     "projectionSha256": "9789429ae293b8b285a834354fb0cf7156d82102c15c31c9ab4dad0ad0e90d06",
+     "projectionBytes": 32884,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 1,
+     "EndLine": 1,
+     "StartColumn": 1,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'EndColumn'"
+   }
+  },
+  {
+   "name": "a finding whose rule is 7",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": 7,
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": 7,
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding whose rule is None",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": null,
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": null,
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding whose rule is ['a']",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": [
+      "a"
+     ],
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": [
+        "a"
+       ],
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding whose rule is {'b': 1}",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": {
+      "b": 1
+     },
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": {
+        "b": 1
+       },
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding whose rule is 'caf\u00e9'",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "caf\u00e9",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "caf\u00e9",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "one finding when one byte may be read",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_TOTAL": 1
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_read_budget"
+   }
+  },
+  {
+   "name": "one finding when no candidate may be tried",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_CANDIDATES": 0
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_candidate_budget"
+   }
+  },
+  {
+   "name": "one finding when no finding may be there",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FINDINGS": 0
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_finding_count"
+   }
+  },
+  {
+   "name": "one finding when the time is over",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "SECONDS": -1
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_deadline"
+   }
+  },
+  {
+   "name": "one finding when as many bytes as the file may be read",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_TOTAL": 32933
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "one finding when a byte fewer than the file may be read",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_TOTAL": 32932
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_read_budget"
+   }
+  },
+  {
+   "name": "one finding when one candidate may be tried",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_CANDIDATES": 1
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "one finding when one finding may be there",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FINDINGS": 1
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "one finding when the file may be no larger than it is",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FILE": 32933
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "one finding when the file must be smaller than it is",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FILE": 32932
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "two findings when one candidate may be tried",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "other",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_CANDIDATES": 1
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_candidate_budget"
+   }
+  },
+  {
+   "name": "two findings when two candidates may be tried",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "other",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_CANDIDATES": 2
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "other",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 2,
+       "endColumn": 6,
+       "status": "resolved",
+       "spanBytes": 5,
+       "spanSha256": "f98103e9217f099208569d295c1b276f1821348636c268c854bb2a086e0037cd"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "two findings when one finding may be there",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "other",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FINDINGS": 1
+   },
+   "version": null,
+   "result": {
+    "refused": "secret_span_finding_count"
+   }
+  },
+  {
+   "name": "two findings when two findings may be there",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "other",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {
+    "MAX_FINDINGS": 2
+   },
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "other",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 2,
+       "endColumn": 6,
+       "status": "resolved",
+       "spanBytes": 5,
+       "spanSha256": "f98103e9217f099208569d295c1b276f1821348636c268c854bb2a086e0037cd"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "two findings at one place",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "other",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "other",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "findings out of the order of their lines",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyMERwiAQAMA/VdCARWhKsIJIcMSJJAPX/2gPfnefe2+fc68zltca+Rytx/rYa561jBqXWdb+2+NdS7SjJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgf882ZuRrmrUcfcu3FK82trykL53xHGA=",
+     "bytes": 32903,
+     "sha256": "23738d00ca08eeadd7dcaf846fd3373fcff7a59f2f04af2f7f1d82cb73dc6e23"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "4ace139746895895ec6b065b424a863b683622a472016f5ea9ec5f50ac9c0f1d",
+     "projectionSha256": "23738d00ca08eeadd7dcaf846fd3373fcff7a59f2f04af2f7f1d82cb73dc6e23",
+     "projectionBytes": 32903,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "third",
+     "StartLine": 32836,
+     "EndLine": 32836,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "first",
+     "StartLine": 32834,
+     "EndLine": 32834,
+     "StartColumn": 1,
+     "EndColumn": 5,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "second",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 7,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "third",
+       "path": "001/example",
+       "fileSha256": "4ace139746895895ec6b065b424a863b683622a472016f5ea9ec5f50ac9c0f1d",
+       "projectionSha256": "23738d00ca08eeadd7dcaf846fd3373fcff7a59f2f04af2f7f1d82cb73dc6e23",
+       "startLine": 32836,
+       "endLine": 32836,
+       "startColumn": 2,
+       "endColumn": 6,
+       "status": "resolved",
+       "spanBytes": 5,
+       "spanSha256": "b1e99324505bd32da0e1f85dcf5e19a09db0481e8a15f62c41eb320304a8e927"
+      },
+      {
+       "rule": "first",
+       "path": "001/example",
+       "fileSha256": "4ace139746895895ec6b065b424a863b683622a472016f5ea9ec5f50ac9c0f1d",
+       "projectionSha256": "23738d00ca08eeadd7dcaf846fd3373fcff7a59f2f04af2f7f1d82cb73dc6e23",
+       "startLine": 32834,
+       "endLine": 32834,
+       "startColumn": 1,
+       "endColumn": 5,
+       "status": "resolved",
+       "spanBytes": 5,
+       "spanSha256": "dd8214d087597269cb68122d9df677e8257db8c229496482e106a853f904d300"
+      },
+      {
+       "rule": "second",
+       "path": "001/example",
+       "fileSha256": "4ace139746895895ec6b065b424a863b683622a472016f5ea9ec5f50ac9c0f1d",
+       "projectionSha256": "23738d00ca08eeadd7dcaf846fd3373fcff7a59f2f04af2f7f1d82cb73dc6e23",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 2,
+       "endColumn": 7,
+       "status": "resolved",
+       "spanBytes": 6,
+       "spanSha256": "16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a token in a later part of a file of short lines",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrty7FOg1AYhuG9V8ENmBQsFAcn08nEDrobzsnBYigQOEMvXxMvwUnzvNP3/Mn/OlyXMW356dLlYlmHKXdhTMWW4pry3Ra76fs6f6aYh3naSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZKk3zcOUyrmvsjplgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4G/i7fx8enn8uCzv9aEpq1D2qe1DV9XdsTxUIcSHJuyP7X1Vt7HZ767zmn4eLcv6r+sL/Oba8A==",
+     "bytes": 293925,
+     "sha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "38641786da7b30bec221c3ceeb7a4a637c5e04148f785669c7cb886f823357a6",
+     "projectionSha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511",
+     "projectionBytes": 293925,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 52834,
+     "EndLine": 52834,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "38641786da7b30bec221c3ceeb7a4a637c5e04148f785669c7cb886f823357a6",
+       "projectionSha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511",
+       "startLine": 52834,
+       "endLine": 52834,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "findings in two parts of a file, the later first",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrty7FOg1AYhuG9V8ENmBQsFAcn08nEDrobzsnBYigQOEMvXxMvwUnzvNP3/Mn/OlyXMW356dLlYlmHKXdhTMWW4pry3Ra76fs6f6aYh3naSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZKk3zcOUyrmvsjplgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4G/i7fx8enn8uCzv9aEpq1D2qe1DV9XdsTxUIcSHJuyP7X1Vt7HZ767zmn4eLcv6r+sL/Oba8A==",
+     "bytes": 293925,
+     "sha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "38641786da7b30bec221c3ceeb7a4a637c5e04148f785669c7cb886f823357a6",
+     "projectionSha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511",
+     "projectionBytes": 293925,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 52834,
+     "EndLine": 52834,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "early",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 10,
+     "EndColumn": 13,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "38641786da7b30bec221c3ceeb7a4a637c5e04148f785669c7cb886f823357a6",
+       "projectionSha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511",
+       "startLine": 52834,
+       "endLine": 52834,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "early",
+       "path": "001/example",
+       "fileSha256": "38641786da7b30bec221c3ceeb7a4a637c5e04148f785669c7cb886f823357a6",
+       "projectionSha256": "155042358577be0d7b530d8cb194a178fc58905dd0ac2d69e49f5f5b0ec97511",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 10,
+       "endColumn": 13,
+       "status": "resolved",
+       "spanBytes": 4,
+       "spanSha256": "982d9e3eb996f559e633f4d194def3761d909f5a3b647d1a851fead67c32c9d1"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a token in a later part of a file of blank lines",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyDFuwjAAQNGdU3ABJBJICANT1alSO8CObMtAKhoi4qHHhzswsLw/vOHv+7/xmqfycQllPt77oYR4zfMpp3suiymF4XlvvzmV/jbMJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEnS65X8X0iSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSJEmSfLeHn6/P7935Mh6bdVvVsTrl7hRD3YRNta5jTNs2Ljfdqm661C5nD5mi/NA=",
+     "bytes": 302925,
+     "sha256": "24766943ec791351d791da720ae33fda1fa0c0322b352f6a81e6fd9b67bc5a05"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "6a1eb6eb460f35bebb7ad611acf5051d0a9f940be2071de9974bd8e51e165560",
+     "projectionSha256": "24766943ec791351d791da720ae33fda1fa0c0322b352f6a81e6fd9b67bc5a05",
+     "projectionBytes": 302925,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 122834,
+     "EndLine": 122834,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "6a1eb6eb460f35bebb7ad611acf5051d0a9f940be2071de9974bd8e51e165560",
+       "projectionSha256": "24766943ec791351d791da720ae33fda1fa0c0322b352f6a81e6fd9b67bc5a05",
+       "startLine": 122834,
+       "endLine": 122834,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "findings in two files",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    },
+    "content-000001": {
+     "deflated": "eNrtyDFugzAAAMCdV+QDlQINhAyZqk6VmiHdI9tyClUKCPx/NX/oejfedfxdHnkrb0Mou2UdpxLiI++2nNZcXrYUpufOPzmVcZ4qAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/5jLktfq6fLx/nr+H5dYeurqJ9T339xiaNhzrQxNjOnVxf+xfm7ZP3b76AyLWI3g=",
+     "bytes": 32931,
+     "sha256": "bc6b81d5748b1f8be9b011ff7605d826726ec36423c57912b0f7b1338a81cde6"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    },
+    "content-000001": {
+     "path": "002/example",
+     "sha256": "2eaebbf5380ea326b80fb2d019643b5dcb590b68c7d5517c841a7a63bf0c34fc",
+     "projectionSha256": "bc6b81d5748b1f8be9b011ff7605d826726ec36423c57912b0f7b1338a81cde6",
+     "projectionBytes": 32931,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000001",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    },
+    {
+     "File": "/layers/content-000001",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 2,
+     "EndColumn": 6,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "002/example",
+       "fileSha256": "2eaebbf5380ea326b80fb2d019643b5dcb590b68c7d5517c841a7a63bf0c34fc",
+       "projectionSha256": "bc6b81d5748b1f8be9b011ff7605d826726ec36423c57912b0f7b1338a81cde6",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "github-pat",
+       "path": "001/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      },
+      {
+       "rule": "github-pat",
+       "path": "002/example",
+       "fileSha256": "2eaebbf5380ea326b80fb2d019643b5dcb590b68c7d5517c841a7a63bf0c34fc",
+       "projectionSha256": "bc6b81d5748b1f8be9b011ff7605d826726ec36423c57912b0f7b1338a81cde6",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 2,
+       "endColumn": 6,
+       "status": "resolved",
+       "spanBytes": 5,
+       "spanSha256": "f98103e9217f099208569d295c1b276f1821348636c268c854bb2a086e0037cd"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a finding in the second of two files alone",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    },
+    "content-000001": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    },
+    "content-000001": {
+     "path": "002/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000001",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": "002/example",
+       "fileSha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a projection of no bytes",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 0,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "a projection of a true size",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": true,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "a projection of a size in text",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": "32933",
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "a projection of a size that is a fraction",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933.0,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "a projection past the largest size",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 268468335,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_size"
+   }
+  },
+  {
+   "name": "a projection of another size",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32934,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_kind"
+   }
+  },
+  {
+   "name": "a projection without a size",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'projectionBytes'"
+   }
+  },
+  {
+   "name": "a projection with a digest in capitals",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157F156DE780BDAF85AEC1997E2B4B7F6D90BB8BACB6BB7AFE51A01E709589B",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_digest"
+   }
+  },
+  {
+   "name": "a projection with a short digest",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_digest"
+   }
+  },
+  {
+   "name": "a projection with a digest and a line end",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b\n",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_digest"
+   }
+  },
+  {
+   "name": "a projection with another digest",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file_changed"
+   }
+  },
+  {
+   "name": "a projection with a digest that is no text",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": 7,
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON string"
+   }
+  },
+  {
+   "name": "a projection without a digest",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'projectionSha256'"
+   }
+  },
+  {
+   "name": "a projection of another format",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "other"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_format"
+   }
+  },
+  {
+   "name": "a projection without a format",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_format"
+   }
+  },
+  {
+   "name": "a projection without a path",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'path'"
+   }
+  },
+  {
+   "name": "a projection without the digest of its source",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'sha256'"
+   }
+  },
+  {
+   "name": "a projection whose path and source digest are anything",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": 7,
+     "sha256": null,
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": [
+      {
+       "rule": "github-pat",
+       "path": 7,
+       "fileSha256": null,
+       "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+       "startLine": 32835,
+       "endLine": 32835,
+       "startColumn": 8,
+       "endColumn": 47,
+       "status": "resolved",
+       "spanBytes": 40,
+       "spanSha256": "34f1d09301478924e20a035dbf63ae3af62ee80da6224ad633391f1b575d1a11"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a projection that is no record",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": [
+     1
+    ]
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON object"
+   }
+  },
+  {
+   "name": "a projection that is not listed",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {},
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_file"
+   }
+  },
+  {
+   "name": "no finding and no directory",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [],
+   "edit": null,
+   "directory": "absent",
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": []
+    }
+   }
+  },
+  {
+   "name": "a finding and no directory",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": "absent",
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_directory"
+   }
+  },
+  {
+   "name": "a finding and a directory that is a link",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": "link",
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_directory"
+   }
+  },
+  {
+   "name": "no finding and a directory that is a link",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [],
+   "edit": null,
+   "directory": "link",
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": []
+    }
+   }
+  },
+  {
+   "name": "a finding and a directory that is a file",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": "file",
+   "limits": {},
+   "version": null,
+   "result": {
+    "refused": "secret_span_directory"
+   }
+  },
+  {
+   "name": "no finding",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "held": {
+     "format": "gitleaks-8.30.1-projection-match",
+     "findings": []
+    }
+   }
+  },
+  {
+   "name": "a report that is no list",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": {
+    "findings": []
+   },
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON array"
+   }
+  },
+  {
+   "name": "a finding that is no record",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    [
+     1,
+     2
+    ]
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": null,
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON object"
+   }
+  },
+  {
+   "name": "another version of the scanner",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [
+    {
+     "File": "/layers/content-000000",
+     "RuleID": "github-pat",
+     "StartLine": 32835,
+     "EndLine": 32835,
+     "StartColumn": 8,
+     "EndColumn": 47,
+     "Match": "REDACTED",
+     "Secret": "REDACTED"
+    }
+   ],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": "8.30.0",
+   "result": {
+    "refused": "secret_span_scanner_version"
+   }
+  },
+  {
+   "name": "another version of the scanner and no finding",
+   "files": {
+    "content-000000": {
+     "deflated": "eNrtyLFOg0AAANCdr+AHTAoWioOTcTJph7qbu/MKmEpJuf+P/QfX98Z3nn/Xa97K2xRKvd7npYR4zfWW0z2Xpy2F5bG3n5zKfFsqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOD/phy+52WsPk8f78fXcVq/un3ftLG55OESQ9uFQ7NvY0wvfdwdhue2G1K/q/4AcOokJg==",
+     "bytes": 32933,
+     "sha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b"
+    }
+   },
+   "paths": {
+    "content-000000": {
+     "path": "001/example",
+     "sha256": "9997a125f23c88365c77f835855196a944663f99a09d07122f32ece733b3346f",
+     "projectionSha256": "4157f156de780bdaf85aec1997e2b4b7f6d90bb8bacb6bb7afe51a01e709589b",
+     "projectionBytes": 32933,
+     "projectionFormat": "ascii-printable"
+    }
+   },
+   "rows": [],
+   "edit": null,
+   "directory": null,
+   "limits": {},
+   "version": "8.30.0",
+   "result": {
+    "refused": "secret_span_scanner_version"
+   }
+  }
+ ],
+ "bounds": {
+  "VERSION": "8.30.1",
+  "FORMAT": "gitleaks-8.30.1-projection-match",
+  "BUFFER": 100000,
+  "PEEK": 25000,
+  "READER_BUFFER": 4096,
+  "MAX_FILE": 268468334,
+  "MAX_TOTAL": 4294967296,
+  "MAX_FINDINGS": 20000,
+  "MAX_CANDIDATES": 100000,
+  "SECONDS": 90
+ }
+}

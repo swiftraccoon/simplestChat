@@ -34,6 +34,8 @@ const TITLE: &[u8] = b"SimplestChat printable secret-scan projection\n";
 /// The line ends after the title. The pinned scanner's file-type matcher
 /// looks for a signature through offset 32773, so they reach past it.
 const PADDING: usize = 32768 + 64;
+/// How many bytes every projection starts with.
+pub(crate) const PREFIX_BYTES: u64 = (TITLE.len() + PADDING) as u64;
 /// The name of the projection.
 pub const FORMAT: &str = "ascii-printable";
 /// What a projection does not cover, as the evidence states it.
@@ -73,7 +75,7 @@ fn prefix() -> Vec<u8> {
 }
 
 /// What tells one state of a file from any other.
-fn identity(metadata: &Metadata) -> (u64, u64, u64, [i64; 4]) {
+pub(crate) fn identity(metadata: &Metadata) -> (u64, u64, u64, [i64; 4]) {
     let times = [
         metadata.mtime(),
         metadata.mtime_nsec(),

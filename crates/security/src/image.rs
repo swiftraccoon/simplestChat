@@ -4,6 +4,7 @@
 use std::process::ExitCode;
 
 pub mod archive;
+pub mod spans;
 
 const USAGE: &str =
     "usage: simplestchat-security image archive --archive FILE --manifest FILE --output DIR";
