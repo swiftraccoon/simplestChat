@@ -60,12 +60,6 @@ const FAILED: Fault = Fault("actions_metadata_command_failed");
 /// An answer in a form the review does not read.
 const FORMAT: Fault = Fault("actions_metadata_format");
 
-/// Whether `name` is the full name of a commit.
-fn full(name: &str) -> bool {
-    let hexadecimal = |byte: u8| matches!(byte, b'0'..=b'9' | b'a'..=b'f');
-    name.len() == 40 && name.bytes().all(hexadecimal)
-}
-
 /// What a pin names: a repository, the path of the action below it or
 /// none, and a commit.
 struct Pin<'a> {
@@ -84,7 +78,7 @@ fn pin(literal: &str) -> Option<Pin<'_>> {
     let (owner, name, path) = (parts.next()?, parts.next()?, parts.next());
     let below =
         |path: &str| !path.is_empty() && path.bytes().all(|byte| named(byte) || byte == b'/');
-    let valid = part(owner) && part(name) && path.is_none_or(below) && full(commit);
+    let valid = part(owner) && part(name) && path.is_none_or(below) && crate::commit(commit);
     valid.then(|| Pin {
         repository: &action[..owner.len() + 1 + name.len()],
         path,
@@ -593,7 +587,7 @@ impl Asking<'_> {
         let mut peeled = BTreeMap::new();
         for line in splitlines(&listing) {
             let (commit, name) = line.split_once('\t').ok_or(IDENTITY)?;
-            require(full(commit), IDENTITY.0)?;
+            require(crate::commit(commit), IDENTITY.0)?;
             let tag = name
                 .strip_prefix("refs/tags/")
                 .ok_or(Fault("actions_tag_ref"))?;
@@ -719,7 +713,10 @@ pub struct Review<'a> {
 /// the head or the full name of a commit that the head descends from.
 fn reviewed(asking: &Asking<'_>, review: &Review<'_>, output: &Path) -> Outcome<()> {
     let base = review.base.unwrap_or("HEAD");
-    require(base == "HEAD" || full(base), "actions_invalid_base")?;
+    require(
+        base == "HEAD" || crate::commit(base),
+        "actions_invalid_base",
+    )?;
     asking.git(&["merge-base", "--is-ancestor", base, "HEAD"])?;
     let now = asking.inventory(Some(review.snapshot), base, review.include_vendor)?;
     let before = asking.inventory(None, base, review.include_vendor)?;

@@ -418,10 +418,7 @@ pub fn cargo(
     )?;
     let database = object(field(raw, "database")?)?;
     let commit = record::string(field(database, "last-commit")?)?;
-    let identified = commit.len() == 40
-        && commit
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    let identified = crate::commit(commit)
         && whole(field(database, "advisory-count")?).is_some_and(|count| count > 0);
     require(identified, "cargo_database_identity")?;
     let updated = instant(record::string(field(database, "last-updated")?)?)?.ok_or(STALE)?;

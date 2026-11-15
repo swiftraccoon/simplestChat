@@ -48,6 +48,13 @@ pub(crate) fn require(held: bool, code: &'static str) -> Result<()> {
     if held { Ok(()) } else { Err(Fault(code)) }
 }
 
+/// Whether `name` is the full name of a commit: forty digits of lowercase
+/// hexadecimal.
+pub(crate) fn commit(name: &str) -> bool {
+    let digit = |byte: u8| matches!(byte, b'0'..=b'9' | b'a'..=b'f');
+    name.len() == 40 && name.bytes().all(digit)
+}
+
 /// `bytes` in lowercase hexadecimal.
 pub(crate) fn hexadecimal(bytes: &[u8]) -> String {
     use std::fmt::Write as _;

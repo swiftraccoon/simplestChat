@@ -329,11 +329,7 @@ pub fn secret_scan(context: &mut Context, programs: &dyn Programs, scan: &Scan<'
         ("projectionCoverageSha256", neutral.coverage_sha256.into()),
     ]);
     if let Some(base) = scan.base {
-        let hexadecimal = |byte: u8| matches!(byte, b'0'..=b'9' | b'a'..=b'f');
-        require(
-            base.len() == 40 && base.bytes().all(hexadecimal),
-            "invalid_security_diff_base",
-        )?;
+        require(crate::commit(base), "invalid_security_diff_base")?;
         let asked = ["merge-base", "--is-ancestor", base, "HEAD"].map(OsStr::new);
         // 1: the base is no ancestor; 128: this clone does not have it.
         let how = Run {

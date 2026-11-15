@@ -115,9 +115,8 @@ fn changed(
         .base
         .filter(|base| !base.is_empty())
         .unwrap_or("HEAD");
-    let lower = |byte: u8| matches!(byte, b'0'..=b'9' | b'a'..=b'f');
     require(
-        selected == "HEAD" || (selected.len() == 40 && selected.bytes().all(lower)),
+        selected == "HEAD" || crate::commit(selected),
         "dependency_diff_base",
     )?;
     let git = programs.prerequisite("git")?;
