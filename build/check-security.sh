@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# Shared local/CI entrypoint. Install only authenticated wheels into an isolated prefix.
+# Entry point of the image tier. Install only authenticated wheels into an isolated prefix.
+# The source tiers are `cargo run --locked -q -p simplestchat-security -- fast|deep`.
 set -euo pipefail
 umask 077
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
 python3 -c 'import sys; assert sys.version_info >= (3, 12), "Python 3.12 or newer is required"'
-case "${1:-}" in
-  fast|deep)
-    rust_toolchain="$(python3 -c 'import tomllib; from pathlib import Path; print(tomllib.loads(Path("rust-toolchain.toml").read_text())["toolchain"]["channel"])')"
-    rust_binary="$(rustup which --toolchain "$rust_toolchain" cargo)"
-    rust_bin_directory="$(dirname -- "$rust_binary")"
-    export PATH="$rust_bin_directory:$PATH"
-    ;;
-esac
 requirements_digest="$(python3 -c 'import hashlib; from pathlib import Path; print(hashlib.sha256(Path("security/requirements.txt").read_bytes()).hexdigest())')"
 # Outside the Cargo target directory: CI's rust-cache saves and restores
 # `target/`, and a receipt-less prefix restored from a partial save stopped

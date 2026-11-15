@@ -18,7 +18,7 @@ automated, along with dependency/image audits and authenticated build inputs.
 Select the vendor suite explicitly through the shared dispatcher:
 
 ```sh
-build/check-security.sh deep --deep-check native --include-vendor
+cargo run --locked -q -p simplestchat-security -- deep --deep-check native --include-vendor
 ```
 
 The host runner requires Python 3.12 or newer and a local Docker or

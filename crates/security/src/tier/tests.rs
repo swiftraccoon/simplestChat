@@ -406,7 +406,10 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
             .expect("the evidence");
         let spelled = place.display().to_string();
         let (python, log) = (place.join("python"), place.join("log"));
-        let script = text(&case["script"]).replace("<log>", &log.display().to_string());
+        // The mutation check is no command of this gate's interpreter.
+        let script = text(&case["script"])
+            .replace("<log>", &log.display().to_string())
+            .replace("<the mutation command>", "none");
         std::fs::write(&python, script).expect("an interpreter");
         std::fs::set_permissions(&python, Permissions::from_mode(0o755)).expect("a mode");
         let arguments = case["arguments"].as_array().expect("arguments").iter();
@@ -458,10 +461,10 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         // The mutation check is no command here: what the reference gave
         // its command is what the check is handed.
         let mut calls = logged(&log, &root.display().to_string(), &spelled);
-        let mutation = |call: &&Value| call[0] == "build/security_mutation.py";
+        let mutation = |call: &&Value| call[0] == "<the mutation command>";
         let there = case["calls"].as_array().expect("calls");
         if let Some(call) = there.iter().find(mutation) {
-            let mut handed = vec![Value::from("build/security_mutation.py")];
+            let mut handed = vec![Value::from("<the mutation command>")];
             handed.extend(host.handed.borrow().iter().cloned());
             calls.push(handed.into());
             assert_eq!(calls.last(), Some(call), "{name}");

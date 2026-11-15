@@ -1,8 +1,8 @@
 //! Replays of what the reference made of Python artifacts.
 //!
 //! `recorded_python.json` holds the normal forms and file-name readings of
-//! the packaging library that `build/security_dependency_licenses.py`
-//! uses, and what the module itself answered for core metadata and for
+//! the packaging library that the reference in Python used, and what the
+//! reference itself answered for core metadata and for
 //! whole pages of the package index served by a scripted `curl`. Where the
 //! reference failed with an exception of its interpreter or its library,
 //! `named` gives the code here; the `STRICTER` lists name what it admitted

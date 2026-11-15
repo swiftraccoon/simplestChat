@@ -50,7 +50,7 @@ jobs:
           if [[ -n "$SECURITY_BASE" && "$SECURITY_BASE" != 0000000000000000000000000000000000000000 ]]; then
             args+=(--base "$SECURITY_BASE")
           fi
-          build/check-security.sh fast --output "$RUNNER_TEMP/security-fast" "${args[@]}"
+          cargo run --locked -q -p simplestchat-security -- fast --output "$RUNNER_TEMP/security-fast" "${args[@]}"
       - name: Retain compact local source-check evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}
         run: |
@@ -109,7 +109,7 @@ jobs:
           cargo fetch --locked
       - name: Check selected policy assertions in an isolated source copy
         run: |
-          build/check-security.sh deep --deep-check mutation \
+          cargo run --locked -q -p simplestchat-security -- deep --deep-check mutation \
             --openssl-prefix "$OPENSSL_DIR" --output "$RUNNER_TEMP/security-mutation"
       - name: Retain compact local mutation evidence
         if: ${{ always() && env.ACT && env.LOCAL_CI_EVIDENCE }}

@@ -14,27 +14,33 @@ remain enforced.
 ## Run the shared checks
 
 Start from the repository root with Python 3.12 or newer, Git, ShellCheck, Node/npm
-and the Rust toolchain declared in `rust-toolchain.toml`. The shell entry point
-selects that Rust toolchain explicitly. It installs authenticated scanner binaries
-and a separate hashed Python environment under ignored `.cache/` directories,
-outside the Cargo target cache.
+and the Rust toolchain declared in `rust-toolchain.toml`. The source tiers are
+commands of the `simplestchat-security` crate. The gate puts that Rust toolchain
+first on the search path of everything it runs. It installs authenticated scanner
+binaries and a separate hashed Python environment for the Python-packaged
+scanners under ignored `.cache/` directories, outside the Cargo target cache.
 The refreshed RustSec Git database uses `.cache/security-rustsec-db`; keeping its
 Git metadata outside `target/` prevents Rust cache pruning from breaking later audits.
 The first run needs network access to the pinned distributions and current
 advisory databases. Installation and database failures fail the check.
 
 ```sh
-build/check-security.sh fast
-build/check-security.sh fast --base FULL_ANCESTOR_COMMIT_SHA
-build/check-security.sh deep
+cargo run --locked -q -p simplestchat-security -- fast
+cargo run --locked -q -p simplestchat-security -- fast --base FULL_ANCESTOR_COMMIT_SHA
+cargo run --locked -q -p simplestchat-security -- deep
 build/check-security.sh image sha256:FULL_IMAGE_ID
 ```
+
+The image tier keeps its shell entry point. Every invocation writes its evidence
+into a new private directory, `--output DIR` or one below the ignored `results/`,
+and prints where it is; `summary.json` there holds only the names of the checks,
+how they ended and how long they took.
 
 Optional vendor analysis is selected separately on a local machine:
 
 ```sh
-build/check-security.sh fast --include-vendor
-build/check-security.sh deep --deep-check native --include-vendor
+cargo run --locked -q -p simplestchat-security -- fast --include-vendor
+cargo run --locked -q -p simplestchat-security -- deep --deep-check native --include-vendor
 ```
 
 `--base` names the commit the push started from (CI passes the event's
@@ -130,7 +136,7 @@ available.
 | Changed dependency licenses | Authenticated npm release metadata and every hash-locked Python wheel use the existing license allowlist | Changed unsupported locks or unknown declarations fail; unchanged dependencies are not reclassified. |
 | Changed GitHub Actions | Exact-ref licenses and current reviewed/malware advisory feeds, with release versions bound to immutable action pins | Unresolved affected versions or incomplete metadata fail; no workflow code is downloaded or executed by this check. |
 | Squawk | New PostgreSQL migrations, using their SQLx transaction mode and the deployed major | The fixed existing-migration baseline forbids edits to old SQL; inline rule suppressions are forbidden. |
-| Runtime configuration | Maintained rendered container restrictions and configuration invariants | Source tests cannot prove live kernel or provider state. |
+| Runtime configuration | Maintained rendered container restrictions and configuration invariants, as pins of the tooling tests (`cargo test -p simplestchat-ci`), not as a step of the gate | Source tests cannot prove live kernel or provider state. |
 
 SQL migrations use transaction-aware lint by default. The exact first-line SQLx
 marker `-- no-transaction` is accepted only for one `CREATE INDEX CONCURRENTLY`

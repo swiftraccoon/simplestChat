@@ -1,8 +1,9 @@
 # Security tool inputs
 
-The repository owns its scanner configuration and installation policy. The shared
-entry point is `build/check-security.sh`; operating instructions and enforcement
-are described in [the security guide](../docs/security.md).
+The repository owns its scanner configuration and installation policy. The source
+tiers are `simplestchat-security fast` and `deep`, and the image tier is
+`build/check-security.sh image`; operating instructions and enforcement are
+described in [the security guide](../docs/security.md).
 
 ## Authenticated native executables
 
@@ -33,9 +34,10 @@ does not merge new tools into an unrelated or incomplete prefix; an explicit
 `--directory` selects a separate installation.
 
 The image's builder stage, the runtime proof workflows and the Rust dependency
-audit install through these commands. `build/security_tools.py` is the same
-installer for the Python gate (`build/check-security.sh` and the release
-checks run it): it takes the same options, lock and default directory and
+audit install through these commands, and so do the source tiers.
+`build/security_tools.py` is the same installer for the Python image gate
+(`build/check-security.sh image` and the release checks run it): it takes the
+same options, lock and default directory and
 writes the same files and a byte-identical receipt, so either one verifies and
 reuses a directory the other published. The Rust installer downloads with
 `/usr/bin/curl`, which is given none of the caller's environment and accepts
@@ -80,11 +82,12 @@ verification. No engine version is borrowed from the developer's global PATH.
 ## Python scanner environment
 
 `requirements.in` declares the small scanner dependency set; `requirements.txt`
-contains its complete hashed wheel lock. The shared shell entry point creates a
-separate environment keyed by that lock's digest. It installs with
-`--require-hashes --only-binary=:all:` and checks dependency consistency before
-publishing the environment receipt. Deployment and build-tool environments are
-independent and are audited separately.
+contains its complete hashed wheel lock. The gate creates a separate
+environment keyed by that lock's digest, and the image tier's shell entry point
+creates the same one. Both install with `--require-hashes --only-binary=:all:`
+and check dependency consistency before publishing the environment receipt.
+Deployment and build-tool environments are independent and are audited
+separately.
 
 To refresh the lock in a reviewed tool-update change:
 
@@ -92,7 +95,7 @@ To refresh the lock in a reviewed tool-update change:
 uv pip compile --universal --python-version 3.12 --generate-hashes \
   --only-binary :all: --no-emit-index-url security/requirements.in \
   --output-file security/requirements.txt
-build/check-security.sh fast
+cargo run --locked -q -p simplestchat-security -- fast
 ```
 
 Review both the direct version change and all transitive changes. The gate audits
@@ -107,7 +110,7 @@ scanning. Each original file is bounded to 16 MiB, the complete snapshot to
 vendored inputs and binary files; ignored build output and local credentials are
 outside it. Source scanners omit `vendor/` by default, including current-tree and
 Git-diff secret scanning. An explicit local
-`build/check-security.sh fast --include-vendor` includes vendor sources; this
+`simplestchat-security fast --include-vendor` includes vendor sources; this
 opt-in is rejected in CI environments. The full identity snapshot continues to
 bind dependency/provenance checks. The image tier scans shipped image contents
 separately, including bundled dependency bytes.
@@ -150,12 +153,10 @@ Git history checks cover textual diffs; the complete projection applies to the
 selected current tree. Passing the gate does not establish that arbitrary
 binary or encoded content contains no secrets.
 
-After installing the pinned tools, run the focused real-engine checks with:
-
-```sh
-SIMPLESTCHAT_GITLEAKS_ENGINE_TESTS=1 python3 -m unittest discover \
-  -s ops/ansible/tests -p test_security_secrets.py
-```
+Every run of the fast gate first proves the real detector on an inert canary:
+binary magic and an inline suppression must not hide the projected fixture, and
+the one finding must be the redacted canary. The crate's tests replay recorded
+scanner answers and need no engine.
 
 ## Review records and test data
 

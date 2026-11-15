@@ -1,6 +1,6 @@
 //! Replays of the recorded review of pinned actions.
 //!
-//! `recorded_actions.json` holds what `build/security_actions.py` read from
+//! `recorded_actions.json` holds what the reference in Python read from
 //! workflow YAML through its YAML library, and what its command did in real
 //! repositories whose commits have fixed names, with a `curl` and a `git
 //! ls-remote` that answer their calls in order: how it ended, what it

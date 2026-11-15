@@ -69,7 +69,7 @@ After installing the pinned dependencies and native prerequisites, run:
 
 ```sh
 cargo run --locked -q -p xtask -- check
-build/check-security.sh fast
+cargo run --locked -q -p simplestchat-security -- fast
 ```
 
 CI also uses `cargo run --locked -q -p xtask -- check`. It stops on the first failure and does not install

@@ -1,7 +1,7 @@
 //! Replays of the recorded fast-tier checks.
 //!
 //! `recorded_drivers.json` holds what the workflow and secret checks of
-//! `build/security_check.py` did with scripted scanners: programs that log
+//! the reference in Python did with scripted scanners: programs that log
 //! their arguments, working directory, environment and input, then say and
 //! exit as the case tells them to. The repository of a secret-scan case is
 //! built with real git and fixed commit times, so its commits have the

@@ -7,19 +7,17 @@ its required native libraries are installed from checksum-pinned archives in
 are not installed or invoked. Rules are local JSON; there is no registry fetch,
 remote ruleset, auto-update, autofix or executable Python rule predicate.
 
-Run the check after installing the pinned security tools:
+The check is a step of the fast gate, which installs the pinned engine itself:
 
 ```sh
-python3 build/security_semgrep.py check \
-  --root "$PWD" --output "$PWD/target/semgrep-review"
+cargo run --locked -q -p simplestchat-security -- fast
 ```
 
-The output directory must not exist. Its parent must already exist. Output inside
-the checkout must live under the ignored `target` or `results` directory. A separate installed
-tool directory can be selected with `--tools-directory`; its receipt and every
-bundled engine/library hash still have to match the maintained tool lock.
-`--include-vendor` explicitly adds supported vendor source files for a local
-review. It is rejected in CI environments and is never selected by a workflow.
+Its evidence is the `semgrep` directory of the gate's evidence. The engine's
+receipt and every bundled engine and library hash have to match the maintained
+tool lock. `--include-vendor` explicitly adds supported vendor source files for
+a local review. It is rejected in CI environments and is never selected by a
+workflow.
 
 ## Scan scope and evidence
 
@@ -44,7 +42,7 @@ production directory requires a deliberate scope/rule update; this pack does not
 claim to scan it automatically.
 
 Before scanning production sources, the same engine scans every golden fixture.
-For both runs the wrapper requires the exact selected target set, all expected
+For both runs the gate requires the exact selected target set, all expected
 rule IDs, the locked engine version, zero scanner errors, no skipped rules and no
 taint fixpoint timeouts. A missing report field is an error. The process runs with
 two workers, a five-second per-rule/file timeout, a 2,048 MiB engine memory budget,
@@ -109,18 +107,11 @@ malformed directives, unattached annotations, omitted positive/negative coverage
 lost positives and false positives all fail. Fixtures use public synthetic values
 and `example.invalid`; they make no network requests and are never executed.
 
-Run all wrapper tests, including the installed engine's regression cases:
-
-```sh
-SIMPLESTCHAT_SEMGREP_ENGINE_TESTS=1 python3 -m unittest discover \
-  -s ops/ansible/tests -p test_security_semgrep.py
-```
-
-Ordinary offline unittest discovery omits only the installed-engine regression
-class. The `check` command always runs the actual golden engine scan and has no
-skip option. Installed-engine regression tests additionally mutate a rule to
-lose positives, mutate a negative fixture to trigger a finding, and supply
-malformed relevant source to confirm those failures cannot report success.
+The gate always runs the actual golden engine scan and has no skip option.
+The crate's tests (`cargo test -p simplestchat-security semgrep`) replay
+recorded engine answers, among them lost positives, findings on negative
+fixtures and malformed reports, to confirm those failures cannot report
+success.
 
 When updating the engine lock, run the real golden scan and full source check on
 supported CI platforms. Review intentional rule changes together with new

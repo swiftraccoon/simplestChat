@@ -1,7 +1,7 @@
 # Targeted mutation checks
 
-`build/security_mutation.py` measures whether the existing pure-policy tests
-detect deliberate changes to the actual application code. It builds the complete
+The mutation check of `simplestchat-security deep` measures whether the existing
+pure-policy tests detect deliberate changes to the actual application code. It builds the complete
 Rust library in a private source copy, then runs only the tests selected by
 [policy.json](policy.json). It starts no chat server, database, browser, load
 generator or remote workload.
@@ -26,7 +26,7 @@ The shared entry point runs fast first-party source checks before the selected d
 component and installs the checksum-verified mutation tool:
 
 ```sh
-build/check-security.sh deep --deep-check mutation \
+cargo run --locked -q -p simplestchat-security -- deep --deep-check mutation \
   --openssl-prefix "$PWD/target/openssl-4.1.0"
 ```
 
@@ -39,30 +39,17 @@ explicitly and remains the scheduled CI command.
 The shared OpenSSL argument defaults to `OPENSSL_DIR` when set, otherwise
 `target/openssl-4.1.0` in the checkout.
 
-For a focused local iteration, install the same tool and invoke the maintained
-helper directly with a **new** private output directory:
-
-```sh
-cargo run --locked -q -p simplestchat-security -- tools install --tools cargo-mutants \
-  --directory "$PWD/target/mutation-tools-local"
-python3 build/security_mutation.py \
-  --tools-directory "$PWD/target/mutation-tools-local" \
-  --openssl-prefix "$PWD/target/openssl-4.1.0" \
-  --output results/mutation-policy-local
-```
-
-Use a separate tool directory from the fast or image scanners: each installed
-receipt binds one exact tool set and cannot be extended in place.
+The tier installs the mutation tool into its own evidence directory, apart from
+the fast and image scanners: each installed receipt binds one exact tool set
+and cannot be extended in place. The check's evidence is the `mutation`
+directory of the tier's evidence.
 
 The shared tool lock pins [cargo-mutants 27.1.0](https://github.com/sourcefrog/cargo-mutants/releases/tag/v27.1.0)
 and its official Linux x86-64 and macOS x86-64 release archives. Upstream does not
 publish an ARM executable for this version. A Mac with an explicitly configured
 x86-64 execution environment can select the reviewed binary with
-`--platform darwin-x86_64` during installation and
-`--tool-platform darwin-x86_64` during execution. There is no automatic platform
+`--mutation-tool-platform darwin-x86_64`. There is no automatic platform
 substitution, PATH-based scanner fallback or build-from-source installer.
-The shared entry point names this explicit selector
-`--mutation-tool-platform darwin-x86_64`.
 
 The command exits unsuccessfully when prerequisites, compilation, test execution,
 coverage verification or cleanup fail. Read `outcome.json` before interpreting

@@ -1,7 +1,7 @@
 //! Replays of the recorded projections and neutral snapshots.
 //!
-//! `recorded_secrets.json` holds what `build/security_secret_projection.py`
-//! and `build/security_secrets.py` answered for files projected one at a time
+//! `recorded_secrets.json` holds what the projection and the neutral
+//! snapshot of the reference in Python answered for files projected one at a time
 //! and for whole snapshots with their manifests and gitleaks configurations.
 //! Where the reference failed with an exception of its interpreter, `named`
 //! gives the code here. A configuration the reference's own configuration

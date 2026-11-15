@@ -1,7 +1,7 @@
 //! Replays of the recorded registry sessions and npm checks.
 //!
-//! `recorded_registry.json` holds what the registry session of
-//! `build/security_dependency_licenses.py` did with a `curl` that answers
+//! `recorded_registry.json` holds what the registry session of the
+//! reference in Python did with a `curl` that answers
 //! its calls in order from numbered files: what each fetch answered, how
 //! `curl` was run, and what the npm check made of a registry's document.
 //! Where the reference failed with an exception of its interpreter, `named`

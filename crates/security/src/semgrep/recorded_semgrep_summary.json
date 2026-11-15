@@ -8527,7 +8527,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -8643,13 +8643,13 @@
    "result": {},
    "texts": {
     "01-semgrep.stderr": "",
-    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [], \"goldenAssertions\": 4, \"includeVendor\": false, \"passed\": true, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 2, \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
+    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [], \"goldenAssertions\": 4, \"includeVendor\": false, \"passed\": true, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 2, \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
     "semgrep/01-source-inventory.stderr": "",
     "semgrep/02-golden-engine.stderr": "",
     "semgrep/03-source-engine.stderr": "",
     "semgrep/golden-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"examples.py\",\n          \"ppath\": \"/examples.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/more.rs\",\n          \"ppath\": \"/src/more.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n",
     "semgrep/golden.json": "{\n  \"actual\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"expected\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"negative\": [\n    {\n      \"line\": 4,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 4,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ]\n}\n",
-    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 2,\n  \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
+    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": false,\n  \"passed\": true,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 2,\n  \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
     "semgrep/source-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"build/check.py\",\n          \"ppath\": \"/build/check.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/main.rs\",\n          \"ppath\": \"/src/main.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n"
    }
   },
@@ -8740,7 +8740,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -8858,13 +8858,13 @@
    },
    "texts": {
     "01-semgrep.stderr": "",
-    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [{\"line\": 1, \"path\": \"build/check.py\", \"rule\": \"simplestchat.example\"}, {\"line\": 1, \"path\": \"src/main.rs\", \"rule\": \"simplestchat.other-rule\"}], \"goldenAssertions\": 4, \"includeVendor\": false, \"passed\": false, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 2, \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
+    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [{\"line\": 1, \"path\": \"build/check.py\", \"rule\": \"simplestchat.example\"}, {\"line\": 1, \"path\": \"src/main.rs\", \"rule\": \"simplestchat.other-rule\"}], \"goldenAssertions\": 4, \"includeVendor\": false, \"passed\": false, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 2, \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
     "semgrep/01-source-inventory.stderr": "",
     "semgrep/02-golden-engine.stderr": "",
     "semgrep/03-source-engine.stderr": "",
     "semgrep/golden-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"examples.py\",\n          \"ppath\": \"/examples.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/more.rs\",\n          \"ppath\": \"/src/more.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n",
     "semgrep/golden.json": "{\n  \"actual\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"expected\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"negative\": [\n    {\n      \"line\": 4,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 4,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ]\n}\n",
-    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [\n    {\n      \"line\": 1,\n      \"path\": \"build/check.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 1,\n      \"path\": \"src/main.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 2,\n  \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
+    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [\n    {\n      \"line\": 1,\n      \"path\": \"build/check.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 1,\n      \"path\": \"src/main.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": false,\n  \"passed\": false,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 2,\n  \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
     "semgrep/source-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"build/check.py\",\n          \"ppath\": \"/build/check.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/main.rs\",\n          \"ppath\": \"/src/main.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n"
    }
   },
@@ -8944,7 +8944,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -9060,13 +9060,13 @@
    "result": {},
    "texts": {
     "01-semgrep.stderr": "",
-    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [], \"goldenAssertions\": 4, \"includeVendor\": true, \"passed\": true, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 3, \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
+    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [], \"goldenAssertions\": 4, \"includeVendor\": true, \"passed\": true, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 3, \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
     "semgrep/01-source-inventory.stderr": "",
     "semgrep/02-golden-engine.stderr": "",
     "semgrep/03-source-engine.stderr": "",
     "semgrep/golden-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"examples.py\",\n          \"ppath\": \"/examples.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/more.rs\",\n          \"ppath\": \"/src/more.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n",
     "semgrep/golden.json": "{\n  \"actual\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"expected\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"negative\": [\n    {\n      \"line\": 4,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 4,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ]\n}\n",
-    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": true,\n  \"passed\": true,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 3,\n  \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
+    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": true,\n  \"passed\": true,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 3,\n  \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
     "semgrep/source-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"build/check.py\",\n          \"ppath\": \"/build/check.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/main.rs\",\n          \"ppath\": \"/src/main.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"vendor/lib/tool.py\",\n          \"ppath\": \"/vendor/lib/tool.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n"
    }
   },
@@ -9144,7 +9144,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -9260,13 +9260,13 @@
    },
    "texts": {
     "01-semgrep.stderr": "",
-    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [{\"line\": 1, \"path\": \"vendor/lib/tool.py\", \"rule\": \"simplestchat.example\"}], \"goldenAssertions\": 4, \"includeVendor\": true, \"passed\": false, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 3, \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
+    "01-semgrep.stdout": "{\"engineVersion\": \"1.179.0\", \"findings\": [{\"line\": 1, \"path\": \"vendor/lib/tool.py\", \"rule\": \"simplestchat.example\"}], \"goldenAssertions\": 4, \"includeVendor\": true, \"passed\": false, \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\", \"schemaVersion\": 1, \"sourceFiles\": 3, \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\", \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"}\n",
     "semgrep/01-source-inventory.stderr": "",
     "semgrep/02-golden-engine.stderr": "",
     "semgrep/03-source-engine.stderr": "",
     "semgrep/golden-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"examples.py\",\n          \"ppath\": \"/examples.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/more.rs\",\n          \"ppath\": \"/src/more.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n",
     "semgrep/golden.json": "{\n  \"actual\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"expected\": [\n    {\n      \"line\": 2,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 2,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ],\n  \"negative\": [\n    {\n      \"line\": 4,\n      \"path\": \"examples.py\",\n      \"rule\": \"simplestchat.example\"\n    },\n    {\n      \"line\": 4,\n      \"path\": \"src/more.rs\",\n      \"rule\": \"simplestchat.other-rule\"\n    }\n  ]\n}\n",
-    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [\n    {\n      \"line\": 1,\n      \"path\": \"vendor/lib/tool.py\",\n      \"rule\": \"simplestchat.example\"\n    }\n  ],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 3,\n  \"sourceManifestSha256\": \"294ba5f3c0ef9bdaaf7c5c3b8d855279ee58d112063017d50207bbf2e5559ce8\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
+    "semgrep/report.json": "{\n  \"engineVersion\": \"1.179.0\",\n  \"findings\": [\n    {\n      \"line\": 1,\n      \"path\": \"vendor/lib/tool.py\",\n      \"rule\": \"simplestchat.example\"\n    }\n  ],\n  \"goldenAssertions\": 4,\n  \"includeVendor\": true,\n  \"passed\": false,\n  \"rulesSha256\": \"51792191ab89df461fe0c1ce02361f954f2718a8641f498c4d9b12770ec4ce65\",\n  \"schemaVersion\": 1,\n  \"sourceFiles\": 3,\n  \"sourceManifestSha256\": \"bbca01705b3469b7ee38484646b7ce2a697e6718a97417a8f5165e36abf51f6f\",\n  \"toolLockSha256\": \"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"\n}\n",
     "semgrep/source-engine-targets.json": "[\n  \"Targets\",\n  [\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"build/check.py\",\n          \"ppath\": \"/build/check.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"rust\",\n        \"path\": {\n          \"fpath\": \"src/main.rs\",\n          \"ppath\": \"/src/main.rs\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ],\n    [\n      \"CodeTarget\",\n      {\n        \"analyzer\": \"python\",\n        \"path\": {\n          \"fpath\": \"vendor/lib/tool.py\",\n          \"ppath\": \"/vendor/lib/tool.py\"\n        },\n        \"products\": [\n          \"sast\"\n        ]\n      }\n    ]\n  ]\n]\n"
    }
   },
@@ -9362,7 +9362,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -9570,7 +9570,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -9750,7 +9750,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -9934,7 +9934,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -10110,7 +10110,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -10252,7 +10252,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -10338,7 +10338,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -10457,7 +10457,7 @@
    ],
    "digests": [],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",
@@ -10629,7 +10629,7 @@
     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
    ],
    "files": {
-    ".gitignore": "ignored/\nbuild/security_semgrep.py\n",
+    ".gitignore": "ignored/\nbuild/security_*\n",
     "README.md": "x\n",
     "build/check.py": "x = 1\n",
     "security/semgrep/fixtures/examples.py.fixture": "# ruleid: simplestchat.example\nunsafe()\n# ok: simplestchat.example\nsafe()\n",

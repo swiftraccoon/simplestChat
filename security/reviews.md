@@ -560,7 +560,7 @@ vendor tree. Source scanning of that tree remains optional local work.
 
 basedpyright 1.40.2 and Meson 1.12.1 omit `License-Expression`. Their
 checksum-authenticated PyPI wheels were downloaded and the packaged license
-texts reviewed. The narrow mapping in `build/security_dependency_licenses.py`
+texts reviewed. The narrow mapping in `crates/security/src/licenses/metadata.rs`
 binds package name, version, complete PEP 658 metadata SHA-256 and locked wheel
 SHA-256. Unknown declarations still fail; no general classifier or free-text
 license inference is introduced. The normal license allowlist still applies.

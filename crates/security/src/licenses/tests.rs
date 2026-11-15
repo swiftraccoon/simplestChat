@@ -1,6 +1,6 @@
 //! Replays of the recorded lock parsers and policies.
 //!
-//! `recorded_locks.json` holds what `build/security_dependency_licenses.py`
+//! `recorded_locks.json` holds what the reference in Python
 //! answered for requirement lines and versions (as its packaging library
 //! judges them), the lines of requirement files beside what pip's own
 //! reader makes of the same text, npm locks, graphs of includes, the

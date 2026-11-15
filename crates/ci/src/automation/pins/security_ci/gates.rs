@@ -514,24 +514,78 @@ fn dependency_reviews_are_shared_by_direct_main_and_local_source_checks() {
     assert!(lacks(&security["jobs"], &["dependency-review"]));
     assert!(lacks(&security["jobs"]["security-fast"], &["if"]));
     let gate = first(steps(&security, "security-fast"), |step| {
-        script(step).contains("build/check-security.sh fast")
+        script(step).contains("-p simplestchat-security -- fast")
     });
     assert!(lacks(gate, &["if"]));
     assert_eq!(
         gate["env"]["SECURITY_BASE"],
         "${{ github.event.pull_request.base.sha || github.event.before }}"
     );
-    let source = checkout_file("build/security_check.py");
+    let tier = checkout_file("crates/security/src/tier.rs");
     for text in [
-        concat!(
-            "security_dependency_licenses.check(context, snapshot, base, ",
-            "include_vendor=include_vendor)"
-        ),
-        "security_actions.check(context, snapshot, base, include_vendor=include_vendor)",
-        "vulnerabilities[\"total\"] == 0",
-        "\"pip_audit\"",
+        "licenses::check(context, programs, &review)?;",
+        "actions::check(context, programs, &review)?;",
     ] {
-        assert!(source.contains(text), "{text}");
+        assert!(tier.contains(text), "{text}");
+    }
+    let checks = checkout_file("crates/security/src/fast.rs");
+    for text in ["field(counts, \"total\")? == &json!(0),", "\"pip_audit\","] {
+        assert!(checks.contains(text), "{text}");
+    }
+}
+
+/// The fast tier runs every one of its checks, in the reviewed order, over
+/// one copy of the sources, and ends by proving that nothing moved.
+#[test]
+fn the_fast_tier_keeps_every_check_in_its_order() {
+    let tier = checkout_file("crates/security/src/tier.rs");
+    let start = tier.find("\nfn fast(").expect("the fast tier");
+    let body = &tier[start..];
+    let body = &body[..body.find("\n}\n").expect("its end")];
+    let mut rest = body;
+    for step in [
+        "context.run(\"source-revision\", &head, &Run::default())?;",
+        "context.snapshot(Snapshot::Source, git)?;",
+        "policy::read(&snapshot.join(\"security/exceptions.json\"), today, vendor)?;",
+        "fast::workflows(context, programs, &reviews)?;",
+        "fast::secret_scan(context, programs, &scan)?;",
+        "fast::dependencies(context, programs, &reviews, since)?;",
+        "licenses::check(context, programs, &review)?;",
+        "actions::check(context, programs, &review)?;",
+        "semgrep::gate(context, &engine, git, vendor)?;",
+        "findings::new_migrations(context.root())?;",
+        "migrations::lint(context, programs, &new)?;",
+        "(\"name\", \"migration-review\".into()),",
+        "openssl::check(context, programs, &snapshot, host.now())?;",
+        "context.snapshot(Snapshot::Final, git)?;",
+        "\"security_source_changed_during_checks\",",
+        "context.run(\"final-revision\", &head, &Run::default())?;",
+        "require(revision == last, \"security_revision_changed_during_checks\")?;",
+        "(\"name\", \"source-identity\".into()),",
+    ] {
+        let at = rest
+            .find(step)
+            .unwrap_or_else(|| panic!("{step} is missing or out of order"));
+        rest = &rest[at + step.len()..];
+    }
+    for (count, call) in [(2, "base,"), (4, "vendor")] {
+        assert!(body.matches(call).count() >= count, "{call}");
+    }
+    let whole = tier.find("\nfn checked(").expect("the tier");
+    let whole = &tier[whole..];
+    let mut rest = &whole[..whole.find("\n}\n").expect("its end")];
+    for step in [
+        "ruled(request, host)?;",
+        "pinned(context)?;",
+        "environment::interpreter(context, &python3)?;",
+        "fast(context, request, host, &programs, &git)?;",
+        "if request.deep {",
+        "deep(context, request, host, &programs, &git)?;",
+    ] {
+        let at = rest
+            .find(step)
+            .unwrap_or_else(|| panic!("{step} is missing or out of order"));
+        rest = &rest[at + step.len()..];
     }
 }
 
@@ -562,7 +616,7 @@ fn source_security_jobs_bootstrap_rust_before_running_shared_checks() {
     assert!(lacks(installer, &["if", "continue-on-error"]));
     let (installed, _) = located(steps, |step| std::ptr::eq(step, installer));
     let (gated, _) = located(steps, |step| {
-        script(step).contains("build/check-security.sh")
+        script(step).contains("-p simplestchat-security -- fast")
     });
     assert!(installed < gated);
     assert!(
@@ -646,7 +700,11 @@ fn scheduled_mutations_use_shared_gate_and_never_publish_build_outputs() {
     let steps = steps(&security, "security-mutation");
     let command = steps.iter().map(script).collect::<Vec<_>>().join("\n");
     assert!(command.contains("cargo fetch --locked"));
-    assert!(command.contains("build/check-security.sh deep --deep-check mutation"));
+    assert!(
+        command.contains(
+            "cargo run --locked -q -p simplestchat-security -- deep --deep-check mutation"
+        )
+    );
     let [upload] = using(steps, "upload-artifact@")[..] else {
         panic!("exactly one upload");
     };

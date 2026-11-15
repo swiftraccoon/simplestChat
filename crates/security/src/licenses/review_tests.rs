@@ -1,7 +1,7 @@
 //! Replays of the recorded licence reviews.
 //!
-//! `recorded_review.json` holds what the review of
-//! `build/security_dependency_licenses.py` did in real repositories whose
+//! `recorded_review.json` holds what the review of the reference in
+//! Python did in real repositories whose
 //! commits have fixed names, with a `curl` that answers its calls in order:
 //! how it ended, the lines of its summary, its receipt byte for byte, the
 //! evidence it kept with what each command printed, and the addresses it

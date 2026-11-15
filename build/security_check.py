@@ -1,628 +1,40 @@
-"""Run the shared blocking source gate, bounded native tier or exact-image gate.
+"""Run the exact-image gate.
 
-The fast tier requires Node/npm, the repository Rust toolchain and ShellCheck.
 Scanner binaries and Python wheels are installed from reviewed hash locks. Raw
 reports stay in a private evidence directory; summary.json contains only check
 identities, status and elapsed time and is the uploadable CI evidence contract.
+The source tiers are `simplestchat-security fast` and `deep`.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
 import json
 import os
-import re
 import sys
 import tempfile
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-import security_actions
-import security_dependency_licenses
-import security_findings as findings
-import security_openssl
-import security_semgrep_summary
-from security_context import MAX_REPORT, ROOT, Context, executable, json_object
-from security_policy import read_exceptions
-from security_secret_projection import project
-from security_secrets import neutral_snapshot
-from security_source_scope import require_local_vendor
-from security_tools import (
-    ToolError,
-    bounded_file,
-    current_platform,
-    install,
-    require,
-    string,
-    tool_path,
-    write_private,
-)
+from security_context import ROOT, Context
+from security_tools import ToolError, install, require, write_private
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from security_policy import ExceptionRecord
-
-
-def workflow_checks(context: Context, tools: Path, reviews: Sequence[ExceptionRecord]) -> None:
-    """Check workflow syntax and every offline/pedantic action-security finding."""
-    _ = context.run("actionlint", [str(tool_path("actionlint", tools))])
-    status, output = context.run(
-        "zizmor",
-        [
-            str(tool_path("zizmor", tools)),
-            "--offline",
-            "--pedantic",
-            "--no-ignores",
-            "--no-config",
-            "--strict-collection",
-            "--collect=all",
-            "--format=json-v1",
-            ".github",
-        ],
-        accepted=(0, 11, 12, 13, 14),
-    )
-    reviewed = findings.zizmor_findings(output, reviews)
-    require(status == 0 or reviewed > 0, "zizmor_unsuccessful_empty_report")
-    context.checks[-1]["reviewedFindings"] = reviewed
-
-
-def secret_checks(  # noqa: PLR0913 -- Explicit source scope joins existing scanner inputs.
-    context: Context,
-    tools: Path,
-    reviews: Sequence[ExceptionRecord],
-    base: str | None,
-    snapshot: Path,
-    *,
-    include_vendor: bool = False,
-) -> None:
-    """Scan current ASCII projections and textual Git changes with full redaction."""
-    config = context.root / "security/gitleaks.toml"
-    require_local_vendor(include_vendor=include_vendor)
-    findings.gitleaks_configuration(config, reviews, include_vendor=include_vendor)
-    neutral, translated = neutral_snapshot(context, snapshot, config, include_vendor=include_vendor)
-    common = [
-        "--config",
-        str(config),
-        "--redact=100",
-        "--ignore-gitleaks-allow",
-        "--gitleaks-ignore-path",
-        os.devnull,
-        "--log-level=warn",
-        "--no-banner",
-        "--report-format=json",
-        "--report-path=-",
-        # Source snapshots already bound each original file and total bytes.
-        # A scanner-specific decimal-MB limit must not silently skip projections.
-        "--max-target-megabytes=0",
-        "--max-decode-depth=3",
-    ]
-    scanner = str(tool_path("gitleaks", tools))
-    secret_selftest(context, scanner, common)
-    tree_options = list(common)
-    tree_options[1] = str(translated)
-    clean_secret_scan(context, "gitleaks-tree", [scanner, "dir", str(neutral), *tree_options])
-    coverage_bytes = bounded_file(context.output / "secret-coverage.json", MAX_REPORT)
-    coverage = json_object(coverage_bytes)
-    context.checks[-1].update(
-        sourceFiles=coverage["files"],
-        sourceBytes=coverage["sourceBytes"],
-        projectionBytes=coverage["projectionBytes"],
-        projectionCoverageSha256=hashlib.sha256(coverage_bytes).hexdigest(),
-    )
-    if base is not None:
-        require(re.fullmatch(r"[a-f0-9]{40}", base), "invalid_security_diff_base")
-        # 1: the base is not an ancestor; 128: the clone does not have it. Both mean
-        # the branch was rewritten (an owner-only force push), so no range of pushed
-        # commits exists to scan: the tree scan above still covered every current
-        # byte, and the evidence records the skipped range scan by name.
-        status, _ = context.run(
-            "diff-base",
-            [executable("git"), "merge-base", "--is-ancestor", base, "HEAD"],
-            accepted=(0, 1, 128),
-        )
-        if status == 0:
-            clean_secret_scan(
-                context,
-                "gitleaks-diff",
-                [
-                    scanner,
-                    "git",
-                    ".",
-                    "--log-opts="
-                    + base
-                    + "..HEAD"
-                    + ("" if include_vendor else " -- . :(top,exclude)vendor/**"),
-                    *common,
-                ],
-            )
-        else:
-            context.checks[-1]["rangeScan"] = "skipped_base_not_an_ancestor"
-    working_env = working_diff_environment(context, snapshot, include_vendor=include_vendor)
-    clean_secret_scan(
-        context,
-        "gitleaks-working-diff",
-        [scanner, "git", str(snapshot), "--pre-commit", *common],
-        env_updates=working_env,
-    )
-
-
-def working_diff_environment(
-    context: Context, snapshot: Path, *, include_vendor: bool = False
-) -> dict[str, str]:
-    """Use an owned index so Gitleaks' fixed diff command never visits excluded paths."""
-    require_local_vendor(include_vendor=include_vendor)
-    git = executable("git")
-    _, git_directory = context.run("secret-diff-git-dir", [git, "rev-parse", "--absolute-git-dir"])
-    directory = Path(git_directory.decode().strip()).resolve(strict=True)
-    require(directory.is_dir(), "secret_diff_git_directory")
-    env = {
-        "GIT_DIR": str(directory),
-        "GIT_WORK_TREE": str(snapshot),
-        "GIT_INDEX_FILE": str(context.output / "secret-diff-index"),
-    }
-    _ = context.run("secret-diff-index", [git, "read-tree", "HEAD"], env_updates=env)
-    if not include_vendor:
-        _, names = context.run(
-            "secret-diff-vendor-paths",
-            [git, "ls-files", "-z", "--", ":(top)vendor/"],
-            env_updates=env,
-        )
-        if names:
-            _ = context.run(
-                "secret-diff-scope",
-                [git, "update-index", "--force-remove", "-z", "--stdin"],
-                input_data=names,
-                env_updates=env,
-            )
-    return env
-
-
-def clean_secret_scan(
-    context: Context,
-    name: str,
-    arguments: Sequence[str],
-    *,
-    env_updates: dict[str, str] | None = None,
-) -> None:
-    """Require a successful scanner to produce an explicit empty findings array."""
-    _, output = context.run(name, arguments, env_updates=env_updates)
-    require(
-        findings.list_value(cast("object", json.loads(output))) == [], "secret_findings_present"
-    )
-
-
-def secret_selftest(context: Context, scanner: str, options: Sequence[str]) -> None:
-    """Prove the actual detector finds a redacted inert credential in projected binary bytes."""
-    canary = (
-        "ghp_"
-        + base64.b64encode(hashlib.sha512(b"inert source scanner coverage only").digest())
-        .decode()
-        .replace("+", "x")
-        .replace("/", "y")[:36]
-    )
-    source = context.output / "secret-canary.original"
-    write_private(
-        source,
-        b"\x7fELF\x02\x01\x01\x00" + ("TOKEN=" + canary + " # gitleaks:allow\n").encode(),
-        0o600,
-    )
-    inputs = context.output / "secret-canary-inputs"
-    inputs.mkdir(mode=0o700)
-    target = inputs / "content000000"
-    projection = project(source, target, max_bytes=1024)
-    configuration = context.output / "secret-canary.toml"
-    write_private(configuration, b"[extend]\nuseDefault = true\n", 0o600)
-    arguments = list(options)
-    arguments[1] = str(configuration)
-    _, output = context.run(
-        "gitleaks-selftest",
-        [scanner, "dir", str(inputs), *arguments, "--exit-code=10"],
-        accepted=(10,),
-    )
-    entries = findings.list_value(cast("object", json.loads(output)))
-    require(len(entries) == 1, "secret_detector_selftest_count")
-    entry = findings.object_value(entries[0])
-    require(
-        entry.get("RuleID") == "github-pat"
-        and entry.get("Secret") == "REDACTED"
-        and Path(string(entry["File"])).resolve() == target.resolve()
-        and canary.encode() not in output,
-        "secret_detector_selftest_identity",
-    )
-    context.checks[-1].update(
-        expectedFinding="github-pat",
-        sourceSha256=projection.source_sha256,
-        projectionSha256=projection.projection_sha256,
-    )
-
-
-def dependency_checks(context: Context, tools: Path, reviews: Sequence[ExceptionRecord]) -> None:
-    """Audit current vulnerability databases and enforce the explicit source/license budget."""
-    _, output = context.run(
-        "cargo-audit",
-        [
-            str(tool_path("cargo-audit", tools)),
-            "audit",
-            "--json",
-            "--file",
-            str(context.root / "Cargo.lock"),
-            "--db",
-            str(context.root / ".cache/security-rustsec-db"),
-        ],
-        accepted=(0, 1),
-        timeout=300,
-        cwd=context.output / "home",
-        env_updates={"CARGO_HOME": str(context.output / "cargo-audit-home")},
-    )
-    lock = findings.object_value(tomllib.loads((context.root / "Cargo.lock").read_text()))
-    try:
-        reviewed = findings.cargo_findings(
-            output, reviews, len(findings.list_value(lock["package"]))
-        )
-    except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        message = "cargo_audit_invalid_report"
-        raise ToolError(message) from error
-    require(
-        context.checks[-1]["exitStatus"] == 0 or reviewed > 0, "cargo_unsuccessful_empty_report"
-    )
-    context.checks[-1]["reviewedFindings"] = reviewed
-    _ = context.run(
-        "cargo-deny",
-        [str(tool_path("cargo-deny", tools)), "--locked", "check", "bans", "licenses", "sources"],
-        timeout=300,
-    )
-    _, output = context.run(
-        "cargo-metadata",
-        [executable("cargo"), "metadata", "--locked", "--all-features", "--format-version=1"],
-        timeout=300,
-    )
-    findings.dependency_budget(output, context.root / "security/dependency-budget.json")
-    for index, requirements in enumerate(
-        (
-            "build/python-requirements.txt",
-            "ops/ansible/requirements.txt",
-            "security/requirements.txt",
-            "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
-            "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
-        )
-    ):
-        _, output = context.run(
-            f"pip-audit-{index}",
-            [
-                sys.executable,
-                "-m",
-                "pip_audit",
-                "--require-hashes",
-                "--disable-pip",
-                "-r",
-                requirements,
-                "--format=json",
-            ],
-            timeout=300,
-        )
-        dependencies = findings.list_value(json_object(output)["dependencies"])
-        require(
-            all(
-                not findings.list_value(findings.object_value(item)["vulns"])
-                for item in dependencies
-            ),
-            "python_dependency_advisory",
-        )
-    for index, package in enumerate(("web", "web/e2e")):
-        _, output = context.run(
-            f"npm-audit-{index}",
-            [executable("npm"), "audit", "--package-lock-only", "--ignore-scripts", "--json"],
-            cwd=context.root / package,
-            timeout=300,
-        )
-        metadata = findings.object_value(json_object(output)["metadata"])
-        vulnerabilities = findings.object_value(metadata["vulnerabilities"])
-        require(vulnerabilities["total"] == 0, "npm_dependency_advisory")
-
-
-def migration_uses_transaction(sql: str) -> bool:
-    """Match SQLx's opt-out only for an exact first-line, single concurrent index.
-
-    The narrow lexical check only selects the execution mode; Squawk still parses
-    every statement with every rule enabled. Comments and SQL string literals
-    cannot hide a second operation. More complex nontransactional migrations need
-    an explicit policy change instead of an inline scanner suppression.
-    """
-    marker = "-- no-transaction"
-    if not sql.startswith(marker):
-        require(
-            re.search(r"(?im)^\s*--\s*no-transaction\b", sql) is None,
-            "migration_transaction_marker_position",
-        )
-        return True
-    require(sql.partition("\n")[0] == marker, "migration_transaction_marker_format")
-    body = sql.partition("\n")[2]
-    require(
-        all(token not in body for token in ("/*", "*/", "\\", "$", "\x00")),
-        "migration_concurrent_index_syntax",
-    )
-    code = re.sub(
-        r"'(?:''|[^'])*'|--[^\n]*",
-        lambda match: "" if match[0].startswith("--") else "''",
-        body,
-    ).strip()
-    require(
-        code.count(";") == 1
-        and code.endswith(";")
-        and re.fullmatch(
-            r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+"
-            + r"(?:IF\s+NOT\s+EXISTS\s+)?[a-z_][a-z_0-9]*"
-            + r"\s+ON\s+[a-z_][a-z_0-9]*\s*\([^;]+;",
-            code,
-            re.IGNORECASE | re.DOTALL,
-        )
-        is not None,
-        "migration_requires_one_concurrent_index",
-    )
-    return False
-
-
-def migration_timeout_context(root: Path) -> bytes:
-    """Expose actual SQLx connection startup timeouts to the static SQL scanner."""
-    source = bounded_file(root / "src/db.rs", MAX_REPORT).decode("utf-8")
-    options = re.search(
-        r"let maintenance\s*=\s*PgConnectOptions::from_str\(&?url\)"
-        + r".*?\.options\(\[(.*?)\]\);",
-        source,
-        re.DOTALL,
-    )
-    require(options is not None, "migration_timeout_configuration_missing")
-    require("connect_with(&maintenance)" in source, "migration_timeout_connection_missing")
-    literal = r'\("(statement_timeout|lock_timeout)",\s*"([1-9][0-9]*(?:ms|s|min))"\)'
-    declared = options[1] if options is not None else ""
-    values = [(match[1], match[2]) for match in re.finditer(literal, declared)]
-    required = {"statement_timeout", "lock_timeout"}
-    require(
-        len(values) == len(required)
-        and {key for key, _ in values} == required
-        and not re.sub(literal, "", declared).strip(" ,\t\r\n"),
-        "migration_timeout_literals_required",
-    )
-    return "".join(f"SET {key} = '{value}';\n" for key, value in values).encode()
-
-
-def migration_checks(context: Context, tools: Path, migrations: Sequence[str]) -> None:
-    """Lint every unbaselined migration in the same transaction mode SQLx will use."""
-    groups: dict[bool, list[str]] = {True: [], False: []}
-    for name in migrations:
-        sql = bounded_file(context.root / name, MAX_REPORT).decode("utf-8")
-        groups[migration_uses_transaction(sql)].append(name)
-    for transactional, names in groups.items():
-        if not names:
-            continue
-        mode = "transactional" if transactional else "concurrent-index"
-        paths = [context.root / name for name in names]
-        if not transactional:
-            # SQLx sets these GUCs when opening its maintenance connection. They
-            # cannot live in the migration: a multi-statement execute would put
-            # CREATE INDEX CONCURRENTLY back inside an implicit transaction.
-            prefix = migration_timeout_context(context.root)
-            projected = context.output / "migration-context"
-            projected.mkdir(mode=0o700)
-            for path in paths:
-                write_private(projected / path.name, prefix + bounded_file(path, MAX_REPORT), 0o600)
-            paths = [projected / path.name for path in paths]
-        config = context.output / f"squawk-{mode}.toml"
-        settings = f'assume_in_transaction = {str(transactional).lower()}\npg_version = "18.6"\n'
-        write_private(
-            config,
-            b"excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\n" + settings.encode(),
-            0o600,
-        )
-        _, output = context.run(
-            f"squawk-{mode}",
-            [
-                str(tool_path("squawk", tools)),
-                "--config",
-                str(config),
-                "--pg-version=18.6",
-                *(["--assume-in-transaction"] if transactional else []),
-                "--reporter=json",
-                *(str(path) for path in paths),
-            ],
-            cwd=context.output / "home",
-        )
-        require(
-            findings.list_value(cast("object", json.loads(output))) == [],
-            "migration_policy_findings",
-        )
-
-
-def semgrep_checks(context: Context, *, include_vendor: bool = False) -> None:
-    """Retain bounded safe nested failure evidence without accepting a failed scan."""
-    status, output = context.run(
-        "semgrep",
-        [
-            sys.executable,
-            "build/security_semgrep.py",
-            "check",
-            "--root",
-            str(context.root),
-            "--output",
-            str(context.output / "semgrep"),
-            *(["--include-vendor"] if include_vendor else []),
-        ],
-        timeout=300,
-        accepted=(0, 1),
-    )
-    diagnosis = security_semgrep_summary.diagnosis(status, output, context.output / "semgrep")
-    context.checks.append({"name": "semgrep-diagnosis", "exitStatus": status, **diagnosis})
-    require(status == 0 and diagnosis["passed"] is True, "semgrep_source_check_failed")
-
-
-def source_checks(context: Context, tools: Path, *, include_vendor: bool = False) -> None:
-    """Run tested repository rules and inspect new SQL plus rendered runtime restrictions."""
-    semgrep_checks(context, include_vendor=include_vendor)
-    migrations = findings.new_migrations(context.root)
-    migration_checks(context, tools, migrations)
-    context.checks.append(
-        {"name": "migration-review", "newFiles": len(migrations), "exitStatus": 0}
-    )
-    _ = context.run(
-        "runtime-configuration",
-        [
-            sys.executable,
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-p",
-            "test_public_templates.py",
-        ],
-        timeout=180,
-    )
-
-
-def fast(context: Context, base: str | None, *, include_vendor: bool = False) -> None:
-    """Run the same blocking checks for a local checkout and GitHub Actions."""
-    require_local_vendor(include_vendor=include_vendor)
-    _, revision = context.run("source-revision", [executable("git"), "rev-parse", "HEAD"])
-    snapshot = context.snapshot()
-    reviews = read_exceptions(snapshot / "security/exceptions.json", include_vendor=include_vendor)
-    tools = install([])
-    workflow_checks(context, tools, reviews)
-    secret_checks(context, tools, reviews, base, snapshot, include_vendor=include_vendor)
-    dependency_checks(context, tools, reviews)
-    security_dependency_licenses.check(context, snapshot, base, include_vendor=include_vendor)
-    security_actions.check(context, snapshot, base, include_vendor=include_vendor)
-    source_checks(context, tools, include_vendor=include_vendor)
-    security_openssl.check(context, snapshot)
-    _ = context.snapshot("final-source")
-    original = (context.output / "source-manifest.json").read_bytes()
-    require(
-        original == (context.output / "final-source-manifest.json").read_bytes(),
-        "security_source_changed_during_checks",
-    )
-    _, final_revision = context.run("final-revision", [executable("git"), "rev-parse", "HEAD"])
-    require(revision == final_revision, "security_revision_changed_during_checks")
-    context.checks.append(
-        {
-            "name": "source-identity",
-            "exitStatus": 0,
-            "revision": revision.decode().strip(),
-            "sourceSha256": hashlib.sha256(original).hexdigest(),
-        }
-    )
-
-
-def deep(context: Context, args: Options) -> None:
-    """Run the requested native and test-quality checks after the complete source gate."""
-    require_local_vendor(include_vendor=args.include_vendor)
-    require(
-        args.deep_check != "native" or args.include_vendor, "native_scan_requires_include_vendor"
-    )
-    fast(context, args.base, include_vendor=args.include_vendor)
-    _ = context.run(
-        "vendor-integrity",
-        [
-            sys.executable,
-            "build/security_vendor.py",
-            "verify",
-            "--root",
-            str(context.root),
-            "--cache",
-            str(context.output / "vendor-cache"),
-            "--output",
-            str(context.output / "vendor"),
-        ],
-        timeout=900,
-    )
-    if args.include_vendor and args.deep_check in ("all", "native"):
-        native_checks(context, args.engine)
-    if args.deep_check in ("all", "mutation"):
-        mutation_checks(context, args)
-
-
-def native_checks(context: Context, engine: str) -> None:
-    """Compile and execute the finite suites in the owned offline native sandbox."""
-    preparation = context.output / "native-preparation"
-    _ = context.run(
-        "native-prepare",
-        [
-            sys.executable,
-            "build/native_security.py",
-            "prepare",
-            "--engine",
-            engine,
-            "--output",
-            str(preparation),
-        ],
-        timeout=1800,
-    )
-    result = json_object((preparation / "report.json").read_bytes())
-    image_id = string(result["imageId"])
-    for mode in ("asan", "ubsan", "replay"):
-        _ = context.run(
-            "native-" + mode,
-            [
-                sys.executable,
-                "build/native_security.py",
-                "run",
-                "--engine",
-                engine,
-                "--image",
-                image_id,
-                "--mode",
-                mode,
-                "--output",
-                str(context.output / ("native-" + mode)),
-            ],
-            timeout=1800,
-        )
-
-
-def mutation_checks(context: Context, args: Options) -> None:
-    """Use authenticated tooling and a private full-source copy for pure policy mutations."""
-    platform = args.mutation_tool_platform or current_platform()
-    tools = install(["cargo-mutants"], context.output / "mutation-tools", target_platform=platform)
-    prefix = args.openssl_prefix or Path(
-        os.environ.get("OPENSSL_DIR", str(context.root / "target/openssl-4.1.0"))
-    )
-    _ = context.run(
-        "mutation-policy",
-        [
-            sys.executable,
-            "build/security_mutation.py",
-            "--tools-directory",
-            str(tools),
-            "--tool-platform",
-            platform,
-            "--openssl-prefix",
-            str(prefix.resolve(strict=True)),
-            "--output",
-            str(context.output / "mutation"),
-        ],
-        timeout=3660,
-    )
-
 
 @dataclass
 class Options(argparse.Namespace):
-    """Declare the supported security tiers and explicit execution inputs."""
+    """Declare the image tier and its explicit execution inputs."""
 
     tier: str = ""
     image: str | None = None
-    base: str | None = None
     output: Path | None = None
     engine: str = "docker"
     artifact_dir: Path | None = None
     image_tools: Path | None = None
     image_database_cache: Path | None = None
-    deep_check: str = "all"
-    openssl_prefix: Path | None = None
-    mutation_tool_platform: str | None = None
-    include_vendor: bool = False
 
 
 def image(context: Context, args: Options) -> None:
@@ -682,24 +94,15 @@ def image(context: Context, args: Options) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Create fresh private evidence and return failure whenever any gate is incomplete."""
+    """Create fresh private evidence and return failure whenever the gate is incomplete."""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument("tier", choices=("fast", "deep", "image"))
-    _ = parser.add_argument("image", nargs="?")
-    _ = parser.add_argument("--base")
+    _ = parser.add_argument("tier", choices=("image",))
+    _ = parser.add_argument("image")
     _ = parser.add_argument("--output", type=Path)
     _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
     _ = parser.add_argument("--artifact-dir", type=Path)
     _ = parser.add_argument("--image-tools", type=Path)
     _ = parser.add_argument("--image-database-cache", type=Path)
-    _ = parser.add_argument("--deep-check", choices=("all", "native", "mutation"), default="all")
-    _ = parser.add_argument("--openssl-prefix", type=Path)
-    _ = parser.add_argument("--mutation-tool-platform", choices=("linux-x86_64", "darwin-x86_64"))
-    _ = parser.add_argument(
-        "--include-vendor",
-        action="store_true",
-        help="Add vendor source scans locally; unavailable in CI",
-    )
     args = parser.parse_args(argv, namespace=Options())
     _ = os.umask(0o077)
     (ROOT / "results").mkdir(exist_ok=True)
@@ -714,31 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     passed = False
     failure: str | None = None
     try:
-        require_local_vendor(include_vendor=args.include_vendor)
-        require(
-            args.tier != "image" or not args.include_vendor, "image_vendor_option_not_applicable"
-        )
-        require((args.tier == "image") == (args.image is not None), "security_image_argument")
-        require(args.tier == "image" or args.image_tools is None, "security_image_tools_argument")
-        require(
-            args.tier == "image" or args.image_database_cache is None,
-            "security_image_database_cache_argument",
-        )
-        require(
-            args.tier == "deep"
-            or (
-                args.deep_check == "all"
-                and args.openssl_prefix is None
-                and args.mutation_tool_platform is None
-            ),
-            "security_deep_arguments",
-        )
-        if args.tier == "fast":
-            fast(context, args.base, include_vendor=args.include_vendor)
-        elif args.tier == "deep":
-            deep(context, args)
-        else:
-            image(context, args)
+        image(context, args)
         passed = True
     except (ToolError, OSError, ValueError, KeyError, RuntimeError) as error:
         failure = str(error) if isinstance(error, ToolError) else type(error).__name__
@@ -750,8 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     {
                         "schemaVersion": 1,
                         "tier": args.tier,
-                        "deepCheck": args.deep_check if args.tier == "deep" else None,
-                        "includeVendor": args.include_vendor,
+                        "deepCheck": None,
+                        "includeVendor": False,
                         "passed": passed,
                         "failure": failure,
                         "checks": context.checks,
