@@ -16,7 +16,9 @@ pub mod summary;
 use crate::{
     Fault, Result,
     context::{Context, Failure, Note, Outcome, Run, Snapshot},
-    files, hexadecimal,
+    files,
+    findings::set,
+    hexadecimal,
     licenses::splitlines,
     policy::space,
     record::{self, pretty, quoted, safe_name},
@@ -182,19 +184,6 @@ fn targets(paths: &[String]) -> Result<Value> {
     Ok(json!(["Targets", listed]))
 }
 
-/// Whether a value counts as true where the reference asked for its truth:
-/// anything but nothing, false, nought and what is empty.
-fn truth(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(held) => *held,
-        Value::Number(number) => number.as_f64() != Some(0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
-    }
-}
-
 /// The field `name` of a part of the engine's report.
 fn field<'a>(record: &'a Value, name: &str) -> Result<&'a Value> {
     record
@@ -277,7 +266,7 @@ fn findings(
         let line = line.ok_or(Fault("semgrep_finding_line"))?;
         let extra = field(result, "extra")?.as_object().ok_or(FAILED)?;
         require(
-            !extra.get("is_ignored").is_some_and(truth),
+            !extra.get("is_ignored").is_some_and(set),
             "semgrep_inline_ignore",
         )?;
         found.insert(Finding {
