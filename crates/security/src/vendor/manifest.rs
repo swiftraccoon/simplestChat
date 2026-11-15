@@ -105,7 +105,7 @@ pub fn relative_path(value: &str) -> Verdict<&str> {
     Ok(value)
 }
 
-fn string(value: &Document) -> Verdict<&str> {
+pub(crate) fn string(value: &Document) -> Verdict<&str> {
     value
         .text()
         .ok_or_else(|| problem("Expected a JSON string"))
@@ -118,7 +118,7 @@ fn array(value: &Document) -> Verdict<&[Document]> {
 }
 
 /// A whole lowercase SHA-256.
-pub(super) fn digest(value: &Document) -> Verdict<&str> {
+pub(crate) fn digest(value: &Document) -> Verdict<&str> {
     let text = string(value)?;
     let digit = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
     if text.len() != 64 || !text.bytes().all(digit) {
@@ -166,7 +166,7 @@ pub fn https_url(value: &str) -> Verdict<&str> {
 }
 
 /// A record with exactly the `expected` fields.
-pub(super) fn fields<'a>(value: &'a Document, expected: &[&str]) -> Verdict<&'a Document> {
+pub(crate) fn fields<'a>(value: &'a Document, expected: &[&str]) -> Verdict<&'a Document> {
     let held = value
         .fields()
         .ok_or_else(|| problem("Expected a JSON object"))?;
@@ -205,7 +205,7 @@ fn unique<'a>(mut values: impl Iterator<Item = &'a str>, label: &str) -> Verdict
     Ok(())
 }
 
-fn source(value: &Document) -> Verdict<Source> {
+pub(crate) fn source(value: &Document) -> Verdict<Source> {
     let record = fields(value, &["id", "url", "sha256", "format"])?;
     let identifier = text(record, "id")?;
     let plain = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
@@ -364,7 +364,7 @@ fn referenced(manifest: &Manifest) -> Verdict<()> {
 
 /// What bytes are no document, said as the reference said it where it can
 /// be.
-pub(super) fn unread(unread: Unread) -> Problem {
+pub(crate) fn unread(unread: Unread) -> Problem {
     match unread {
         Unread::Duplicate(name) => problem(format!("Duplicate JSON key: {name}")),
         Unread::Invalid => problem("Invalid JSON"),

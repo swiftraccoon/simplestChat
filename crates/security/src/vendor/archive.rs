@@ -71,10 +71,11 @@ impl Budget {
 }
 
 /// Every member of a gzip stream, unpacked whole: one member after another,
-/// with nothing after the last but zero bytes.
-fn unpacked(data: &[u8], bounds: &Bounds) -> Verdict<Vec<u8>> {
+/// with nothing after the last but zero bytes, and no more than `most`
+/// bytes together, or `budget` is what is wrong.
+pub(crate) fn unpacked(data: &[u8], most: u64, budget: &str) -> Verdict<Vec<u8>> {
     let unreadable = || problem("Unreadable gzip stream");
-    let limit = bounds.content + 1;
+    let limit = most + 1;
     let mut expanded = Vec::new();
     let mut rest = data;
     if rest.is_empty() {
@@ -86,7 +87,7 @@ fn unpacked(data: &[u8], bounds: &Bounds) -> Verdict<Vec<u8>> {
         let read = (&mut member).take(room).read_to_end(&mut expanded);
         read.map_err(|_| unreadable())?;
         if expanded.len() as u64 >= limit {
-            return Err(problem("Archive expansion budget exceeded"));
+            return Err(problem(budget));
         }
         rest = member.into_inner();
         let padding = rest.iter().take_while(|byte| **byte == 0).count();
@@ -95,15 +96,30 @@ fn unpacked(data: &[u8], bounds: &Bounds) -> Verdict<Vec<u8>> {
     Ok(expanded)
 }
 
-/// The files of a gzip tar archive.
-fn tar_members(data: &[u8], bounds: &Bounds) -> Verdict<Files> {
+/// What a member of a tar archive is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Kind {
+    /// A directory.
+    Directory,
+    /// A file with bytes of its own.
+    File,
+    /// A link, a device, a pipe or anything else.
+    Other,
+}
+
+/// What a walk over a tar archive does with one member: its name, what it
+/// is, the bytes it says it has, and those bytes.
+pub(crate) type Visit<'a> = dyn FnMut(&str, Kind, u64, &mut dyn Read) -> Verdict<()> + 'a;
+
+/// Walk the members of the unpacked tar archive `expanded` in their order.
+/// A directory is named without the slashes at its end, and a header that
+/// speaks for the whole archive is passed over.
+pub(crate) fn tar_each(expanded: &[u8], visit: &mut Visit<'_>) -> Verdict<()> {
     let unreadable = || problem("Unreadable tar archive");
-    let expanded = unpacked(data, bounds)?;
     if expanded.is_empty() {
         return Err(unreadable());
     }
-    let mut budget = Budget::new(bounds);
-    let mut archive = tar::Archive::new(Cursor::new(&expanded));
+    let mut archive = tar::Archive::new(Cursor::new(expanded));
     for entry in archive.entries().map_err(|_| unreadable())? {
         let mut entry = entry.map_err(|_| unreadable())?;
         let kind = entry.header().entry_type();
@@ -114,29 +130,45 @@ fn tar_members(data: &[u8], bounds: &Bounds) -> Verdict<Files> {
         let name = std::str::from_utf8(&path).unwrap_or("\u{fffd}");
         let directory =
             kind.is_dir() || (entry.header().as_bytes()[156] == 0 && name.ends_with('/'));
-        if !directory && !kind.is_file() && !kind.is_contiguous() {
+        let (kind, name) = if directory {
+            (Kind::Directory, name.trim_end_matches('/'))
+        } else if kind.is_file() || kind.is_contiguous() {
+            (Kind::File, name)
+        } else {
+            (Kind::Other, name)
+        };
+        let size = entry.size();
+        visit(name, kind, size, &mut entry)?;
+    }
+    Ok(())
+}
+
+/// The files of a gzip tar archive.
+fn tar_members(data: &[u8], bounds: &Bounds) -> Verdict<Files> {
+    let budget = "Archive expansion budget exceeded";
+    let expanded = unpacked(data, bounds.content, budget)?;
+    let mut budget = Budget::new(bounds);
+    tar_each(&expanded, &mut |name, kind, size, content| {
+        if kind == Kind::Other {
             return Err(problem("Unsupported tar member type"));
         }
-        let size = entry.size();
-        let name = if directory {
-            name.trim_end_matches('/')
-        } else {
-            name
-        };
+        let directory = kind == Kind::Directory;
         let key = budget.reserve(name, size, directory)?;
         if directory {
             if size != 0 {
                 return Err(problem("Nonempty archive directory"));
             }
-            continue;
+            return Ok(());
         }
         let mut body = Vec::new();
-        entry.read_to_end(&mut body).map_err(|_| unreadable())?;
+        let read = content.read_to_end(&mut body);
+        read.map_err(|_| problem("Unreadable tar archive"))?;
         if body.len() as u64 != size {
             return Err(problem("Tar member size differs"));
         }
         budget.files.insert(key, body);
-    }
+        Ok(())
+    })?;
     Ok(budget.files)
 }
 

@@ -12,7 +12,7 @@ use std::{
 
 /// The whole of the regular file `path` of at most `limit` bytes, read
 /// through no link, and unchanged while it was read.
-pub(super) fn read_regular(path: &Path, limit: u64) -> Verdict<Vec<u8>> {
+pub(crate) fn read_regular(path: &Path, limit: u64) -> Verdict<Vec<u8>> {
     let unreadable = || problem(format!("Unreadable file: {}", path.display()));
     let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
     let opened = rustix::fs::open(path, flags, Mode::empty());

@@ -16,29 +16,33 @@ const CONTEXT: usize = 3;
 /// them is too common to start a match from.
 const POPULAR_FROM: usize = 200;
 
+/// Whether a line ends with `character` for the reference's interpreter.
+pub(crate) fn ends(character: char) -> bool {
+    matches!(
+        character,
+        '\n' | '\r'
+            | '\u{b}'
+            | '\u{c}'
+            | '\u{1c}'
+            | '\u{1d}'
+            | '\u{1e}'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
+}
+
 /// The lines of a text with their ends, split where the reference's
 /// interpreter splits lines: after a line feed, a carriage return (with the
 /// line feed that follows it), a vertical tab, a form feed, the three
 /// information separators, a next-line character and the separators of
 /// lines and of paragraphs.
-fn lines(text: &str) -> Vec<&str> {
+pub(crate) fn lines(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     let mut start = 0;
     let mut characters = text.char_indices().peekable();
     while let Some((at, character)) = characters.next() {
-        let ends = matches!(
-            character,
-            '\n' | '\r'
-                | '\u{b}'
-                | '\u{c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        );
-        if !ends {
+        if !ends(character) {
             continue;
         }
         let mut end = at + character.len_utf8();

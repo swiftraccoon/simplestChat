@@ -19,6 +19,7 @@
 //! policy.
 
 pub mod actions;
+pub mod awslc;
 pub mod context;
 pub(crate) mod document;
 pub mod elf;
