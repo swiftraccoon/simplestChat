@@ -31,6 +31,8 @@ use std::{
 const POLL: Duration = Duration::from_millis(100);
 /// How long a killed leader has to be reaped.
 const REAP: Duration = Duration::from_secs(5);
+/// What a command is stopped as when what it needs is gone.
+const LOST: &str = "command_lease_lost";
 /// Where a command without a search path of the caller's looks.
 const SEARCH: &str = "/usr/bin:/bin";
 
@@ -261,7 +263,7 @@ pub(crate) fn asked(
     let kept: (Box<dyn Write + Send>, Box<dyn Write + Send>) =
         (Box::new(Handed(hand)), Box::new(std::io::sink()));
     let patience = (within, Limits::REVIEWED.grace);
-    let status = pumped(command, input, patience, kept, room)?;
+    let status = pumped(command, input, patience, kept, room, &mut || true)?;
     // Both streams were closed, so everything printed has been handed on.
     Ok((status, handed.try_iter().flatten().collect()))
 }
@@ -272,12 +274,16 @@ pub(crate) fn asked(
 /// stream runs until the deadline. It reads `input`, and what it prints goes
 /// to the two `kept` writers, standard output first. Its `patience` is how
 /// long it may take, and how long it is given to end once it is stopped.
+/// It is also stopped, as lost, when `healthy` says that what it needs is
+/// gone: that is asked while it runs, whether or not it prints, and once
+/// more when it has ended.
 fn pumped<W: Write + Send + 'static>(
     command: &mut Command,
     input: &[u8],
     patience: (Duration, Duration),
     kept: (W, W),
     room: (u64, u64),
+    healthy: &mut dyn FnMut() -> bool,
 ) -> Outcome<i32> {
     let mut child = command
         .stdin(Stdio::piped())
@@ -307,7 +313,10 @@ fn pumped<W: Write + Send + 'static>(
     let deadline = Instant::now() + patience.0;
     let stopped = loop {
         if open == 0 && exited(pid) {
-            break None;
+            break (!healthy()).then_some(LOST);
+        }
+        if !healthy() {
+            break Some(LOST);
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if left.is_zero() {
@@ -634,6 +643,39 @@ impl Context {
         Self::new(&self.root, output, self.limits, &ambient)
     }
 
+    /// Run `argv` to its end with what it prints kept in the new private
+    /// files `stem.stdout` and `stem.stderr`, and stop it as lost when
+    /// `healthy` says so. It is no check of the invocation: no status and no
+    /// time is recorded, and whoever asks judges the status.
+    pub fn watch<S: AsRef<OsStr>>(
+        &self,
+        stem: &str,
+        argv: &[S],
+        how: &Run<'_>,
+        healthy: &mut dyn FnMut() -> bool,
+    ) -> Outcome<i32> {
+        let output = created(&self.output.join(format!("{stem}.stdout")))?;
+        let error = created(&self.output.join(format!("{stem}.stderr")))?;
+        let mut command = self.command(argv, how)?;
+        let patience = (how.within, self.limits.grace);
+        let room = (self.limits.report, self.limits.report);
+        pumped(
+            &mut command,
+            how.input,
+            patience,
+            (output, error),
+            room,
+            healthy,
+        )
+    }
+
+    /// The value of the variable `name` in the fixed environment of the
+    /// checks.
+    pub fn variable(&self, name: &str) -> Option<&OsStr> {
+        let held = self.variables.iter().find(|(held, _)| *held == name);
+        held.map(|(_, value)| value.as_os_str())
+    }
+
     /// The command `argv` in the fixed environment of the checks, in the
     /// directory `how` names or at the sources' root.
     fn command<S: AsRef<OsStr>>(&self, argv: &[S], how: &Run<'_>) -> Outcome<Command> {
@@ -661,7 +703,7 @@ impl Context {
     ) -> Outcome<i32> {
         let mut command = self.command(argv, how)?;
         let patience = (how.within, self.limits.grace);
-        pumped(&mut command, how.input, patience, kept, room)
+        pumped(&mut command, how.input, patience, kept, room, &mut || true)
     }
 
     /// Copy every tracked and every unignored file into a new private
