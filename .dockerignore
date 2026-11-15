@@ -303,6 +303,9 @@ crates/security/src/spdx/**
 !crates/security/src/tier/
 crates/security/src/tier/**
 !crates/security/src/tier/*.rs
+!crates/security/src/elf/
+crates/security/src/elf/**
+!crates/security/src/elf/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

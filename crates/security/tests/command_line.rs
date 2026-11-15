@@ -263,3 +263,66 @@ fn a_tier_that_is_refused_says_so_in_one_line_and_leaves_its_summary() {
         "Security gate failed: security_home_unset\n"
     );
 }
+
+#[test]
+fn an_elf_audit_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["elf"][..],
+        &["elf", "--rootfs", "/nowhere"],
+        &[
+            "elf",
+            "--rootfs",
+            "/nowhere",
+            "--output",
+            "/nowhere/report",
+            "--platform",
+            "linux/riscv64",
+        ],
+        &[
+            "elf",
+            "--rootfs",
+            "/nowhere",
+            "--output",
+            "/nowhere/report",
+            "more",
+        ],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        assert!(
+            usage.starts_with("usage: simplestchat-security elf --rootfs DIR "),
+            "{usage}"
+        );
+    }
+}
+
+#[test]
+fn an_elf_audit_of_no_image_is_reported_and_ends_with_one() {
+    let scratch = Scratch::new("elf");
+    let report = scratch.0.join("report.json");
+    let (missing, named) = (scratch.0.join("missing"), report.to_str().expect("a path"));
+    let arguments = [
+        "elf",
+        "--rootfs",
+        missing.to_str().expect("a path"),
+        "--output",
+        named,
+    ];
+    let output = run(&arguments);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!((text(&output.stdout), text(&output.stderr)), ("", ""));
+    let written = std::fs::read_to_string(&report).expect("a report");
+    assert_eq!(
+        written,
+        "{\n  \"passed\": false,\n  \"reason\": \"image_root_invalid\"\n}\n"
+    );
+    let again = run(&arguments);
+    assert_eq!(again.status.code(), Some(1));
+    assert_eq!(
+        text(&again.stderr),
+        "ELF audit failed: tool_entry_unavailable\n"
+    );
+    assert_eq!(std::fs::read_to_string(&report).expect("a report"), written);
+}

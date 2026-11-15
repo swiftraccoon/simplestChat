@@ -26,6 +26,9 @@ fn main() -> ExitCode {
             let ambient = |name: &str| std::env::var_os(name);
             simplestchat_security::tier::run(&root, tier, rest, &ambient)
         }
+        (Some(_), Some([group, rest @ ..])) if group == "elf" => {
+            simplestchat_security::elf::run(rest)
+        }
         (Some(root), Some([group, rest @ ..])) if group == "tools" => {
             simplestchat_security::tools::run(&root, rest)
         }

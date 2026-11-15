@@ -20,6 +20,8 @@
 
 pub mod actions;
 pub mod context;
+pub(crate) mod document;
+pub mod elf;
 pub mod environment;
 pub mod fast;
 pub(crate) mod files;
