@@ -12,9 +12,10 @@
 //! licence expression against an allowlist, `openssl` holds the pinned
 //! OpenSSL to the vendor's newest release, `semgrep` scans the maintained
 //! sources with the reviewed local rules, `migrations` lints new migrations
-//! in the mode they run in, `fast` holds the checks of the fast tier, and
-//! `rulesets` reconciles the repository's rulesets on GitHub with their
-//! policy.
+//! in the mode they run in, `mutation` holds the tests of the pure policy
+//! functions to every change of them, `fast` holds the checks of the fast
+//! tier, and `rulesets` reconciles the repository's rulesets on GitHub with
+//! their policy.
 
 pub mod actions;
 pub mod context;
@@ -24,6 +25,7 @@ pub(crate) mod files;
 pub mod findings;
 pub mod licenses;
 pub mod migrations;
+pub mod mutation;
 pub mod openssl;
 pub mod policy;
 pub(crate) mod record;

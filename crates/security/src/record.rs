@@ -91,6 +91,70 @@ pub(crate) fn strict(content: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
+/// The keys of the record that the field `name` of the document `content`
+/// holds, in the order they are written; none when the document has no
+/// such field. The reader of documents keeps a record's fields by their
+/// names, which is not the order a reviewed list is written in.
+pub(crate) fn written(content: &[u8], name: &str) -> Result<Vec<String>> {
+    use serde::de::{DeserializeSeed, Deserializer, IgnoredAny, MapAccess, Visitor};
+    struct Keys;
+    impl<'de> Visitor<'de> for Keys {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a record")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(
+            self,
+            mut pairs: A,
+        ) -> std::result::Result<Vec<String>, A::Error> {
+            let mut keys = Vec::new();
+            while let Some(key) = pairs.next_key::<String>()? {
+                pairs.next_value::<IgnoredAny>()?;
+                keys.push(key);
+            }
+            Ok(keys)
+        }
+    }
+    impl<'de> DeserializeSeed<'de> for Keys {
+        type Value = Vec<String>;
+
+        fn deserialize<D: Deserializer<'de>>(
+            self,
+            source: D,
+        ) -> std::result::Result<Vec<String>, D::Error> {
+            source.deserialize_map(self)
+        }
+    }
+    struct Field<'a>(&'a str);
+    impl<'de> Visitor<'de> for Field<'_> {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a record")
+        }
+
+        fn visit_map<A: MapAccess<'de>>(
+            self,
+            mut pairs: A,
+        ) -> std::result::Result<Vec<String>, A::Error> {
+            let mut keys = Vec::new();
+            while let Some(key) = pairs.next_key::<String>()? {
+                if key == self.0 {
+                    keys = pairs.next_value_seed(Keys)?;
+                } else {
+                    pairs.next_value::<IgnoredAny>()?;
+                }
+            }
+            Ok(keys)
+        }
+    }
+    let mut source = serde_json::Deserializer::from_slice(content);
+    let keys = source.deserialize_map(Field(name));
+    keys.map_err(|_| Fault("invalid_tool_json"))
+}
+
 /// A JSON document, or the one code for bytes that are none.
 pub(crate) fn document(content: &[u8]) -> Result<Value> {
     serde_json::from_slice(content).map_err(|_| Fault("invalid_tool_json"))

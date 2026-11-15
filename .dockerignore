@@ -288,6 +288,9 @@ crates/security/src/rulesets/**
 !crates/security/src/migrations/
 crates/security/src/migrations/**
 !crates/security/src/migrations/*.rs
+!crates/security/src/mutation/
+crates/security/src/mutation/**
+!crates/security/src/mutation/*.rs
 !crates/security/src/openssl/
 crates/security/src/openssl/**
 !crates/security/src/openssl/*.rs
