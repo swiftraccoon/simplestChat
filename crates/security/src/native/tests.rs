@@ -7,7 +7,7 @@ use super::validate_manifest;
 use crate::{
     document::Document,
     scratch::{Scratch, base64},
-    vendor::Problem,
+    vendor::{Problem, Verdict},
 };
 use std::{io::Read, path::Path};
 
@@ -51,39 +51,28 @@ pub(super) fn written(root: &Path, files: &[(String, Document)]) {
     }
 }
 
-/// What every case came to here and there, as lines that can be compared.
-fn replayed() -> Vec<(String, String, String)> {
-    let recording = Document::read(RECORDING).expect("a recording");
+/// Build every case of a recording again and answer its name with what
+/// `work` came to over it here and with what the recording says of it, as
+/// lines that can be compared. The root's own path is spelled `<root>`.
+pub(super) fn replay(
+    recording: &[u8],
+    place: &str,
+    work: &dyn Fn(&Path) -> Verdict<Document>,
+) -> Vec<(String, String, String)> {
+    let recording = Document::read(recording).expect("a recording");
     let cases = recording.get("cases").and_then(Document::items);
     let mut all = Vec::new();
     for (index, case) in cases.expect("cases").iter().enumerate() {
-        let scratch = Scratch::new(&format!("native-record-{index}"));
+        let scratch = Scratch::new(&format!("native-{place}-{index}"));
         written(&scratch.0, fields(&recording, "base"));
         written(&scratch.0, fields(case, "delta"));
         let shown = scratch.0.to_str().expect("a path");
-        let here = match validate_manifest(&scratch.0) {
-            Ok((record, integrity)) => {
-                let names = |names: Vec<&str>| {
-                    Document::List(names.into_iter().map(Document::from).collect())
-                };
-                let fields = record.fields().expect("a record").iter();
-                let mut sources: Vec<&str> = integrity
-                    .sources
-                    .iter()
-                    .map(|source| source.identifier.as_str())
-                    .collect();
-                sources.sort_unstable();
-                let wraps = integrity.wraps.iter().map(|wrap| wrap.source.as_str());
-                let held = Document::record([
-                    (
-                        "fields",
-                        names(fields.map(|(name, _)| name.as_str()).collect()),
-                    ),
-                    ("sources", names(sources)),
-                    ("wraps", names(wraps.collect())),
-                ]);
-                format!("held {}", held.pretty())
-            }
+        for (path, target) in fields(case, "links") {
+            let target = target.text().expect("a target").replace("<root>", shown);
+            std::os::unix::fs::symlink(target, scratch.0.join(path)).expect("a link");
+        }
+        let here = match work(&scratch.0) {
+            Ok(held) => format!("held {}", held.pretty().replace(shown, "<root>")),
             Err(Problem(words)) => format!("refused {}", words.replace(shown, "<root>")),
         };
         let result = case.get("result").expect("a result");
@@ -98,6 +87,51 @@ fn replayed() -> Vec<(String, String, String)> {
         all.push((text(case, "name").to_owned(), here, there));
     }
     all
+}
+
+/// A list of names.
+pub(super) fn names<'a>(names: impl Iterator<Item = &'a str>) -> Document {
+    Document::List(names.map(Document::from).collect())
+}
+
+/// Hold every case to the recording, but for those that `reworded` names
+/// with the words they have here, and answer how many were held alike,
+/// refused alike and refused in other words.
+pub(super) fn tallied(all: Vec<(String, String, String)>, reworded: &[(&str, &str)]) -> [usize; 3] {
+    let mut tally = [0; 3];
+    for (name, here, there) in all {
+        if let Some((_, words)) = reworded.iter().find(|(other, _)| *other == name) {
+            assert_eq!(here, format!("refused {words}"), "{name}");
+            assert!(!there.starts_with("held ") && there != here, "{name}");
+            tally[2] += 1;
+            continue;
+        }
+        assert_eq!(here, there, "{name}");
+        tally[usize::from(here.starts_with("refused "))] += 1;
+    }
+    tally
+}
+
+/// What the reviewed record came to.
+fn recorded() -> Vec<(String, String, String)> {
+    replay(RECORDING, "record", &|root| {
+        let (record, integrity) = validate_manifest(root)?;
+        let fields = record.fields().expect("a record").iter();
+        let mut sources: Vec<&str> = integrity
+            .sources
+            .iter()
+            .map(|source| source.identifier.as_str())
+            .collect();
+        sources.sort_unstable();
+        Ok(Document::record([
+            ("fields", names(fields.map(|(name, _)| name.as_str()))),
+            ("sources", names(sources.into_iter())),
+            (
+                "wraps",
+                names(integrity.wraps.iter().map(|wrap| wrap.source.as_str())),
+            ),
+        ]))
+    })
 }
 
 /// Cases that both refuse in other words: the reference in those of its
@@ -137,17 +171,6 @@ const REWORDED: [(&str, &str); 11] = [
 
 #[test]
 fn every_recorded_record_comes_to_the_same() {
-    // Held alike, refused alike, and refused in other words.
-    let mut tally = [0; 3];
-    for (name, here, there) in replayed() {
-        if let Some((_, words)) = REWORDED.iter().find(|(other, _)| *other == name) {
-            assert_eq!(here, format!("refused {words}"), "{name}");
-            assert!(!there.starts_with("held ") && there != here, "{name}");
-            tally[2] += 1;
-            continue;
-        }
-        assert_eq!(here, there, "{name}");
-        tally[usize::from(here.starts_with("refused "))] += 1;
-    }
+    let tally = tallied(recorded(), &REWORDED);
     assert_eq!(tally, [29, 110, 11]);
 }

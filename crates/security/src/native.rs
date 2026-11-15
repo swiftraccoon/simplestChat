@@ -14,6 +14,9 @@ use crate::{
 };
 use std::{collections::BTreeSet, path::Path};
 
+pub mod build;
+pub mod receipt;
+
 /// Where a crate of the lock comes from when it comes from crates.io.
 const SOURCE_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
 /// The reviewed options of the OpenSSL build, in their order.
@@ -23,21 +26,33 @@ const ADAPTED: &str = "vendor/mediasoup-sys-0.19.0/deps/libwebrtc";
 /// The crates whose build scripts link native libraries.
 const PROVIDERS: [&str; 3] = ["mediasoup-sys", "openssl-sys", "aws-lc-sys"];
 
-fn problem(text: &str) -> Problem {
+pub(crate) fn problem(text: &str) -> Problem {
     Problem(text.to_owned())
 }
 
+/// The field `name` of a record, which must have it.
+pub(crate) fn field<'a>(record: &'a Document, name: &str) -> Verdict<&'a Document> {
+    let held = record.get(name);
+    held.ok_or_else(|| Problem(format!("Missing field: {name}")))
+}
+
+/// A record.
+pub(crate) fn object(value: &Document) -> Verdict<&Document> {
+    let held = value.fields().map(|_| value);
+    held.ok_or_else(|| problem("Expected a JSON object"))
+}
+
 /// The field `name` of a record that was held to its fields.
-fn part<'a>(record: &'a Document, name: &str) -> &'a Document {
+pub(crate) fn part<'a>(record: &'a Document, name: &str) -> &'a Document {
     record.get(name).unwrap_or(&Document::Null)
 }
 
-fn text<'a>(record: &'a Document, name: &str) -> Verdict<&'a str> {
+pub(crate) fn text<'a>(record: &'a Document, name: &str) -> Verdict<&'a str> {
     manifest::string(part(record, name))
 }
 
 /// A list of nothing but text.
-fn strings(value: &Document) -> Verdict<Vec<&str>> {
+pub(crate) fn strings(value: &Document) -> Verdict<Vec<&str>> {
     manifest::array(value)?
         .iter()
         .map(manifest::string)
@@ -45,7 +60,7 @@ fn strings(value: &Document) -> Verdict<Vec<&str>> {
 }
 
 /// The whole of a small file of the checkout.
-fn read(path: &Path) -> Verdict<Vec<u8>> {
+pub(crate) fn read(path: &Path) -> Verdict<Vec<u8>> {
     tree::read_regular(path, Bounds::REVIEWED.record as u64)
 }
 

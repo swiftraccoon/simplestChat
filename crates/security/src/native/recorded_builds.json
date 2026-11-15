@@ -1,0 +1,1659 @@
+{
+ "base": {
+  "Cargo.lock": {
+   "deflated": "eNqt0LluhDAUheGex3AbAd6XSPMkoyns62uwwiZskszbhykjUqb/j/Tp3O+bhw8/4OPRLH7GG/FfpZ2gLc9Cmk/cS16XG6GdVB0lTVmPHc5oxyGXuj/fxlq38t73Q67jETpY534/Sm0nvww97L5i6fLa5iXiN2lgRPgox3wjKURqJEcmlEIuFDjNbHIxpWActQIl9wGM0MpGdJIzCvqMLcqkQuSRNPeLfN1wKWW60F3HmPlHu0o6eZbSSbQ0RjBRcWcFhxSFNFpRVNoGdbIpBsu0Aw5cnnLHREDEv+wzxuxP4XbRM/M6/rooed4mLBVGX38PXv0PUJWZNQ==",
+   "spelled": false
+  },
+  "Cargo.toml": {
+   "deflated": "eNpdjDEOgCAQBHueQe9FS4t7CbE4zalEUMKBfl8sJNFmi5nNmOuImwSaeFCe/chR0AzKVAxlNlqKPouzx466hQ5arWKW1FTYQd8/1NT/Tp5Ri/XBsaRppaTfBtQ8ppj5k/q7kEdnZcWZnLC6AZmTP2M=",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUzNNQzUOJShir2D3D1Cw72ifcMjgfr4wIA5X4UTQ==",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/boringssl_prefix_symbols.h": {
+   "deflated": "eNpTTklNy8xLVXDyD/L0cw8O9okPCHJ184xQKM7MLchJLS5JzkgsiU8sL85JjjeNNzSMN+ACAL3tESc=",
+   "spelled": false
+  },
+  "aws-lc/lib/libcrypto-awslc.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+   "spelled": false
+  },
+  "aws-lc/share/rust/aws_lc_bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/CMakeCache.txt": {
+   "deflated": "eNptkM1qwzAQhO9+mBIfSqHQg37WzlJFK1brtDktbjA04ELBgb5+5aZpY5KLEPONVjPrNuYZ1HYYvMouwWMWxtg+8TAO/TRUJ5LXhsFrQJvPBmqaXyiQpSg3AFG4VucheaFDNDaAZurYgW7IY4POCFK8fm1ecnCamLbogW9McbxLQpoooENYxG0hAhsB5S6LWoy+kH9HrBa6iuEWRLfA+SJKffewqizN91KjJIEGX89wOnx8jsN03L/3R+2/pnGv91rXuqrcz54TZZx7afkDEpQjijrycBHi5MSYxYQwb8vjX8/x8FZ9AwOif/4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/aws-lc-source.tar.gz": {
+   "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t08FLwzAUx/Gc91eUeV77gl3vrpQRqJ00Oo+h2zI2KJ0Yh/++paLgLh6Uwdj3c3nh8cI7JL/mPUza9WQaax1Lsu/W7XHjk8OL70Jok1UTfLxTfyS9LE2H2jutoiX7Pg99nUqqVSTqDI7hrXnt16vrdLPx233no7tnW+ZuWdTWLCpXPd3PitrZx9pU82j8+TvGo6/hxUNRWVs6Y91wb6RwoZof+S9N3r9s8c87fsu/yO1J/iWbkv+zMDYnBAAAAAAAAAAAAAAAABfsA+My+EQAKAAAP0ZwOA==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/bindgen-cli.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZR74mA5GWh9u/icQ1/NJwDV9nwamkyLvEt6uojkta+PqxIz/qZ888k5Znd6fdTuTuE27T6aduBF9epjhLs2xxTVta+vNvZ+4Fb92yft/bpWtjVd2n6lec6zd7Wv3T33t+mvzhq7IsDMjgg3OYzf7r3gwaDAwAswY4Zg==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/build.json": {
+   "deflated": "eNqlVE1v20YQvftXGDrX0n5/9CZLtEtUFg1KTpsTsTs7axNlJIOU0aRB/nuHio1EruFLBYggOG/em9k3s1/Pzs8nsd2le9w1w0MQ2kx+PZ+E//mb/DLywn6X2/unHpv946Hd7wai/koBCl1Wdbm+3mxWzW1dXJV/jqJD++mxw+EAD+HQhL+HDhrdcN6wI9uYdFeuls38j81qQWnVh3JZ1GNidXV1ClmVl0T9Zmjz27wuviPejG+LzZYqeztWVa9JFzfz34vmOfzxthjDNXYYBjyFlOvNdr5ajcLL8lh118ZTyG21KbdltSbssrgt6LHeNotqeSSt1i/gYj2/XBXNov54u60oaVUuyuJ1M8+gTXVXL4rmplqWV+ViPrK/Al4X66Keb4umvttsm0uSHn05VTwJNdt5fV1smw9FvXmm41PLJgT9dnQ9t2TiD6fbHXRPCWf7R9wNQzeLdDTThzHNOeGZTTyq5EySRlofrHPWY0amlVcCnWUeNdM8g89Z+YQyyMghRoX2pbz/KOz7dndPb81jj7n93AxfPsV9N3xXFeASJKlS0F4lEY3WOYkkSVJjJnqfAbkWLkhtuGIuM+EiGoMOUojhRZXsm9Ef+i+Ph/3FcVynYRRIhlMXUkYBGhiCU1opIxJIrYXJ2oCyWvCQQ0YTQWvIjKuUEmajvRYvArSNPc76p+EwI/aGtmHc07GzaT8cOwkZmA1GUeUCAXigg5EKBNfWpUjlMybQWCWzl2PToJmPNmXk2XktT4V+3r7Z4ib8hYsADzg9fD4cbwQ6Ix5SEpwJroJgAYlGgOeRRQfRSmPRCC+soQ6zcixoFk3S2gSIKb0jRt1ddHAx7J96IL3QT+//GSUN2WQt05lnbYNwNunMFNLYGIUxBycUBhNDphebgs9kVvIIimUJifN3JJ9vvAvo2in04YDHMXbH/pRhMUWGCljM2WB23JicrOBOZ/THJ4dMeuBD9jaCCYEpHd/Re5nA58O06JQUDDKSc0pJn5iSUXGfhZXkolGReau0D0DzwiQmjMHQ9NssYojmx7K1u+EQug77ny5vk4O0IjBIWkqUmQunnBfBxWyIG5ynj9k4DEomp4yncbdesKjIMwcwOft29i8q+bqR",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/symbols.txt": {
+   "deflated": "eNpzDQuId8lMTy0u4fIvSM0LDvaJL0stKs7Mz+MCAIU/Cag=",
+   "spelled": false
+  },
+  "build/install-aws-lc.sh": {
+   "deflated": "eNpFjs1qwzAQhO95Ed3MriytpIOfxaz2JzGkbohC28evSQi5DMMMzHz8O66y/th9bN/7EvKEOEE48TMeF46ZlkCicymQHT0XjrVodkhWa6Rk3bnGZEyd/TBFuXmCqs0kgc+iiO+92918+1vC2L5uVxsPufBjfVV5RVyP477terb9QwRTmaf4Kd5MWFk1YiLo2sGSQHcn84pEriVizW7tqSh+MEljb6ULMUPKPZz+AZQFTZM=",
+   "spelled": false
+  },
+  "build/install-openssl.sh": {
+   "deflated": "eNrLL0jNKy7OiS9LLSrOzM+zVTfRM9AzVufKh4oXZyQamZrZqhtQCNS5AEk+GcM=",
+   "spelled": false
+  },
+  "cache/ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda": {
+   "deflated": "eNoBgQF+/h+LCAAA8VNlAv/t1Ltu2zAUBmDNegrBuyiSoi3ZgIcgyZgla1EEvMlWIpoCKefSpy+dooVhdMgQe0j+b6FwKFCADv/jrOll9PuxjG+xpIQtCa2uZdh4Mnk3ZJ+BJgsh3tfkdE2bR8+HOqs5W2QFzS5gHycZ0uez7+nHKPWT3Nif+U46u5654/swy59tiL3frWfpZjSEzvIMvhT3v/zHvRqDf7R6ilXnPXkJcjxj/nnDTvI/r1mN/F8k/4fell0/pAlg+pBa7sNbsS5S20tGaJ6uRtD2YR+GVNxO0xhXVWVfpRsHS/rdsxx6U528fDjtME3+HEPS/yWbX383tzJu04ZpjKBL0bVMc9V2na1Z07TKKqlEJ5ZcCK2psou2ri1rDTWcs3qhKLdtpyzjGERnzL+xY6yGXr1YFSZd3d9e3dzdEmfOlH/G56f5F/MG+b+EsvjX50IFudPbVeGaJj+ua+9cP60K+UHIJgAAAAAAAAAAAAAAAADA5f0GgtFZ9gAoAABHgMAL",
+   "spelled": false
+  },
+  "cache/d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZQ64GAwGXi2ttW8UDzAVybXo7nKSYDRn787cIvhE98n+W5LKZN3+funJrjV1r4Sr3yoa0uVvT076HmL692n93xds1U7T0PbJlnPZNry/y1knfflRk2T4BBmRwIPxNiNS5SAYNBgYA3h8vfA==",
+   "spelled": false
+  },
+  "cargo-build.json": {
+   "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPh2FGxnuo9Gpc25sxg7LAnctEngVG/ln+ch+Npbx6HfvO1Mios+pWHKCWE8Munn7qgw1o=",
+   "spelled": true
+  },
+  "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+   "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69pIAEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPcbNgPqiY0PX1MoP4aOF637W0bRy7jvH865v2a5tKRpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9Pxm6WleZaOV4K0wCXVXg9NEX+WddXxUz5N+yvUn+HcdbIP9z5p81YqCcBmLHiVirWdc01WCUJMtxNXwTNsNJ53/fMas2q7e5MLvNuPJlbT6RFKz8nf/fcyf5X3DXR/7ncJaL56oV2vlDchWk96s4CW+iNLq7vljFaXIbh9GlpnvM333/SAsAAAAAAAAAAAAAAAAAwN/1AfnnKsoAKAAAJYqWcA==",
+   "spelled": false
+  },
+  "cargo-home/registry/cache/index/openssl-sys-0.9.117.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+0lQ+5DBgJtD8/8FJ201/RgVuGLKycPnvWVceJcesNs6cqm//c0nA5GlnyonfZ+h/WOp38e/BK4pXLHadHl3CyffTpvI36XfIrVtnNyn61TnfZlXtTz1zvrvpz1klYWi6o5qOpT1vP8aL0V3zar27fmpuRbh2vY/2+eFG7edux7a1Vt26Tc4KOVd26/5/PiYkAGB9bfYfTm/b+UQYOBAQBOuVBL",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+   "deflated": "eNqrVipTsjKsBQAIkwIe",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+   "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyi9IzSsuztEtrixW4ipLLSrOzM+zVTLQs9QzNDRX4srJTAbKA9X5eoYocQEAjjsTkg==",
+   "spelled": false
+  },
+  "openssl/include/openssl/configuration.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKBQCUZw9L",
+   "spelled": false
+  },
+  "openssl/include/openssl/opensslv.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1biAgDUdQox",
+   "spelled": false
+  },
+  "openssl/lib/libcrypto.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyQcAIS0E5Q==",
+   "spelled": false
+  },
+  "openssl/lib/libssl.a": {
+   "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+   "spelled": false
+  },
+  "openssl/share/simplestchat/openssl-disabled.txt": {
+   "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEvlAgB3IAji",
+   "spelled": false
+  },
+  "system/lib/libstdc++.a": {
+   "deflated": "eNpTtEksSs6w43KOiAAAExsDNw==",
+   "spelled": false
+  },
+  "target/release/build/aws-lc-sys/out/bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": {
+   "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+   "spelled": false
+  },
+  "target/release/build/openssl-sys/out/": null,
+  "target/release/simplestChat": {
+   "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+   "spelled": false
+  },
+  "vendor/integrity.json": {
+   "deflated": "eNqVUsty4yAQvPsrXDrbEg9ZQvmVrS3XAENEIoEKsJNsKv++yNk4WUd5HaCK7mGmG/pxtV4Xxg4Yi6v1r9+b+TiCdSkv1Pszk/HMHNFpHyoHyR5xq/w4eYcuxfImelfkmucG0R+CenPv8bTPg3wYIWW8SBDK6z/F5oWxekaN91taklc49sB2zUzpVtekq42giklhDHLatkKiBFmbumN1rRSR2AjOkQpNNGOUN5IwFEYiZa89D2GYG/YpTfGqqvAexmnA0rojDFZXLxpO5U+bnxkYUVvI9qdtfIhbUtJu2Q3IZsdZy3SniNFN1yiz41k7E7TdAReiRYK6AQmko7LmXKNGYEILJrXR8G03i4KerZ2/KwVc+izVg7t+k4sTOEHq53n/kvC53ymgsfffeJdTXj6su5B7F2BayhYMgwR1u88v8l606vfaBlTJh4dMusMwXNBnEZfcV36reJBT8De5eZzTU84Cl8z9n6zZz+pp9RfVEPPy",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOICAKZ6D8M=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/README.md": {
+   "deflated": "eNrTVcjJTCpPTSoqSVZIKkrMS86wUsg1N+fSRRJPzs/NzSyxUkgkEnABAPfgHhk=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/foo.wrap": {
+   "deflated": "eNpdjEsKgzAUAPeewgsY80NjoScppbyXvNRANBJjf6evpXTT7cwwp3uGpfEh0rlyIZMtKT/rY+1TagTj1Zq2bOmy5bjDsZRlPbQtPWBaIrEw3yAG1/7Fn9sME303rEBm19dPjrCOu3C903zQ3ggr0XhPSvS9QUJA7fUgtbaWI3VGKRLGcSelUB1yScYjCVm9Af8wO+I=",
+   "spelled": false
+  },
+  "vendor/native-components.json": {
+   "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YDyIMkyFsglFmDbccCyHe5T7ElfSBm7PvJsIBaLuWtTxxPgEwsjTrWyB0Q6sbDEq0k+FrlxiJ4yktw8vpkdK/OE4FF7mM+24tt9x0kmNpBFJxF5KyZtVBrrMU8T7dW1DWvQF9vAYI8JoauQoljECAhHsZQUpIcplcK1sOdI8A9PzCXzJfeZ9N2YU8YQceL+qj8Zmh4185RmPzhteF7pc72IXC+W4fxutZpFD8vgNvyzJqKSXZHqrsW3rIoOQylyIowj1Cd9/SGc3UT6AM+m2nTxMbwJlrXx4vb2VG0WXmsXr4pXv02WwVHrVZ11sFprpq/LF4tzDqb3k9+DqFH59BDUKstjFzlVC+er9WQ2q4nchMvm4nGq9rBYhetwMdf6N8FDoB/zdTRd3BwWX8z7BsF8cj0Louny08N6oQ1n4TQMzm2yUVwtPiynQXS/uAlvw+mk9nJG+S6YB8vJOoiWH1br6FrTqHN46n0gjtaT5V2wjj4Gy1WzLDZcdHpizk0nKpntWgzpCWXbYEtsecTzLebFkmJOuedrUFIPGLGFR6gP2HF9C8UEMcfjvNdb/lVZNr3AMTA20PmKpFzYrosciaXjMstz62FKwPMsSiCWzLMIMBozqV9coSuSIE/4wAmSNhcYv1GRvYmkiTSNyWQl3+prnx5KUpkV2yjz8chvMHj6kT3uPWpmQi+8wtNTXOgeSikWjhAgJdJtRGKIOfJ86glGXKIDT33uEg7Sp7WKRTAwYMjphfd5F+dpVGhSyde3i/m1udgEuR2MTyUruqHY3ZPajtubcffhuuNS34fZ5oA3d7ruXtQMQJnnZ45GDY/7iR7tVbNQUepLF68bWSfscW+IH29+ny++X/wDdldD3A==",
+   "spelled": false
+  },
+  "vendor-evidence/report.json": {
+   "deflated": "eNqtVMluE0EQvecrLJ8Tu6v35oaAIxeuCKGqrmoyyPaMZiZhU/6dsgNZwGAQHGbrab2l+lV9OVsslty19na6RBvi8sliKY5M9d6W3CpU8AUbNV9zKbFRsd4mFA/ioy9UnK/oSygFKOVgKYewPN+Dtm4jk8K9fnP43GK3m/USfnv3R9cXiy+Hu+4YcL7c01/LjvtxvcO5u5aL2m+Hfie7eVq9n/rdAfuw/V4vV48F2DJnsgAVOUgRB84ZIseh1sIRU/M+tiY1mAZurzNLczbksjxA3uj9u9Rd12SaH5Qk1FYcUAxgGaJnDFRiduSULoTkkhemEvQ1JsX2DDZYD+xUgxM2tyWZ+quxHrPe+nGL855oxnH17vO9y473q63vL2BljppP7E3xLUPV4qs/ByllEkLyzetp+VoNiYp1ApkNWwsukrGSGwnYB5jdZ1FEgHK3dDVu9hyX8zxMT9Zr+YjbYSOrbneNm47X32Xd1u/87zxthTvUigwX06fpwqygHDeIWnVnk+VSTeNYYm3BqR2bIQV0OScxoudLaDSD3jkWFrSZsyVujD8ZdDn8qcGjGn9IyzzK0SN9FPKHvx6F/RmO7/rV3G83dzpvhQ2TAuP2QQZJPUNCKJ6YNe2OfLSOmmYSdTV6b5I6rgTNNqRMOaUELXPSztV+eExw22Xajf+R4A7/5vz3rlmGab3p6IPQONf1qxdPn798sdryyRpgZiXUJvS1qJZCIsE2CvoAl4wkrlEDTMaVQhXbfnj5qMkBBlXeTtbgnwn+uAbTFQ1j/17qPO0bafVhxOGkf50+gYu3EiJDVpXomzXGadgRMAUxehS+hhYQtfdbMzroiovRO1NMiif9/zPBvf9vb2/OfzHgTwyAw6z85aC4b8Kzm7Ovnxe/2A==",
+   "spelled": false
+  },
+  "vendor-evidence/vendor.diff": {
+   "deflated": "eNoDAAAAAAE=",
+   "spelled": false
+  }
+ },
+ "cases": [
+  {
+   "name": "a whole production build",
+   "delta": {},
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "no line",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNoDAAAAAAE=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build that did not finish",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGTJSOc0IfS/7852SUI6J+1SxqDfbN29d8/39PA2CaCid8ntVaJ93RgLQaiAplQak89XSaP0UlWQmYJbGoWLaUlNt1JK1TSTaOrGQkS9UPhzls7TGYNq5UxJpxn3M+578B5/yHsVKp+iry13Ib0BUnmbOFUD9z3T3RMdtyyN47m/kty45OGJ9QTP8zsUUic9lMpGoFIBeVtlKkYg/d7FvZJvMLOwAstDviRMVILCNkDs6AsoVWsxeeAC0bOevjIo77XKAJbWBfJAJ4NgDbpFlXfKzgHxIJrO28HQwtOn7d85IVfgCh9kDYUhmrYRcRMFOXKTziYHh2zT9bhPI1ynPSzNmhd7YJ81+T+x78ga11o7uvq8NbYQUQfToOihULzT+n2LWWHCn29MJ+aQUxKIsda4JRQZLbZfQUSFRt9FLPR0yg3DwQ786MMSwl4pRrv3psOmQd+tcODmb+zJHXWs4O7VIg9xvgFHMyVfhqOieozC6pdrxIhQy/4SvTYoASoTMWymC8Qmkl2VwUWbpwSVoY0orHKV1EHRdUyNF3RlYT0ZtA6G3aTz+fVYYDSHQix8DfJ5noxBy45M7pGJgewjRpc358w47aFPhemSAXlh7P8bj17OYMDXb+N/k/Fw7KhET/URjUsbc2YwdtgTueiTIKjf6jfn4Xjau8ThN/oMs8Q=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build that failed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSOc0IeS/72S7S0JaJ91SxqDfYt+9d8/37pFN4kEEa5K760TaxikNngmPqhQSk0/XiRNyISrIVBFbnMB6WlLTHedcODcJqnEaAspa4I9ZOk9nEdQIo0p6m8X+iPvmrcXv/EH4yqZoGx27kJ4AqbxJjGgg9j3TPRBdbFkoE+f+THJlksdt1ONtnN+hkDrpRyl0ACoVkLdVJkIA0m9N2CtZh5mGJeg45HMSiUoQ2HoIHX0BpWg1Jo+xQPRRT18ZlPdauQdN6wJ+oDOCYAWyRZF3ys4BxUE0PW4HfQvbq83fOcGXYArreQOFIprWsbAOjBy5TWeTg5fRpptxn0a4TntYqlVc7IF9WuX/xL4ja0yr9ejq81bpggXplUPWQ6F4p/XbFrNC+dcvphNzyMkJFLFamQUUGS22X0FAgUreByzkdBobhhc78JP1C/B7pRD03pP0a4e2W+HAHb+xJzfUsYT7N4s8xFkHhmbyeAxHRfEUmJYv14gRoeH9Eb01KB4qFdCvpzWiC2RXpbBu85Sg3LcBmRam4tILOsdUWUYnC6vJoHUw7Dadz2/GAiNjKFhtG+DP83jwkndkfI+MDWQfMbq8OWfGaQ99KkyXDMgLY//fePRyBgO+fB3/NxkPx46K9VQf0bi0MWcGY4c9kYs+CYz6tfzjPBxPe/c49JsvlVGh7lceWikh/D6E7dUvffTDpQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native evidence requires a successful Cargo build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build whose success is a number",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IeS/T2e7JKGdk24pY9Bvtu7eu+d7enibeRDBmuzuOpO2dUqDZ8KjqoTE7NN15oRcihoKVVKLE9hMq9R0xzkXzk2Cap2GgLIR+GOWz/MZgVphVJVOC+on3DdvLX7nD8LXNkfbaurC9AaYytvMiBao75nuIdFRy1IZmvszWyiTPe5Ij7c0v0Nh6kwPldABUqmERawLEQIk/daEg5J1WGhYgaYhnzMiqkBg9BA6+hIqETVmj1RI9KSnrwzKe63cg07rAn6kk0CwBhlRLDpl54BoUJpO20EfYXe1/Tsn+ApMaT1voVSJJjoWNoElR27z2eTokGy6GfdphOu0h5Va02KP7NNq8U/se2GNiVqPrn4RlS5ZkF45ZD0Uyndav41YlMr//sZ0Yo45eQIRViuzhLJIi+1XEFCgkvcBSzmdUsNwsAc/Wb8Ef1AKQR+8Sb9xaLsVDtz0jT25SR0ruH+zyGOcdWDSTE6X4UVRPAWm5eu1xIjQ8v4SvTUoHmoV0G+mDaILya5aYRMXeYJyHwMyLUzNpRfpOubKsnRlYT0ZtA6G3ebz+c1YYCSFgjW2Bf48jwcveUfGD8jYQPYRo8ubc2acDtCnwnTJgLwy9v+NRy9nMODL1/G/yXg49lSsp/qIxqWNOTMYe+yJXPRJYKlfyz/Ow8tp7x6HfvOVMio0/cpDlBICaZ7vrn4Bb+fByw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native evidence requires a successful Cargo build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build without a word on its success",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxiny2RWTJSOc0IeS/7852SUI7J91SxqDfbN29d8/39PA2CaCid8nddaJ93RgLQaiAplAak0/XSaP0UpWQmZxbGoXVtKCmOymlappJNHVjIaKuFP6YpfN0xqBaOVPQacb9jPsWvMfv8kGF0qfoa8tdSG+AVN4mTtXAfc90D0THLUvjeO7PZGFc8rhjPcHz/A6F1EkPhbIRqJTDoi0zFSOQfu/iQck3mFlYgeUhnxMmKkBhGyB29DkUqrWYPHKB6FlPXxmU91plAEvrAnmkk0GwBt2iWnTKzgHxIJrO28HQwu5q+3dOyBW43AdZQ26Ipm1E3ERBjtyms8nRIdt0M+7TCNdpDwuz5sUe2WfN4p/Y98Ia11o7uvpFa2wuog6mQdFDIX+n9fsWs9yE39+YTswxpyQQY61xS8gzWmy/gogKjb6PmOvplBuGgz34yYclhINSjPbgTYdNg75b4cDN39iTO+pYwf2bRR7jfAOOZkq+DC+K6ikKq1+vESNCLftL9NagBChNxLCZVohNJLtKg1W7SAkqQxtRWOVKqYOi65gaL+jKwnoyaB0Mu03n85uxwGgOhah8DfJ5noxBy45MHpCJgewjRpc358w4HaBPhemSAXll7P8bj17OYMCXr+N/k/Fw7KlET/URjUsbc2Yw9tgTueiTIKjf6j/Ow8tp7x6HfvOFcSZWtPLd1S/vab23",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native evidence requires a successful Cargo build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a message after the build finished",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVmFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxiny2RWTJ6M5pQsh/38l2SUI7J91SxqDfbN29dy/39HC2SQCF3iV314n2dWMsBKECmUJpSj5dJ43SS1VCZvLY0iiqpgU33UkpVdNM0NSNBSRdKfoxS+fpLIJq5UzBp1nsj7hvwXv6Lh9UKH1Kvraxi/gNiMvbxKkaYt8z3QPTxZalcXHuz2RhXPK4i3qCj/M7FHEnPxTKInAph0VbZgoRWL93eFDyDWUWVmDjkM9JJCpAURsAO/ocCtVaSh5jgemjnr4yKO+1ygCW1wXySGcEwRp0S2rRKTsHFAfx9LgdCi3srrZ/54Rcgct9kDXkhmnaRuAGBTtym84mR4fRpptxn0a4TntYmHVc7JF91iz+iX0vrHGttaOrX7TG5gJ1MA2JHgr5O63ft5TlJvz+xnRijjklgyLWGreEPOPF9itAUmT0PVKup9PYMBzswU8+LCEclBDtwZsOm4Z8t8KBO/7Gntxxxwru3yzyGOcbcDxTxsvwoqieUFj9eo0ZCWrZX6K3BiVAaZDCZloRNch2lYaqdpEyVIYWSVjlSqmD4uuYGi/4ysJ6MmgdDLtN5/ObscDoGApR+Rrk8zyJQcuOTB6QiYHsI0aXN+fMOB2gT4XpkgF5Zez/G49ezmDAl6/jX5PxcOypRE/1EY1LG3NmMPbYE7nokyC43+o/zsPLae8eh37zhXEGq37l2GoNiON/wthpZF+S3dUvEuTOMw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo messages continue after completion or exceed budget",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "two builds",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7JCGdk3YpY9Bvtu7eu+d7enibeRBoTXZ7lUnbOqXBM+FJ1UJS9vkqc0IuRQOFqlKLE7SY1rHplnMunJugap0GJLkQ9HOWz/NZArXCqDqeFqk/4b57a+kHvxe+sTnZVqcuim9AsbzNjGgh9T3T3Ue61LJUJs39lZXKZA9PSY+3aX6HotgZH2qhEWKpgjI0hUCEqN8a3CtZR4WGFeg05EuWiGoQFDxgR19BLYKm7CEVIn3S01cG5b1W7kHHdQE/0JlAsAYZSJSdsnNAaVCcnrZDPsDTp+3fOcFXYCrreQuVijTBMdwgi47c5LPJwWGy6XrcpxGu0x7Wap0We2CfVuU/se/IGhO0Hl19GZSuGEqvHLEeCtU7rd8GKirl/3xjOjGHnDyCElYrs4SqiIvtV4AkSMk7pEpOp6lhONiBH61fgt8rIeq9N+k3jmy3woE7fWNPbmLHCu5eLfIQZx2YOJOny3BUFI/ItHy5FhkJWt5fotcGxUOjkPxmuiByGO1qFC1CmUco9wGJaWEaLr2I1zFXlsUrC+vJoHUw7Cafz6/HAiNTKNjCtsCf53H0kndkfI+MDWQfMbq8OWfGaQ99KkyXDMgLY//fePRyBgO+fhv/m4yHY0fFeqqPaFzamDODscOeyEWfBBb7tXxzHo6nvXsc+s3Xyihc9CvHICUgjvg01v0bSFXS8A==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo messages continue after completion or exceed budget",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an empty line after the build finished",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/T2e7S0JbJ91SxqDfbN29d8/39PA28yCCNdnNZSZt65QGz4RHVQuJ2afLzAm5FA0UqqIWJ3AxrVPTDedcODcJqnUaAsqFwB+zfJ7PCNQKo+p0WlA/4b55a/E7vxO+sTnaVlMXpjfAVN5mRrRAfU90d4mOWpbK0NyfWalMdv9Ieryl+R0KU2d6qIUOkEoVlLEpRAiQ9FsT9krWYaFhBZqGfM6IqAaB0UPo6CuoRdSY3VMh0ZOevjIo77VyDzqtC/iBTgLBGmREUXbKTgHRoDSdtoM+wuPF9u+c4CswlfW8hUolmuhY2ASWHLnOZ5ODQ7LpatynEa7jHtZqTYs9sE+r8p/Y98waE7UeXX0Zla5YkF45ZD0Uqndav41YVMq/fmM6MYecPIEIq5VZQlWkxfYrCChQyduAlZxOqWE42IEfrF+C3yuFoPfepN84tN0KB276xp7cpI4V3L5Z5CHOOjBpJqfL8KwoHgLT8uVaYkRoeX+J3hoUD40K6DfTBaILya5G4SKWeYJyHwMyLUzDpRfpOubKsnRlYT0ZtA6GXefz+dVYYCSFgi1sC/xpHg9e8o6M75GxgewjRuc358Q47aGPhemcAXlh7P8bj17OYMCXr+N/k/Fw7KhYT/URjXMbc2IwdtgjueiTwFK/ln+ch+fT3j0O/eZrZVRY9CsPUUoI4bdPF78AfhPDZA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo messages continue after completion or exceed budget",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an empty line among the messages",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxsny2RWRJ6E5pQuh/n2S7a0LaJN1SxqDfbN29d+f39PAm8yDQmuzmMpO2c0qDZ8KTqoWk7NNl5oRciAYKVaUWJ6id1rHphnMunJug6pwGJNkK+jHL5/ksgTphVB1Pi9SfcN+8tfSd3wnf2Jxsp1MXxTegWN5kRnSQ+p7o7iJdalkok+b+zEplsvvHtI+3aX6PotgZH2qhEWKpgjI0hUCEuL81uFWyjgoNS9BpyOcsEdUgKHjAnr6CWgRN2X0qRPq0z1AZNx925R50lAv4zp4JBCuQgUTZb3YKKA2K05M65AM8Xlxs/s4KvgRTWc87qFSkCY7hGlm05DqfTXYOk09Xh406wHXcxFqtkrI7/mlV/hP/9rwxQes97belL4PSFUPplSM2QKF6J/ltoKJS/vUr0y+zy8kjKGG1MguoiijsIAGSICVvkSo5naaG8eAZ/GD9AvxWCVFvvUm/dmR7CUfu9I0DuYkdS7h985K7OOvAxJk8XYa9onhApuXLtchI0PHhEr01KB4aheTX05bIYbSrUdSGMo9Q7gMS08I0XHoRr2OuLItXFlaTcdfRsOt8Pr86FBiZQsFa2wF/msfRS96T8S0yNpJ9xOj85pwYpy30sTCdMyAvjP1/4zGsMxrw5evhv8nhcDxTsYHqIxrnNubEYDxjj+RiSAKL/Vr+cR72p717HAbla2UUtoPkGKQExN8+/QKd1sNk",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "JSONDecodeError",
+    "said": "Expecting value: line 1 column 1 (char 0)"
+   }
+  },
+  {
+   "name": "lines that end with a carriage return and a line feed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/T7YfyjOx0xWwjZKyzoG/RmjGFk+xyKyJHSnNCH0v0+yXZKQzkm3hjHoN1t3793zPT28zTwItCa7vcqkbZ3S4JnwpGohKft0lTkhl2IBhapSixPUTOvYdMs5F85NULVOA5JsBP2Y5fN8lkCtMKqOp0XqT7hv3lr6zu+FX9icbKtTF8U3oFjeZka0kPqe6e4jXWpZKpPm/sxKZbKHp6TH2zS/Q1HsjA+10AixVEEZFoVAhKjfGtwrWUeFhhXoNORzlohqEBQ8YEdfQS2CpuwhFSJ90tNXBuW9Vu5Bx3UBP9CZQLAGGUiUnbJzQGlQnJ62Qz7A08cP27+zgq/AVNbzFioVaYJjuEEWLbnJZ5ODw+TT9bhRI1ynTazVOm32wD+tyn/i35E3Jmg9vvsyKF0xlF45Yj0Wqgvt3wYqKuV/f2c6MYecPIISViuzhKqIm+13gCRIyTukSk6nqWE42IEfrV+C3ysh6r036TeObLfDgTt9Y09uYscK7l4t8hBnHZg4k6fbcFQUj8i0fLkWGQla3t+iV0fFw0Ih+c20IXIY/VooakKZRyj3AYlpYRZcehEvZK4si5cW1pNB7ODYTT6fX49FRqZYsMa2wJ/ncfSSd2R8j4wNZO9BuoA7ZwZqD30qTm8ZkRfG/scB6fUMDnz5Ov5HGY/Hjor1VO/heHNnzozGDnsiGX0WWOzX8o8TcTzt8oHoV18ro7Dpd45BSkDcOfUL+63Dwg==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "no line end after the last message",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72Q7JKGdk3YpY9Bvtu7eu+d7enibeRDBmuz2KpO2dUqDZ8KjqoXE7PNV5oRcigYKVaUWJ3AxranplnMunJsE1ToNAeVC4M9ZPs9nCdQKo2o6LVJ/wn331uIPfi98Y3O0rU5dSG+AVN5mRrSQ+nZ090SXWpbKpLm/slKZ7OEp6fE2ze9QSJ30UAsdgEoVlLEpRAhA+q0JByXrsNCwAp2GfMkSUQ0Co4fQ0VdQi6gxe0gFok96+sqgvNfKPWhaF/AjnQkEa5ARRdkpOweUBtH0tB30EZ4+bf/OCb4CU1nPW6gU0UTHwiYwcuQmn02ODpNN1+M+jXCd9rBW67TYI/u0Kv+Jfc+sMVHr0dWXUemKBemVQ9ZDoXqn9duIRaX8n29MJ+aYkxMoYbUyS6gKWmy/goAClbwLWMnpNDUMB3vwo/VL8AelEPTBm/Qbh7Zb4cCdvrEnN9SxgrtXizzGWQeGZvJ0GZ4VxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvhuHg9e8o6MH5CxgewjRpc358w4HaBPhemSAXlh7P8bj17OYMDXb+N/k/Fw7KlYT/URjUsbc2Yw9tgTueiTwKhfyzfn4fm0d49Dv/laGRUW/cpDlBJC2Pn0G/c3w1A=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "a line that is no JSON",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fEZyPmayEbZSWdQz6M0Yxsny2tciSkE5pQul/3yl2l4S2TrqljEG/2bp7757v6WFjcfIzWPPhPvMg6CG7mmTSdk5p8Ex4VLWQmH2cZE7IpWigUFVqcQLbWU1NV5xz4dw0qM5pCChbgd/n+SKfJ1AnjKrptEj9CffVW4vf+I3wjc3Rdjp1Ib0BUvk+M6KD1PdId0N0qWWpTJr7IyuVyW4fkh5v0/wtCqmTHmqhA1CpgjI2hQgBSL81Ya9kHRYaVqDTkE9ZIqpBYPQQtvQV1CJqzG5TgeiTnr4yKO+1cg+a1gX8QGcCwRpkRFFulZ0CSoNoetoO+ggPf+sEX4GprOcdVIpoomNhExg5cpnPpweHyaaLcZ9GuI57WKt1WuyBfVqV/8S+J9aYqPXo6suodMWC9Moh66FQvdH6bcSiUv7lG7MVc8jJCZSwWpklVAUttl9BQIFKXges5GyWGoaDHfjO+iX4vVIIeu9N+o1Du13hwJ2+sSc31LGC61eLPMRZB4Zm8nQZnhTFXWBaPl8jRoSO95fotUHx0KiAfjNrEV0guxqFbSxzgnIfAzItTMOlF3Qdc2UZXVlYTwetg2GX+WJxMRYYmULBWtsBf5zHg5d8S8b3yNhA9h6j85tzYpz20MfCdM6APDP2/41HL2cw4POX8b/JeDh2VKyneo/GuY05MRg77JFc9Elg1K/lH+fh6bQ3j0O/+VoZFdp+5SFKCSH89ukXRTPGjw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "JSONDecodeError",
+    "said": "Expecting value: line 1 column 1 (char 0)"
+   }
+  },
+  {
+   "name": "a line that is a list",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0owiny2RWRJSKc0ofS/72S7S0JaN91SxqDfbN29d8/39PDd4tND5kEEa7Lri0za1ikNngmPqhISs88XmRNyJWooVJlanMBmWlHTNedcODcJqnUaAspG4M9ZPs9nCdQKoyo6LVJ/wn331uIPfit8bXO0rU5dSG+AVH7IjGgh9T3R3RJdalkpk+beZUtlssVj0uNtmt+hkDrpoRI6AJVKWMa6ECEA6bcm7JWsw0LDGnQa8iVLRBUIjB5CR19CJaLGbJEKRJ/09JVBea+Ve9C0LuAHOhMINiAjimWn7BRQGkTT03bQR3j8Wyf4GkxpPW+hVEQTHQvbwMiRq3w2OThMNl2O+zTC9bqHldqkxR7Yp9Xyn9h3ZI2JWo+ufhmVLlmQXjlkPRTKd1q/jViUyr98Yzoxh5ycQAmrlVlBWdBi+xUEFKjkTcBSTqepYTjYge+tX4HfK4Wg996k3zq03QoH7vSNPbmhjjXcvFnkIc46MDSTp8twVBT3gWn5fI0YEVreX6K3BsVDrQL67bRBdIHsqhU2cZkTlPsYkGlhai69oOuYK8voysJmMmgdDLvK5/PLscDIFArW2Bb40zwevOQdGd8jYwPZR4zOb86JcdpDvxamcwbkmbH/bzx6OYMBX7+N/03Gw7GjYj3VRzTObcyJwdhhX8lFnwRG/Vr+cR6Op717HPrNV8qo0PQrD1FKCOG3T78AHl3EHA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON object",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a message without a reason",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVmFr2zAQ/b5fUZSPmayEbZSWdQz6M0Yxsnx2RGRJSOc0IfS/72S7S0I6J91SxqDfIt29dy/39Ei2rIEYZQ3s9oqt2dOHLQsgo7PprFzjtYHAZUBdSYXs4xXzUi2pP9dlavESF9OKmm6FENL7SdSNNxBRLSR+n2XzbJZAjbS6ots89Sfc1+AcfhP3MtQuQ9eY1IV0AqTyllnZdJKe6e6JLrUstU1zf7BCW/bwlPQEl+Z3KKRO+lBJE4FKJRRtncsYgfQ7G/dKzmNuYAUmDfnEElEFEtsAsaMvoZKtQfaQCkSf9PSVQXmvVQQwtC4QBzoTCNagWpRFp+wcUBpE09N2MLTw106IFdjSBdFAqYmm9TxuIidHbrLZ5OAy2XQ97tMI12kPK71Oiz2wz+jin9h3ZI1tjRldfdFqU/KogvbIeyiUb7R+12Je6vD7F9OJOeQUBEpYo+0SypwW268gokSt7iKWajpNDcPFDvzowhLCXilGs3dSYePRdSscuNN37Mktdazg7tUiD3HOg6WZIj2Go6J8jNyol2vEiNCI/hG9NigBah0xbKYLRB/Jrlrjoi0ygorQRuRG2lqoIOk5ZtpxerKwngxaB8Nusvn8eiwwKoWCL1wD4nmeiEGJjkzskfGB7D1GlzfnzDjtoU+F6ZIBeWHs/xuPXs5gwOcv478m4+HYUfGe6j0alzbmzGDssCdy0SeBU79Rf5yH42lvHod+85W2Oi76lcdWKfpD/Munnwx8yJs=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'reason'"
+   }
+  },
+  {
+   "name": "a message whose reason is a number",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayErZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0JbJ91SxqDfIt29d8/39Mg28yCCNdnNxeXjp+3ulEnbOqXBM+FR1UJi9vkic0IuRQOFqlKLE7iY1tR0wzkXzk2Cap2GgHIh8Mcsn+ezBGqFUTXdFqk/4b55a/E7vxO+sTnaVqcupBMglbeZES2kvie6O6JLLUtl0tyfWalMdv+Y9Hib5ncopE76UQsdgEoVlLEpRAhA+q0JeyXrsNCwAp2GfMkSUQ0Co4fQ0VdQi6gxu08Fok96+sqgvNfKPWhaF/ADnQkEa5ARRdkpOwWUBtH0tB30Ef7aCb4CU1nPW6gU0UTHwiYwcuQ6n00OLpNNV+M+jXAd97BW67TYA/u0Kv+Jfc+sMVHr0dWXUemKBemVQ9ZDoXqn9duIRaX86y+mE3PIyQmUsFqZJVQFLbZfQUCBSt4GrOR0mhqGix34wfol+L1SCHrvJP3Goe1WOHCnb+zJDXWs4PbNIg9x1oGhmTw9hmdF8RCYli/XiBGh5f0jemtQPDQqoN9MF4gukF2NwkUsc4JyHwMyLUzDpRf0HHNlGT1ZWE8GrYNh1/l8fjUWGJlCwRa2Bf40jwcveUfG98jYQPYRo/Obc2Kc9tDHwnTOgLww9v+NRy9nMODr5fi/yXg4dlSsp/qIxrmNOTEYO+yRXPRJYNSv5R/n4fm0d49Dv/laGRUW/cpDlBJC+O3TLyKDx7c=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a compiler's message",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVl2L2zAQfO+vCM5jaiuhLceFXinczyiHkeW1LSJLQlrng5D/3pXtNAlJnVyboxTuzdbuzE52NMTbyAH3RkfzUSRMbaUCF9fgPS8h+jiK9o/z0ZY6dQ4O8tC74k5LXUa73YftJQruUBZcYOCwXCyII5Ut0nKsJgU1zRlj3Nqxl7VV4FFUHL9Pk1kybQdzLQs6TUN/wH11xuA39sxdaRI0tQpdSG+ArTrN6yAz2tM9E11oWUgd5v6IMqmjl13Q40yY36KQOumh4MoDlXLImjLl3gPpN9oflYzFVMESVBjyKQpEBXBsHPiWPoeCNwqjl1Ag+qCnq/TKO63MgaJ1ATvRGUCwBtEgz1plt4DCIJoetoOugb92gi3JYONYDbkkmsbGfuNjcuQxmY5PDoNND8M+DXBd97CQ67DYE/uUzP6JfWfW6EapwdVnjVR57IWTFuMOSqF5m/WbBtNcut/fmFbMKScjUMAqqReQp7TYbgUeOUrx5DEXk0lo6A8O4JVxC3BHJe/V0ZtwG4umXWHPHX5jR66pYwlPrxZ5ijMWNM1k4TKcFfnKx0pcrhEjQs26S/TaoDgopUe3mVSI1pNdpcSqyRKCMtd4jBXXJROO03VMpInpysJ63GvtDXtMZrOHocCIEIq4MjWw/TzmnWAtGTsii3uy9xjd35wb43SEvhamewbkwtj/Nx6dnN6Az1+G/02Gw3Ggijuq92jc25gbg3HAXslFl4SY+pX44zycT3vzOHSbL6SWvupW7hsh6CP5l08/AXf72hs=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "a message of another kind",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSOc0IfS/T2e7i0M6J91SxqDfbN29dy/39Jxd4kEEa5LbqwRVo0zFlClt8vRhN6pI2zilwTPhUZVCYvLxKnFCrkQFmSqoxQms52VsuuWcC+dmQTVOQ0BZC/y+SJfpgkCNMKqMpxn1E+6rtxa/8XvhK5uibTR1YXwDjOVdYkQD1PdMdx/pqGWlDM39keTKJA9PpMdbmt+hMHbGh1LoALFUQN5WmQgBon5rwqhkHWYa1qBpyKeEiEoQ2HoIHX0BpWg1Jg9UiPSkp68Mynut3IOO6wJ+oJNAsAHZosg7ZeeAaFCcTttB38JfO8HXYArreQOFijStY2EbWHTkJl3MDg7Jputpnya4TntYqg0t9sA+rfJ/Yt+RNabVenL1eat0wYL0yiHroVC80fpti1mh/O9vTCfmkJNHEGG1MisosrjYfgUBBSp5F7CQ8zk1DAd78KP1K/CjUgh69Cb91qHtVjhw02/syU3sWMPdq0Ue4qwDE2dyugxHRfEYmJYv1yIjQsP7S/TaoHioVEC/ndeILkS7KoV1m6cRyn0bkGlhKi69iNcxVTZ+GAvYzAatg2E36XJ5PRUYSaFgtW2AP8/jwUvekfERGRvI3mN0eXPOjNMIfSpMlwzIC2P/33j0cgYDPn+Z/jeZDseeivVU79G4tDFnBmOPPZGLPgks9mv5x3k4nvbmceg3XyqjQt2vPLRSQgi/fPoJjRvMJw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Unsupported Cargo message kind",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script twice",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtldFq2zAUhu/3FMW5zGQlbKO0rGPQxxjByPKxIyJLQjpKE0LffZLlLjZtkyxkg7HcxTrn/Oe3fn9kl1lgTqvs/ibjujVCgiXMoqgZx+zjTWYYX7EGClHFFsNwOa1D0z2llBkzcaI1EhzyJcPvs3yez+JQy5Sow2kR++PcV6s1fqOPzDY6R93K2IXhCTCUd5liLcS+F7nHIBdbVkLFvT+yUqhs8Rz9WB33d1MYOsOPmkkHoVRB6ZuCOQfBv1ZuUNIGCwlrkHHJpywK1cDQW3CdfAU18xKzRSwE+egnVXrnySu1IMN1AR35jEOwAe6RlZ2zU4biorA93g5aD88fdoMkSi9kRRy3wiBJ0lAdT4OuQVXa0hYqEaS8IW7rSEjlLp9NRocxqtuUlfZYVMK+b7szM9akYSjOSqFWUBVSlOmyHDIU/MFhxafT2NAf7IeftF2BHZSck4MnbrcGdXejvXZ8xySuQscaHn7b5HhOG1BhJw2eXxfZkyOSv10LightV1uM0zqDm7OSeo+qA1rHiavFJmIwgi2949+H7RVIykt5BeV/AsVCIxza7XSJaFyIqxG49GUeRqn1DolkqqHcsvA55kKT8MnCZtJ77QO7y+fz20PA8AgFWeoW6Ms+6iynnRgdiJFe7IrR5cM5EafB9DGYLgnIG2v/XTySnT6Az18O/5schmMvRZLUFY1LB3MiGPvZI1wkEkjol/xsHl5v++M4pJuvhRJuma7cec7BuV85/QRH01it",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Duplicate native build script event",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script without its directory",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFv2jAQ/b5fUYWPLDFom6pW6zSpP2OqIse5BAvHtuwzBaH+953jMEDQtNuopkn9RnL33h333oNt5oB7o7Pbq0yYzkoFLucOZcMFZh+vMsvFkrdQyjq2WI6LaUNNt4wxbu3Ey84q8CgWHL/Pinkxi6COa9nQ2zL2R9xXZwx+Y/fctaZA06nYhfQESOVtpnkHsW9Hd090sWUpdZz7I6ukzh6e4j7OxPk9CqmTPjRceaBSDVVoS+490P5G+4OSsVgqWIGKQz5lkagBjsGB7+lraHhQmD3EAtHHfVJl2DztyhwoOhewoz0jCNYgAvKq3+w1oDiIpsfroAvw9GH7d0qwFejaONZBLYkm2NxvfE6K3BSzydHLKNP1uE4jXC9r2Mh1POyRfEpW/0S+E2l0UGr09FWQqs69cNJinqBQv9H5ldRLqEs6TvoaHjlKceexFtNpbBhe7PGPxi3BHZS8VwdPwm0smv4MA3fcM5Fr6ljB3Xlr9t/6eHlmQm+7Y5yxoGkmi4KeFPmjz5U4XyNGhI4lI/yu2R200qPbTBeI1tPJW4mLUBUEZS54zBXXLROOk6UKaXKyHawnw67D0W+K+fx6zPQiGjtfmA7Ybh7zTrCejB2Q5QPZexQuLw6Zrqyle/5HNDn1AL3z6XNhumRAzoz9f+OR1hkE+Pxl/B9hPBx7qjxRvUfj0sK8Mhh77Au5SEnIqV+JP87D6bQ3j0O6fCO19It0ch+EAO9/6fQTaGOt6g==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'out_dir'"
+   }
+  },
+  {
+   "name": "a build script without its package",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVNFu2zAMfN9XFM5jJivBNhQt1mFAP2MoDFmmbSGyJEhUmiDov0+03SVBOyfdWgzD9habvOOZx8su8yCCNdn1RSZt55QGz4RHVQuJ2fuLzAm5Eg0UqqIWJ7Cd16npmnMunJsF1TkNAWUr8OsiX+YLAnXCqDq9LaifcJ+9tfiF3wrf2Bxtp6kL0xNgKu8yIzqgvke620RHLStlaO63rFQmu3sgPd7S/B6FqTP9qIUOkEoVlLEpRAiQ9FsTDkrWYaFhDZqGfMiIqAaB0UPo6SuoRdSY3VEh0ZOeoTIqH7RyDzqtC/iRTgLBBmREUfbKzgHRoDSdtoM+wsO73e85wddgKut5B5VKNNGxsA0sOXKVL2ZHL8mmy2mfJrhOe1irDS32yD6tyj9i3xNrTNR6cvVlVLpiQXrlkA1QqOhbbMSiUv7n9vbI453xBCKsVmYFVZG2MOgNKFDJm4CVnM+pYXyxB99bvwJ/UApBHzxJv3Vo++8ducnBgdykjjXcvFjkMc46MGkmJ+eeFMV9YFo+X0uMCB0fHH/pVXtoVEC/nbeILqTTbhS2scwTlPsYkGlhGi69SLeTK8vSfcFmNmodj/sqXy4vp65b0gWz1nbAH+fx4CXvyfgBGRvJ/tmbf0NzzozTAfpUmF4zIM+M/XvjMcgZDfj4afqvfzoceyo2UP2Pxmsbc2Yw9tgTuRiSwFK/lr+ch6fT3jwOw+ZrZVRoh5WHKCWE8MOn781eqEg=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'package_id'"
+   }
+  },
+  {
+   "name": "a build script of one package in two directories",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I7J91SRke/xbp7717u6dnbzINAa7Lri0za1ikNnglPqhaSso8XmRNyKRooVJVanKDFtI5N15xz4dwEVes0IMmFoO+zfJ7PEqgVRtXxtEj9CffVW0vf+K3wjc3Jtjp1UXwCiuVtZkQLqe+R7jbSpZalMmnuj6xUJrt7SHq8TfM7FMXO+KMWGiGWKihDUwhEiPqtwb2SdVRoWIFOQz5liagGQcEDdvQV1CJoyu5SIdInPX1lUN5r5R50XBfwA50JBGuQgUTZKTsFlAbF6Wk75AM8fNj+nRN8BaaynrdQqUgTHMMNsujIVT6bHBwmmy7HfRrhOu5hrdZpsQf2aVX+E/ueWGOC1qOrL4PSFUPplSPWQ6F6pfXbQEWl/O9vTCfmkJNHUMJqZZZQFXGx/QqQBCl5g1TJ6TQ1DAc78L31S/B7JUS99yT9xpHtVjhwp//Yk5vYsYKbF4s8xFkHJs7k6TI8KYp7ZFo+X4uMBC3vL9FLg+KhUUh+M10QOYx2NYoWocwjlPuAxLQwDZdexOuYK8vilYX1ZNA6GHaVz+eXY4GRKRRsYVvgj/M4esk7Mr5Hxgay9xid35wT47SHPhamcwbkmbFvNx69nMGAz1/Gvybj4dhRsZ7qPRrnNubEYOywR3LRJ4HFfi3/OA9Pp716HN7GS4khSGuq//3d1JtRK6Nw0buAQUpA/BWan1SETyA=",
+     "spelled": true
+    },
+    "target/release/build/openssl-sys-second/out/": null
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys-second/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "an artifact without its package",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUdyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/72R7S0I6Jx0pY9Bvtu7eu+d3enibeRDBmuzuKpO2c0qDZ8KjqoXE7ONV1gmjaghYOIFt6vrqrcVv/EH4xuZoO526kN4AqbzNjOgg9QXVOU3Ah1b0REtlKjr/kZXKZI/PdOK8rWlej0LqpIda6ABUqqCMTSFCAJJiTdgrWYeFhhXoNORTlohqEBg9hJ6+glpEjdljKhB90jNURuWDVu5B05cDP9CZQLAGGVGUvbJzQGkQTU/uoI/w/GF7ylQn5FI0UKjkSJacnSWpd5xz4Rxfgams5x1UimiiY2ET2Dxf3Obz64PD73R4k8+n9jTBdXqHtVonYw/Wp1X5T9Z3tBoTtZ60voxKVyxIrxyyAQrVG9lvIxaV8n++Mb2YQ05OoITVyiyhKsjYwYKAApW8D1jJ2Sw1jAc78JP1S/B7pRD03pv0G4e2t3DkTt84kBvqWMH9q0Ue4qwDQzN5ugxHRfEUmJYv14gRoePDJXptUDw0KqDfzFpEF2hdjcI2ljlBuY8BmRam4dILuo65soyuLKyvR63jwm7zxeJmKjAyhYK1tgP+ax4PXvKejO+RsZHsPUaXX86ZcdpDnwrTJQPywtj/Nx6DnHEBn79M/02mw7GjYgPVezQuvZgzg7HDnsjFkARG/Vr+dR6Op715HAbna2VUaAfLQ5QSQvi9p5/hKbJT",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'package_id'"
+   }
+  },
+  {
+   "name": "an artifact without a target",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFu2zAMfN9XFM5jJivBNhQt1mFAP2MoDEWmbSGyJEhUmiDIv4+y3SVZWrfd0gED+haLvCN55CHbzIMI1mTXF5m0rVMaPBMeVSUkZh8vMifkUtRQqDKlOIHNtKKka865cG4SVOs0BJSNwO+zfJ7PEqgVRlX0WqT8hPvqrcVv/Fb42uZoW91Re5uoKL7NkLLpRyV0AAqVsIh1IUIAasWacBCyDgsNK9CJ91O2o6cKBEYPKesHQSsRNWZ3KUD0RrRDZGgCqQlA7kHT5MAfJrilCToQrEFGFIuus5eAUiGqngZFH2H3Yft3ovIVmNJ63kKpiCY6FjaBkbhX+Wxy9JgUvxyXfITrt3X0I3bbSJoljkqtk7ApulSm7FTUapHd7f79+k5WY6LWo9IvotIlC9Irh6yHQvlG8tuIRan80xfTNXPMyQmUsFqZJZQFCdtLEFCgkjcBSzmdpoThYQ++t34J/iAUgj74kn7j0HYSDtxpxp7cUMYKbl7d5DHOOjBUk6djOAmK+8C0fDxGjAgt74/otUbxUKuAfjNtEF2gddUKm7jICcp9DMi0MDWXXtA55soyOllYT4Zeh4Vd5fP55ZhhZDIFa2wL/KEeD17yjowfkLGB7N1G51/OC+10gH7OTOc0yCNl/1979O0MC/j8ZfzfZNwceyrWU71b49yLeaEx9thnfNE7gVG+ln/sh9Nqb26HXvlKGRWaXvIQpYQQfu3pJ+ogsrg=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'target'"
+   }
+  },
+  {
+   "name": "an artifact whose target is a list",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0oxiny2RWRJSKc0IeS/72S7S0JbN93SwaDfLN29d6d39/A28yCCNdn1RSZt65QGz4RHVQmJ2eeLzAm5FDUUqkwpTmAzrSjpmnMunJsE1ToNAWUj8Ocsn+ezBGqFURXdFik/4b57a/EHvxW+tjnaVqcspBMghe/uUyFvEzEdtxkSlj4qoQNQqIRFrAsRAlBj1oSDkHVYaFiBTlW+ZDu6qkBg9JCy7ghaiagxSxUSvRHtEBla6pvgHjTpAPzxPbf0ng4Ea5ARxaLr7BRQKkTV07PRR9h92v6dxHwFprSet1AqoomOhU1gJPVVPpscXSb9L8cHMML10nC2WdIscVRqnYRN0aUyZaeiVovsfvfvx/dkNCZqPSr9IipdsiC9csh6KJTvJL+NWJTKv7wxXTPHnJxACauVWUJZkLC9BAEFKnkTsJTTaUoYLvbgB+uX4A9CIeiDk/Qbh7aTcOBOb+zJDWWs4ObNTR7jrANDNXlahidB8RCYls/HiBGh5f0SvdUoHmoV0G+mDaILNK5aYRMXOUG5jwGZFqbm0gtax1xZRisL68nQ6zCwq3w+vxwzjEymYI1tgT/W48FL3pHxAzI2kH3Y6PzDOdFOB+jXzHROgzxT9v+1R9/OMICv38b/JuPm2FOxnurDGucezInG2GNf8UXvBEb5Wv6xH55We3c79MpXyqjQ9JKHKCWE8HtOvwBwvbbh",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON object",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "an artifact whose target has no name",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJ6E5pQuh/n2S7TUJaN91SxqDfYt29d6f39Mg28yDQmuz6IpO2dUqDZ8KTqoSk7PNF5oRcihoKVaYWJ6iZVrHpmnMunJugap0GJNkI+jnL5/ksgVphVBVPi9SfcN+9tfSD3wpf25xsq1MXxS+gWN5mS2US/69soUx295DmepvmdFWKVPFHJTRCLJWwCHUhECHuaQ3ulayjQsMKdBr6JUtEFQgKHrCjL6ESQVN2lwqR3oh2qAwb9jtxDzrKAvzxerfxeh0I1iADiUW32SmgNChOTyqQD/Dwaft3ivMVmNJ63kKpIk1wDDfIovJX+WxycJjsuBz3Y4TrZa+SZomjUuskbKo+2afV4p/Yd2SNCVqPSr8ISpcMpVeOWA+F8p3kt4GKUvmXX0y3zCEnj6CE1cosoSyisL0ESIKUvEEq5XSaGoaDHfje+iX4vRKi3vuSfuPIdhIO3OmOPbmJHSu4efOShzjrwMSZPD2Go6K4R6bl87XISNDy/hG9NSgeaoXkN9OGyGG0q1bUhEUeodwHJKaFqbn0Ij7HXFkWnyysJ8Oug2FX+Xx+ORYYmULBGtsCf5zH0UvekfE9MjaQfcTo/OacGKc99GthOmdAnhn7/8ajX2cw4Ou38X+T8XDsqFhP9RGNcxtzYjB22Fdy0SeBxX4t/zgPx9PePQ698pUyCptecgxSAuKTT78BPCm7mg==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'name'"
+   }
+  },
+  {
+   "name": "an artifact whose target has no kind",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/72S7S0I6J91SxqDfbN29d+f39PA28yCCNdntVSZt65QGz4RHVQmJ2cerzAm5FDUUqkwtTmAzrajplnMunJsE1ToNAWUj8Pssn+ezBGqFURWdFqk/4b56a/Ebvxe+tjnaVqcupDdAKm8zI1pIfc9090SXPaXx3qZxXRNSgR4qoQNQqYRFrAsRAtC61oS9knVYaFiBTpyfOqIKBEYPqesHQSsRNWYPqUD0aXxfGRbtV+MeNKkD/GCtBII1yIhi0W12DigNoulJDPQRnj5s/054vgJTWs9bKBXRRMfCJjAy4CafTQ4OkyvX47aMcJ22rFLrJGyqLpUpOxW1WmQP/8C+I2tM1HpU+kVUumRBeuWQ9VAo30h+G7Eolf/9jemWOeTkBEpYrcwSyoKE7SUIKFDJu4ClnE5Tw3CwAz9avwS/VwpB771Jv3FoOwkH7vSNPbmhjhXcvXrJQ5x1YGgmT5fhqCgeA9Py5RoxIrS8v0SvDYqHWgX0m2mD6ALZVSts4iInKPcxINPC1Fx6QdcxV5bRlYX1ZNh1MOwmn8+vxwIjUyhYY1vgz/N48JJ3ZHyPjA1k7zG6vDlnxmkPfSpMlwzIC2P/33j06wwGfP4y/jcZD8eOivVU79G4tDFnBmOHPZGLPgmM+rX84zwcT3vzOPTKV8qo0PSShyglhPDLp5+WB76V",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'kind'"
+   }
+  },
+  {
+   "name": "an artifact whose kinds are text",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0oxsny2RWRJSOc0IfS/72S7i0NaN91SxqDfbN29d8/39PAu8SCCNcn1RSJt45QGz4RHVQqJyeeLxAm5EhVkqogtTmA9L6npmnMunJsF1TgNAWUt8OciXaaLCGqEUSWdZrE/4r57a/EHvxW+sinaRscupDdAKu8SIxqIfU90t0QXW1bKdHNzZZLHqMbbOL3DIPXRQyl0ACoVkLdVJkIAUm9NGJWsw0zDGnSk+tIRlSCw9RC77ghailZjch8LRB/V9JVBd6+Ue9C0LOAHKiMINiBbFHmn7BRQHETT427Qt/D4afd3PvA1mMJ63kChiKZ1LGwDIz+u0sXs4DCadDnt0gTX6w6WahMXOzLvLtEqT+7/gX1H1phW68nV563SBQvSK4esh0LxTuu3LWaF8i/fmE7MIScnUMRqZVZQZLTYfgUBBSp5E7CQ83lsGA724AfrV+BHpRD06E36rUPbrXDgjt/YkxvqWMPNm0Ue4qwDQzN5vAxHRfEQmJbP14gRoeH9JXprUDxUKqDfzmtEF8iuSmHd5ilBuW8DMi1MxaUXdB1TZRldWdjMBq2DYVfpcnk5FRgZQ8Fq2wB/mseDl7wj4yMyNpB9xOj85pwYpxH6tTCdMyDPjP1/49HLGQz4+m36bzIdjj0V66k+onFuY04Mxh77Si76JDDq1/KP83A87d3j0G++VEaFul95aKWEEH779AvSU8Ki",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON array",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "the server as a library and a binary",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I6J91SxqDfIt+9d0/39Mg28yDQmuz2KpO2dUqDZ8KTqoWk7ONV5oRcigYKVaUWJ2gxrWPTLedcODdB1ToNSHIh6Pssn+ezBGqFUXX8WqT+hPvqraVv/F74xuZkW526KJ6AYnmbGdFC6numu490qWWpTJr7I9OqTOdSmezhKcnyNsnowBQB8UctNEIsVVCGphCIEK9hDe6VrKNCwwp0mvUpS0Q1CAoesJtSQS2CpuwhFSJ9ktVXhgv0krkHHbcG/EBuAsEaZCBRdsrOAaVBcXpaEvkATx+2f2cIX4GprOctVCrSBMdwgywac5PPJgcfk1vX43aNcJ22slbrtNgjF/+FfUfWmKD16OrLoHTFUHrliPVQqN5o/TZQUSn/+xfTiTnk5BGUsFqZJVRFXGy/AiRBSt4hVXI6TQ3Dhx340fol+L0Sot47Sb9xZLsVDtzpjj25iR0ruHu1yEOcdWDiTD5E+rAoHpFp+XItMhK0vH9Erw2Kh0Yh+c10QeQw2tUoWoQyj1DuAxLTwjRcehGfY64si08W1pNB62DYTT6fX48FRqZQsIVtgT/P4+gl78j4HhkbyN5jdHlzzozTHvpUmC4ZkBfG/r/x6OUMBnz+Mv5vMh6OHRXrqd6jcWljzgzGDnsiF30SWOzX8o/zcDztzePQb75WRuGiXzkGKQHxl08/AcK7xSE=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server as a test",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fEZyPmayEbZSGdQz6M8Ywinx2RGRJ6E5pQuh/n2S7S0JaJ91SxqAfrbv37umeHt5lHgRak81HmbSNUxo8E55UJSRlH0eZE3IlaihUmVqcoOWkik1zzrlwboyqcRqQ5FLQ92k+y6cJ1AijqnhapP6E++qtpW/8Xvja5mQbnboofgHF8i4zooHU90R3H+lSy0qZNPdHRvEw+/mYBHmbBLSw9nQ+qoRGiKUSFqEuBCLEC1iDByXrqNCwBp2mfMoSUQWCggds+UuoRNBxRCpE+iSoq/TSO7Hcg477An4kNIFgAzKQWLTKLgGlQXF6Wg/5AI8fdn9nBV+DKa3nDZQq0gTHcIssWnKbT8dHh8mnm2GjBrjOm1ipTVrskX9aLf6JfSfWmKD14OoXQemSofTKEeugUL7R+m2golT+5RfTijnm5BGUsFqZFZRFXGy3AiRBSt4hlXIySQ39wR78YP0K/EEJUR98Sb91ZNsV9tzpjh25iR1ruHu1yGOcdWDiTJ4ew0lRPCDT8vlaZCRoePeIXhsUD7VC8tvJkshhtKtWtAyLPEK5D0hMC1Nz6UV8jrmyLD5Z2Ix7rb1ht/lsdjMUGJlCwZa2Af40j6OXvCXjB2SsJ3uP0fXNuTBOB+hzYbpmQJ4Z+//Go5PTG/D5y/DfZDgceyrWUb1H49rGXBiMPfZMLroksNiv5R/n4XTam8eh23yljMJlt3IMUgLib59+AW6tw+E=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a binary of another name",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfYt29d0/39Mg28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kL4AqbzNjGgh9WkrqgZMqi6VSSN/ZKUy2cNTkuJtGt0BkNjpRy10ACpVUMamECEASbcm7JWsw0LDCnTi/5QlohoERg+ho6+gFlFj9pAKRJ+k9JVBdC+Te9C0KeDPN76nG3cgWIOMKMpO2TmgNIimp8Wgj/D0Yft3JvAVmMp63kKliCY6FjaBkRk3+WxycJgcuh63aITrtH21WqfFHtinVflP7DuyxkStR1dfRqUrFqRXDlkPheqN1m8jFpXyv38xnZhDTk6ghNXKLKEqaLH9CgIKVPIuYCWn09QwHOzAj9Yvwe+VQtB7X9JvHNpuhQN3umNPbqhjBXevFnmIsw4MzeTpMRwVxWNgWr5cI0aElveP6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17Qc8yVZfRkYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/TcbDsaNiPdV7NC5tzJnB2GFP5KJPAqN+Lf84D8fT3jwO/eZrZVRY9CsPUUoI4ZdPPwHhK8FD",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server from another manifest",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQmJ2cerzAm5FDUUqkwtTmAzrajplnMunJsE1ToNAWUj8Pssn+ezBGqFURWdFqk/4b56a/Ebt9iA5/fC1zZH2+rUi/QGSE3bzIgWUvcz6T2RppalMmn6j2yhTPbwlFR5m1R0KKROeqiEDkClEhaxLkQIQF9hTdgrWYeFhhXoNORTlogqEBg9hI6+hEpEjdlDKhB90tNXBv29Vu5B09KAH+hMIFiDjCgWnbJzQGkQTU87Qh/h6cP27/zgKzCl9byFUhFNdCxsAiNfbvLZ5OAwmXU97tYI12kPK7VOiz2wT6vFP7HvyBoTtR5d/SIqXbIgvXLIeiiUb7R+G7Eolf/9jenEHHJyAiWsVmYJZUGL7VcQUKCSdwFLOZ2mhuFgB360fgl+rxSC3nuTfuPQdiscuNM39uSGOlZw92qRhzjrwNBMni7DUVE8BqblyzViRGh5f4leGxQPtQroN9MG0QWyq1bYxEVOUO5jQKaFqbn0gq5jriyjKwvryaB1MOwmn8+vxwIjUyhYY1vgz/N48JJ3ZHyPjA1k7zG6vDlnxmkPfSpMlwzIC2P/33j0cgYDPn8Z/5uMh2NHxXqq92hc2pgzg7HDnshFnwRG/Vr+cR6Op715HPrNV8qo0PQrD1FKCOGXTz8BP5HFqw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server from a manifest named through a step up",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFv2jAQ/b5fUYWPzDFom6pW6zSpP2OqIuNcEgvHtnxnCkL977OTMEAwoBvVNKnfiO/eu+d7fmKdeRBoTXZ/k0nbOqXBM+FJVUJS9vEmc0LORQ2FKlOLE9SMq9h0zzkXzo1QtU4DkmwEfZ/k03ySQK0wqoqnRepPuK/eWvrGF2BK63me80fha5uTbXXqp/gFFBvXmREtJMSG+DESp5a5MknBj2ymTPb0kpR5m5R0KIqd8UclNEIslTALdSEQId7EGtwpWUeFhgXoNORTlogqEBQ8YEdfQiWCpuwpFSJ90tNXhjv0WrkHHRcHfE9nAsESZCAx65RdAkqD4vS0J/IBXj6s/86TzZZbKFWkCY7hCln05i6fjPYOk2G3Fzl2jOu8h5VapsXu2afV7J/Yd2CNCVqfXP0sKF0ylF45Yj0Uyjdavw1UlMr//sV0YvY5eQQlrFZmDmURF9uvAEmQkg9IpRyPU8NwsAU/Wz8Hv1NC1Dtf0q8c2W6FA3e6Y09uYscCHl4tch9nHZg4k6fHcFAUz8i0PF6LjAQt7x/Ra4PioVZIfjVuiBxGu2pFTZjlEcp9QGJamJpLL+JzzJVl8cnCcjRoHQy7y6fT21OBkSkUrLEt8M08jl7yjozvkLGB7D1G1zfnwjjtoM+F6ZoBOTL2/41HL2cw4POX0/8mp8OxpWI91Xs0rm3MhcHYYs/kok8Ci/1a/nEeDqe9eRz6zVfKKGz6lWOQEhB/+fQTIEPGog==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/vendor/../Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "the server with another feature",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Ywsnx2RGRJ6E5pQuh/n2S7S0I6N93SwaDfbN1778739PAu8yDQmuz2KpO2dUqDZ8KTqoWk7ONV5oRciQYKVSWIE7Sc1hF0yzkXzk1QtU4DklwK+j7L5/kskVphVB1Pi4RPvK/eWvrG74VvbE621QlF8Q0olneZES0k3JPcfZRLkJUyqe+PrFQmWzymebxN/TsWRWR8qIVGiKUKytAUAhHi/NbgQck6KjSsQacmn7IkVIOg4AE7+QpqEXTXEjbkRbZIiNgnDdZDhk/oh+YedNwb8KOBFx0dZCBRdiOeQ0qN4hhpTeQDPH7Y/Z0lfA2msp63UKkoExzDLbJozU0+mxwdJr+uxw0b0XrZzFpt0oaPfNSq/Bc+nth3Yo0JWo+uvgxKVwylV45YT4XqjdZvAxWV8r+/Md0wx5o8khJXK7OCqoiL7VeAJEjJO6RKTqcJMBzsyQ/Wr8AflBD1wZv0W0e2W+Ggnb6xFzcRsYa7Vw95zLMOTOzJ02U4KYoHZFo+X4uKBC3vL9Frg+KhUUh+O10SOYx2NYqWocwjlfuAxLQwDZdexOuYK8vilYXNZJh1MOwmn8+vxwIjUyjY0rbAn/px9JJ3YvxAjA1i7zG6vDlnxumA/VKYLhmQZ9r+v/HoxxkM+Pxl/G8yHo69FOul3qNxaWPODMae+0Iu+iSwiNfyj/Nw2u3N49BvvlZG4bJfOQYpAfGXTz8B8kfGDg==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server with no feature",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFu2zAMfN9XFM5jZivBNhQt1mFAP6MoDFmmbSGyZEh0miDov4+0nSVBOifdkocBfYtE3vHM0yGbyIMMzkb3N5FydaMN+Fh61IVUGH2+iRqpFrKEVOfc0kispgU13QshZNNMgq4bAwFVJfHnLJknMwbV0uqCblPuZ9x37xz+EI/Sly5BVxvuQjoBUnkTWVkD923pHomOWxba8tynKNM2en5lPd7x/A6F1Ek/CmkCUCmHrC1TGQKQfmfDXsk1mBpYguEhXyImKkBi64G7np75TKwso7vYCu4lCg+GtgTiQB6DYAWqRZl1gs4B8SAayktB38Lrp82/GSCWYHPnRQ25Jpq2icM6xGTEXTKbHFyyO7fj9oxwnbau0Cve54FrRmdXdI2ghWxN78SBfUfW2NaY0dVnrTZ5HJTXDcY9FPIrrd+1mOba//nFdGIOOQWBGGu0XUCe0mL7FQSUqNVDwFxNp9wwXOzAL84vwO+VQjB7J+XXDbpuhQM3f2NPbqljCQ/vFnmIcw1Ymin4MRwV5UuIjXq7RowItegf0XuD4qHUAf16WiE2gewqNVZtlhBU+DZgbKQthfKSnmOiXUxPFlaTQetg2F0yn9+OBUZxKOLK1SC280TwSnRkYo8sHsg+YnR5c86M0x76VJguGZA3xv6/8ejlDAZ8/Tb+bzIejh1V3FN9ROPSxpwZjB32RC76JMTUb9Rf5+F42tXj0G++0FaHql95aJWCEH779AsJ6MAx",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server built for tests",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpoiyBBUxTIM4pAoKiVRJgiCXLl2DDy9y4lubbhRHZa+1AgN4m7Mzva4UCbxIMI1iT3N4m0jVMaPBMeVSkkJp9vEifkQlSQqSK2OIH1tKSme865cG4SVOM0BJS1wJ+zdJ7OIqgRRpV0msX+iPvurcUf/FH4yqZoGx27kN4AqbxJjGgg9m3pHokutiyUiXN/JbkyydNL1ONtnN+hkDrpAX0LVCkgb6tMhAAk35pAlVLoEEvWYaZhCTrO+JJEnhIEth5Cx15AKVqNyVMsEHuU01cG4b1U7kHTtoAfyIwgWIFsUeSdsHNAcRBNrwf5L582/2YEX4IprOcNFIpoWsfCOjAy5C6dTQ4Oo0u34zaNcJ22sFSruNgD97TK33Rv69E17DuyxrRaj64+b5UuWJBeOWQ9FIorrd+2mBXKv31jOjGHnJxAEauVWUCR0WL7FQQUqORDwEJOp7FhONiBn61fgN8rhaD33qRfO7TdCgfu+I09uaGOJTy8W+QhzjowNJPHy3BUFM+Bafl6jRgRGt5fovcGxUOlAvr1tEZ0geyqFNZtnhKU+zYg08JUXHpB1zFVltGVhdVk0DoYdpfO57djgZExFKy2DfDtPB685B0Z3yNjA9lHjC5vzplx2kOfCtMlA/LK2P83Hr2cwYCv38b/JuPh2FGxnuojGpc25sxg7LAnctEngVG/ln+dh+NpV49Dv/lSGRXqfuWhlRJC+OPTb3Zoww8=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server with a profile that does not say",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFu2zAMfN9XFM5jJivBNhQt1mFAP2MoAlmmbSGyJEhUmiDov4+y3TVBWifdkocBfbTIO154PGSbeRDBmuz2KpO2dUqDZ8KjqoTE7PNV5oRcihoWqkwtTmAzrajplnMunJsE1ToNAWUj8Ocsn+ezBGqFURW9LlJ/wn331uIPfi98bXO0rU5dSF+AVN5mRrSQ+p7p7okutSyVSXN/ZYUy2cNT0uNtmt+hSihivRAhAAm2JtBjJXQAarMOFxpWoBPrlywhKxAYPYSOr4RKRI3ZQyoQXxLQVwapvTjuQdN+gO8JSyBYg4woik7KKaA0iKandaCP8PRp+2+r5yswpfW8hVIRTXQsbAIjC27y2WTvMflyPW7MCNdx0yq1Tovd80ur4tAvpMk7Hl3CvgNrTNR6dPVFVLpkQXrlkPVQKC+0fhtxUSr/9sV0YvY5OYESViuzhHJBi+1XEFCgkncBSzmdpobh4QX8aP0S/E4pBL3zJf3Goe1WOHCn39iTG+pYwd27Re7jrANDM3k6hoOieAxMy9drxIjQ8v6I3hsUD7UK6DfTBtEFsqtW2MQiJyj3MSDTwtRcekHnmCvL6GRhPRm0Dobd5PP59VhgZAoFa2wL/HkeD17yjozvkLGB7CNG5zfnxDjtoI+F6ZwBeWXs/xuPXs5gwNdv4/8m4+F4oWI91Uc0zm3MicF4wR7JRZ8ERv1a/nUeDqddPA795itlVGj6lYcoJYTwx6ffo0u+pQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server with debug assertions",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpoiyBBUxTIM4pAoKiVRJgiCXLl2DDy9y4lubbhVHZc51AgN4m7Mzva4UCbxIMI1iT3N4m0jVMaPBMeVSkkJp9vEifkQlSQqSK2OIH1tKSme865cG4SVOM0BJS1wJ+zdJ7OIqgRRpV0msX+iPvurcUf/FH4yqZoGx27kN4AqbxJjGgg9m3pHokutiyUiXN/JbkyydNL1ONtnN+hkDrpoRQ6AJUKyNsqEyEA6bcmUAl9GyvWYaZhCTrO+JJEnhIEth5Cx15AKVqNyVMsEHuU01cG4b1U7kHTtoAfyIwgWIFsUeSdsHNAcRBNrweNL582/2YEX4IprOcNFIpoWsfCOjAy5C6dTQ4Oo0u34zaNcJ22sFSruNgD97TKL3FvW7rYviNrTKv16OrzVumCBemVQ9ZDoXin9dsWs0L5v9+YTswhJydQxGplFlBktNh+BQEFKvkQsJDTaWwYDnbgZ+sX4PdKIei9N+nXDm23woE7fmNPbqhjCQ9vFnmIsw4MzeTxMhwVxXNgWr5eI0aEhveX6K1B8VCpgH49rRFdILsqhXWbpwTlvg3ItDAVl17QdUyVZXRlYTUZtA6G3aXz+e1YYGQMBattA3w7jwcveUfG98jYQPYRo+ubc2ac9tCnwnTNgLwy9v+NRy9nMODrt/G/yXg4dlSsp/qIxrWNOTMYO+yJXPRJYNSv5cV5OJ727nHoN18qo0Ldrzy0UkIIf3z6DXSrww8=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server optimized less",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVctu2zAQvPcrAvnoUrT7QJCgKQrkM4pAoKmVRJgiCe7SsWHk30tKSm0jqWy3zqFAbhJ3Z3a0w4G2mQeB1mS3V5m0rVMaPBOeVCUkZR+vMifkUtRQqDK1OEHNtIpNt5xz4dwEVes0IMlG0I9ZPs9nCdQKo6p4WqT+hPvmraXv/F742uZkW526KL4BxfI2M6KF1PdMdx/pUstSmTT3Z7ZQJnt4Snq8TfM7FMXO+FAJjRBLJSxCXQhEiPqtwb2SdVRoWIFOQz5liagCQcEDdvQlVCJoyh5SIdInPX1lUN5r5R50XBfwA50JBGuQgcSiU3YKKA2K09N2yAd4+rD9Nyf4CkxpPW+hVJEmOIYbZNGRm3w2OThMNl2P+zTCddzDSq3TYg/s02pxMfs+n2HfC2tM0Hp09YugdMlQeuWI9VAo32j9NlBRKv/nG9OJOeTkEZSwWpkllEVcbL8CJEFK3iGVcjpNDcPBDvxo/RL8XglR771Jv3FkuxUO3Okbe3ITO1Zwd7bIQ5x1YOJMni7Di6J4RKbl67XISNDy/hKdGxQPtULym2lD5DDaVStqwiKPUO4DEtPC1Fx6Ea9jriyLVxbWk0HrYNhNPp9fjwVGplCwxrbAn+dx9JJ3ZHyPjA1k7zG6vDknxmkPfSxMlwzIK2P/33j0cgYDvnwd/5uMh2NHxXqq92hc2pgTg7HDHslFnwQW+7X86zy8nPbmceg3XymjsOlXjkFKQPzt0y+whcNZ",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server with an optimization level that is a number",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpIiyBBUxTIM4pAoKmVRJgiCXLp2DDy9y4lpbbhVHZa51AgN4m7Mzva4UDbzIMI1mR3V5m0rVMaPBMeVSUkZp+vMifkUtRQqDK1OIHNtKKmO865cG4SVOs0BJSNwB+zfJ7PEqgVRlV0WqT+hPvmrcXv/EH42uZoW526kN4AqbzNjGgh9b3QPRBdalkqk+b+zBbKZI/PSY+3aX6HQuqkh0roAFQqYRHrQoQApN+asFeyDgsNK9B0dp1oKhAYPYSOvIRKRI3ZYyoQeVLTVwbdvVLuQdOygB+oTCBYg4woFp2uc0BpEE1Pu0Ef4fnT9t984CswpfW8hVIRTXQsbAIjP27z2eTgMJl0M+7SCNdpByu1Tos9ME+rxaXMy66z8+07ssZErUdXv4hKlyxIrxyyHgrlO63fRixK5f98Yzoxh5ycQAmrlVlCWdBi+xUEFKjkfcBSTqepYTjYgZ+sX4LfK4Wg996k3zi03QoH7vSNPbmhjhXcv1nkIc46MDSTp8twVBRPgWn5eo0YEVreX6K3BsVDrQL6zbRBdIHsqhU2cZETlPsYkGlhai69oOuYK8voysJ6MmgdDLvN5/ObscDIFArW2Bb4yzwevOQdGd8jYwPZR4wub86ZcdpDnwrTJQPyytj/Nx69nMGAL1/H/ybj4dhRsZ7qIxqXNubMYOywJ3LRJ4FRv5Z/nYfjae8eh37zlTIqNP3KQ5QSQvjt0y9qcMMW",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server without a profile",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVcFu2zAMve8rCueYyUqwDUWLdRjQzxgKQ5ZpR4gsCRKVJgj676Nid3GQ1km39DCgt5jke6Qe+ZBt5kEEa7Lbq0za1ikNngmPqhYSs89XmRNyKRooVJVKnMDFtKaiW865cG4SVOs0BJQLgT9n+TyfJVArjKopWqT6hPvurcUf/F74xuZoW52qkL4AKb3NjGgh1T3T3RNdKlkqk/r+ykplsocnitQgMHoIu2gFtYgas4eUoKkSTZfpG3YtuAdNrwR+QJ9AsAYZUZQaBlOOgVIj6p4ehT7C06ftvwnIV2Aq63kLlSKa6FjYBEZC3uSzyUEwqXs9Lu8I12npa7VOwh6orlXZqe68TUPvAEid6UctdABKVVDGphAhAD3amjBIWYeFhhXoxP8lO399R6sxUetR6cuodMWC9Moh66BQvZP8NmJRKf/6xeyGOeTkBEpYrcwSqoKE7SQIKFDJu4CVnE5TQR/Ygx+tX4IfpELQgy/pNw7tTsKeO72xIzdUsYK7Nw95iLMODPXk6RiOkuIxMC1fzhEjQsu7I3qrUTw0KqDfTBeILtC6GoWLWOYE5T4GZFqYhksv6BxzZRmdLKwn/az9wm7y+fx6zDAymYItbAv8uR8PXvIdGR+QsZ7sw0aXX86ZdhqgT5npkgZ5oe3/a49unH4BX7+N/5uMm2NPxTqqD2tcejFnGmOPPeGLzgmM6rX8az8cd3t3O3TK18qosOgkD1FKCOHPnn4DG9KrTQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'profile'"
+   }
+  },
+  {
+   "name": "the server whose executable is not among its files",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/72QnS7K2TrulsEG/xbp7707v6ZFN5kEEa7Lri0zazikNngmPqhYSs48XmRNyIRooVJVanMB2WlPTNedcODcJqnMaAspW4PdZPs9nCdQJo2o6LVJ/wn311uI3fit8Y3O0nU5dSF+AVN5kRnSQ+nZ0t0SXWhbKpLk/slKZ7O4h7eNtmt+jkDrpRy10ACpVUMamECEA7W9NOChZh4WGJeg05FOWiGoQGD2Enr6CWkSN2V0qEH3ap6+kA1iBjCjKfuruKsPy3IMm/YD/vnhNzOnm6CM8fNj8ncp8CaaynndQKaKJjoV1YKT2VT6bHB0mCy7HPRjhOu1PrVZJtCNrtCr/DWtM1HpU+jIqXbEgvXLIBihUbyS/jVhUyj//Yvpljjk5gRJWK7OAqiBhBwkCClTyJmAlp9PUsD3Yg++tX4A/KIWgD76kXzu0vYRb7nTHgdxQxxJuXr3kMc46MDSTp8fwqCjuA9Py6RoxInR8eESvDYqHRgX062mL6ALZ1ShsY5kTlPsYkGlhGi69oOeYK8voycJqst11a9hVPp9fjgVGplCw1nbAd/N48JL3ZPyAjG3J3mN0fnNeGKcD9KkwnTMgT4z9f+MxrLM14POX8X+T8XDsqdhA9R6NcxvzwmDssSdyMSSBUb+Wf5yHx9PePA6D8rUyKrSD5CFKCSH88uknLj618g==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server without an executable",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUdyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/T2e7i7OWpNlSxqDfbN29d8/v9PA28yCCNdnNRSZt55QGz4RHVQuJ2ceLzAm5FA0UqqIWJ7Cd1anphnMunLsMqnMaAspW4Pd5vsjnBOqEUXU6LaifcF+9tfiN3wnf2Bxtp6kL0xtgKm8zIzqgvie6u0RHLUtlaO6PrFQmu38kPd7S/B6FqTM91EIHSKUKytgUIgRI+q0Jk5J1WGhYgaYhnzIiqkFg9BB6+gpqETVm91RI9KRnqIzKB63cg052Ad/TSSBYg4woyl6ZiVoTUWKnr0cf4fHD9u+c5iswlfW8g0olmuhY2ASWHL/O55d7h7SGq8N7OMB1fEe1WpNxe+vRqvwn6znd+jIqXbEgvXLIBihUb2S/jVhUyk+M/+0a9WL2OXkCEVYrs4SqSMYOFgQUqORtwErOZtQwHuzAD9YvwU9KIejJm/Qbh7a3cOSmbxzITepYwe3JIvdx1oFJMzldhmdF8RCYli/XEiNCx4dLdGpQPDQqoN/MWkQX0roahW0s8wTlPgZkWpiGSy/SdcyVZenKwvpy1Dou7DpfLK4OBUZSKFhrO+BP83jwkvdkfELGRrL3GJ1/Oa+M0wR9LEznDMgLY//feAxyxgV8/nL4b3I4HDsqNlC9R+Pci3llMHbYI7kYksBSv5Z/nIfn0948DoPztTIqtIPlIUoJIfza00+wRbet",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "the server at another path",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/72Q7S0I6p91SxqDfYt+7d+f37pFt5kEEa7Lbq0za1ikNngmPqhISs49XmRNyKWooVJkgTmAzrQh0yzkXzk2Cap2GgLIR+H2Wz/NZamqFURW9LRI+9X311uI3fi98bXO0rU4opCdAKm8zI1pIuB3dPdElyFKZNPdHtlAme3hK+3ib5nddSEj6UQkdgEolLGJdiBCA9rcmHJSsw0LDCnQa8ilLRBUIjB5CR19CJaLG7CEViD7t01eGzftduQdNcgG32IDv0LAGGVEsupVG0Yma5iU90Ed4+rD9O+35CkxpPW+hVEQTHQubwMiDm3w2OXqZjLked2aE67xrlVonKY8M02rxTww78cRErUelX0SlSxakVw5Z3wrlG8lvIxal8r8/lW6ZY05OTalXK7OEsiBhewkCClTyLmApp9MEGF7smx+tX/aHt8MGffAk/cah7SQcuNM39uSGECu4e/WSx33WgaGZPB3DSVE8Bqbl8zViRGh5f0SvDYqHWgX0m2mD6ALZVSts4iKnVu5jQKaFqbn0gs4xV5bRycJ6Muw6GHaTz+fXY4GRKRSssS3w3TwevOQdGT8gYwPZe4wub84L43TQfS5MlwzIM2P/33j06wwGfP4y/m8yHo49Feup3qNxaWNeGIx975lc9ElghNfyj/NwOu3N49ArXymjQtNLHqKUEMIvn34CASO9vA==",
+     "spelled": true
+    },
+    "target/release/other": {
+     "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Production binary artifact path differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server outside the release directory",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/T2e7a0KK03YpY9Bvtu7eu+d7eniXeRDBmuz6IpO2c0qDZ8KjqoXE7PNF5oRciQYKVVGLE9jO69R0zTkXzs2C6pyGgLIV+HORL/MFgTphVJ1OC+on3HdvLf7gt8I3NkfbaerC9AaYyrvMiA6o75HuNtFRy0oZmvsrK5XJ7h5Ij7c0v0dh6kwPtdABUqmCMjaFCAGSfmvCXsk6LDSsQdOQLxkR1SAwegg9fQW1iBqzOyoketIzVEblg1bej+AHKgkCG5ARRdnrOg2hIWkybQZ9hIdPu79zga/BVNbzDiqVaKJjYRtYcuMqX8wODsmiy2mPJrhO+1erDS31wDqtyn9i3ZExJmo9ufoyKl2xIL1yyAYoVO+0fhuxqJQ/vi8edBIEvBdzyMkTiLBamRVURVrssIKAApW8CVjJ+ZwaxoMn8L31K/B7pRD03pv0W4e2X+HITd84kJvUsYabV4s8xFkHJs3kdBmOiuI+MC2fryVGhI4Pl+i1QfHQqIB+O28RXUh2NQrbWOYJyn0MyLQwDZdepOuYK8vSlYXNbNQ6GnaVL5eXU4GRFArW2g744zwevOQ9Gd8jYyPZR4zOb84L47SHPhWmcwbkmbH/bzwGOaMBX79N/02mw/FExQaqj2ic25gXBuMJeyIXQxJY6tfyzXk4nvbucRg2XyujQjusPEQpIYQ/Pv0GY0TBpg==",
+     "spelled": true
+    },
+    "target/debug/simplestChat": {
+     "deflated": "eNqrAAAAeQB5",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server at a path that is not absolute",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/T2e7S7IUt91SxqDfbN27d+f39PAu8yCCNdn1RSZt55QGz4RHVQuJ2ceLzAm5Eg0UqiKIE9jO6wS65pwL52ZBdU5DQNkK/L7Il/mCmjphVJ1OC8JT31dvLX7jt8I3NkfbaUJhegNM5V1mRAeEe6S7TXQEWSlDc39kpTLZ3QPt4y3N77swIdNDLXSAVKqgjE0hQoC0vzXhoGQdFhrWoGnIp4yIahAYPYSevoJaRI3ZHRUSPe0zVIYluQeddAJ+tCChYQMyoij7lSbRRJ3mkR7oIzx82P2d9nwNprKed1CpRBMdC9vAkgdX+WJ2dEjGXE47M8H1vGu12pCUR4ZpVf4Tw048MVHrSenLqHTFgvTKIRtaoXoj+W3EolL+QPjfbky/zDEnT03Uq5VZQVUkYQcJAgpU8iZgJedzAowH++Z761fgD0oh6IM36bcObS/hyE3fOJCbhFjDzauXPO6zDkyayekynBTFfWBaPl1LjAgdHy7Ra4PioVEB/XbeIrqQ7GoUtrHMUyv3MSDTwjRcepGuY64sS1cWNrNx19Gwq3y5vJwKjKRQsNZ2wB/n8eAl78n4ARkbyd5jdH5zXhing+7nwnTOgDwx9v+Nx7DOaMDnL9N/k+lw7KnYQPUejXMb88Jg7HufycWQBJbwWv5xHk6nvXkcBuVrZVRoB8lDlBJC+OXTT3qOvoA=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server that is not there",
+   "delta": {
+    "target/release/simplestChat": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/target/release/simplestChat'"
+   }
+  },
+  {
+   "name": "the server through a link in the release directory",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/72S7S0I7p91SxqDfYt+7d+f37pFd5kEEa7Lri0zazikNngmPqhYSs48XmRNyJRooVJUgTmA7rwl0zTkXzs2C6pyGgLIV+H2RL/NFauqEUTW9LRI+9X311uI3fit8Y3O0nU4opCdAKu8yIzpIuEe6W6JLkJUyae6PrFQmu3tI+3ib5vddSEj6UQsdgEoVlLEpRAhA+1sTDkrWYaFhDToN+ZQlohoERg+hp6+gFlFjdpcKRJ/2GSrj5sOu3IMmuYBrZVY9GDYgI4qy32gKnIhpWlIDfYSHD7u/U56vwVTW8w4qRTTRsbANjBy4yhezo5fJlstpXya4TntWq00S8sgurcp/YtcTS0zUelL6MipdsSC9csiGVqjeSH4bsaiU//2l9Mscc3JqSr3piKAqSNhBgoAClbwJWMn5PAHGF/vme+tX4A9KIeiDJ+m3Dm0v4cidvnEgN4RYw82rlzzusw4MzeTpGJ4UxX1gWj5fI0aEjg9H9NqgeGhUQL+dt4gukF2NwjaWObVyHwMyLUzDpRd0jrmyjE4WNrNx19Gwq3y5vJwKjEyhYK3tgD/O48FL3pPxAzI2kr3H6PzmvDBOB92nwnTOgDwz9v+Nx7DOaMDnL9P/JtPh2FOxgeo9Guc25oXB2PeeyMWQBEZ4Lf84D0+nvXkcBuVrZVRoB8lDlBJC+OXTT1lZvNQ=",
+     "spelled": true
+    }
+   },
+   "links": {
+    "target/release/link": "simplestChat"
+   },
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "the server twice",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/T2e7S0I7Jx0pYyPfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqqIWJ3AxrVPTLedcODcJqnUaAsqFwO+zfJ7PCNQKo+p0WlA/4b56a/Ebvxe+sTnaVlMXpjfAVN5mRrRAfc9094mOWpbK0NwfWalM9vBEeryl+R0KU2d6qIUOkEoVlLEpRAiQ9FsT9krWYaFhBZqGfMqIqAaB0UPo6CuoRdSYPVAh0ZOevjIo77VyDzqtC/iBTgLBGmREUXbKTgHRoDSdtoM+wtOH7cWJ/8MJvgJTWc9bqFSiiY6FTWDJkZt8Njk4JJuux30a4TruYa3WtNgD+7Qq/4p9L6wxUevR1ZdR6YoF6ZVD1kOheqf124hFpfzvb0wn5pCTJxBhtTJLqIq02H4FAQUqeRewktMpNQwHO/Cj9Uvwe6UQ9N6b9BuHtlvhwE3f2JOb1LGCuzeLPMRZBybN5HQZXhTFY2Bavl5LjAgt7y/RW4PioVEB/Wa6QHQh2dUoXMQyT1DuY0CmhWm49CJdx1xZlq4srCeD1sGwm3w+vx4LjKRQsIVtgT/P48FL3pHxPTI2kF1idH5zTozTHvpYmM4ZkFfG/rvx6OUMBnz+Mv43GQ/Hjor1VJdonNuYE4Oxwx7JRZ8Elvq1/OM8vJz27nHoN18ro8KiX3mIUkIIv3z6Ca+CR1M=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no server",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtlVFr2zAQx9/3KYr7mMlK2EZpWcdgH2MUo8hnR0SWhO6UJoR+9+lsb3FoSbORPgz6Fuvu/7vTnf5kX0RQ6F1xd1Vo3wVjIQoVyTRKU/HxqghKr1ULlak5JShazZqcdCelVCHIDbjaR9lBbTImBYE7FPNycVvOr48Ov+fDm3LOyE450wBSxTSmfo3e07dTLPlDxdaX5DvLBMpfQFm6L5zqgBmN2VKKwNG1cdzsz8KaZfHwxJeInpvuBZQr5x+Nsgg5VMMytZVChHxp73AS8oEqCxuwzP9UMKgBxVWwx9fQqGSpeOBAxnMrfYQPYAs6kVr2VV2ylpOyki9MMcHTh/1k9MtkbC1QRxNIDFKo32j8PlFVmzgZ/DBOGcHmhkD2zRwzZRax1hq3hrrKgx1GgKTI6HukWs9mnDAeHMSPPq4hTkKIdvKl4y6Q70c4svmOA9zljA3c/3WTxzofwOWakh/Ds6B6RGH1y7FMJOjk8IiOtnWGUSK0BinuZiuigHldraFVWpZZKmNCEla5Vuqo8nMsjRf5ycL2eux1XNhtuVjcnDKMZlOIle9A/q4nMWrZw+QEJkbYu40uv5wz7TRRv2amSxrkhbL/rz2GdsYFfP5y+t/ktDkOKDGg3q1x6cWcaYyD9hVfDE4QOd/qf/bD82pvbodh8o1xBlfDyDFpDYh/9vQL18c/cA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing successful production binary artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a package from two manifests",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVctu2zAQvPcrAvnoUrTRFkGCpiiQzygCgaJWEmGKJMilY8PIv3cpKbWNpLbTOugDuUncndnVDAfaZB5EsCa7vsik7ZzS4JnwqGohMXt/kTkhF6KBQlWpxQlspzU1XXPOhXOToDqnIaBsBX6d5fN8lkCdMKqm0yL1J9xnby1+4bfCNzZH2+nUhfQGSOVNZkQHqe+R7pboUstCmTT3W1Yqk909pH28TfN7FFInPdRCB6BSBWVsChEC0P7WhJ2SdVhoWIJOQz5kiagGgdFD6OkrqEXUmN2lAtGnfYbKuPmwK/egSS7ge3smEKxARhRlv9kpoDSIpid10Ed4eLf5PSf4EkxlPe+gUkQTHQvrwMiRq3w22TtMNl0e9ukA13EPa7VKwu7Zp1X5R+x7Yo2JWv/V0ltswf/vIpdR6YoF6ZVDNkCheiWhbcSiUv7nseyX2efkBEpYrcwCqoKEHSQIKFDJm4CVnE5Tw3iwBd9bvwC/UwpB77xJv3ZoewlH7vSNA7mhjiXcvHjJfZx1YGgmT5fhSVHcB6bl8zViROj4cIleGgkPjQro19MW0QWyq1HYxjInKPcxINPCNFx6QdcxV5bRlYXVZNx1NOwqn88vD0VDplCw1nbAH+fx4CXvyfgOGRvJ3mJ0fnNOjNMO+liYzhmQZ8b+u/EY1hkN+Pjp8H/jcDi2VGygeovGuY05MRhb7JFcDElg1K/lL+fh6bRXj8OgfK2MCu0geYhSQgg/fPoOLOQ4rg==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Ambiguous Cargo package source path",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a package twice from one manifest",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/72S7S0LaJN1StkG+2bp7787v6eF15kEEa7Lbq0za1ikNngmPqhISs49XmRNyLmooVJlanMBmXFHTLedcODcKqnUaAspG4PdJPs0nCdQKoyo6LVJ/wn311uI3fi98bXO0rU5dSG+AVF5nRrSQ+p7p7okutcyVSXN/ZDNlsoentI+3aX6HQuqkh0roAFQqYRbrQoQAtL81YatkHRYaFqDTkE9ZIqpAYPQQOvoSKhE1Zg+pQPRpn74ybN7vyj1okgv4zp4JBEuQEcWs2+wUUBpE05M66CM8fVj/mRN8Aaa0nrdQKqKJjoVVYOTITT4Z7Rwmm64P+3SA67iHlVomYXfs02r2V+zbs8ZErS/S/5vSz6LSJQvSK4esh0L5TvLbiEWp/Oth7ZbZ5eQESlitzBzKgoTtJQgoUMm7gKUcj1PDcLABP1o/B79VCkFvvUm/cmg7CQfu9I09uaGOBdy9ecldnHVgaCZPl2GvKB4D0/LlGjEitLy/RG8NiodaBfSrcYPoAtlVK2ziLCco9zEg08LUXHpB1zFXltGVheVo2HUw7CafTq8PBUamULDGtsCf5/HgJe/I+BYZG8guMTq/OSfGaQt9LEznDMgLY//fePTrDAZ8/nL4b3I4HBsq1lNdonFuY04MxgZ7JBd9Ehj1a/nbedif9u5x6JWvlFGh6SUPUUoI4ZdPPwEcbD/v",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "an artifact without a manifest",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJ6M5pQuh/n2S5S0K6JN1Sxti+xb577y7v6cmbzINAa7Lbq0zazikNnglPqhaSsvdXmRNyIRooVBVbnKB2WoemW865cG6CqnMakGQr6Ossn+ezCOqEUXV4W8T+iPvsraUv/F74xuZkOx27KDwBhfImM6KD2PdMdx/oYstCmTj3W1Yqkz08xX28jfMHFIXO8KMWGiGUKij7phCIEPa3BndK1lGhYQk6DvmQRaIaBPUecKCvoBa9puwhFgJ93CdVxs3TrtyDDnIB39szgmAFsidRDpudA4qDwvSoDvkent5tfs8JvgRTWc87qFSg6R3DNbLgyE0+m+y9jDZdJ59ecKBWqyjLnvhalX9E/ANhTa/1UeHKXumKofTKEUtQqN5IPNtTUSn/c7+HZfY5eQBFrFZmAVURhE0SIAlS8g6pktNpbBhfbMGP1i/A75QQ9c6T9GtHdpBw5I7/MZGb0LGEu1cvuY+zDkyYyeNhOCiKR2RavlwLjAQdT4fotcfcQ6OQ/HraEjkMdjWK2r7MA5T7HolpYRouvQjHMVeWhSMLq8m462jYTT6fXx+7lmS8llhrO+DP8zh6yQcyvkPGRrLTF9k/EaOLmnNmnHbQp8J0yYC8MPbvjUdaZzTg46fj3+zj4dhSsUT1PxqXNubMYGyxJ3KRksBCv5a/nIfDaW8eh6R8rYzCNkmOvZSA+MOn72hgrPQ=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": null,
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "the server at another path and none at its own",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/72Q7S0I6p91SxqDfYt+7d+f37pFt5kEEa7Lbq0za1ikNngmPqhISs49XmRNyKWooVJkgTmAzrQh0yzkXzk2Cap2GgLIR+H2Wz/NZamqFURW9LRI+9X311uI3fi98bXO0rU4opCdAKm8zI1pIuB3dPdElyFKZNPdHtlAme3hK+3ib5nddSEj6UQkdgEolLGJdiBCA9rcmHJSsw0LDCnQa8ilLRBUIjB5CR19CJaLG7CEViD7t01eGzftduQdNcgG32IDv0LAGGVEsupVG0Yma5iU90Ed4+rD9O+35CkxpPW+hVEQTHQubwMiDm3w2OXqZjLked2aE67xrlVonKY8M02rxTww78cRErUelX0SlSxakVw5Z3wrlG8lvIxal8r8/lW6ZY05OTalXK7OEsiBhewkCClTyLmApp9MEGF7smx+tX/aHt8MGffAk/cah7SQcuNM39uSGECu4e/WSx33WgaGZPB3DSVE8Bqbl8zViRGh5f0SvDYqHWgX0m2mD6ALZVSts4iKnVu5jQKaFqbn0gs4xV5bRycJ6Muw6GHaTz+fXY4GRKRSssS3w3TwevOQdGT8gYwPZe4wub84L43TQfS5MlwzIM2P/33j06wwGfP4y/m8yHo49Feup3qNxaWNeGIx975lc9ElghNfyj/NwOu3N49ArXymjQtNLHqKUEMIvn34CASO9vA==",
+     "spelled": true
+    },
+    "target/release/other": {
+     "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+     "spelled": false
+    },
+    "target/release/simplestChat": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/target/release/simplestChat'"
+   }
+  },
+  {
+   "name": "the server from a manifest at a path that is not absolute",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/72S7S0LaNO1SxqDfbN29d8/39PAm8yCCNdn1RSZt55QGz4RHVQuJ2eeLzAm5EA0UqkotTmA7ranpmnMunJsE1TkNAWUr8Ocsn+ezBOqEUTWdFqk/4W6Fb2yOttOpjPQGSOebzIgOUsMjzy3xpJaFMmngr6xUJrt7SEK8TYN7FFInPdRCB6BSBWVsChECkHBrwk7JOiw0LEGnIV+yRFSDwOgh9PQV1CJqzO5SgeiTnqHy3VuLP/iglXvQtCfgezoTCFYgI4qyV3YKKA2i6Wkt6CM8fNr8nQV8CaaynndQKaKJjoV1YGTFVT6b7B0mfy6fMWgUfoSLv+hhrVZpsXv2aVX+E/sOrDFR66OrL6PSFQvSK4dsgEL1Tuu3EYtK+edvTC9mn5MTKGG1MguoClrssIKAApW8CVjJ6TQ1jAdb8L31C/A7pRD0zpv0a4e2X+HInb5xIDfUsYSbV4vcx1kHhmbydBkOiuI+MC2frhEjQseHS/TaoHhoVEC/nraILpBdjcI2ljlBuY8BmRam4dILuo65soyuLKwmo9bRsKt8Pr88FhiZQsFa2wF/nMeDl7wn4ztkbCT7iNH5zTkxTjvol8J0zoA8Mfb/jccgZzTg67fjf5Pj4dhSsYHqIxrnNubEYGyxL+RiSAKjfi3fnIfDae8eh2HztTIqtMPKQ5QSQvjj02/24sDt",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "lines that end with a carriage return",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/QX7D8X5mMlK2EZpWcegP2MUI8tnR0SWhHRKE0L/+062uySkc9ItZQz6zdbde/d8Tw9vMw8iWJPdXmXStk5p8Ex4VLWQmH28ypyQS9FAoarU4gQupjU13XLOhXOToFqnIaBcCPw+y+f5LIFaYVRNp0XqT7iv3lr8xu+Fb2yOttWpC+kNkMrbzIgWUt8z3T3RpZalMmnuj6xUJnt4Snq8TfM7FFInPdRCB6BSBWVsChECkH5rwl7JOiw0rECnIZ+yRFSDwOghdPQV1CJqzB5SgeiTnr4yKO+1cg+a1gX8QGcCwRpkRFF2ys4BpUE0PW0HfYSnD9u/c4KvwFTW8xYqRTTRsbAJjBy5yWeTg8Nk0/W4TyNcpz2s1Tot9sA+rcp/Yt+RNSZqPbr6MipdsSC9csh6KFRvtH4bsaiU//2N6cQccnICJaxWZglVQYvtVxBQoJJ3ASs5naaG4WAHfrR+CX6vFILee5N+49B2Kxy40zf25IY6VnD3apGHOOvA0EyeLsNRUTwGpuXLNWJEaHl/iV4bFA+NCug30wWiC2RXo3ARy5yg3MeATAvTcOkFXcdcWUZXFtaTQetg2E0+n1+PBUamULCFbYE/z+PBS96R8T0yNpC9x+jy5pwZpz30qTBdMiAvjP1/49HLGQz4/GX8bzIejh0V66neo3FpY84Mxg57Ihd9Ehj1a/nHeTie9uZx6DdfK6PCol95iFJCCL98+gkgCsNy",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "a build whose success is text",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZSPmayEbZSWdQz6M0Yxiny2RWRJSOc0IeS/T2e7JKGdk24pY9Bvtu7eu+d7enjLAsjoLLu7Zso1XhsIXAbUpVTIPl0zL9VSVpDrglq8xHpapqY7IYT0fhJ14w1EVLXEH7Nsns0I1Eiry3SaUz/hvgXn8Lt4kKFyGbrGUBemN8BU3jIrG6C+Z7qHREctS21p7k+20JY97khPcDS/Q2HqTA+lNBFSqYBFW+UyRkj6nY0HJecxN7ACQ0M+MyIqQWIbIHb0BZSyNcgeqZDoSU9fGZT3WkUAk9YF4kgngWANqkW56JSdA6JBaTptB0MLu6vt3zkhVmALF0QDhU40redxE3ly5DabTY4OyaabcZ9GuE57WOo1LfbIPqMX/8S+F9bY1pjR1S9abQoeVdAeeQ+F4p3W71rMCx1+f2M6McecIoEIa7RdQpGnxfYriChRq/uIhZpOqWE42IOfXFhCOCjFaA7eVNh4dN0KB276xp7cpo4V3L9Z5DHOebBppqDL8KIonyI36vVaYkRoRH+J3hqUAJWOGDbTGtHHZFelsW4XWYKK0EbkRtpKqCDTdcy04+nKwnoyaB0Mu83m85uxwCgKBa9dA+J5nohBiY5MHJDxgewjRpc358w4HaBPhemSAXll7P8bj17OYMCXr+N/k/Fw7Kl4T/URjUsbc2Yw9tgTueiTwFO/UX+ch5fT3j0O/eZLbXWs+5XHVimIpJmRUWx39QtAGsOe",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native evidence requires a successful Cargo build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "another artifact whose target has no kind",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFvmzAQ/b5fUZGPmXGibapardOk/owpQsYcYMXYln2kiaL+952BLkTtSLqlmjbtG/juvXvc48E+8SCCNcntVSJt45QGz4RHVQqJyfurxAm5FhVkqogtTmA9L6nplnMunJsF1TgNAWUt8OsiXaaLCGqEUSWdZrE/4j57a/ELvxe+sinaRscupDtAKu8TIxqIfU9090QXW9bKxLnfklyZZPUY9Xgb53copE66KIUOQKUC8rbKRAhA+q0Jo5J1mGnYgI5DPiSRqASBrYfQ0RdQilZjsooFoo96+sqgvNfKPWhaF/AjnREEW5AtirxTdg4oDqLpcTvoW3h8t/89J/gGTGE9b6BQRNM6FnaBkSM36WJ2dBhtup72aYLrtIel2sbFJn/ArWdOmFbryU3nrdIFC9Irh6yHQvFG27YtZoXyP39BOjHHnJxAEauVWUORaZX3KwgoUMm7gIWcz2PDcHAAP1i/Bj8qhaBHd9LvHNpuhQN3fMae3FDHBu5eLfIYZx0YmslJ8/OieAhMy5drxIjQdLXVq3PhoVIB/W5eI7pAdlUK6zZPCcp9G5BpYSouvaDXMVWW0QcGtrNB62DYTbpcXk/lQ8YMsNo2wJ/m8eAl78j4iIwNZOenZvzR6zfwD8XoouacGacR+lSYLhmQF8b+vfHo5QwGfPw0/fOYDseBivVU/6NxaWPODMYBeyIXfRIY9Wv5y3l4Pu3N49BvvlRGhbpfeWilhBB++PQdC76+lw==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "another artifact whose target has no name",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJ6E5pQuh/n2S7TUJaN91Sxsa+xbp7717u6dnbzINAa7Lri0za1ikNnglPqhKSso8XmRNyKWooVJlanKBmWsWma865cG6CqnUakGQj6Pssn+ezBGqFUVU8LVJ/wn311tI3fit8bXOyrU5dFJ+AYnmbGdFC6nuku410qWWpTJr7I1sok909JD3epvkdimJn/FEJjRBLJSxCXQhEiPqtwb2SdVRoWIFOQz5liagCQcEDdvQlVCJoyu5SIdInPX1lUN5r5R50XBfwA50JBGuQgcSiU3YKKA2K09N2yAd4+LD9PSf4CkxpPW+hVJEmOIYbZNGRq3w2OThMNl2O+zTC9bKHT15ptfgjXh35YILWo3teBKVLhtIrR6yHQvlOu7aBilL5l69HJ+aQk0dQwmplllAWcbH9CpAEKXmDVMrpNDUMBzvwvfVL8HslRL33JP3Gke1WOHCn/9iTm9ixgps3izzEWQcmzuTpMhwVxT0yLZ+vRUaClveX6K2p8FArJL+ZNkQOo121oiYs8gjlPiAxLUzNpRfxOubKsnhlYT0ZtA6GXeXz+eVYOmRKAGtsC/xxHkcveUfG98jYQPb6e69S63TBD155/1yMzmrOiXHaQ78WpnMG5Jmxf288ejmDAZ+/jH86xsOxo2I91f9onNuYE4Oxw76Siz4JLPZr+ct5OJ727nHoN18po7DpV45BSkB88uknMBK9hA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'name'"
+   }
+  },
+  {
+   "name": "a package once with and once without a manifest",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFu2zAMfN9XFM5jJivBNhQt1mFAP2MoDFmmbSGyJEhUmiDov0+03SVBuyTdUmwr9habvOOFp5M3mQcRrMmuLzJpO6c0eCY8qlpIzN5fZE7IhWigUBW1OIHttE5N15xz4dwkqM5pCChbgV9n+TyfEagTRtXpbUH9hPvsrcUv/Fb4xuZoO01dmJ4AU3mTGdEB9T3S3SY6alkoQ3O/ZaUy2d0D6fGW5vcoTJ3pRy10gFSqoIxNIUKApN+asFOyDgsNS9A05ENGRDUIjB5CT19BLaLG7I4KiZ70DJVR+aCVe9BpXcD3dBIIViAjirJXdgqIBqXptB30ER7ebX7PCb4EU1nPO6hUoomOhXVgyZGrfDbZe0k2XR726QDXcQ9rtaLF7tmnVflH7HtijYla/xWrf3OLK6PSFQvSK4dsgEL1SsuzEYtK+Z9HrRezz8kTiLBamQVURVrssIKAApW8CVjJ6ZQaxhdb8L31C/A7pRD0zpP0a4e2X+HITf9xIDepYwk3Lxa5j7MOTJrJ6TA8KYr7wLR8vpYYETo+HKKXHnMPjQro19MW0YVkV6OwjWWeoNzHgEwL03DpRTqOubIsHVlYTUato2FX+Xx+eeimkXSbsNZ2wB/n8eAl78n4Dhkbyd76/XNijM5qzolx2kEfC9M5A/LM2H83HoOc0YCPnw5/hg+HY0vFBqr/0Ti3MScGY4s9koshCSz1a/nLeXg67dXjMGy+VkaFdlh5iFJCCD98+g6tsSmJ",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Ambiguous Cargo package source path",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server whose test flag is null",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFv2jAQ/b5fUYWPzDFom6pW6zSpP2OqIuNcEgvHtuwzBaH+952TMEAUSjf4MKnfSO7eu5d798Q68yCCNdn9TSZt65QGz4RHVQmJ2eebzAk5FzUUqkwtTmAzrqjpnnMunBsF1ToNAWUj8Ockn+aTBGqFURW9LVJ/wn331uIP/ih8bXO0rU5dSE+AVF5nRrSQ+jZ0j0SXWubKpLm/spky2dNL0uNtmt+hkDrph4laU6WEWawLEQKQfGsCVSqhA1DJOiw0LECnGV+yxFOBwOghdOwlVCJqzJ5SgdiTnL4yCO+lcg+atgV8T2YCwRJkRDHrhJ0DSoNoeloO+ggvn9b/ZgRfgCmt5y2UimiiY2EVGBlyl09Gey+TS7enbTrB9baFlVqmxe65p9XsqHsbj65h34E1w6kcX/0sKl2yIL1yyHoolFdav41YlMofv5hOzD4nJ1DCamXmUBa02H4FAQUq+RCwlONxahhebMHP1s/B75RC0DtP0q8c2m6FA3f6xp7cUMcCHt4tch9nHRiaydMxHBTFc2Bavl4jRoSW90f03qB4qFVAvxo3iC6QXbXCJs5ygnIfAzItTM2lF3SOubKMThaWo0HrYNhdPp3engqMTKFgjW2Bb+bx4CXvyPgOGRvIPmJ0eXPOjNMO+q0wXTIgr4z9f+PRyxkM+Prt9L/J6XBsqVhP9RGNSxtzZjC22Ddy0SeBUb+Wf52Hw2lXj0O/+UoZFZp+5SFKCSH88ek3QvDDCg==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server whose test flag is nought",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpoiyBBUxTIM4pAoKiVRJgiCXLl2DDy9y4lubbhRHZa+1AgN4m7Mzva4UCbxIMI1iT3N4m0jVMaPBMeVSkkJp9vEifkQlSQqSK2OIH1tKSme865cG4SVOM0BJS1wJ+zdJ7OIqgRRpV0msX+iPvurcUf/FH4yqZoGx27kN4AqbxJjGgg9m3pHokutiyUiXN/JbkyydNL1ONtnN+hkDrpYUbHBeRtlYkQgLRbE+i4FDoAlazDTMMSdBzwJYkkJQhsPYSOuoBStBqTp1gg6qilrwyqe53cg6ZVAT/QGEGwAtmiyDtV54DiIJoeN4O+hZdPm39zgS/BFNbzBgpFNK1jYR0YuXGXziYHh9Gi23GPRrhO+1eqVVzsgXVa5W9at/XoGvYdWWNarUdXn7dKFyxIrxyyHgrFldZvW8wK5d++MZ2YQ05OoIjVyiygyGix/QoCClTyIWAhp9PYMBzswM/WL8DvlULQe2/Srx3aboUDd/zGntxQxxIe3i3yEGcdGJrJ42U4KornwLR8vUaMCA3vL9F7g+KhUgH9elojukB2VQrrNk8Jyn0bkGlhKi69oOuYKsvoysJqMmgdDLtL5/PbscDIGApW2wb4dh4PXvKOjO+RsYHsI0aXN+fMOO2hT4XpkgF5Zez/G49ezmDA12/jf5PxcOyoWE/1EY1LG3NmMHbYE7nok8CoX8u/zsPxtKvHod98qYwKdb/y0EoJIfzx6Tej/cF/",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo artifact is not the default release production server",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a message more than the bound",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "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",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo messages continue after completion or exceed budget",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server from a manifest named through a step up from a directory that is not there",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I6J91SxqDfYt29d0/39Mg28yDQmuz2KpO2dUqDZ8KTqoWk7ONV5oRcigYKVaUWJ2gxrWPTLedcODdB1ToNSHIh6Pssn+ezBGqFUXU8LVJ/wn311tI3LkoEQzzP+b3wjc3Jtjr1U/wCio3bzIgWEuKZ+D4Sp5alMknBj6xUJnt4Ssq8TUo6FMXO+KMWGiGWKihDUwhEiDexBvdK1lGhYQU6DfmUJaIaBAUP2NFXUIugKXtIhUif9PSV4Q69Vu5Bx8UBP9CZQLAGGUiUnbJzQGlQnJ72RD7A04ft33nCV2Aq63kLlYo0wTHcIIve3OSzycFhMux63LERrtMe1mqdFntgn1blP7HvyBoTtB5dfRmUrhhKrxyxHgrVG63fBioq5X//Yjoxh5w8ghJWK7OEqoiL7VeAJEjJO6RKTqepYTjYgR+tX4LfKyHqvS/pN45st8KBO92xJzexYwV3rxZ5iLMOTJzJ02M4KopHZFq+XIuMBC3vH9Frg+KhUUh+M10QOYx2NYoWocwjlPuAxLQwDZdexOeYK8vik4X1ZNA6GHaTz+fXY4GRKRRsYVvgz/M4esk7Mr5Hxgay9xhd3pwz47SHPhWmSwbkhbH/bzx6OYMBn7+M/5uMh2NHxXqq92hc2pgzg7HDnshFnwQW+7X84zwcT3vzOPSbr5VRuOhXjkFKQPzl009qycaR",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/absent/../Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "the server through a linked directory that leads outside the release directory",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/T2e7S0I6J91SxqDfYt+9d8/37pFt5kEEa7Lbq0za1ikNngmPqhYSs49XmRNyKRooVEUtTuBiWqemW865cG4SVOs0BJQLgd9n+TyfEagVRtXpbUH9hPvqrcVv/F74xuZoW01dmJ4AU3mbGdEC9T3T3Sc6alkqQ3N/ZKUy2cMT6fGW5ncoTJ3pRy10gFSqoIxNIUKApN+asFeyDgsNK9A05FNGRDUIjB5CR19BLaLG7IEKiZ709JVBea+Ve9BpXcBtRH6glYCwBhlRlJ26c4E0MKmgLaGP8PRh+3eO8BWYynreQqUSTXQsbAJLztzks8nBS7LretyvEa7TXtZqTQs+sFGr8p/YeGSPiVqPrr6MSlcsSK8csh4K1RutPx1FUSn/+6vpxBxy0iURViuzhKpIi+1XEFCgkncBKzmdUsPwYgd+tH4Jfq8Ugt57kn7j0HYrHLjpG3tykzpWcPdqkYc468CkmZyO4agoHgPT8uVaYkRoeX9Erw2Kh0YF9JvpAtGFZFejcBHLPEG5jwGZFqbh0ot0jrmyLJ0srCeD1sGwm3w+vx4LjKRQsIVtgT/P48FL3pHxPTI2kL3H6PLmnBmnPfSpMF0yIC+M/X/j0csZDPj8ZfzfZDwcOyrWU71H49LGnBmMHfZELvoksNSv5R/n4Xjam8eh33ytjAqLfuUhSgkh/PLpJw0vxmg=",
+     "spelled": true
+    },
+    "outside/simplestChat": {
+     "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+     "spelled": false
+    }
+   },
+   "links": {
+    "target/release/out": "../../outside"
+   },
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the server through a linked directory that stays in the release directory",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I6J91SxqDfbN29d8/39PA28yDQmuz2KpO2dUqDZ8KTqoWk7ONV5oRcigYKVaUWJ2gxrWPTLedcODdB1ToNSHIh6Pssn+ezBGqFUXU8LVJ/wn311tI3fi98Y3OyrU5dFN+AYnmbGdFC6numu490qWWpTJr7IyuVyR6ekh5v0/wORbEzPtRCI8RSBWVoCoEIUb81uFeyjgoNK9BpyKcsEdUgKHjAjr6CWgRN2UMqRPqkp68Mynut3IOO6wKuDD+QmnCwBhlIlJ24M3FpXNSQdkQ+wNOH7d/5wVdgKut5C5WKNMEx3CCLvtzks8nBYTLretytEa7TTtZqndZ7YKJW5T8x8cgdE7QeXX0ZlK4YSq8csR4K1Rut3wYqKuV/f2k6MYecPIISViuzhKqIi+1XgCRIyTukSk6nqWE42IEfrV+C3ysh6r036TeObLfCgTt9Y09uYscK7l4t8hBnHZg4k6fLcFQUj8i0fLkWGQla3l+i1wbFQ6OQ/Ga6IHIY7WoULUKZRyj3AYlpYRouvYjXMVeWxSsL68mgdTDsJp/Pr8cCI1Mo2MK2wJ/ncfSSd2R8j4wNZO8xurw5Z8ZpD30qTJcMyAtj/9949HIGAz5/Gf+bjIdjR8V6qvdoXNqYM4Oxw57IRZ8EFvu1/OM8HE978zj0m6+VUbjoV45BSkD85dNPVGDFZg==",
+     "spelled": true
+    }
+   },
+   "links": {
+    "target/release/in": "."
+   },
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  },
+  {
+   "name": "more messages than the bound",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "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",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Cargo messages continue after completion or exceed budget",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "as many messages as the bound",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "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",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "binary": "<root>/target/release/simplestChat",
+     "artifacts": [
+      "path+file:///app#simplestchat@0.1.0",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117"
+     ],
+     "scripts": [
+      [
+       "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "<root>/target/release/build/mediasoup-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "<root>/target/release/build/aws-lc-sys/out"
+      ],
+      [
+       "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "<root>/target/release/build/openssl-sys/out"
+      ]
+     ],
+     "manifests": {
+      "path+file:///app#simplestchat@0.1.0": "<root>/Cargo.toml",
+      "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0": "<root>/vendor/mediasoup-sys-0.19.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0": "<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml",
+      "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117": "<root>/cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml"
+     }
+    }
+   }
+  }
+ ],
+ "packages": [
+  {
+   "identifier": "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+   "result": {
+    "held": "aws-lc-sys"
+   }
+  },
+  {
+   "identifier": "path+file:///app#simplestchat@0.1.0",
+   "result": {
+    "held": "simplestchat"
+   }
+  },
+  {
+   "identifier": "path+file:///app/vendor/x#mediasoup-sys@0.17.0",
+   "result": {
+    "held": "mediasoup-sys"
+   }
+  },
+  {
+   "identifier": "name@1.0",
+   "result": {
+    "held": "name"
+   }
+  },
+  {
+   "identifier": "name",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "#@1",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "a#b#c@1",
+   "result": {
+    "held": "c"
+   }
+  },
+  {
+   "identifier": "name@",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "@1.0",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "na me@1",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "na.me@1",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "name@1@2",
+   "result": {
+    "held": "name"
+   }
+  },
+  {
+   "identifier": "x#y@z#w@1",
+   "result": {
+    "held": "w"
+   }
+  },
+  {
+   "identifier": "",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "A9@1",
+   "result": {
+    "held": "A9"
+   }
+  },
+  {
+   "identifier": "a_b-c@1",
+   "result": {
+    "held": "a_b-c"
+   }
+  },
+  {
+   "identifier": "name\n@1",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "name@1\n",
+   "result": {
+    "held": "name"
+   }
+  },
+  {
+   "identifier": "x#",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "x@1#",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "a/b@1",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "identifier": "a#b@1#",
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  }
+ ]
+}
