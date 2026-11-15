@@ -107,6 +107,17 @@ fn rust(root: &Path, environment: &mut Environment) -> tooling::Result<()> {
             "-D",
             "warnings",
         ],
+        // The image build compiles the security executable in this shape,
+        // which no build of every feature covers.
+        vec![
+            "check",
+            "--locked",
+            "-p",
+            "simplestchat-security",
+            "--no-default-features",
+            "--bin",
+            "simplestchat-security",
+        ],
     ] {
         tooling::run(
             root,

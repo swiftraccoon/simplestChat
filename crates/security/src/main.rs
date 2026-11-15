@@ -29,6 +29,7 @@ fn main() -> ExitCode {
         (Some(_), Some([group, rest @ ..])) if group == "elf" => {
             simplestchat_security::elf::run(rest)
         }
+        #[cfg(feature = "image")]
         (Some(_), Some([group, rest @ ..])) if group == "image" => {
             simplestchat_security::image::run(rest)
         }

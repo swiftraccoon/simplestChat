@@ -35,6 +35,7 @@ const TITLE: &[u8] = b"SimplestChat printable secret-scan projection\n";
 /// looks for a signature through offset 32773, so they reach past it.
 const PADDING: usize = 32768 + 64;
 /// How many bytes every projection starts with.
+#[cfg(feature = "image")]
 pub(crate) const PREFIX_BYTES: u64 = (TITLE.len() + PADDING) as u64;
 /// The name of the projection.
 pub const FORMAT: &str = "ascii-printable";

@@ -27,6 +27,7 @@ pub mod environment;
 pub mod fast;
 pub(crate) mod files;
 pub mod findings;
+#[cfg(feature = "image")]
 pub mod image;
 pub mod licenses;
 pub mod migrations;

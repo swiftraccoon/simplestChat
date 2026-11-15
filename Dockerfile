@@ -156,10 +156,11 @@ RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crate
 # build: its dependency section must survive in the final executable for image
 # auditing. The installer is the security crate itself, built here from its
 # real sources and the locked dependencies; it downloads with this stage's curl
-# and admits only the archive the tool lock names.
+# and admits only the archive the tool lock names. Its checks of a saved image
+# need the ops crate, whose sources are still stubs here, and are left out.
 COPY build/security-tools.lock.json ./build/
 COPY crates/security/src ./crates/security/src
-RUN cargo build --locked --release -p simplestchat-security --bin simplestchat-security \
+RUN cargo build --locked --release -p simplestchat-security --no-default-features --bin simplestchat-security \
     && target/release/simplestchat-security tools install --tools cargo-auditable --directory /opt/security-tools
 # Warm every dependency, including the native worker, against stub sources.
 # This layer is reused until the manifest, lockfile or vendored patches change,

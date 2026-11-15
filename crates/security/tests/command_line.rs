@@ -547,6 +547,7 @@ fn native_evidence_that_fails_says_what_is_wrong_in_one_line_and_writes_nothing(
     assert!(!Path::new(&report).exists());
 }
 
+#[cfg(feature = "image")]
 #[test]
 fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
     for arguments in [
@@ -646,6 +647,7 @@ fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
     }
 }
 
+#[cfg(feature = "image")]
 #[test]
 fn an_image_archive_check_that_fails_says_its_code_in_one_line_and_writes_nothing() {
     let scratch = Scratch::new("image");

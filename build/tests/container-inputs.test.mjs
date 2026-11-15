@@ -293,7 +293,7 @@ test('the builder authenticates cargo-auditable with the security crate built fr
     /> crates\/security\/src\/lib\.rs(?=\s|$)/,
     /^COPY build\/security-tools\.lock\.json \.\/build\/$/m,
     /^COPY crates\/security\/src \.\/crates\/security\/src$/m,
-    /^RUN cargo build --locked --release -p simplestchat-security --bin simplestchat-security +&& target\/release\/simplestchat-security tools install --tools cargo-auditable --directory \/opt\/security-tools$/m,
+    /^RUN cargo build --locked --release -p simplestchat-security --no-default-features --bin simplestchat-security +&& target\/release\/simplestchat-security tools install --tools cargo-auditable --directory \/opt\/security-tools$/m,
     /^RUN \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,
     /^COPY src \.\/src$/m,
     /^RUN target\/release\/simplestchat-security tools path cargo-auditable --directory \/opt\/security-tools +&& \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,

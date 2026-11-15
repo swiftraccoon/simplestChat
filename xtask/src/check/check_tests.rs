@@ -425,6 +425,7 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
             "rustup-which-rustdoc",
             "cargo-fmt",
             "cargo-clippy",
+            "cargo-check",
             "cargo-line-length",
             "cargo-protocol-ts",
             "cargo-http-policy",
@@ -460,7 +461,22 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
             "warnings"
         ]
     );
-    for (event, checker) in events[4..7]
+    assert_eq!(
+        events[4].arguments,
+        [
+            "run",
+            "9.88.7",
+            "cargo",
+            "check",
+            "--locked",
+            "-p",
+            "simplestchat-security",
+            "--no-default-features",
+            "--bin",
+            "simplestchat-security"
+        ]
+    );
+    for (event, checker) in events[5..8]
         .iter()
         .zip(["line-length", "protocol-ts", "http-policy"])
     {
@@ -478,7 +494,7 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
             .all(|event| { event.command == "rustup" && Path::new(&event.cwd) == fixture.root })
     );
     assert_eq!(
-        events[7].arguments,
+        events[8].arguments,
         [
             "run",
             "9.88.7",
@@ -534,7 +550,7 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
         assert_eq!(environment["AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK"], "0");
     }
     assert_eq!(
-        events[7].environment["RUSTDOCFLAGS"],
+        events[8].environment["RUSTDOCFLAGS"],
         "--cfg quality_fixture -D warnings"
     );
 }
@@ -897,6 +913,7 @@ fn default_runs_all_groups_in_order() {
             "rustup-which-rustdoc",
             "cargo-fmt",
             "cargo-clippy",
+            "cargo-check",
             "cargo-line-length",
             "cargo-protocol-ts",
             "cargo-http-policy",
@@ -1007,6 +1024,7 @@ fn each_failed_phase_preserves_status_and_prevents_every_later_phase() {
         "rustup-which-rustdoc",
         "cargo-fmt",
         "cargo-clippy",
+        "cargo-check",
         "cargo-line-length",
         "cargo-protocol-ts",
         "cargo-http-policy",
