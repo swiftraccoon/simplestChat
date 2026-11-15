@@ -43,7 +43,7 @@ fn held<'a>(record: &'a Document, name: &str) -> Option<&'a str> {
 }
 
 /// Whether the reference's interpreter takes a character for space.
-fn space(character: char) -> bool {
+pub(super) fn space(character: char) -> bool {
     character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 

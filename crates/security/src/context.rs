@@ -268,6 +268,22 @@ pub(crate) fn asked(
     Ok((status, handed.try_iter().flatten().collect()))
 }
 
+/// Run `command` to its end as `asked` does, without input, and answer
+/// what it complained of as well as what it printed.
+pub(crate) fn heard(
+    command: &mut Command,
+    within: Duration,
+    room: (u64, u64),
+) -> Outcome<(i32, Vec<u8>, Vec<u8>)> {
+    let (hand, handed) = mpsc::channel();
+    let (complaint, complained) = mpsc::channel();
+    let kept = (Handed(hand), Handed(complaint));
+    let patience = (within, Limits::REVIEWED.grace);
+    let status = pumped(command, &[], patience, kept, room, &mut || true)?;
+    let printed = handed.try_iter().flatten().collect();
+    Ok((status, printed, complained.try_iter().flatten().collect()))
+}
+
 /// Run `command` to its end, or stop it at its deadline or when a stream
 /// says more than its `room`. A command is over when both streams are closed
 /// and its leader has exited, so one that leaves a descendant holding a

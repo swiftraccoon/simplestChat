@@ -469,3 +469,80 @@ fn a_vendor_check_that_may_fetch_nothing_asks_for_nothing() {
     assert_eq!((text(&output.stdout), text(&output.stderr)), ("", ""));
     assert_eq!(output.status.code(), Some(0));
 }
+
+#[test]
+fn native_evidence_that_is_not_asked_for_properly_is_told_the_usage() {
+    let all = [
+        "--vendor-report",
+        "r",
+        "--cargo-messages",
+        "m",
+        "--cargo-home",
+        "h",
+        "--openssl-prefix",
+        "o",
+        "--aws-lc-prefix",
+        "a",
+        "--output",
+        "out",
+    ];
+    fn joined<'a>(all: &[&'a str], more: &[&'a str]) -> Vec<&'a str> {
+        [&["native"][..], all, more].concat()
+    }
+    let with = |more: &[&'static str]| joined(&all, more);
+    for arguments in [
+        vec!["native"],
+        [&["native"][..], &all[..10]].concat(),
+        [&["native"][..], &all[2..]].concat(),
+        with(&["more"]),
+        with(&["--output", "again"]),
+        with(&["--root"]),
+        with(&["--root", ""]),
+        with(&["--root", "--output"]),
+        with(&["--system-root", "/usr"]),
+    ] {
+        let output = run(&arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        assert!(
+            usage.starts_with("usage: simplestchat-security native --vendor-report FILE "),
+            "{usage}"
+        );
+    }
+}
+
+#[test]
+fn native_evidence_that_fails_says_what_is_wrong_in_one_line_and_writes_nothing() {
+    let scratch = Scratch::new("native");
+    let path = |name: &str| scratch.0.join(name).to_str().expect("a path").to_owned();
+    let (root, report) = (path("root"), path("report.json"));
+    std::fs::create_dir(&root).expect("a checkout");
+    let arguments = [
+        "native",
+        "--root",
+        &root,
+        "--vendor-report",
+        &path("vendor-evidence/report.json"),
+        "--cargo-messages",
+        &path("cargo-build.json"),
+        "--cargo-home",
+        &path("cargo-home"),
+        "--openssl-prefix",
+        &path("openssl"),
+        "--aws-lc-prefix",
+        &path("aws-lc"),
+        "--output",
+        &report,
+    ];
+    let output = run(&arguments);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(text(&output.stdout), "");
+    let real = Path::new(&root).canonicalize().expect("the checkout");
+    let line = format!(
+        "Native provenance failed: Unreadable file: {}/vendor/native-components.json\n",
+        real.display()
+    );
+    assert_eq!(text(&output.stderr), line);
+    assert!(!Path::new(&report).exists());
+}

@@ -1,0 +1,1510 @@
+{
+ "base": {
+  "Cargo.lock": {
+   "deflated": "eNqt0LluhDAUheGex3AbAd6XSPMkoyns62uwwiZskszbhykjUqb/j/Tp3O+bhw8/4OPRLH7GG/FfpZ2gLc9Cmk/cS16XG6GdVB0lTVmPHc5oxyGXuj/fxlq38t73Q67jETpY534/Sm0nvww97L5i6fLa5iXiN2lgRPgox3wjKURqJEcmlEIuFDjNbHIxpWActQIl9wGM0MpGdJIzCvqMLcqkQuSRNPeLfN1wKWW60F3HmPlHu0o6eZbSSbQ0RjBRcWcFhxSFNFpRVNoGdbIpBsu0Aw5cnnLHREDEv+wzxuxP4XbRM/M6/rooed4mLBVGX38PXv0PUJWZNQ==",
+   "spelled": false
+  },
+  "Cargo.toml": {
+   "deflated": "eNpdjDEOgCAQBHueQe9FS4t7CbE4zalEUMKBfl8sJNFmi5nNmOuImwSaeFCe/chR0AzKVAxlNlqKPouzx466hQ5arWKW1FTYQd8/1NT/Tp5Ri/XBsaRppaTfBtQ8ppj5k/q7kEdnZcWZnLC6AZmTP2M=",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUzNNQzUOJShir2D3D1Cw72ifcMjgfr4wIA5X4UTQ==",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/boringssl_prefix_symbols.h": {
+   "deflated": "eNpTTklNy8xLVXDyD/L0cw8O9okPCHJ184xQKM7MLchJLS5JzkgsiU8sL85JjjeNNzSMN+ACAL3tESc=",
+   "spelled": false
+  },
+  "aws-lc/lib/libcrypto-awslc.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+   "spelled": false
+  },
+  "aws-lc/share/rust/aws_lc_bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/CMakeCache.txt": {
+   "deflated": "eNptkM1qwzAQhO9+mBIfSqHQg37WzlJFK1brtDktbjA04ELBgb5+5aZpY5KLEPONVjPrNuYZ1HYYvMouwWMWxtg+8TAO/TRUJ5LXhsFrQJvPBmqaXyiQpSg3AFG4VucheaFDNDaAZurYgW7IY4POCFK8fm1ecnCamLbogW9McbxLQpoooENYxG0hAhsB5S6LWoy+kH9HrBa6iuEWRLfA+SJKffewqizN91KjJIEGX89wOnx8jsN03L/3R+2/pnGv91rXuqrcz54TZZx7afkDEpQjijrycBHi5MSYxYQwb8vjX8/x8FZ9AwOif/4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/aws-lc-source.tar.gz": {
+   "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t08FLwzAUx/Gc91eUeV77gl3vrpQRqJ00Oo+h2zI2KJ0Yh/++paLgLh6Uwdj3c3nh8cI7JL/mPUza9WQaax1Lsu/W7XHjk8OL70Jok1UTfLxTfyS9LE2H2jutoiX7Pg99nUqqVSTqDI7hrXnt16vrdLPx233no7tnW+ZuWdTWLCpXPd3PitrZx9pU82j8+TvGo6/hxUNRWVs6Y91wb6RwoZof+S9N3r9s8c87fsu/yO1J/iWbkv+zMDYnBAAAAAAAAAAAAAAAABfsA+My+EQAKAAAP0ZwOA==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/bindgen-cli.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZR74mA5GWh9u/icQ1/NJwDV9nwamkyLvEt6uojkta+PqxIz/qZ888k5Znd6fdTuTuE27T6aduBF9epjhLs2xxTVta+vNvZ+4Fb92yft/bpWtjVd2n6lec6zd7Wv3T33t+mvzhq7IsDMjgg3OYzf7r3gwaDAwAswY4Zg==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/build.json": {
+   "deflated": "eNqlVE1v20YQvftXGDrX0n5/9CZLtEtUFg1KTpsTsTs7axNlJIOU0aRB/nuHio1EruFLBYggOG/em9k3s1/Pzs8nsd2le9w1w0MQ2kx+PZ+E//mb/DLywn6X2/unHpv946Hd7wai/koBCl1Wdbm+3mxWzW1dXJV/jqJD++mxw+EAD+HQhL+HDhrdcN6wI9uYdFeuls38j81qQWnVh3JZ1GNidXV1ClmVl0T9Zmjz27wuviPejG+LzZYqeztWVa9JFzfz34vmOfzxthjDNXYYBjyFlOvNdr5ajcLL8lh118ZTyG21KbdltSbssrgt6LHeNotqeSSt1i/gYj2/XBXNov54u60oaVUuyuJ1M8+gTXVXL4rmplqWV+ViPrK/Al4X66Keb4umvttsm0uSHn05VTwJNdt5fV1smw9FvXmm41PLJgT9dnQ9t2TiD6fbHXRPCWf7R9wNQzeLdDTThzHNOeGZTTyq5EySRlofrHPWY0amlVcCnWUeNdM8g89Z+YQyyMghRoX2pbz/KOz7dndPb81jj7n93AxfPsV9N3xXFeASJKlS0F4lEY3WOYkkSVJjJnqfAbkWLkhtuGIuM+EiGoMOUojhRZXsm9Ef+i+Ph/3FcVynYRRIhlMXUkYBGhiCU1opIxJIrYXJ2oCyWvCQQ0YTQWvIjKuUEmajvRYvArSNPc76p+EwI/aGtmHc07GzaT8cOwkZmA1GUeUCAXigg5EKBNfWpUjlMybQWCWzl2PToJmPNmXk2XktT4V+3r7Z4ib8hYsADzg9fD4cbwQ6Ix5SEpwJroJgAYlGgOeRRQfRSmPRCC+soQ6zcixoFk3S2gSIKb0jRt1ddHAx7J96IL3QT+//GSUN2WQt05lnbYNwNunMFNLYGIUxBycUBhNDphebgs9kVvIIimUJifN3JJ9vvAvo2in04YDHMXbH/pRhMUWGCljM2WB23JicrOBOZ/THJ4dMeuBD9jaCCYEpHd/Re5nA58O06JQUDDKSc0pJn5iSUXGfhZXkolGReau0D0DzwiQmjMHQ9NssYojmx7K1u+EQug77ny5vk4O0IjBIWkqUmQunnBfBxWyIG5ynj9k4DEomp4yncbdesKjIMwcwOft29i8q+bqR",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/symbols.txt": {
+   "deflated": "eNpzDQuId8lMTy0u4fIvSM0LDvaJL0stKs7Mz+MCAIU/Cag=",
+   "spelled": false
+  },
+  "build/install-aws-lc.sh": {
+   "deflated": "eNpFjs1qwzAQhO95Ed3MriytpIOfxaz2JzGkbohC28evSQi5DMMMzHz8O66y/th9bN/7EvKEOEE48TMeF46ZlkCicymQHT0XjrVodkhWa6Rk3bnGZEyd/TBFuXmCqs0kgc+iiO+92918+1vC2L5uVxsPufBjfVV5RVyP477terb9QwRTmaf4Kd5MWFk1YiLo2sGSQHcn84pEriVizW7tqSh+MEljb6ULMUPKPZz+AZQFTZM=",
+   "spelled": false
+  },
+  "build/install-openssl.sh": {
+   "deflated": "eNrLL0jNKy7OiS9LLSrOzM+zVTfRM9AzVufKh4oXZyQamZrZqhtQCNS5AEk+GcM=",
+   "spelled": false
+  },
+  "cache/ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda": {
+   "deflated": "eNoBgQF+/h+LCAAA8VNlAv/t1Ltu2zAUBmDNegrBuyiSoi3ZgIcgyZgla1EEvMlWIpoCKefSpy+dooVhdMgQe0j+b6FwKFCADv/jrOll9PuxjG+xpIQtCa2uZdh4Mnk3ZJ+BJgsh3tfkdE2bR8+HOqs5W2QFzS5gHycZ0uez7+nHKPWT3Nif+U46u5654/swy59tiL3frWfpZjSEzvIMvhT3v/zHvRqDf7R6ilXnPXkJcjxj/nnDTvI/r1mN/F8k/4fell0/pAlg+pBa7sNbsS5S20tGaJ6uRtD2YR+GVNxO0xhXVWVfpRsHS/rdsxx6U528fDjtME3+HEPS/yWbX383tzJu04ZpjKBL0bVMc9V2na1Z07TKKqlEJ5ZcCK2psou2ri1rDTWcs3qhKLdtpyzjGERnzL+xY6yGXr1YFSZd3d9e3dzdEmfOlH/G56f5F/MG+b+EsvjX50IFudPbVeGaJj+ua+9cP60K+UHIJgAAAAAAAAAAAAAAAADA5f0GgtFZ9gAoAABHgMAL",
+   "spelled": false
+  },
+  "cache/d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZQ64GAwGXi2ttW8UDzAVybXo7nKSYDRn787cIvhE98n+W5LKZN3+funJrjV1r4Sr3yoa0uVvT076HmL692n93xds1U7T0PbJlnPZNry/y1knfflRk2T4BBmRwIPxNiNS5SAYNBgYA3h8vfA==",
+   "spelled": false
+  },
+  "cargo-build.json": {
+   "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPh2FGxnuo9Gpc25sxg7LAnctEngVG/ln+ch+Npbx6HfvO1Mios+pWHKCWE8Munn7qgw1o=",
+   "spelled": true
+  },
+  "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+   "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69pIAEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPcbNgPqiY0PX1MoP4aOF637W0bRy7jvH865v2a5tKRpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9Pxm6WleZaOV4K0wCXVXg9NEX+WddXxUz5N+yvUn+HcdbIP9z5p81YqCcBmLHiVirWdc01WCUJMtxNXwTNsNJ53/fMas2q7e5MLvNuPJlbT6RFKz8nf/fcyf5X3DXR/7ncJaL56oV2vlDchWk96s4CW+iNLq7vljFaXIbh9GlpnvM333/SAsAAAAAAAAAAAAAAAAAwN/1AfnnKsoAKAAAJYqWcA==",
+   "spelled": false
+  },
+  "cargo-home/registry/cache/index/openssl-sys-0.9.117.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+0lQ+5DBgJtD8/8FJ201/RgVuGLKycPnvWVceJcesNs6cqm//c0nA5GlnyonfZ+h/WOp38e/BK4pXLHadHl3CyffTpvI36XfIrVtnNyn61TnfZlXtTz1zvrvpz1klYWi6o5qOpT1vP8aL0V3zar27fmpuRbh2vY/2+eFG7edux7a1Vt26Tc4KOVd26/5/PiYkAGB9bfYfTm/b+UQYOBAQBOuVBL",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+   "deflated": "eNqrVipTsjKsBQAIkwIe",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+   "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyi9IzSsuztEtrixW4ipLLSrOzM+zVTLQs9QzNDRX4srJTAbKA9X5eoYocQEAjjsTkg==",
+   "spelled": false
+  },
+  "openssl/include/openssl/configuration.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKBQCUZw9L",
+   "spelled": false
+  },
+  "openssl/include/openssl/opensslv.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1biAgDUdQox",
+   "spelled": false
+  },
+  "openssl/lib/libcrypto.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyQcAIS0E5Q==",
+   "spelled": false
+  },
+  "openssl/lib/libssl.a": {
+   "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+   "spelled": false
+  },
+  "openssl/share/simplestchat/openssl-disabled.txt": {
+   "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEvlAgB3IAji",
+   "spelled": false
+  },
+  "system/lib/libstdc++.a": {
+   "deflated": "eNpTtEksSs6w43KOiAAAExsDNw==",
+   "spelled": false
+  },
+  "target/release/build/aws-lc-sys/out/bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": {
+   "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+   "spelled": false
+  },
+  "target/release/build/openssl-sys/out/": null,
+  "target/release/simplestChat": {
+   "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+   "spelled": false
+  },
+  "vendor/integrity.json": {
+   "deflated": "eNqVUsty4yAQvPsrXDrbEg9ZQvmVrS3XAENEIoEKsJNsKv++yNk4WUd5HaCK7mGmG/pxtV4Xxg4Yi6v1r9+b+TiCdSkv1Pszk/HMHNFpHyoHyR5xq/w4eYcuxfImelfkmucG0R+CenPv8bTPg3wYIWW8SBDK6z/F5oWxekaN91taklc49sB2zUzpVtekq42giklhDHLatkKiBFmbumN1rRSR2AjOkQpNNGOUN5IwFEYiZa89D2GYG/YpTfGqqvAexmnA0rojDFZXLxpO5U+bnxkYUVvI9qdtfIhbUtJu2Q3IZsdZy3SniNFN1yiz41k7E7TdAReiRYK6AQmko7LmXKNGYEILJrXR8G03i4KerZ2/KwVc+izVg7t+k4sTOEHq53n/kvC53ymgsfffeJdTXj6su5B7F2BayhYMgwR1u88v8l606vfaBlTJh4dMusMwXNBnEZfcV36reJBT8De5eZzTU84Cl8z9n6zZz+pp9RfVEPPy",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOICAKZ6D8M=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/README.md": {
+   "deflated": "eNrTVcjJTCpPTSoqSVZIKkrMS86wUsg1N+fSRRJPzs/NzSyxUkgkEnABAPfgHhk=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/foo.wrap": {
+   "deflated": "eNpdjEsKgzAUAPeewgsY80NjoScppbyXvNRANBJjf6evpXTT7cwwp3uGpfEh0rlyIZMtKT/rY+1TagTj1Zq2bOmy5bjDsZRlPbQtPWBaIrEw3yAG1/7Fn9sME303rEBm19dPjrCOu3C903zQ3ggr0XhPSvS9QUJA7fUgtbaWI3VGKRLGcSelUB1yScYjCVm9Af8wO+I=",
+   "spelled": false
+  },
+  "vendor/native-components.json": {
+   "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YDyIMkyFsglFmDbccCyHe5T7ElfSBm7PvJsIBaLuWtTxxPgEwsjTrWyB0Q6sbDEq0k+FrlxiJ4yktw8vpkdK/OE4FF7mM+24tt9x0kmNpBFJxF5KyZtVBrrMU8T7dW1DWvQF9vAYI8JoauQoljECAhHsZQUpIcplcK1sOdI8A9PzCXzJfeZ9N2YU8YQceL+qj8Zmh4185RmPzhteF7pc72IXC+W4fxutZpFD8vgNvyzJqKSXZHqrsW3rIoOQylyIowj1Cd9/SGc3UT6AM+m2nTxMbwJlrXx4vb2VG0WXmsXr4pXv02WwVHrVZ11sFprpq/LF4tzDqb3k9+DqFH59BDUKstjFzlVC+er9WQ2q4nchMvm4nGq9rBYhetwMdf6N8FDoB/zdTRd3BwWX8z7BsF8cj0Louny08N6oQ1n4TQMzm2yUVwtPiynQXS/uAlvw+mk9nJG+S6YB8vJOoiWH1br6FrTqHN46n0gjtaT5V2wjj4Gy1WzLDZcdHpizk0nKpntWgzpCWXbYEtsecTzLebFkmJOuedrUFIPGLGFR6gP2HF9C8UEMcfjvNdb/lVZNr3AMTA20PmKpFzYrosciaXjMstz62FKwPMsSiCWzLMIMBozqV9coSuSIE/4wAmSNhcYv1GRvYmkiTSNyWQl3+prnx5KUpkV2yjz8chvMHj6kT3uPWpmQi+8wtNTXOgeSikWjhAgJdJtRGKIOfJ86glGXKIDT33uEg7Sp7WKRTAwYMjphfd5F+dpVGhSyde3i/m1udgEuR2MTyUruqHY3ZPajtubcffhuuNS34fZ5oA3d7ruXtQMQJnnZ45GDY/7iR7tVbNQUepLF68bWSfscW+IH29+ny++X/wDdldD3A==",
+   "spelled": false
+  },
+  "vendor-evidence/report.json": {
+   "deflated": "eNqtVMluE0EQvecrLJ8Tu6v35oaAIxeuCKGqrmoyyPaMZiZhU/6dsgNZwGAQHGbrab2l+lV9OVsslty19na6RBvi8sliKY5M9d6W3CpU8AUbNV9zKbFRsd4mFA/ioy9UnK/oSygFKOVgKYewPN+Dtm4jk8K9fnP43GK3m/USfnv3R9cXiy+Hu+4YcL7c01/LjvtxvcO5u5aL2m+Hfie7eVq9n/rdAfuw/V4vV48F2DJnsgAVOUgRB84ZIseh1sIRU/M+tiY1mAZurzNLczbksjxA3uj9u9Rd12SaH5Qk1FYcUAxgGaJnDFRiduSULoTkkhemEvQ1JsX2DDZYD+xUgxM2tyWZ+quxHrPe+nGL855oxnH17vO9y473q63vL2BljppP7E3xLUPV4qs/ByllEkLyzetp+VoNiYp1ApkNWwsukrGSGwnYB5jdZ1FEgHK3dDVu9hyX8zxMT9Zr+YjbYSOrbneNm47X32Xd1u/87zxthTvUigwX06fpwqygHDeIWnVnk+VSTeNYYm3BqR2bIQV0OScxoudLaDSD3jkWFrSZsyVujD8ZdDn8qcGjGn9IyzzK0SN9FPKHvx6F/RmO7/rV3G83dzpvhQ2TAuP2QQZJPUNCKJ6YNe2OfLSOmmYSdTV6b5I6rgTNNqRMOaUELXPSztV+eExw22Xajf+R4A7/5vz3rlmGab3p6IPQONf1qxdPn798sdryyRpgZiXUJvS1qJZCIsE2CvoAl4wkrlEDTMaVQhXbfnj5qMkBBlXeTtbgnwn+uAbTFQ1j/17qPO0bafVhxOGkf50+gYu3EiJDVpXomzXGadgRMAUxehS+hhYQtfdbMzroiovRO1NMiif9/zPBvf9vb2/OfzHgTwyAw6z85aC4b8Kzm7Ovnxe/2A==",
+   "spelled": false
+  },
+  "vendor-evidence/vendor.diff": {
+   "deflated": "eNoDAAAAAAE=",
+   "spelled": false
+  }
+ },
+ "cases": [
+  {
+   "name": "a whole report",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "adapted_component": {
+      "license": "ISC",
+      "name": "libwebrtc",
+      "path": "vendor/mediasoup-sys-0.19.0/deps/libwebrtc",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "version": "m77"
+     },
+     "binary": {
+      "path": "<root>/target/release/simplestChat",
+      "sha256": "259fe96758f3ad8ecc7bcc77ce9d7ddf073cb5adf3ae02bbf144a66bcd9df145",
+      "size": 4096
+     },
+     "cargo_lock_sha256": "225f5b84e8abfb908bac39fc79fd1d35ed9eb688cc98dd93db0fa4a989ed32ff",
+     "cargo_messages_sha256": "<the digest of the messages>",
+     "limits": [
+      "Static archive identity does not prove every member survives final linking.",
+      "Header-only and adapted components are authenticated source inputs.",
+      "Rust license evidence covers compiler events and the exact embedded dependency graph.",
+      "Embedded metadata can include optional packages without compiler-artifact events.",
+      "The unpublished first-party application has no inferred distribution license.",
+      "Runtime-loaded libraries and deployed protections need separate checks."
+     ],
+     "native_manifest_sha256": "dc4a91d2dd8b211cad5e9e31330bb3d5cc9d6a7f446ffec50f13b8558ef32589",
+     "openssl": {
+      "build": {
+       "configuration_header": {
+        "path": "<root>/openssl/include/openssl/configuration.h",
+        "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+        "size": 51
+       },
+       "disabled_options": [
+        "shared",
+        "dso",
+        "module",
+        "engine"
+       ],
+       "disabled_options_record": {
+        "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+        "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+        "size": 25
+       },
+       "static_libraries": [
+        {
+         "library": "ssl",
+         "path": "<root>/openssl/lib/libssl.a",
+         "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+         "size": 11
+        },
+        {
+         "library": "crypto",
+         "path": "<root>/openssl/lib/libcrypto.a",
+         "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+         "size": 14
+        }
+       ],
+       "version_header": {
+        "path": "<root>/openssl/include/openssl/opensslv.h",
+        "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+        "size": 37
+       }
+      },
+      "configure_options": [
+       "no-shared",
+       "no-dso",
+       "no-module",
+       "no-engine",
+       "no-tests"
+      ],
+      "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+      "license": "ISC",
+      "source": {
+       "format": "tar.gz",
+       "id": "openssl-4.0.3",
+       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+       "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+      },
+      "version": "4.0.3"
+     },
+     "registry_component": {
+      "bindgen_source": {
+       "format": "tar.gz",
+       "id": "bindgen-cli-0.73.2",
+       "sha256": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+       "url": "https://static.crates.io/crates/bindgen-cli/bindgen-cli-0.73.2.crate"
+      },
+      "bindings_sha256": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+      "build": {
+       "bindgen_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "configure_options": {
+        "BORINGSSL_PREFIX": "simplestchat_awslc_5_11_0",
+        "BUILD_AWSLC_PROVIDER": "OFF",
+        "BUILD_LIBSSL": "OFF",
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "BUILD_TOOL": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        "ENABLE_CRYPTO_POLICIES": "OFF",
+        "ENABLE_SOURCE_MODIFICATION": "OFF",
+        "GENERATE_RUST_BINDINGS": "ON",
+        "RUST_BINDINGS_TARGET_VERSION": "1.70"
+       },
+       "files": {
+        "include/openssl/base.h": "882907d1b4d86d36379a78879efe054942e8709e5051fc9ff49de3a3b1cbb4e7",
+        "include/openssl/boringssl_prefix_symbols.h": "2c8dcd34da594d2b655fd2d3e055ef3a39fce1528a3561408f028be66e8cdaba",
+        "lib/libcrypto-awslc.a": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+        "share/rust/aws_lc_bindings.rs": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+        "share/simplestchat/CMakeCache.txt": "ad2d1add210214a20aee1f2c91b0b8cb7367e62927656cf480a50b6d556acbdd",
+        "share/simplestchat/aws-lc-source.tar.gz": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+        "share/simplestchat/bindgen-cli.crate": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+        "share/simplestchat/symbols.txt": "7e84320cfe5524439d043b419f273a1c64b097459acf5603edeba69de7f2bab6"
+       },
+       "installer_sha256": "6fa372a0cd533e3f1284892a8bf61c6c89e3ff68ea43d8469e157920b40a58cc"
+      },
+      "crate": "aws-lc-sys",
+      "crate_version": "0.45.0",
+      "license": "ISC",
+      "name": "AWS-LC",
+      "native_license_sha256": "d8d62d58d661d5ddeff06fdf1ebc08968da4743e369c74cef96eff0241eaea05",
+      "native_source": {
+       "format": "tar.gz",
+       "id": "aws-lc-5.11.0",
+       "sha256": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+       "url": "https://github.com/aws/aws-lc/archive/refs/tags/v5.11.0.tar.gz"
+      },
+      "native_verified_files": 2,
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+      "unused_bundled_source": {
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "version": "5.7.0"
+      },
+      "verified_files": 3,
+      "version": "5.11.0"
+     },
+     "rust_dependency_metadata": {
+      "compressedSha256": "ac923f69f6868c5af23567b5719b812f8bb176e1307109d27c60a0633d3d16e6",
+      "format": 1,
+      "packageCount": 4,
+      "sha256": "ebd9c1a99a4c662de496a604abc0b60e97800158e2828c8b0a84ddb97ea39999"
+     },
+     "rust_licenses": [
+      {
+       "cargo_publish": false,
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": true,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "bcdbd7f250d242ce70b33e94cf04c2a238f7e6ff2cf5403e10b38dfe8323b5f2",
+       "name": "simplestchat",
+       "package_id": "path+file:///app#simplestchat@0.1.0",
+       "source": "local",
+       "source_sha256": null,
+       "version": "0.1.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "b83217a194bddd2d3b4623bf512aa1964407bdfcb1f2fab8b87771f8d78999e3",
+       "name": "mediasoup-sys",
+       "package_id": "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "source": "local",
+       "source_sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "version": "0.17.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "ISC",
+        "license_file": null
+       },
+       "manifest_sha256": "e9f2bf1fa055f3dafbd57d58d022fe64f38ac25d0ab99e1f3f3f62f6a5df5808",
+       "name": "aws-lc-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "source": "crates.io",
+       "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+       "version": "0.45.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "MIT",
+        "license_file": null
+       },
+       "manifest_sha256": "8e98d6d1ae2a6f85a5f209cbf2851695f86c0e60554b1a5ed795399d7d6f099a",
+       "name": "openssl-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "source": "crates.io",
+       "source_sha256": "5f6fa1ff42a80ddc7d529832cfd347650e568b5e940eb8169c2c24e4f913beee",
+       "version": "0.9.117"
+      }
+     ],
+     "static_archives": [
+      {
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/system/lib/libstdc++.a",
+       "provider": "mediasoup-sys",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11
+      },
+      {
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "provider": "mediasoup-sys",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "mediasoup-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "mediasoup-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      },
+      {
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out",
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "provider": "aws-lc-sys",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "openssl-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "openssl-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      }
+     ],
+     "toolchain": {
+      "builder_rpms": [
+       "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+      ],
+      "builder_signing_keys": [],
+      "cxx": "c++ (GCC) fixture\n",
+      "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+      "static_cxx_license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "static_cxx_owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+     },
+     "vendor_patches": [
+      {
+       "changes": [],
+       "path": "vendor/mediasoup-sys-0.19.0",
+       "source": "mediasoup-sys-0.19.0"
+      }
+     ],
+     "vendor_report_sha256": "1a8347f811c94a001a316931dc355a7e0ba87c7c075c43c4839d219a33d2ea09",
+     "vendor_sources": [
+      {
+       "format": "tar.gz",
+       "id": "foo-1.0",
+       "sha256": "d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12",
+       "url": "https://example.invalid/foo-1.0"
+      },
+      {
+       "format": "tar.gz",
+       "id": "mediasoup-sys-0.19.0",
+       "sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "url": "https://example.invalid/mediasoup-sys-0.19.0"
+      }
+     ],
+     "wrap_components": [
+      {
+       "license": "MIT",
+       "linkage": "static",
+       "name": "foo",
+       "source": "foo-1.0",
+       "usage": "production",
+       "version": "1.0"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a whole report with a signing key and a package of the graph alone",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0r1uwyAUBeDdj+G1ss2vgUp5kijD5XJJrPpPBrfN25d0auWM2RjOkT4OnM8r4Adc6XKpZpjoVMNXakZs0j3V1SdtaVjmU81apVtWV2nZNyyhja5Dytv97Zbzmt677jrk2+5bXKZu21NuRpivHW6QKbXD0gxzoO+6whvhR9qnUx19YEYJ4lJrElKj67mNLsTojWNWkhLg0che20BOCc6wL2FLKmofRKir80G+rDSnNB7oruXcvNCuYx+Bx1iIloWAJmjhrBQYg1Sm14x0b70ubEbe8t6hQKGK3HHpieiZfaIwQBGuBz03j+GPjTRM60gp4w3y/8Ij/3SeXBIwNr9X+1PhrWjlC/cBIqWl5VIpRwZ8BChHEZh1xCIaE9FBoNi7ABHKdsQdlB9QXl474wvlB01T11o=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/optional-crate-1.2.3.crate": {
+     "deflated": "eNqT7+ZgYPgYnMr0/+0lW/4mA5HWh+f+ii6zjrBrEhae3Dx7dmGGh3OHg+fKf3Xa3RdvvnjwW+f5sydq5Tvz+PbOPjNhyz2W2SmZ88RuH/txbunB3uYfLLKhqTvTvsyLer/q+Z8Xm5XWb7mR8ZH1uqqE/Pnu/yWzfKsN59qePtmzLezdU/kpeyL3H1kU9jpdw/LL2rnTdlTckJ8qwoAMGuR3Mv/QzpnFoMHAAAC0rlDw",
+     "spelled": false
+    },
+    "target/release/simplestChat": {
+     "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5CvyYCnLT71pqQYm8Si9UkWJotfPUpIkZVyrijnluvp6Ny+7ffv2rsa/nZbBJ46vnA5IXdG9JzHHTn3m47dMZ6bct9PWLSzYEKwOU9Krbl9qtfqnHkT5ZsiL52TLvisUWFfnCwxYTdb9RupNz21DyOnqy/ycIn076w4/cBvpbGm7Qvv0HfX9IQVlDRfP2U/vLnrRK7TN6/Xr/S9untZ/b7OlonNra8p9XjCWvByUYThllOhHz9Pqqpiyn1ec2qYJAC94ozikqKSxCQGvZTUAt0yg9EigRTACK2TMQA7hBLGoh4ZcOOoSxqgFdMuAvpHwSgYBaNgFIyCUUA6AACB8Hg4",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\ngpg-pubkey\t0:36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6-6786af3b.(none)\t(none)\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "adapted_component": {
+      "license": "ISC",
+      "name": "libwebrtc",
+      "path": "vendor/mediasoup-sys-0.19.0/deps/libwebrtc",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "version": "m77"
+     },
+     "binary": {
+      "path": "<root>/target/release/simplestChat",
+      "sha256": "0a37c6817b42f7d50279c6f31e532b12842bae35a838d4db03c228cb002903ef",
+      "size": 4096
+     },
+     "cargo_lock_sha256": "481be248e3629e144f7100f28b25868c34d14f9b1d9503fc8b7655ef32456e38",
+     "cargo_messages_sha256": "<the digest of the messages>",
+     "limits": [
+      "Static archive identity does not prove every member survives final linking.",
+      "Header-only and adapted components are authenticated source inputs.",
+      "Rust license evidence covers compiler events and the exact embedded dependency graph.",
+      "Embedded metadata can include optional packages without compiler-artifact events.",
+      "The unpublished first-party application has no inferred distribution license.",
+      "Runtime-loaded libraries and deployed protections need separate checks."
+     ],
+     "native_manifest_sha256": "dc4a91d2dd8b211cad5e9e31330bb3d5cc9d6a7f446ffec50f13b8558ef32589",
+     "openssl": {
+      "build": {
+       "configuration_header": {
+        "path": "<root>/openssl/include/openssl/configuration.h",
+        "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+        "size": 51
+       },
+       "disabled_options": [
+        "shared",
+        "dso",
+        "module",
+        "engine"
+       ],
+       "disabled_options_record": {
+        "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+        "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+        "size": 25
+       },
+       "static_libraries": [
+        {
+         "library": "ssl",
+         "path": "<root>/openssl/lib/libssl.a",
+         "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+         "size": 11
+        },
+        {
+         "library": "crypto",
+         "path": "<root>/openssl/lib/libcrypto.a",
+         "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+         "size": 14
+        }
+       ],
+       "version_header": {
+        "path": "<root>/openssl/include/openssl/opensslv.h",
+        "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+        "size": 37
+       }
+      },
+      "configure_options": [
+       "no-shared",
+       "no-dso",
+       "no-module",
+       "no-engine",
+       "no-tests"
+      ],
+      "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+      "license": "ISC",
+      "source": {
+       "format": "tar.gz",
+       "id": "openssl-4.0.3",
+       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+       "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+      },
+      "version": "4.0.3"
+     },
+     "registry_component": {
+      "bindgen_source": {
+       "format": "tar.gz",
+       "id": "bindgen-cli-0.73.2",
+       "sha256": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+       "url": "https://static.crates.io/crates/bindgen-cli/bindgen-cli-0.73.2.crate"
+      },
+      "bindings_sha256": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+      "build": {
+       "bindgen_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "configure_options": {
+        "BORINGSSL_PREFIX": "simplestchat_awslc_5_11_0",
+        "BUILD_AWSLC_PROVIDER": "OFF",
+        "BUILD_LIBSSL": "OFF",
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "BUILD_TOOL": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        "ENABLE_CRYPTO_POLICIES": "OFF",
+        "ENABLE_SOURCE_MODIFICATION": "OFF",
+        "GENERATE_RUST_BINDINGS": "ON",
+        "RUST_BINDINGS_TARGET_VERSION": "1.70"
+       },
+       "files": {
+        "include/openssl/base.h": "882907d1b4d86d36379a78879efe054942e8709e5051fc9ff49de3a3b1cbb4e7",
+        "include/openssl/boringssl_prefix_symbols.h": "2c8dcd34da594d2b655fd2d3e055ef3a39fce1528a3561408f028be66e8cdaba",
+        "lib/libcrypto-awslc.a": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+        "share/rust/aws_lc_bindings.rs": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+        "share/simplestchat/CMakeCache.txt": "ad2d1add210214a20aee1f2c91b0b8cb7367e62927656cf480a50b6d556acbdd",
+        "share/simplestchat/aws-lc-source.tar.gz": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+        "share/simplestchat/bindgen-cli.crate": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+        "share/simplestchat/symbols.txt": "7e84320cfe5524439d043b419f273a1c64b097459acf5603edeba69de7f2bab6"
+       },
+       "installer_sha256": "6fa372a0cd533e3f1284892a8bf61c6c89e3ff68ea43d8469e157920b40a58cc"
+      },
+      "crate": "aws-lc-sys",
+      "crate_version": "0.45.0",
+      "license": "ISC",
+      "name": "AWS-LC",
+      "native_license_sha256": "d8d62d58d661d5ddeff06fdf1ebc08968da4743e369c74cef96eff0241eaea05",
+      "native_source": {
+       "format": "tar.gz",
+       "id": "aws-lc-5.11.0",
+       "sha256": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+       "url": "https://github.com/aws/aws-lc/archive/refs/tags/v5.11.0.tar.gz"
+      },
+      "native_verified_files": 2,
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+      "unused_bundled_source": {
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "version": "5.7.0"
+      },
+      "verified_files": 3,
+      "version": "5.11.0"
+     },
+     "rust_dependency_metadata": {
+      "compressedSha256": "604037136dcb6cd0ccbc3b9b66361a952735b9790a2f3c6ea4dbbf0e9006fcd6",
+      "format": 1,
+      "packageCount": 5,
+      "sha256": "45714314f0ceb0131d365431910733c58ff050a568c22be5de9343ed3c337aca"
+     },
+     "rust_licenses": [
+      {
+       "cargo_publish": false,
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": true,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "bcdbd7f250d242ce70b33e94cf04c2a238f7e6ff2cf5403e10b38dfe8323b5f2",
+       "name": "simplestchat",
+       "package_id": "path+file:///app#simplestchat@0.1.0",
+       "source": "local",
+       "source_sha256": null,
+       "version": "0.1.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "b83217a194bddd2d3b4623bf512aa1964407bdfcb1f2fab8b87771f8d78999e3",
+       "name": "mediasoup-sys",
+       "package_id": "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "source": "local",
+       "source_sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "version": "0.17.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "ISC",
+        "license_file": null
+       },
+       "manifest_sha256": "e9f2bf1fa055f3dafbd57d58d022fe64f38ac25d0ab99e1f3f3f62f6a5df5808",
+       "name": "aws-lc-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "source": "crates.io",
+       "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+       "version": "0.45.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "MIT",
+        "license_file": null
+       },
+       "manifest_sha256": "8e98d6d1ae2a6f85a5f209cbf2851695f86c0e60554b1a5ed795399d7d6f099a",
+       "name": "openssl-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "source": "crates.io",
+       "source_sha256": "5f6fa1ff42a80ddc7d529832cfd347650e568b5e940eb8169c2c24e4f913beee",
+       "version": "0.9.117"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": false,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "MIT",
+        "license_file": null
+       },
+       "manifest_sha256": "c94fd05d79a9db44984d1bd1eaca4aa974d42da3a3ca56450c589e7e74f241d1",
+       "name": "optional-crate",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#optional-crate@1.2.3",
+       "source": "crates.io",
+       "source_sha256": "aee453813449e7abfaa3442d089e0fc77fc9adef69dafa529e19a5c9b79597b3",
+       "version": "1.2.3"
+      }
+     ],
+     "static_archives": [
+      {
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/system/lib/libstdc++.a",
+       "provider": "mediasoup-sys",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11
+      },
+      {
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "provider": "mediasoup-sys",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "mediasoup-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "mediasoup-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      },
+      {
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out",
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "provider": "aws-lc-sys",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "openssl-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "openssl-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      }
+     ],
+     "toolchain": {
+      "builder_rpms": [
+       "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+      ],
+      "builder_signing_keys": [
+       "gpg-pubkey\t0:36f612dcf27f7d1a48a835e4dbfcf71c6d9f90a6-6786af3b.(none)\t(none)"
+      ],
+      "cxx": "c++ (GCC) fixture\n",
+      "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+      "static_cxx_license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "static_cxx_owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+     },
+     "vendor_patches": [
+      {
+       "changes": [],
+       "path": "vendor/mediasoup-sys-0.19.0",
+       "source": "mediasoup-sys-0.19.0"
+      }
+     ],
+     "vendor_report_sha256": "1a8347f811c94a001a316931dc355a7e0ba87c7c075c43c4839d219a33d2ea09",
+     "vendor_sources": [
+      {
+       "format": "tar.gz",
+       "id": "foo-1.0",
+       "sha256": "d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12",
+       "url": "https://example.invalid/foo-1.0"
+      },
+      {
+       "format": "tar.gz",
+       "id": "mediasoup-sys-0.19.0",
+       "sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "url": "https://example.invalid/mediasoup-sys-0.19.0"
+      }
+     ],
+     "wrap_components": [
+      {
+       "license": "MIT",
+       "linkage": "static",
+       "name": "foo",
+       "source": "foo-1.0",
+       "usage": "production",
+       "version": "1.0"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a whole report of a tree with a reviewed change and an added file",
+   "delta": {
+    "vendor/integrity.json": {
+     "deflated": "eNqVlNtu2zAMhu/7FEWuG0eiZB16u8cYioASqcadYxu207Ur+u6Tc26RLt2FA4c/Tf0fRent5vZ2lqqah9n97c+Hu+nvGqtmzA/T8qjkeFaeuaG2XzQ4Vs88j+26axtuxqF4GtpmlnN2BYZ208ez7962v9NCbb/GMcdnI/bF45/Z3UGpaIqmtp3LQpzCwwqhNJNElrTwOjkZIbiUWElrXeCAQSftQesYRWDjlGLpSBCAVCYIYJcCSzjV3PT1VHA1jt1wv1jwC667mouqeca6osXBwzb9/e7/ANZMFWb8bj68DnNRSH+ZBoMpFVggH0Ui401MpcrewUlbonLOsmAyGFB4GbRSxMQIjhwESoTfprloaId23K6x50ubFVfYPJ4J5+I2ocNxNa39A/vHthjbdX20tbPWDbk0rpcn7pARpUXpdSAiIBW0ARVSKQFz1GgtbAaMQSZIGFxw1lqZHFnnvWf1cYHdOOYxPWsseYYUVEDJwihtBMQg2ChCUB4MIXqtaWqtYue1otJBiWy5NAHcvjdnW/8lNVLekyJeQ242dX3NdAKToIwQtaHIuSlJQYjopIhayuwTJJeQk9iSBBExZp6YUT2HAPbc9P7t4TgfB7v7o/vvAe16TtXLNwZ5e8C/zPs0X7977C5dBljXAeOvZR7h0+1zMB1XS6p6jmPbv35q414+mvisXeNdDJvQ9e1TLj5Mx72YDF6C+3gVTDw37zd/ASJuYEk=",
+     "spelled": false
+    },
+    "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOJSVihKLctMLU9N4QIAaVsTaw==",
+     "spelled": false
+    },
+    "vendor/mediasoup-sys-0.19.0/added.c": {
+     "deflated": "eNrLzCtRSExJSU2x5gIAGCEDow==",
+     "spelled": false
+    },
+    "vendor-evidence/report.json": {
+     "deflated": "eNqlVU1v20gMvedXBDkn9pDz3dui7XEve10UBTnkNCpsy7CUdLdF//vSTps4XQdu0YMG0mhEvvf4SH25uLy8kqH399MtYUxXry6vqDP5RgwpdvA1SouKLAEhMFLrwtydY5e1qkOM4sl74Ii5ZJ8kXF3vg/ZhpZOF+/vd4XFNw2a2S+X94xvbv7z8cljtxJbm2336e93IuFtuaB7u9aaN6+240c08LT5O4+YQ+3D8Ca+0QBUERQojQCOJhsyD947ZS2ytSqLcQ0i9a4vOWHGJsWj3GEu9OoT8aut3qJuh6zQfSdJTSByrK6BBmqQQKpkErTrIqdRYcsDQJXFJFjtqIvugZyklOu+De5BkGu927RT1Pu7WNO8TzbRbfPj8xHKQQ/pxvIGFO0k+S3A19AINuRg/DzkXViYOPVQMoTXHmor3CkWcIIJP7FBLZwU8ijl8VosIUB+37narfY7bed5Or5ZL/YfW25Uuhs09rQZZfof1oN/1r3Faqwxkimxvpn+nG7eAepogcYoeM0ptzhSuqfXojQ4WyJF8KVmdWn2ZXAUO3ouKEhYp5tku9D+CvsSfJXgS4w9umXd6sqTPTH786pnZX9Puw7iYx/XqEecDsO1kgWl95EE2zpAJamARc7vnkNBzj4Bku+ZJl41xY+jYiQuXnDP0IrnUav3wPMFDl1k3HiktVbGzZwJ1yYfksLHT5IXQV0xCVEOQvdZeSw3WWgUjadaYGMs3ZY688CJrEivSop2jvLlbrc6B7pg6xoYtJGlqolhPc6MCrgUAw4mgEe2QZgF0jZrxsRFhijBj/gXQottpuRr4k/Jubsu/3v7x5s+3i7WcLRwVsTIASmjVKlRZDVG3KaERfHYGrCXrOna+VoPewYZLSGZ3ELB69vOF+90EP63BdMfb3fhR2zztu3/xaUfbs/xRIEoNaDYRKIaSQkfnvHUoAeWozgwaWuzRDGZjtDubztWnFLyrLqez/H87wRP/b3fvrl/4K52ZWocB/+J0e5ocF18v/gNo4e5b",
+     "spelled": false
+    },
+    "vendor-evidence/vendor.diff": {
+     "deflated": "eNqNkEsKwkAQRPd9iiYuJ/MJCiISCHgMcTGmO2EwmQn54u1NRBeunHUVj3pFrqpQytqNaPXMnkKvWyZnhzB1cngO0qjspIy+2L4Oagxtg/fIIkgpo6kghIgnFwXKLN2jyNIDFgXgtbPlw9Z8A/S25Tz5ISSAM/eDCz5PVthRmQTEDnueHS9MQLEvWCImVf4Z+mmB5wUr1/D7CE08az81MaZfwKZpUrNqbpLC+XXfFp3hBf7Fi14=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "adapted_component": {
+      "license": "ISC",
+      "name": "libwebrtc",
+      "path": "vendor/mediasoup-sys-0.19.0/deps/libwebrtc",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "version": "m77"
+     },
+     "binary": {
+      "path": "<root>/target/release/simplestChat",
+      "sha256": "259fe96758f3ad8ecc7bcc77ce9d7ddf073cb5adf3ae02bbf144a66bcd9df145",
+      "size": 4096
+     },
+     "cargo_lock_sha256": "225f5b84e8abfb908bac39fc79fd1d35ed9eb688cc98dd93db0fa4a989ed32ff",
+     "cargo_messages_sha256": "<the digest of the messages>",
+     "limits": [
+      "Static archive identity does not prove every member survives final linking.",
+      "Header-only and adapted components are authenticated source inputs.",
+      "Rust license evidence covers compiler events and the exact embedded dependency graph.",
+      "Embedded metadata can include optional packages without compiler-artifact events.",
+      "The unpublished first-party application has no inferred distribution license.",
+      "Runtime-loaded libraries and deployed protections need separate checks."
+     ],
+     "native_manifest_sha256": "dc4a91d2dd8b211cad5e9e31330bb3d5cc9d6a7f446ffec50f13b8558ef32589",
+     "openssl": {
+      "build": {
+       "configuration_header": {
+        "path": "<root>/openssl/include/openssl/configuration.h",
+        "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+        "size": 51
+       },
+       "disabled_options": [
+        "shared",
+        "dso",
+        "module",
+        "engine"
+       ],
+       "disabled_options_record": {
+        "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+        "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+        "size": 25
+       },
+       "static_libraries": [
+        {
+         "library": "ssl",
+         "path": "<root>/openssl/lib/libssl.a",
+         "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+         "size": 11
+        },
+        {
+         "library": "crypto",
+         "path": "<root>/openssl/lib/libcrypto.a",
+         "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+         "size": 14
+        }
+       ],
+       "version_header": {
+        "path": "<root>/openssl/include/openssl/opensslv.h",
+        "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+        "size": 37
+       }
+      },
+      "configure_options": [
+       "no-shared",
+       "no-dso",
+       "no-module",
+       "no-engine",
+       "no-tests"
+      ],
+      "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+      "license": "ISC",
+      "source": {
+       "format": "tar.gz",
+       "id": "openssl-4.0.3",
+       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+       "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+      },
+      "version": "4.0.3"
+     },
+     "registry_component": {
+      "bindgen_source": {
+       "format": "tar.gz",
+       "id": "bindgen-cli-0.73.2",
+       "sha256": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+       "url": "https://static.crates.io/crates/bindgen-cli/bindgen-cli-0.73.2.crate"
+      },
+      "bindings_sha256": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+      "build": {
+       "bindgen_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "configure_options": {
+        "BORINGSSL_PREFIX": "simplestchat_awslc_5_11_0",
+        "BUILD_AWSLC_PROVIDER": "OFF",
+        "BUILD_LIBSSL": "OFF",
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "BUILD_TOOL": "OFF",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        "ENABLE_CRYPTO_POLICIES": "OFF",
+        "ENABLE_SOURCE_MODIFICATION": "OFF",
+        "GENERATE_RUST_BINDINGS": "ON",
+        "RUST_BINDINGS_TARGET_VERSION": "1.70"
+       },
+       "files": {
+        "include/openssl/base.h": "882907d1b4d86d36379a78879efe054942e8709e5051fc9ff49de3a3b1cbb4e7",
+        "include/openssl/boringssl_prefix_symbols.h": "2c8dcd34da594d2b655fd2d3e055ef3a39fce1528a3561408f028be66e8cdaba",
+        "lib/libcrypto-awslc.a": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+        "share/rust/aws_lc_bindings.rs": "2afc07a640552ecc1a1cb34c21578db356002e6743f938dcdc509b7dfe1f8953",
+        "share/simplestchat/CMakeCache.txt": "ad2d1add210214a20aee1f2c91b0b8cb7367e62927656cf480a50b6d556acbdd",
+        "share/simplestchat/aws-lc-source.tar.gz": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+        "share/simplestchat/bindgen-cli.crate": "18add21460bdb0e4c0bff6ef8166fd72185fe9185fe1cfa9fc9af97bc6aa045b",
+        "share/simplestchat/symbols.txt": "7e84320cfe5524439d043b419f273a1c64b097459acf5603edeba69de7f2bab6"
+       },
+       "installer_sha256": "6fa372a0cd533e3f1284892a8bf61c6c89e3ff68ea43d8469e157920b40a58cc"
+      },
+      "crate": "aws-lc-sys",
+      "crate_version": "0.45.0",
+      "license": "ISC",
+      "name": "AWS-LC",
+      "native_license_sha256": "d8d62d58d661d5ddeff06fdf1ebc08968da4743e369c74cef96eff0241eaea05",
+      "native_source": {
+       "format": "tar.gz",
+       "id": "aws-lc-5.11.0",
+       "sha256": "6cd37705f1f57a287d5f04e88264ebfa824ea6baf8247da9f408d9ec40f3cd11",
+       "url": "https://github.com/aws/aws-lc/archive/refs/tags/v5.11.0.tar.gz"
+      },
+      "native_verified_files": 2,
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+      "unused_bundled_source": {
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "version": "5.7.0"
+      },
+      "verified_files": 3,
+      "version": "5.11.0"
+     },
+     "rust_dependency_metadata": {
+      "compressedSha256": "ac923f69f6868c5af23567b5719b812f8bb176e1307109d27c60a0633d3d16e6",
+      "format": 1,
+      "packageCount": 4,
+      "sha256": "ebd9c1a99a4c662de496a604abc0b60e97800158e2828c8b0a84ddb97ea39999"
+     },
+     "rust_licenses": [
+      {
+       "cargo_publish": false,
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": true,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "bcdbd7f250d242ce70b33e94cf04c2a238f7e6ff2cf5403e10b38dfe8323b5f2",
+       "name": "simplestchat",
+       "package_id": "path+file:///app#simplestchat@0.1.0",
+       "source": "local",
+       "source_sha256": null,
+       "version": "0.1.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": null,
+        "license_file": null
+       },
+       "manifest_sha256": "ad9e2fb3ba1e0634602cb0e63da23926daa944dd6ab3e8943d5825ae7e56b280",
+       "name": "mediasoup-sys",
+       "package_id": "path+file:///app/vendor/mediasoup-sys-0.19.0#mediasoup-sys@0.17.0",
+       "source": "local",
+       "source_sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "version": "0.17.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "ISC",
+        "license_file": null
+       },
+       "manifest_sha256": "e9f2bf1fa055f3dafbd57d58d022fe64f38ac25d0ab99e1f3f3f62f6a5df5808",
+       "name": "aws-lc-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#aws-lc-sys@0.45.0",
+       "source": "crates.io",
+       "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+       "version": "0.45.0"
+      },
+      {
+       "evidence": {
+        "compilerArtifact": true,
+        "embeddedMetadata": true
+       },
+       "first_party": false,
+       "license": {
+        "expression": "MIT",
+        "license_file": null
+       },
+       "manifest_sha256": "8e98d6d1ae2a6f85a5f209cbf2851695f86c0e60554b1a5ed795399d7d6f099a",
+       "name": "openssl-sys",
+       "package_id": "registry+https://github.com/rust-lang/crates.io-index#openssl-sys@0.9.117",
+       "source": "crates.io",
+       "source_sha256": "5f6fa1ff42a80ddc7d529832cfd347650e568b5e940eb8169c2c24e4f913beee",
+       "version": "0.9.117"
+      }
+     ],
+     "static_archives": [
+      {
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/system/lib/libstdc++.a",
+       "provider": "mediasoup-sys",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11
+      },
+      {
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "provider": "mediasoup-sys",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "mediasoup-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "mediasoup-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      },
+      {
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out",
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "provider": "aws-lc-sys",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20
+      },
+      {
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libssl.a",
+       "provider": "openssl-sys",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11
+      },
+      {
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out",
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "provider": "openssl-sys",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14
+      }
+     ],
+     "toolchain": {
+      "builder_rpms": [
+       "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+      ],
+      "builder_signing_keys": [],
+      "cxx": "c++ (GCC) fixture\n",
+      "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+      "static_cxx_license": "GPL-3.0-or-later WITH GCC-exception-3.1",
+      "static_cxx_owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm"
+     },
+     "vendor_patches": [
+      {
+       "changes": [
+        {
+         "path": "Cargo.toml",
+         "upstream_sha256": "b83217a194bddd2d3b4623bf512aa1964407bdfcb1f2fab8b87771f8d78999e3",
+         "vendored_sha256": "ad9e2fb3ba1e0634602cb0e63da23926daa944dd6ab3e8943d5825ae7e56b280"
+        },
+        {
+         "path": "added.c",
+         "upstream_sha256": null,
+         "vendored_sha256": "f26f25c2c46dced3bf32bca810c4113e821e5226fe7d120cac63dcad99ebb270"
+        }
+       ],
+       "path": "vendor/mediasoup-sys-0.19.0",
+       "source": "mediasoup-sys-0.19.0"
+      }
+     ],
+     "vendor_report_sha256": "bc5c6927dbc79c92de2243feaef064a54680645a36e9906e0c247a9694271346",
+     "vendor_sources": [
+      {
+       "format": "tar.gz",
+       "id": "foo-1.0",
+       "sha256": "d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12",
+       "url": "https://example.invalid/foo-1.0"
+      },
+      {
+       "format": "tar.gz",
+       "id": "mediasoup-sys-0.19.0",
+       "sha256": "ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda",
+       "url": "https://example.invalid/mediasoup-sys-0.19.0"
+      }
+     ],
+     "wrap_components": [
+      {
+       "license": "MIT",
+       "linkage": "static",
+       "name": "foo",
+       "source": "foo-1.0",
+       "usage": "production",
+       "version": "1.0"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "a report where one is already",
+   "delta": {
+    "native-components.build.json": {
+     "deflated": "eNrLz0nhAgAD1gFK",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "FileExistsError",
+    "said": "[Errno 17] File exists: '<root>/native-components.build.json'"
+   }
+  },
+  {
+   "name": "a report below a directory that is not there",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/absent/report.json'"
+   }
+  },
+  {
+   "name": "a record that is not as reviewed",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zozYQfs9fkfHrxSCBEHBvjkNSpj47YzvX3nQyjJBWNnMYGESSpjf53ytswo+xk+ba+gHDt7vaT7vaXf04Oz8fMcGKCkTE812RZ5BVo8/nP7RAi9KEQ6ZAA6NwNR1dHNCM7fZQmsRPEJcVfxUUrNrWgkfIRF6aOxAJU/lDMVbPaowM7BvIFFAo88iyhMdEJXlWW7MP/l5tH6F8Nd257kiDL7VE06ySR4jSJPuuui2xJzVOec2oxTSqKq3MNfJHg2iMl89FlY+1QcpHDXx/0Vo8qwp2tcX9Hnpp2Aw2/U8uVCX4p0+jiw7pzJ/y8juUfZlSaf/zwO89Zp2uGFgW1bYEJlrTwQbyQqdcpR+i/7OEGk9tihpfXXZ4nslk81BClBeVTqrqORxl+VhtWQmidVpDQuWD710uHlIYQJBtkmwIVaAqdaDaEB0lmd5jmkIZaS+WQ+sD5RLmcuFIZBFEXUs6DgbKkQWWa0tmxY7vAnfs2PZ9gXwLE+JgCzNBBbXARej1jPYK6RXSSS459EMs83LH6uobVaw0Nn91hBNRo6+ZIQYy7E7YsUX/8det+VDWSRltq6pQn01zk1Tbh9jQHcJsSLT/JaTAFChT5E9ZmjNhDmgOv4xmY4MD16vfw87a41HCJlFV+XyqNfGSVft49gr6oieKessigzjGqVycaGqT31bj2fT/6Es/n+BuK+MB5UGSZSyQSyzAtuOAZTvcp9iTvpAydn3k2UAsFnPXpo4nwCcWRpxqZQ+IdGJhiTeTfKhwYx89ZSS5eXgzO1bmEcGD9jCfbbm3+46TTGwgi44i8l5M2qg01mOeJtqraxvWoCm2gcEeE0KXIEWxiBEQjmIpKUgPUyqFa2HPkeDvn5hL5kvuM+m7MaeMIeLE/VU/GJoeNfOYZj84bXjeaHK9iFwuluH8ZrWaRbfL4Dr8vSaikl2R6pbFt6yK9hMpciKMI9QnfXkXzq4ifYBnU226+BpeBcvaeHF9faw2Cy+1izfFq18my+Cg9abOOlitNdO35YvFKQfTL5Nfg6hR+XYb1CrLQxc5Vgvnq/VkNquJXIXL5tZxrHa7WIXrcDHX+lfBbaAf83U0XVztF1/M+wbBfHI5C6Lp8tvteqENZ+E0DE5tslFcLe6W0yD6srgKr8PppPZyQvkmmAfLyTqIlnerdXSpadQ5PPY+EEfryfImWEdfg+WqWRYbLjo+MadGE5XMdi2G9HiybbAltjzi+RbzYkkxp9zzNSipB4zYwiPUB+y4voVigpjjcd7rLf+qLJte4BgYG+h0RVIubNdFjsTScZnlufUkJeB5FiUQS+ZZBBiNmdQvrtAVSZAnfOAESZsLjN+pyN5E0kSaxmSykm/1nU8PJanMim2U+XjgNxg8/cge9h41M6EXXuHpES50D6UUC0cIkBLpNiIxxBx5PvUEIy7Rgac+dwkH6dNaxSIYGDDk9ML7vIvzNCo0qeTP94v5rbnYBLkdjE8lK7qh2F2S2o7bm3FfwnXHpb4Ms80eby503aWoGYAyz08cjRoe9xM9elDNQkWpb1y8bmSdsMe9IX649t2fvZz9Der5Qv0=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or invalid reviewed native license expression",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a receipt of other differences",
+   "delta": {
+    "vendor-evidence/vendor.diff": {
+     "deflated": "eNrLL8lILeICAAihAi0=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Vendor receipt diff differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no messages",
+   "delta": {
+    "cargo-build.json": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/cargo-build.json'"
+   }
+  },
+  {
+   "name": "a build that failed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/d5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSOc0IeS/72S7S0JaJ91SxqDfYt+9d8/37pFN4kEEa5K760TaxikNngmPqhQSk0/XiRNyISrIVBFbnMB6WlLTHedcODcJqnEaAspa4I9ZOk9nEdQIo0p6m8X+iPvmrcXv/EH4yqZoGx27kJ4AqbxJjGgg9j3TPRBdbFkoE+f+THJlksdt1ONtnN+hkDrpRyl0ACoVkLdVJkIA0m9N2CtZh5mGJeg45HMSiUoQ2HoIHX0BpWg1Jo+xQPRRT18ZlPdauQdN6wJ+oDOCYAWyRZF3ys4BxUE0PW4HfQvbq83fOcGXYArreQOFIprWsbAOjBy5TWeTg5fRpptxn0a4TntYqlVc7IF9WuX/xL4ja0yr9ejq81bpggXplUPWQ6F4p/XbFrNC+dcvphNzyMkJFLFamQUUGS22X0FAgUreByzkdBobhhc78JP1C/B7pRD03pP0a4e2W+HAHb+xJzfUsYT7N4s8xFkHhmbyeAxHRfEUmJYv14gRoeH9Eb01KB4qFdCvpzWiC2RXpbBu85Sg3LcBmRam4tILOsdUWUYnC6vJoHUw7Dadz2/GAiNjKFhtG+DP83jwkndkfI+MDWQfMbq8OWfGaQ99KkyXDMgLY//fePRyBgO+fB3/NxkPx46K9VQf0bi0MWcGY4c9kYs+CYz6tfzjPBxPe/c49JsvlVGh7lceWikh/D6E7dUvffTDpQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native evidence requires a successful Cargo build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a server that is text",
+   "delta": {
+    "target/release/simplestChat": {
+     "deflated": "eNrLyy9RSMxTSK1ITS4tSUzKSeXKG1ARAOLaNGE=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Unsupported production binary architecture",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a wrapper whose unpacked source has a file more",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/extra.c": {
+     "deflated": "eNrLzCtRSK0oKUq05gIAGTAD1Q==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a server that may be published",
+   "delta": {
+    "Cargo.toml": {
+     "deflated": "eNpdjEEKgCAQRfcew32DLVt4EmmhMqSUKY7W9TMioTYD897nqTPmlZK2OLOAwWAmqWamOoZ2Vr00fTTn4y65gBEEZ7lSGTocYZpuqvp+1wElJx/ShlSs04W/Deh5WXLFT+rvUjWbJ/c8F1pePxg=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "First-party Cargo publication policy must be false",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a thin library",
+   "delta": {
+    "openssl/lib/libssl.a": {
+     "deflated": "eNpTtCnJyMyz4youzgEAFJ4Dqw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native library must be a regular self-contained ar archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "generated bindings of other bytes",
+   "delta": {
+    "target/release/build/aws-lc-sys/out/bindings.rs": {
+     "deflated": "eNrLL8lILQIABnQCIw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Cargo AWS-LC bindings differ from the installed namespace",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "no generated bindings",
+   "delta": {
+    "target/release/build/aws-lc-sys/out/": null,
+    "target/release/build/aws-lc-sys/out/bindings.rs": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/target/release/build/aws-lc-sys/out/bindings.rs'"
+   }
+  },
+  {
+   "name": "another compiler than the manifest's",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.98.0\nrelease: 1.98.0\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Rust compiler differs from the reviewed production version",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration that takes a macro back",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKlCrNA0qi6wAASMkWLw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  }
+ ]
+}

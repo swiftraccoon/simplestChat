@@ -1,0 +1,1395 @@
+{
+ "base": {
+  "Cargo.lock": {
+   "deflated": "eNqt0LluhDAUheGex3AbAd6XSPMkoyns62uwwiZskszbhykjUqb/j/Tp3O+bhw8/4OPRLH7GG/FfpZ2gLc9Cmk/cS16XG6GdVB0lTVmPHc5oxyGXuj/fxlq38t73Q67jETpY534/Sm0nvww97L5i6fLa5iXiN2lgRPgox3wjKURqJEcmlEIuFDjNbHIxpWActQIl9wGM0MpGdJIzCvqMLcqkQuSRNPeLfN1wKWW60F3HmPlHu0o6eZbSSbQ0RjBRcWcFhxSFNFpRVNoGdbIpBsu0Aw5cnnLHREDEv+wzxuxP4XbRM/M6/rooed4mLBVGX38PXv0PUJWZNQ==",
+   "spelled": false
+  },
+  "Cargo.toml": {
+   "deflated": "eNpdjDEOgCAQBHueQe9FS4t7CbE4zalEUMKBfl8sJNFmi5nNmOuImwSaeFCe/chR0AzKVAxlNlqKPouzx466hQ5arWKW1FTYQd8/1NT/Tp5Ri/XBsaRppaTfBtQ8ppj5k/q7kEdnZcWZnLC6AZmTP2M=",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUzNNQzUOJShir2D3D1Cw72ifcMjgfr4wIA5X4UTQ==",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/boringssl_prefix_symbols.h": {
+   "deflated": "eNpTTklNy8xLVXDyD/L0cw8O9okPCHJ184xQKM7MLchJLS5JzkgsiU8sL85JjjeNNzSMN+ACAL3tESc=",
+   "spelled": false
+  },
+  "aws-lc/lib/libcrypto-awslc.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+   "spelled": false
+  },
+  "aws-lc/share/rust/aws_lc_bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/CMakeCache.txt": {
+   "deflated": "eNptkM1qwzAQhO9+mBIfSqHQg37WzlJFK1brtDktbjA04ELBgb5+5aZpY5KLEPONVjPrNuYZ1HYYvMouwWMWxtg+8TAO/TRUJ5LXhsFrQJvPBmqaXyiQpSg3AFG4VucheaFDNDaAZurYgW7IY4POCFK8fm1ecnCamLbogW9McbxLQpoooENYxG0hAhsB5S6LWoy+kH9HrBa6iuEWRLfA+SJKffewqizN91KjJIEGX89wOnx8jsN03L/3R+2/pnGv91rXuqrcz54TZZx7afkDEpQjijrycBHi5MSYxYQwb8vjX8/x8FZ9AwOif/4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/aws-lc-source.tar.gz": {
+   "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t08FLwzAUx/Gc91eUeV77gl3vrpQRqJ00Oo+h2zI2KJ0Yh/++paLgLh6Uwdj3c3nh8cI7JL/mPUza9WQaax1Lsu/W7XHjk8OL70Jok1UTfLxTfyS9LE2H2jutoiX7Pg99nUqqVSTqDI7hrXnt16vrdLPx233no7tnW+ZuWdTWLCpXPd3PitrZx9pU82j8+TvGo6/hxUNRWVs6Y91wb6RwoZof+S9N3r9s8c87fsu/yO1J/iWbkv+zMDYnBAAAAAAAAAAAAAAAABfsA+My+EQAKAAAP0ZwOA==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/bindgen-cli.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZR74mA5GWh9u/icQ1/NJwDV9nwamkyLvEt6uojkta+PqxIz/qZ888k5Znd6fdTuTuE27T6aduBF9epjhLs2xxTVta+vNvZ+4Fb92yft/bpWtjVd2n6lec6zd7Wv3T33t+mvzhq7IsDMjgg3OYzf7r3gwaDAwAswY4Zg==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/build.json": {
+   "deflated": "eNqlVE1v20YQvftXGDrX0n5/9CZLtEtUFg1KTpsTsTs7axNlJIOU0aRB/nuHio1EruFLBYggOG/em9k3s1/Pzs8nsd2le9w1w0MQ2kx+PZ+E//mb/DLywn6X2/unHpv946Hd7wai/koBCl1Wdbm+3mxWzW1dXJV/jqJD++mxw+EAD+HQhL+HDhrdcN6wI9uYdFeuls38j81qQWnVh3JZ1GNidXV1ClmVl0T9Zmjz27wuviPejG+LzZYqeztWVa9JFzfz34vmOfzxthjDNXYYBjyFlOvNdr5ajcLL8lh118ZTyG21KbdltSbssrgt6LHeNotqeSSt1i/gYj2/XBXNov54u60oaVUuyuJ1M8+gTXVXL4rmplqWV+ViPrK/Al4X66Keb4umvttsm0uSHn05VTwJNdt5fV1smw9FvXmm41PLJgT9dnQ9t2TiD6fbHXRPCWf7R9wNQzeLdDTThzHNOeGZTTyq5EySRlofrHPWY0amlVcCnWUeNdM8g89Z+YQyyMghRoX2pbz/KOz7dndPb81jj7n93AxfPsV9N3xXFeASJKlS0F4lEY3WOYkkSVJjJnqfAbkWLkhtuGIuM+EiGoMOUojhRZXsm9Ef+i+Ph/3FcVynYRRIhlMXUkYBGhiCU1opIxJIrYXJ2oCyWvCQQ0YTQWvIjKuUEmajvRYvArSNPc76p+EwI/aGtmHc07GzaT8cOwkZmA1GUeUCAXigg5EKBNfWpUjlMybQWCWzl2PToJmPNmXk2XktT4V+3r7Z4ib8hYsADzg9fD4cbwQ6Ix5SEpwJroJgAYlGgOeRRQfRSmPRCC+soQ6zcixoFk3S2gSIKb0jRt1ddHAx7J96IL3QT+//GSUN2WQt05lnbYNwNunMFNLYGIUxBycUBhNDphebgs9kVvIIimUJifN3JJ9vvAvo2in04YDHMXbH/pRhMUWGCljM2WB23JicrOBOZ/THJ4dMeuBD9jaCCYEpHd/Re5nA58O06JQUDDKSc0pJn5iSUXGfhZXkolGReau0D0DzwiQmjMHQ9NssYojmx7K1u+EQug77ny5vk4O0IjBIWkqUmQunnBfBxWyIG5ynj9k4DEomp4yncbdesKjIMwcwOft29i8q+bqR",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/symbols.txt": {
+   "deflated": "eNpzDQuId8lMTy0u4fIvSM0LDvaJL0stKs7Mz+MCAIU/Cag=",
+   "spelled": false
+  },
+  "build/install-aws-lc.sh": {
+   "deflated": "eNpFjs1qwzAQhO95Ed3MriytpIOfxaz2JzGkbohC28evSQi5DMMMzHz8O66y/th9bN/7EvKEOEE48TMeF46ZlkCicymQHT0XjrVodkhWa6Rk3bnGZEyd/TBFuXmCqs0kgc+iiO+92918+1vC2L5uVxsPufBjfVV5RVyP477terb9QwRTmaf4Kd5MWFk1YiLo2sGSQHcn84pEriVizW7tqSh+MEljb6ULMUPKPZz+AZQFTZM=",
+   "spelled": false
+  },
+  "build/install-openssl.sh": {
+   "deflated": "eNrLL0jNKy7OiS9LLSrOzM+zVTfRM9AzVufKh4oXZyQamZrZqhtQCNS5AEk+GcM=",
+   "spelled": false
+  },
+  "cache/ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda": {
+   "deflated": "eNoBgQF+/h+LCAAA8VNlAv/t1Ltu2zAUBmDNegrBuyiSoi3ZgIcgyZgla1EEvMlWIpoCKefSpy+dooVhdMgQe0j+b6FwKFCADv/jrOll9PuxjG+xpIQtCa2uZdh4Mnk3ZJ+BJgsh3tfkdE2bR8+HOqs5W2QFzS5gHycZ0uez7+nHKPWT3Nif+U46u5654/swy59tiL3frWfpZjSEzvIMvhT3v/zHvRqDf7R6ilXnPXkJcjxj/nnDTvI/r1mN/F8k/4fell0/pAlg+pBa7sNbsS5S20tGaJ6uRtD2YR+GVNxO0xhXVWVfpRsHS/rdsxx6U528fDjtME3+HEPS/yWbX383tzJu04ZpjKBL0bVMc9V2na1Z07TKKqlEJ5ZcCK2psou2ri1rDTWcs3qhKLdtpyzjGERnzL+xY6yGXr1YFSZd3d9e3dzdEmfOlH/G56f5F/MG+b+EsvjX50IFudPbVeGaJj+ua+9cP60K+UHIJgAAAAAAAAAAAAAAAADA5f0GgtFZ9gAoAABHgMAL",
+   "spelled": false
+  },
+  "cache/d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZQ64GAwGXi2ttW8UDzAVybXo7nKSYDRn787cIvhE98n+W5LKZN3+funJrjV1r4Sr3yoa0uVvT076HmL692n93xds1U7T0PbJlnPZNry/y1knfflRk2T4BBmRwIPxNiNS5SAYNBgYA3h8vfA==",
+   "spelled": false
+  },
+  "cargo-build.json": {
+   "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPh2FGxnuo9Gpc25sxg7LAnctEngVG/ln+ch+Npbx6HfvO1Mios+pWHKCWE8Munn7qgw1o=",
+   "spelled": true
+  },
+  "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+   "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69pIAEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPcbNgPqiY0PX1MoP4aOF637W0bRy7jvH865v2a5tKRpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9Pxm6WleZaOV4K0wCXVXg9NEX+WddXxUz5N+yvUn+HcdbIP9z5p81YqCcBmLHiVirWdc01WCUJMtxNXwTNsNJ53/fMas2q7e5MLvNuPJlbT6RFKz8nf/fcyf5X3DXR/7ncJaL56oV2vlDchWk96s4CW+iNLq7vljFaXIbh9GlpnvM333/SAsAAAAAAAAAAAAAAAAAwN/1AfnnKsoAKAAAJYqWcA==",
+   "spelled": false
+  },
+  "cargo-home/registry/cache/index/openssl-sys-0.9.117.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+0lQ+5DBgJtD8/8FJ201/RgVuGLKycPnvWVceJcesNs6cqm//c0nA5GlnyonfZ+h/WOp38e/BK4pXLHadHl3CyffTpvI36XfIrVtnNyn61TnfZlXtTz1zvrvpz1klYWi6o5qOpT1vP8aL0V3zar27fmpuRbh2vY/2+eFG7edux7a1Vt26Tc4KOVd26/5/PiYkAGB9bfYfTm/b+UQYOBAQBOuVBL",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+   "deflated": "eNqrVipTsjKsBQAIkwIe",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+   "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyi9IzSsuztEtrixW4ipLLSrOzM+zVTLQs9QzNDRX4srJTAbKA9X5eoYocQEAjjsTkg==",
+   "spelled": false
+  },
+  "openssl/include/openssl/configuration.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKBQCUZw9L",
+   "spelled": false
+  },
+  "openssl/include/openssl/opensslv.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1biAgDUdQox",
+   "spelled": false
+  },
+  "openssl/lib/libcrypto.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyQcAIS0E5Q==",
+   "spelled": false
+  },
+  "openssl/lib/libssl.a": {
+   "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+   "spelled": false
+  },
+  "openssl/share/simplestchat/openssl-disabled.txt": {
+   "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEvlAgB3IAji",
+   "spelled": false
+  },
+  "system/lib/libstdc++.a": {
+   "deflated": "eNpTtEksSs6w43KOiAAAExsDNw==",
+   "spelled": false
+  },
+  "target/release/build/aws-lc-sys/out/bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": {
+   "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+   "spelled": false
+  },
+  "target/release/build/openssl-sys/out/": null,
+  "target/release/simplestChat": {
+   "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+   "spelled": false
+  },
+  "vendor/integrity.json": {
+   "deflated": "eNqVUsty4yAQvPsrXDrbEg9ZQvmVrS3XAENEIoEKsJNsKv++yNk4WUd5HaCK7mGmG/pxtV4Xxg4Yi6v1r9+b+TiCdSkv1Pszk/HMHNFpHyoHyR5xq/w4eYcuxfImelfkmucG0R+CenPv8bTPg3wYIWW8SBDK6z/F5oWxekaN91taklc49sB2zUzpVtekq42giklhDHLatkKiBFmbumN1rRSR2AjOkQpNNGOUN5IwFEYiZa89D2GYG/YpTfGqqvAexmnA0rojDFZXLxpO5U+bnxkYUVvI9qdtfIhbUtJu2Q3IZsdZy3SniNFN1yiz41k7E7TdAReiRYK6AQmko7LmXKNGYEILJrXR8G03i4KerZ2/KwVc+izVg7t+k4sTOEHq53n/kvC53ymgsfffeJdTXj6su5B7F2BayhYMgwR1u88v8l606vfaBlTJh4dMusMwXNBnEZfcV36reJBT8De5eZzTU84Cl8z9n6zZz+pp9RfVEPPy",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOICAKZ6D8M=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/README.md": {
+   "deflated": "eNrTVcjJTCpPTSoqSVZIKkrMS86wUsg1N+fSRRJPzs/NzSyxUkgkEnABAPfgHhk=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/foo.wrap": {
+   "deflated": "eNpdjEsKgzAUAPeewgsY80NjoScppbyXvNRANBJjf6evpXTT7cwwp3uGpfEh0rlyIZMtKT/rY+1TagTj1Zq2bOmy5bjDsZRlPbQtPWBaIrEw3yAG1/7Fn9sME303rEBm19dPjrCOu3C903zQ3ggr0XhPSvS9QUJA7fUgtbaWI3VGKRLGcSelUB1yScYjCVm9Af8wO+I=",
+   "spelled": false
+  },
+  "vendor/native-components.json": {
+   "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YDyIMkyFsglFmDbccCyHe5T7ElfSBm7PvJsIBaLuWtTxxPgEwsjTrWyB0Q6sbDEq0k+FrlxiJ4yktw8vpkdK/OE4FF7mM+24tt9x0kmNpBFJxF5KyZtVBrrMU8T7dW1DWvQF9vAYI8JoauQoljECAhHsZQUpIcplcK1sOdI8A9PzCXzJfeZ9N2YU8YQceL+qj8Zmh4185RmPzhteF7pc72IXC+W4fxutZpFD8vgNvyzJqKSXZHqrsW3rIoOQylyIowj1Cd9/SGc3UT6AM+m2nTxMbwJlrXx4vb2VG0WXmsXr4pXv02WwVHrVZ11sFprpq/LF4tzDqb3k9+DqFH59BDUKstjFzlVC+er9WQ2q4nchMvm4nGq9rBYhetwMdf6N8FDoB/zdTRd3BwWX8z7BsF8cj0Louny08N6oQ1n4TQMzm2yUVwtPiynQXS/uAlvw+mk9nJG+S6YB8vJOoiWH1br6FrTqHN46n0gjtaT5V2wjj4Gy1WzLDZcdHpizk0nKpntWgzpCWXbYEtsecTzLebFkmJOuedrUFIPGLGFR6gP2HF9C8UEMcfjvNdb/lVZNr3AMTA20PmKpFzYrosciaXjMstz62FKwPMsSiCWzLMIMBozqV9coSuSIE/4wAmSNhcYv1GRvYmkiTSNyWQl3+prnx5KUpkV2yjz8chvMHj6kT3uPWpmQi+8wtNTXOgeSikWjhAgJdJtRGKIOfJ86glGXKIDT33uEg7Sp7WKRTAwYMjphfd5F+dpVGhSyde3i/m1udgEuR2MTyUruqHY3ZPajtubcffhuuNS34fZ5oA3d7ruXtQMQJnnZ45GDY/7iR7tVbNQUepLF68bWSfscW+IH29+ny++X/wDdldD3A==",
+   "spelled": false
+  },
+  "vendor-evidence/report.json": {
+   "deflated": "eNqtVMluE0EQvecrLJ8Tu6v35oaAIxeuCKGqrmoyyPaMZiZhU/6dsgNZwGAQHGbrab2l+lV9OVsslty19na6RBvi8sliKY5M9d6W3CpU8AUbNV9zKbFRsd4mFA/ioy9UnK/oSygFKOVgKYewPN+Dtm4jk8K9fnP43GK3m/USfnv3R9cXiy+Hu+4YcL7c01/LjvtxvcO5u5aL2m+Hfie7eVq9n/rdAfuw/V4vV48F2DJnsgAVOUgRB84ZIseh1sIRU/M+tiY1mAZurzNLczbksjxA3uj9u9Rd12SaH5Qk1FYcUAxgGaJnDFRiduSULoTkkhemEvQ1JsX2DDZYD+xUgxM2tyWZ+quxHrPe+nGL855oxnH17vO9y473q63vL2BljppP7E3xLUPV4qs/ByllEkLyzetp+VoNiYp1ApkNWwsukrGSGwnYB5jdZ1FEgHK3dDVu9hyX8zxMT9Zr+YjbYSOrbneNm47X32Xd1u/87zxthTvUigwX06fpwqygHDeIWnVnk+VSTeNYYm3BqR2bIQV0OScxoudLaDSD3jkWFrSZsyVujD8ZdDn8qcGjGn9IyzzK0SN9FPKHvx6F/RmO7/rV3G83dzpvhQ2TAuP2QQZJPUNCKJ6YNe2OfLSOmmYSdTV6b5I6rgTNNqRMOaUELXPSztV+eExw22Xajf+R4A7/5vz3rlmGab3p6IPQONf1qxdPn798sdryyRpgZiXUJvS1qJZCIsE2CvoAl4wkrlEDTMaVQhXbfnj5qMkBBlXeTtbgnwn+uAbTFQ1j/17qPO0bafVhxOGkf50+gYu3EiJDVpXomzXGadgRMAUxehS+hhYQtfdbMzroiovRO1NMiif9/zPBvf9vb2/OfzHgTwyAw6z85aC4b8Kzm7Ovnxe/2A==",
+   "spelled": false
+  },
+  "vendor-evidence/vendor.diff": {
+   "deflated": "eNoDAAAAAAE=",
+   "spelled": false
+  }
+ },
+ "cases": [
+  {
+   "name": "every library as reviewed",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a second directory of the OpenSSL bindings",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I7J91SRke/xbp7717u6dnbzINAa7Lri0za1ikNnglPqhaSso8XmRNyKRooVJVanKDFtI5N15xz4dwEVes0IMmFoO+zfJ7PEqgVRtXxtEj9CffVW0vf+K3wjc3Jtjp1UXwCiuVtZkQLqe+R7jbSpZalMmnuj6xUJrt7SHq8TfM7FMXO+KMWGiGWKihDUwhEiPqtwb2SdVRoWIFOQz5liagGQcEDdvQV1CJoyu5SIdInPX1lUN5r5R50XBfwA50JBGuQgUTZKTsFlAbF6Wk75AM8fNj+nRN8BaaynrdQqUgTHMMNsujIVT6bHBwmmy7HfRrhOu5hrdZpsQf2aVX+E/ueWGOC1qOrL4PSFUPplSPWQ6F6pfXbQEWl/O9vTCfmkJNHUMJqZZZQFXGx/QqQBCl5g1TJ6TQ1DAc78L31S/B7JUS99yT9xpHtVjhwp//Yk5vYsYKbF4s8xFkHJs7k6TI8KYp7ZFo+X4uMBC3vL9FLg+KhUUh+M10QOYx2NYoWocwjlPuAxLQwDZdexOuYK8vilYX1ZNA6GHaVz+eXY4GRKRRsYVvgj/M4esk7Mr5Hxgay9xid35wT47SHPhamcwbkmbFvNx69nMGAz1/Gvybj4dhRsZ7qPRrnNubEYOywR3LRJ4HFfi3/OA9Pp716HN7GS4khSGuq//3d1JtRK6Nw0buAQUpA/BWan1SETyA=",
+     "spelled": true
+    },
+    "target/release/build/openssl-sys-second/out/": null
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys-second/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys-second/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a build script that links nothing",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVV1r20AQfO+vCPKjK51NW0JCUwL5GcWI02klHT7dibuVPzD5792VnFrGxnaMQynkzb7dnR3vzOBN5EEGZ6PHu0i5utEGfCw96kIqjL7eRY1Uc1lCqnNuaSRW44KaHoUQsmlGQdeNgYCqkvg8SabJhIdqaXVBryn389xP7xz+Ei/Sly5BVxvuQvoGSOVNZGUN3PcG90Jw3DLXlvf+jjJto9kr8/GO93dTSJ30oZAmAJVyyNoylSEA8Xc2DEquwdTAAgwv+RYxUAESWw+hg8+hkK3BaMYFgmc+fWXLvOcqPBg6F4g9njwEK1AtyqxjdskQL6LtfB30Lbx+2QyUyFpt8jgorxuMe2jID9XwUOqAfj2uEJtAkpQaqzZLSEjh24CxkbYUyks6VKJdTMeE1chhBf6ZlOq1ci2mufaMJ6xbUg342Wg7hzw1OuvuMNs9sab92z7pK+wjFmBz50UNuSaYtonDOsRko4dkMtp7ZG/dnzbXCazzxiv0it2w5zn67f/Ecwd+sq0xt/DLTc4/8Mtxm3dk9jEFDR0xVRRQolZPAXM1HnPD9mE3vHR+Dn5QCsEMvim/btBFx9xJ0qJewNO7Se7PuQYs7RRshoOiXIbYqOM1QkSoRW+i9wblymT3XLeCPSTT6f2pwCgORVy5GsTbPhG8Eh2YGIDFW7DPGN1enAvjNJg+F6ZbBuTI2v83Hj2drQDff5z+Nzkdjh1U3EN9RuPWwlwYjN3smVz0SYip36ir83C47cPj0F++0FaHqj95aJWCEP7q9AcyfADv",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a build script of a package that is no provider",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdtq20AQfe9XBPnRldamLSGhKYF8RjFivRpJi1e7YnfkS03+vTOSU0vY2I5xKYW8SXM5M5pzDtpGHmRwNnq8i5Sram3Ax9KjzqXC6PNdVEu1kAWkOuOSWmI5zqnoUQgh63oUdFUbCKhKic+TZJpMuKmSVucUTbme+7575/CHeJG+cAm6ynAV0hsgpbeRlRVw3RvcC8FxyUJbnvszmmsbzV55H+94ftuFVEkPuTQBKJXBvClSGQLQ/s6GXsrVmBpYguEhXyIGykFi4yG08BnksjEYzThB8LxPl9lt3u0qPBg6F4jBntwEa1ANynm72SVNPIim83XQN/D6adtjYt5ok8VBeV1j3EFDdsiGh0IH9JtxiVgHoqTQWDbzhIgUvgkYG2kLobykQyXaxXRMWI8cluCfiamOK9dgmmnPeMK6FeWAw0bbBWSp0fPuDr/az9xFmdY2PBvufYWCxBJs5ryoINME09Rx2ISYlPSQTEaDIMvr/rS+TmCd116u1yyIgezo8/+J7A4kZRtjbiGZm5y/J5njSm+XGWIKajqmq4AStXoKmKnxmAt2gX3zyvkF+F4qBNN7U35TozuqTqIW9RKe3r3ksM/VYGmmYDEcJOUqxEYdzxEiQiU6Eb3XKFeau9t1R9hDMp3enzKMYlPEpatAvM0TwSvRgokeWLwD+7DR7cm50E697nNmuqVBjoz9f+3RrbMj4Ou303+T0+bYQ8Ud1Ic1bk3MhcbY957xReeEmOqNutoPh9P+uh26y+fa6lB2Jw+NUhDCH55+A4QmAa0=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Unlisted native link provider or missing compiler artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a provider without an artifact",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVMFu2zAMve8rCueY2UqwDUWLdRjQzxgKQ5ZpW4gsCSKdJgj676Nsd0mQLkmzdrvsFot8jy98JDdJAInOJrdXiXKt1wZCKgPpSipKPl4lXqqFrCHXZUzxkpppxUm3Qgjp/QR16w0gqUbS91k2z2YR1EqrK37NY37EfQ3O0TdxL0PtMnKtiVnEX0Ac3iRWthDznunumS6mLLSNdX8khbbJw1PUE1ys36OIM/lHJQ0Ch0ooujqXiMD6ncWdkPOUG1iCiUU+JZGoAkldAOzpS6hkZyh5iAGmj3qGyKh80CoCGG4XiD2dEQQrUB3Jold2DigW4uqxOxQ6ePqw+TMnxBJs6YJoodRM0/kU15iyIzfZbLL3GG26Pu7TEa7THlZ6FRu7Z5/RxT+x78Aa2xlztPVFp02ZograUzpAoXyn9ruO8lKH309ML2afUzAoYo22CyhzbuzQAiRJWt0hlWo6jQnjwxb86MICwk4I0ex8qbD25PoWjtzxPw7kljOWcPdqkfs458FyTRGH4SAoHzE16uUYMxK0YhiiS9wKUGuksJ42RB7ZslpT0xUZ75kIHVJqpK2FCpJHMtMu5bGF1WTUO5p2k83n169wbQd9yrO39OGFsu/uwhnn6jIHBjmjAZ+/HD9aKh6mtHEtiOdqAoMSPZXYUqUD1f9D9tbGnLkYW+yJvRg2IeV8oy7eh8Nqf+koVdpqbIaWY6cUIP7y6SeVuToZ",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Unlisted native link provider or missing compiler artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script without its libraries",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFu2zAMfN9XFM5jJivBNhQt1mFAP2MoDEWmbSGyJEhUmiDov4+y3SVZWjfZWgwD+maLvOOZR1rbzIMI1mTXF5m0rVMaPBMeVSUkZh8vMifkUtRQqDKlOIHNtKKka865cG4SVOs0BJSNwO+zfJ7PEqgVRlV0WqT8hPvqrcVv/Fb42uZoW52ykN4AKbzNjGgh5T3S3RJdSlkqk+r+yBbKZHcPSY+3qX6HQsqkh0roABQqYRHrQoQApN+asBeyDgsNK9CpyKcsEVUgMHoIHX0JlYgas7sUIPqkp48Mynut3IOmdgE/0JlAsAYZUSw6ZaeAUiGqnrqDPsLDh+3fOcFXYErreQulIproWNgERo5c5bPJwWGy6XLcpxGulz2s1Do19sA+rRb/xL4ja0zUerT1i6h0yYL0yiHroVC+UfttxKJU/vmJ6cQccnICJaxWZgllQY3tWxBQoJI3AUs5naaE4WAHvrd+CX4vFILee5N+49B2LRy40zf25IYyVnBztshDnHVgqCZPw3AUFPeBafl0jBgRWt4P0bmL4qFWAf1m2iC6QHbVCpu4yAnKfQzItDA1l17QOObKMhpZWE8GrYNhV/l8fjm2MDItBWtsC/yxHg9e8o6M75Gxgex9jV7fnBPXaQ/92zKdNfBP0Py/497LGRr6+cv47TA+7Dsq1lO9j/prG3PioO+wL1wa/a+fUb6Wf3wBHFd783XoO18po0LTtzxEKSGEXz79BMZ5suc=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "KeyError",
+    "said": "'linked_libs'"
+   }
+  },
+  {
+   "name": "a build script whose libraries are text",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S7Jkbtq1jEG/xbp7717u6aFt5kGgNdn1RSZt65QGz4QnVQtJ2ceLzAm5FA0UqkotTtBiWsema865cG6CqnUakORC0PdZPs9nCdQKo+p4WqT+hPvqraVv/Fb4xuZkW526KH4BxfI2M6KF1PdIdxvpUstSmTT3R1Yqk909JD3epvkdimJn/FELjRBLFZShKQQiRP3W4F7JOio0rECnIZ+yRFSDoOABO/oKahE0ZXepEOmTnr4yKO+1cg86rgv4gc4EgjXIQKLslJ0DSoPi9LQd8gEePmz/zgm+AlNZz1uoVKQJjuEGWXTkKp9NDg6TTZfjPo1wPe1hrdZpsQf2aVX+E/uOrDFB69HVl0HpiqH0yhHroVC90fptoKJS/s83phNzyMkjKGG1MkuoirjYfgVIgpS8QarkdJoahoMd+N76Jfi9EqLe+5J+48h2Kxy403/syU3sWMHNs0Ue4qwDE2fydBmOiuIemZana5GRoOX9JXpuUDw0Cslvpgsih9GuRtEilHmEch+QmBam4dKLeB1zZVm8srCeDFoHw67y+fxyLDAyhYItbAv8cR5HL3lHxvfI2ED2HqPXN+fMOO2hT4fpt3y8JA0nZvy/WejlDNv+/GX86RhPwo6K9VTvOXhtY85MwQ77xIvSvwss9mv54tfheNqbx6HffK2MwkW/cgxSAuIvn34C4Bm8rA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Expected a JSON array",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a static library more than reviewed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0Weh/n852l4RmTtq1jEG/2bp7757v6eFt5kEEa7Lri0za1ikNngmPqhISs48XmRNyKWooVEktTmAzrVLTNedcODcJqnUaAspG4PdZPs9nBGqFUVU6LaifcF+9tfiN3wpf2xxtq6kL0xtgKm8zI1qgvke620RHLUtlaO6PbKFMdvdAeryl+R0KU2d6qIQOkEolLGJdiBAg6bcm7JWsw0LDCjQN+ZQRUQUCo4fQ0ZdQiagxu6NCoic9fWVQ3mvlHnRaF/ADnQSCNciIYtEpOwdEg9J02g76CA8ftn/nBF+BKa3nLZQq0UTHwiaw5MhVPpscHJJNl+M+jXCd9rBSa1rsgX1aLf6JfU+sMVHr0dUvotIlC9Irh6yHQvlG67cRi1L5P9+YTswhJ08gwmplllAWabH9CgIKVPImYCmnU2oYDnbge+uX4PdKIei9N+k3Dm23woGbvrEnN6ljBTfPFnmIsw5MmsnpMjwpivvAtDxeS4wILe8v0XOD4qFWAf1m2iC6kOyqFTZxkSco9zEg08LUXHqRrmOuLEtXFtaTQetg2FU+n1+OBUZSKFhjW+CP83jwkndkfI+MDWTvMXp9c86M0x76VJiOBWR38PPFYTki4f+NSi9nMOPzl/E/y3hQdlSsp3qPyWsbc2ZIdtgTGelTwVK/li/Ow9Npbx6HfvOVMio0/cpDlBJC+O3TL8Xzxyk=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native link declarations differ from reviewed policy",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a static library fewer than reviewed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0JaJ+1axqDfbN29d8/39PA28yCCNdn1RSZt65QGz4RHVQuJ2eeLzAm5FA0UqkotTuBiWlPTNedcODcJqnUaAsqFwJ+zfJ7PEqgVRtV0WqT+hPvurcUf/Fb4xuZoW526kN4AqbzNjGgh9T3S3RJdalkqk+b+ykplsruHpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8iVLRDUIjB5CR19BLaLG7C4ViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j4tP07J/gKTGU9b6FSRBMdC5vAyJGrfDY5OEw2XY77NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVO67cRi0r5529MJ+aQkxMoYbUyS6gKWmy/goAClbwJWMnpNDUMBzvwvfVL8HulEPTem/Qbh7Zb4cCdvrEnN9SxgpsXizzEWQeGZvJ0GY6K4j4wLZ+uESNCy/tL9NKgeGhUQL+ZLhBdILsahYtY5gTlPgZkWpiGSy/oOubKMrqysJ4MWgfDrvL5/HIsMDKFgi1sC/xxHg9e8o6M75GxgewjRm9vzplx2kOfChMF5LV5eGLK/5uGXs6w76/fxn8e41nYUbGe6iMJb23MmTnYYU/EoP8zMOrX8tV5OJ727nHoN18ro8KiX3mIUkIIf3z6DXovvWQ=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native link declarations differ from reviewed policy",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a system library that is reviewed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJSKc0IfS/T2e7S0JSN+1axqDfbN2998739PA28yCCNdn1RSZt65QGz4RHVQmJ2eeLzAm5FDUUqqQWJ7CZVqnpmnMunJsE1ToNAWUj8Ocsn+czArXCqCqdFtRPuO/eWvzBb4WvbY621dSF6Q0wlbeZES1Q3yPdbaKjlqUypPsrWyiT3T3QPN6SfofC1JkeKqEDpFIJi1gXIgRI81sT9krWYaFhBZpEvmREVIHA6CF09CVUImrM7qiQ6GmevjJM3s/KPei0LuAHcxII1iAjikU32TkgEkrqtB30ER4+bf/OCb4CU1rPWyhVoomOhU1gyZGrfDY5OCSbLsd9GuF63sNKrWmxB/Zptfgn9h1ZY6LWo6tfRKVLFqRXDlkPhfKd1m8jFqXyT9+YbphDTp5AhNXKLKEs0mL7FQQUqORNwFJOp9QwHOzA99Yvwe+VQtB7b9JvHFo6KHW3yEGBvrSXMKlvBTcvHvUQZx2YpMzpShwVxX1gWp6uJUaElvdX6aVx8VCrgH4zbRBdSKbVCpu4yBOU+xiQaWFqLr1IlzJXlqWLC+vJMOtg21U+n1+OxUZSNFhjW+CPejx4yTsyvkfGBrKPML29OWeGag/9XKROxeS1ATkh+//Gox9nMODrt/F/yng4dlSsp/qIxlsbc2YwdthnctEngaV+LV+dh2O1d49Dv/lKGRWafuUhSgkh/PHpN4hExLo=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a system library that is not reviewed",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxiny2RWRJ6E5pQuh/n2S7S0JSN+1axqDfYt+998737pFt5kGgNdn1RSZt65QGz4QnVQlJ2eeLzAm5FDUUqkwtTlAzrWLTNedcODdB1ToNSLIR9HOWz/NZArXCqCq+LVJ/wn331tIPfit8bXOyrU5dFJ+AYnmbGdFC6nuku410qWWpTNL9lS2Uye4e0jzeJv0ORbEz/qiERoilEhahLgQixPmtwb2SdVRoWIFOIl+yRFSBoOABO/oSKhE0ZXepEOnTPH1lmLyflXvQcV3AD+ZMIFiDDCQW3WTngJJQVE/bIR/g4dP275zgKzCl9byFUkWa4BhukEVHrvLZ5OBlsuly3KcRruc9rNQ6LfbAPq0W/8S+I2tM0Hp09YugdMlQeuWI9VAo32n9NlBRKv/0xXTDHHLyCEpYrcwSyiIutl8BkiAlb5BKOZ2mhuHFDnxv/RL8XglR7z1Jv3Fku6vo9jgIpA/tFUxsW8HNiyc9xFkHJgrzdBFHRXGPTMvTtchI0PL+kl6aFg+1QvKbaUPkMHpWK2rCIo9Q7gMS08LUXHoRbzJXlsW7hfVkmHVw7Sqfzy/HUiNTMlhjW+CPehy95B0Z3yNjA9lHlt7enDMztYd+LlGnUvLagJyQ/X/j0Y8zGPD12/hfyng4dlSsp/qIxlsbc2YwdthnctEngcV+LV+dh2O1d49Dv/lKGYVNv3IMUgLiH59+A3W2xFc=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native link declarations differ from reviewed policy",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a reviewed static library linked as a system one",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPma2EbZSWdQz6M0Yxsny2RWRJSKc0IfS/72S5S0JbN11bxqDfbN29d8/39PAuc8C90dnlWSZMb6UCl3OHsuECs89nmeVixVsoZR1bLMdu3lDTJWOMWzvzsrcKPIqO489FsSwWEdRzLRs6LWN/xH13xuAPds1dawo0vYpdSG+AVN5lmvcQ++7prokutqykjnN/ZZXU2c1d1ONMnD+gkDrpoeHKA5VqqEJbcu+B9BvtD0rGYqlgDSoO+ZJFogY4Bgd+oK+h4UFhdhMLRB/1pMqoPGllDhStC9iRzgiCDYiAvBqUnQKKg2h63A66AHefdq9zgq1B18axHmpJNMHmfutzcuSiWMyODqNN59M+TXA972EjN3GxR/YpWf0T+x5Yo4NSk6uvglR17oWTFvMEhfqd1m8ClrV0T9+YQcwxJyNQxCqpV1CXtNi0Ao8cpbjyWIv5PDaMB3vwrXErcAcl79XBm3Bbi2ZY4cgdvzGRa+pYw9WLRR7jjAVNM1m8DA+K/NbnSjxeI0aEnqVL9NKgOGilR7edd4jWk12txC5UBUGZCx5zxXXLhON0HQtpcrqysJmNWkfDLorl8nwqMCKGIu9MD+x+HvNOsIGMHZDlI9lHjN7enBPjdIB+MkwpGa+MxCOD/t9AJDnjyr9+m/5/TMdhT5Unqo8wvLUxJ0Zhj33mt5KSkFO/En+dh4fT3j0OafON1NJ3aeU+CAHe//HpN1OBvdA=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native link declarations differ from reviewed policy",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a static library given twice",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSOc0IfS/T2e7S0xSN+1axqDfbN29d8/39PAu8SCCNcn1RSJt45QGz4RHVQqJyeeLxAm5EhVkqqAWJ7Cel7HpmnMunJsF1TgNAWUt8OciXaYLAjXCqDKeZtRPuO/eWvzBb4WvbIq20dSF8Q0wlneJEQ1Q3yPdbaSjlpUyNPdXkiuT3D2QHm9pfofC2BkfSqEDxFIBeVtlIgSI+q0JByXrMNOwBk1DviREVILA1kPo6AsoRasxuaNCpCc9fWVQ3mvlHnRcF/CRTgLBBmSLIu+UnQOiQXE6bQd9Cw+fdn/nBF+DKaznDRQq0rSOhW1g0ZGrdDEbHZJNl9M+TXA972GpNrTYkX1a5f/EviNrTKv15OrzVumCBemVQ9ZDoXin9dsWs0L5p29MJ2bMySOIsFqZFRRZXGy/goAClbwJWMj5nBqGgz343voV+INSCPrgTfqtQ9utcOCmb+zJTexYw82LRY5x1oGJMzldhqOiuA9My9O1yIjQ8P4SvTQoHioV0G/nNaIL0a5KYd3maYRy3wZkWpiKSy/idUyVZfHKwmY2aB0Mu0qXy8upwEgKBattA/xxHg9e8o6MH5CxgewjRm9vzplxOkA/F6ZTARnn57VxOSHi/w1LL2ew4+u36X/LdFT2VKyn+gjKWxtzZkz22GdS0ueCxX4tX52H42nvHod+86UyKtT9ykMrJYTwx6ff8XbIAQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a build script whose directory is outside the build",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJ6E5pQuh/n2S7a7K0bruljEG/xbp7717u6aFd5kGgNdnlWSZt55QGz4QnVQtJ2cezzAm5Eg0UqkotTlA7r2PTJedcODdD1TkNSLIV9H2RL/NFAnXCqDqeFqk/4b56a+kbvxa+sTnZTqcuil9AsbzLjOgg9d3TXUe61LJSJs39kZXKZDd3SY+3aX6PotgZf9RCI8RSBWVoCoEIUb81uFeyjgoNa9BpyKcsEdUgKHjAnr6CWgRN2U0qRPqkZ6iMyget3IOO6wJ+oDOBYAMykCh7ZS8BpUFxetoO+QB3H3Z/5wRfg6ms5x1UKtIEx3CLLDpykS9mB4fJpvNpnya4nvewVpu02AP7tCr/iX1H1pig9eTqy6B0xVB65YgNUKjeaP02UFEp//SN6cUccvIISlitzAqqIi52WAGSICWvkCo5n6eG8eABfGv9CvxeCVHvfUm/dWT7FY7c6T8O5CZ2rOHq1SIPcdaBiTN5ugxHRXGLTMvHa5GRoOPDJXptUDw0Cslv5y2Rw2hXo6gNZR6h3AckpoVpuPQiXsdcWRavLGxmo9bRsIt8uTyfCoxMoWCt7YDfz+PoJe/J+B4ZG8neY3R6c47j9NuNeyozp8zBnrb/PwWDnHHPn79MPxrTGXigYgPVewJObcwLn5MH7DNvyZAEFvu1/OM8HE978zgMm6+VUdgOK8cgJSD+8uknlpq5qA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script whose directory is not there",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFq20AQfO9XBPnRPZ1NW0JCUwr5jBLE6bSSDp/uxO3KsTH5995KSm03reK0DqWQN0u7Mzve2UG7JIBC75Lri0T7pjUWglCBTKk0Je8vklbplaogMwW3tIrqeRmbrqWUqm1naJrWApKuFX1dpMt0waBGOVPGtxn3M+5z8J6+yFsVKp+Sbyx3UXwCiuVd4lQD3PdIdxvpuGVlHM/9luTGJXcPrCd4nt+jKHbGH6WyCLFUQN5VmUKEqN87PCj5ljILa7A85EPCRCUo6gJgT19AqTpLyR0XIj3rGSqj8kGrDGDjukAe6WQQbEB3pPJe2SkgHhSn83YodPDwbvd3Tsg1uMIH2UBhIk3XCtyiiI5cpYvZ0Uu26XLapwmu5z0szYYXe2SfNfk/se+JNa6zdnL1eWdsIVAH05IYoFC80vp9R1lhwu8vphdzzCkjiLHWuBUUWVzssAIkRUbfIBV6PueG8cUefO/DCsJBCdEePOmwbcn3Kxy5+T8O5C52rOHmxSKPcb4FF2dKPoYnRXWPwupf1yIjQSOHI3ppUAJUBils5zVRi9GuylDd5WmEytAhCatcJXVQ8RxT40U8WdjMRq2jYVfpcnk5FRjNoRC1b0A+zpMYtOzJ5AGZGMneYnR+c06M0wGa71SoHMFNZuqcOflp+v+dkkHO6MPHT9MflemM7KnEQPWWkHMbc2I+9thnvjVDEkTst/qP8/B02qvHYdh8aZzBelg5dloD4g+fvgMsEsYE",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/target/release/build/openssl-sys/out-absent'"
+   }
+  },
+  {
+   "name": "a search path that is not absolute",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpoiyBBUxTIM4pAoKiVTJgiCXLp2DDy9y4lpbbhVHZap73kJnF3Zkc7HGibeRDBmuz2KpO2dUqDZ8KjqoXE7ONV5oRcigYKVaUWJ3AxranplnMunJsE1ToNAeVC4PdZPs9nCdQKo2o6LVJ/wn311uI3fi98Y3O0rU5dSG+AVN5mRrSQ+p7p7okutSyVSXN/ZKUy2cNT0uNtmt+hkDrpoRY6AJUqKGNTiBCA9FsT9krWYaFhBToN+ZQlohoERg+ho6+gFlFj9pAKRJ/09JVBea+Ve9C0LuAHOhMI1iAjirJTdg4oDaLpaTvoIzx92P6dE3wFprKet1ApoomOhU1g5MhNPpscHCabrsd9GuE67WGt1mmxB/ZpVf4X+46sMVHr0dWXUemKBemVQ9ZDoXqj9duIRaX8729MJ+aQkxMoYbUyS6gKWmy/goAClbwLWMnpNDUMBzvwo/VL8HulEPTem/Qbh7Zb4cCdvrEnN9SxgrtXizzEWQeGZvJ0GY6K4jEwLV+uESNCy/tL9NqgeGhUQL+ZLhBdILsahYtY5gTlPgZkWpiGSy/oOubKMrqysJ4MWgfDbvL5/HosMDKFgi1sC/x5Hg9e8o6M75Gxgew9Rpc358w47aFPhemSAXlh7OXjsavR8O7hn6amVzn48vnL+E9mPDM7KtZTvSfm0sacmZcd9kRc+oAw6tfyj2NyPO3NfyL95mtlVFj0Kw9RSgjhl08/AWjXy3A=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native linker search path must be absolute",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a search path of another kind",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGTJSOc0IfS/7852l4R0TrqljEG/2bp7757v6eFtEkBF75Lbq0T7ujEWglABTak0Jh+vkkbppaogMwW3NAoX05KabqWUqmkm0dSNhYh6ofD7LJ2nMwbVypmSTjPuZ9zX4D1+k/cqVD5FX1vuQnoDpPI2caoG7numuyc6blkax3N/JLlxycMT6wme53copE56KJWNQKUC8rbKVIxA+r2LeyXfYGZhBZaHfEqYqASFbYDY0RdQqtZi8sAFomc9fWVQ3muVASytC+SBTgbBGnSLKu+UnQPiQTSdt4OhhacP279zQq7AFT7IGgpDNG0j4iYKcuQmnU0ODtmm63GfRrhOe1iaNS/2wD5r8n9i35E1rrV2dPV5a2whog6mQdFDoXij9fsWs8KE39+YTswhpyQQY61xSygyWmy/gogKjb6LWOjplBuGgx340YclhL1SjHbvTYdNg75b4cDN39iTO+pYwd2rRR7ifAOOZkq+DEdF9RiF1S/XiBGhlv0lem1QAlQmYthMF4hNJLsqg4s2TwkqQxtRWOUqqYOi65gaL+jKwnoyaB0Mu0nn8+uxwGgOhVj4GuTzPBmDlh2Z3CMTA9l7jC5vzplx2kOfCtMlA/LC2DLQgjmW/2NCejmDB5+/jP9QxvOxoxI91Xs6Lm3MmdnYYU9Eow+DoH6r/zgSx9Pe/IfRb740zsRFv/LYag0x/vLpJ+uaxKE=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native linker search path must be absolute",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a search path without a kind",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P8wF72cYfOfv4z/RsZTsaNiPdV7Ji5tzJmJ2GFPBKKPAKN+Lf84CMfT3vw30W++VkaFRb/yEKWEEH759BMZ58CW",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "a search path twice",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVUFu2zAQvPcVgXx0KdpoiyBBUxTIM4pAoKiVTJgiCXLp2DDy93IlpbbhVHZap73kJnF3Zkc7HGibeRDBmuz2KpO2dUqDZ8KjqoXE7ONV5oRcigYKVVGLE7iY1qnplnMunJsE1ToNAeVC4PdZPs9nBGqFUXU6LaifcF+9tfiN3wvf2Bxtq6kL0xtgKm8zI1qgvme6+0RHLUtlaO6PrFQme3giPd7S/A6FqTM91EIHSKUKytgUIgRI+q0JeyXrsNCwAk1DPmVEVIPA6CF09BXUImrMHqiQ6ElPXxmU91q5B53WBfxAJ4FgDTKiKDtl54BoUJpO20Ef4enD9u+c4CswlfW8hUolmuhY2ASWHLnJZ5ODQ7LpetynEa7THtZqTYs9sE+r8r/Yd2SNiVqPrr6MSlcsSK8csh4K1Rut30YsKuV/f2M6MYecPIEIq5VZQlWkxfYrCChQybuAlZxOqWE42IEfrV+C3yuFoPfepN84tN0KB276xp7cpI4V3L1a5CHOOjBpJqfLcFQUj4Fp+XItMSK0vL9Erw2Kh0YF9JvpAtGFZFejcBHLPEG5jwGZFqbh0ot0HXNlWbqysJ4MWgfDbvL5/HosMJJCwRa2Bf48jwcveUfG98jYQPYeo8ubc2ac9tCnwnTJgLww9vLxGCX9V9nptQ7ufP4y/qsZT86OivVU77m5tDFnpmaHPRGaPiYs9Wv5x2E5nvbmv5J+87UyKiz6lYcoJYTwy6efTufNhQ==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "search paths that are text",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVNFu2zAMfN9XFM5jJivBNhQt1mFAP2MoDFmmHSGyJEhUmiDov4+ynSVBVifd2u2lb7HJOzJ3R28zDyJYk91eZdK2TmnwTHhUtZCYfbzKnJBL0UChqtTiBC6mNTXdcs6Fc5OgWqchoFwI/D7L5/ksgVphVE1vi9SfcF+9tfiN3wvf2Bxtq1MX0hMglbeZES2kvh3dPdGllqUyae6PrFQme3hK+3ib5ncopE76UQsdgEoVlLEpRAhA+1sTDkrWYaFhBToN+ZQlohoERg+ho6+gFlFj9pAKRJ/26SvD5v2u3IMmuYAf7ZlAsAYZUZTdZpeA0iCantRBH+Hpw/bvnOArMJX1vIVKEU10LGwCI0du8tnk6GWy6XrcpxGu8x7Wap2EPbJPq/K/2HdijYlaj0pfRqUrFqRXDlkPheqN5LcRi0r55xPTLXPMyQmUsFqZJVQFCdtLEFCgkncBKzmdpobhxR78aP0S/EEpBH3wJP3Goe0kHLjTf+zJDXWs4O7FSx7jrANDM3kKw0lRPAam5e9rxIjQ8j5ELz0UD40K6DfTBaILZFejcBHLnKDcx4BMC9Nw6QXFMVeWUWRhPRl2HQy7yefz67GDkeko2MK2wHfzePCSd2T8gIwNZO9n9PrmXHhOB+hzx3ThgeziytfZP4pnfy2DAJ+/jH/Nx8O5p2I91Xs0X9uYC4O5x57JZZ9ERv1a/vEH+3Tam3+te+VrZVRY9JKHKCWE8Munn7YslVs=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Expected a JSON array",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a library in no search path",
+   "delta": {
+    "openssl/lib/libssl.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or ambiguous native static archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a library in two search paths",
+   "delta": {
+    "target/release/build/openssl-sys/out/libssl.a": {
+     "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+     "spelled": false
+    },
+    "target/release/build/openssl-sys/out/": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or ambiguous native static archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a library reached through a link in another search path",
+   "delta": {
+    "target/release/build/openssl-sys/out/": "absent"
+   },
+   "links": {
+    "target/release/build/openssl-sys/out/libssl.a": "<root>/openssl/lib/libssl.a"
+   },
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "held": {
+     "records": [
+      {
+       "path": "<root>/system/lib/libstdc++.a",
+       "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "stdc++",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+       "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+       "size": 24,
+       "provider": "mediasoup-sys",
+       "library": "mediasoup-worker",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "mediasoup-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "mediasoup-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+      },
+      {
+       "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+       "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+       "size": 20,
+       "provider": "aws-lc-sys",
+       "library": "crypto-awslc",
+       "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libssl.a",
+       "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+       "size": 11,
+       "provider": "openssl-sys",
+       "library": "ssl",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      },
+      {
+       "path": "<root>/openssl/lib/libcrypto.a",
+       "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+       "size": 14,
+       "provider": "openssl-sys",
+       "library": "crypto",
+       "out_dir": "<root>/target/release/build/openssl-sys/out"
+      }
+     ],
+     "runtime": "<root>/system/lib/libstdc++.a"
+    }
+   }
+  },
+  {
+   "name": "an OpenSSL library found only in the script's directory",
+   "delta": {
+    "target/release/build/openssl-sys/out/libssl.a": {
+     "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+     "spelled": false
+    },
+    "openssl/lib/libssl.a": "absent",
+    "target/release/build/openssl-sys/out/": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or ambiguous native static archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a worker library found only in the OpenSSL directory",
+   "delta": {
+    "openssl/lib/libmediasoup-worker.a": {
+     "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+     "spelled": false
+    },
+    "target/release/build/mediasoup-sys/out/": null,
+    "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the external library found only in its script's directory",
+   "delta": {
+    "aws-lc/lib/": null,
+    "target/release/build/aws-lc-sys/out/libcrypto-awslc.a": {
+     "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+     "spelled": false
+    },
+    "aws-lc/lib/libcrypto-awslc.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script whose directory is in the target but outside the build",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSOc0IfS/T2e5S0IXt91SxqDfYt29dy/39NAu8yCCNdn1RSZt55QGz4RHVQuJ2ceLzAm5Eg0UqqIWJ7Cd17HpmnMunJsF1TkNAWUr8PsiX+YLAnXCqDqeFtRPuK/eWvzGb4VvbI6209SF8QswlneZER1Q3yPdbaSjlpUyNPdHViqT3T2QHm9p/oDC2Bl/1EIHiKUKyr4pRAgQ9VsTDkrWYaFhDZqGfMqIqAaBvYcw0FdQi15jdkeFSE96UmVUnrRyDzquC/iRTgLBBmSPohyUvQREg+J02g76Hh4+7P7OCb4GU1nPO6hUpOkdC9vAoiNX+WJ2dEg2XU77NMH1vIe12tBij+zTqvwn9j2xxvRaT66+7JWuWJBeOWQJCtUbrd/2WFTKn74xg5hjTh5BhNXKrKAq4mLTCgIKVPImYCXnc2oYD/bge+tX4A9KIeiDL+m3Du2wwpGb/mMiN7FjDTevFnmMsw5MnMnpMjwpivvAtPx9LTIidDxdotcGxUOjAvrtvEV0IdrVKGz7Mo9Q7vuATAvTcOlFvI65sixeWdjMRq2jYVf5cnk5FRhJoWCt7YA/zuPBSz6Q8QMyNpK9x+j85pyMk8U2XfxToTlnEA7E/f8xSHLGRX/+Mv1qTIdgT8US1XsEzm3MC9+TPfaZxyQlgcV+Lf84D0+nvXkc0uZrZVRo08pDLyWE8Munn6nsuhY=",
+     "spelled": true
+    },
+    "target/other/": null
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a thin library",
+   "delta": {
+    "openssl/lib/libssl.a": {
+     "deflated": "eNpTtCnJyMyz4youzgEAFJ4Dqw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Native library must be a regular self-contained ar archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an empty library",
+   "delta": {
+    "openssl/lib/libssl.a": {
+     "deflated": "eNoDAAAAAAE=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or excessive native artifact",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a library that is a directory",
+   "delta": {
+    "openssl/lib/libssl.a/": null,
+    "openssl/lib/libssl.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or ambiguous native static archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no static C++ runtime",
+   "delta": {
+    "system/lib/": null,
+    "system/lib/libstdc++.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing or ambiguous native static archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a provider whose build script did not run",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFq3DAQfO9XBN/j1dYdbQkJTSnkM0owsry2xcmS0K4udxz592ptp7kjqZPQlFLaN1u7Mzve0eBDFkCis9nlWaZc77WBkMtAupGKsvdnmZdqI1sodc0tXlK3bFLTpRBCer9A3XsDSKqT9HVVrIsVg3ppdZNOS+5n3OfgHH0R1zK0riDXG+6i9AaUyofMyh64757uOtFxy0Zbnvstq7TNbu5YT3A8f0BR6kwPjTQIqVRDFdtSIkLS7ywelZyn0sAWDA/5kDFRA5JiABzoa2hkNJTdcCHRs56xMikftYoAJq0LxIlOBsEOVCRZDcpeAuJBaTpvh0KEu3eHX3NCbMHWLogeap1oos9xj3ly5KJYLU4O2abzeZ9muJ73sNE7XuyJfUZXf8S+R9bYaMzs6quoTZ2jCtpTPkKh/k3rd5HKWoef35hBzCmnSCDGGm03UJdpseMKkCRpdYVUq+WSG6aDB/CtCxsIRyVEc/Smwt6TG1Y4cfM3juQ2dWzh6tUiT3HOg00zBV+GR0V5i7lRT9cSI0Evxkv02qAEaDVS2C87Io/JrlZTF6siQUWISLmRthUqyHQdC+3ydGVht5i0ToZdFOv1+VxgFIci71wP4n6ewKDEQCaOyPKJ7H+M3t6cF8bpCP1cmN4yIE+M/XvjMcqZDPj4af5vMh+OB6p8pPo3otFoq7EbM4FRKUD80f0d3Xs/HA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Missing native link provider or static C++ runtime",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build script with an identifier that names no package",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVttq20AQfe9XBPnRldamLSGhKYV8RjFitRpJi1e7YnfkS03+vTOSjGVs7CS4lELerLmcOZo5B2sXeZDB2ejxLlKubrQBH0uPupAKo893USPVUpaQ6pxLGonVtKCiRyGEbJpJ0HVjIKCqJP6cJfNkxk21tLqgaMr13PfdO4c/xLP0pUvQ1YarkJ4AKb2LrKyB6/ZwzwTHJUttee6vKNM2WrwwH+94fteFVEk/CmkCUCqHrC1TGQIQf2fDKOUaTA2swPCQLxEDFSCx9RA6+BwK2RqMFpwgeObTZwbmPVfhwdC6QBzx5CbYgGpRZh2z1zTxIJrO20Hfwsun3egSWatNHgfldYNxDw356TWYJQEGzrgW01x7Dgvr1hV44LDRdgl5anTWv87vju0Q5et04cXx+HcIQazA5s6LGnJNMG0Th22ISRAPyWxyFGSV3F+WyQWs6xIq9IbveqQeev1/op4TZdjWmFtc/ibrH0nmvGA7MseYgprO6SqgRK2eAuZqOuWCIXBoXju/BD9KhWBGT8pvG3Rn1UmnRb2CpzeTPO5zDViaKVgMJ0m5DrFR53OEiFCLXkRvNYqHUgf022mF2AQ6V6mxarOEWoVvA8ZG2lIoL0mOiXYxSRY2k4HrcLCHZD6/v2QYxaaIK1eD2M8TwSvRgYkRWDyAfdjo9sd5pZ1G3dfMdEuDnBn7/9qjpzMc4Ou3y/8ml81xgIp7qA9r3PowrzTGofeKL3onxFRv1Lv9cDrtr9uh33yhrQ5Vv/LQKsXfb/s7/QHu/O1d",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Unsupported Cargo package identifier",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a record of links without a provider that ran",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1zozYQ/p5fkfHXi0ECIeC+OQ5JmfrsjO1ce9O5YYS0spnDwCCSXHqT/15hE15qJ8215YMx+6J99Kx2Vz/Ozs9HTLCiAhHxfFfkGWTV6OP5D63QqjThkCnQglG4mo4uDtKM7faiNIkfIS4r/qIoWLWtFQ+Qibw0dyASpvL7Yqye1BgZ2DeQKaBQ5pFnCQ+JSvKs9mbvfF58H6B8cd257kgLn2uNhlklDxClSfZNdVsagGrFWqEqbc+15I9GspcJ/uFDE+hv7o95+Q3Kvk6ptP/Jy6eiykeN4OtFG+hJVbAbBhIDz6LalsBE67p/PzfbzQudEpW+C/7PAmoitRQ2sTr2eJ7JZHNfQpQXlSZd9QKOsnystqwE0QatRULlg+9dLu5TGIgg2yTZUFSBqtQBagN0lGR6j2kKZaSjWA6tE+4S5nLhSGQRRF1LOg4GypEFlmtLZsWO7wJ37Nj2fYF8CxPiYAszQQW1wEXo5QydPug6zyWHPssyL3esLpBRxUpj82eHORG19CU5xECG3Sk7wOg/Pt2a92Wdl9G2qgr10TQ3SbW9jw1dxGYDon2XkAJToEyRP2ZpzoQ5gDn8MpqNDc5cr8QOO2tPSAmbRFXl06nuwUtW7Sllj2qc8v2Jveipot6yyCCO8Q/peOk7k99W49n0/2gdP5/gbivjAeRBkmUskEsswLbjgGU73KfYk76QMnZ95NlALBZz16aOJ8AnFkacamMPiHRiYYlXk3wocmPPnjKS3Dz8MztU5hHAg/Uwn23Ft/uOk0xsIIuOGHmLk5aVxnvM00RHdW3DGvTFlhjsMSF0FVIUixgB4SiWkoL0MKVSuBb2HAn+/hdzyXzJfSZ9N+aUMUScuL/qO6npQTOPYfbJael5pc/1GLlcLMP5zWo1i26XwXX4ew1EJbsi1V2Lb1kV6SykPHIijCPUB315F86uIn2AZ1PtuvgcXgXL2nlxfX1sNgsvdYhX1atfJsvgYPWqzTpYrTXS1/WLxakA00+TX4OoMflyG9Qmy0MXOTYL56v1ZDargVyFy+ZicGx2u1iF63Ax1/ZXwW2gf+braLq42i++mPcdgvnkchZE0+WX2/VCO87CaRic2mRjuFrcLadB9GlxFV6H00kd5YTxTTAPlpN1EC3vVuvoUsOoc3gcfaCO1pPlTbCOPgfLVbMsNlx0fGJOTScqme1aDOkJZdtgS2x5xPMt5sWSYk6552uhpB4wYguPUB+w4/oWiglijsd5r7f8q7JseoFjYGyg0xVJubBdFzkSS8dllufWw5SA51mUQCyZZxFgNGZS/3GFrkiCPOEDJ0jaXGD8RkX2JpIG0jQmk5V8q69leihJZVZso8yHA77B4Okze9h71MyEHr3C01Nc6B5KKRaOECAl0m1EYog58nzqCUZcoomnPncJB+nT2sQiGBgw5PTofdrFeRoVGlTy/e1ifm0uNiS3g/GxZEU3FLt7UttxezPuU7jusNT3VbbZy5s7XXcvagagzPMTR6MWj/uJHt2rZqGi1JcuXjeyTtnD3gA/3Py+nj2f/QUEAyya",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": null,
+   "result": {
+    "refused": "Unlisted native link provider or missing compiler artifact",
+    "kind": "native"
+   }
+  }
+ ]
+}

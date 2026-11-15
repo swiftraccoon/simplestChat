@@ -17,8 +17,11 @@ use std::{collections::BTreeSet, path::Path};
 pub mod artifact;
 pub mod build;
 pub mod licenses;
+pub mod links;
+pub mod openssl;
 pub mod receipt;
 pub mod registry;
+pub mod toolchain;
 
 /// Where a crate of the lock comes from when it comes from crates.io.
 pub(crate) const SOURCE_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
@@ -347,6 +350,217 @@ pub fn validate_manifest(root: &Path) -> Verdict<(Document, Manifest)> {
     }
     validate_links(part(&record, "native_links"))?;
     Ok((record, integrity))
+}
+
+/// Where the static C++ runtime of the host belongs.
+const SYSTEM_ROOT: &str = "/usr";
+/// The most bytes the report may have.
+const MAX_REPORT: usize = 8 * 1024 * 1024;
+/// What the evidence does not show, said in the report itself.
+const LIMITS: [&str; 6] = [
+    "Static archive identity does not prove every member survives final linking.",
+    "Header-only and adapted components are authenticated source inputs.",
+    "Rust license evidence covers compiler events and the exact embedded dependency graph.",
+    "Embedded metadata can include optional packages without compiler-artifact events.",
+    "The unpublished first-party application has no inferred distribution license.",
+    "Runtime-loaded libraries and deployed protections need separate checks.",
+];
+
+/// The whole report of the native evidence of one production build, as it
+/// is written.
+fn report(build: &Build<'_>, system: &Path, host: &dyn toolchain::Host) -> Verdict<Vec<u8>> {
+    let (record, integrity) = validate_manifest(build.root)?;
+    let receipt = receipt::validate_vendor_receipt(build.root, build.vendor_report, &integrity)?;
+    let messages = tree::read_regular(build.cargo_messages, build::MAX_MESSAGES as u64)?;
+    let graph = build::cargo_build(build.root, &messages)?;
+    let (binary, embedded) = artifact::binary_dependencies(&graph.binary)?;
+    let wrapper = part(&record, "registry_component");
+    let registry = registry::registry_component(build, &graph, wrapper)?;
+    let licences = licenses::rust_licenses(build, &graph, &integrity, &embedded)?;
+    let (archives, runtime) = links::link_archives(build, &graph, &record, system)?;
+    let scripts = build.root.join("target/release/build");
+    let mut bindings = Vec::new();
+    for ((identifier, _), event) in &graph.scripts {
+        if build::package_name(identifier)? == "aws-lc-sys" {
+            let directory = manifest::string(field(event, "out_dir")?)?;
+            bindings.push(build::beneath(Path::new(directory), &scripts)?.join("bindings.rs"));
+        }
+    }
+    let installed = awslc::evidence(build.aws_lc_prefix, wrapper, &archives, &bindings)?;
+    let mut registry = registry.fields().unwrap_or_default().to_vec();
+    for (name, value) in installed.fields().unwrap_or_default() {
+        registry.retain(|(held, _)| held != name);
+        registry.push((name.clone(), value.clone()));
+    }
+    let toolchain = toolchain::toolchain_evidence(build.root, &runtime, host)?;
+    let openssl =
+        openssl::openssl_build_evidence(build.openssl_prefix, part(&record, "openssl"), &archives)?;
+    let own = |name: &str| read(&build.root.join(name)).map(|body| Document::from(digest(&body)));
+    let graphed = ["format", "sha256", "compressedSha256", "packageCount"];
+    let mut metadata = Vec::new();
+    for name in graphed {
+        metadata.push((name.to_owned(), field(&embedded, name)?.clone()));
+    }
+    let source = |source: &manifest::Source| {
+        Document::record([
+            ("id", source.identifier.as_str().into()),
+            ("url", source.url.as_str().into()),
+            ("sha256", source.sha256.as_str().into()),
+            ("format", source.format.as_str().into()),
+        ])
+    };
+    let change = |change: &manifest::Change| {
+        Document::record([
+            ("path", change.path.as_str().into()),
+            ("upstream_sha256", change.upstream.clone().into()),
+            ("vendored_sha256", change.vendored.clone().into()),
+        ])
+    };
+    let patch = |tree: &manifest::Tree| {
+        Document::record([
+            ("path", tree.path.as_str().into()),
+            ("source", tree.source.as_str().into()),
+            (
+                "changes",
+                Document::List(tree.changes.iter().map(change).collect()),
+            ),
+        ])
+    };
+    let report = Document::record([
+        (
+            "native_manifest_sha256",
+            own("vendor/native-components.json")?,
+        ),
+        ("vendor_report_sha256", receipt.into()),
+        ("cargo_messages_sha256", digest(&messages).into()),
+        ("cargo_lock_sha256", own("Cargo.lock")?),
+        ("binary", binary.clone()),
+        ("wrap_components", part(&record, "wrap_components").clone()),
+        (
+            "adapted_component",
+            part(&record, "adapted_component").clone(),
+        ),
+        ("openssl", openssl),
+        ("registry_component", Document::Record(registry)),
+        ("rust_licenses", Document::List(licences)),
+        ("rust_dependency_metadata", Document::Record(metadata)),
+        (
+            "vendor_sources",
+            Document::List(integrity.sources.iter().map(source).collect()),
+        ),
+        (
+            "vendor_patches",
+            Document::List(integrity.trees.iter().map(patch).collect()),
+        ),
+        ("static_archives", Document::List(archives)),
+        ("toolchain", toolchain),
+        (
+            "limits",
+            Document::List(LIMITS.into_iter().map(Document::from).collect()),
+        ),
+    ]);
+    if artifact::record_hash(&graph.binary, false)? != binary {
+        return Err(problem(
+            "Production binary changed before receipt publication",
+        ));
+    }
+    let written = report.sorted().pretty().into_bytes();
+    if written.len() > MAX_REPORT {
+        return Err(problem("Native provenance report exceeds its byte budget"));
+    }
+    Ok(written)
+}
+
+/// Write the report of the native evidence of the build as its new
+/// private file, only after the sources and what was really linked agree.
+pub fn produce(build: &Build<'_>, system: &Path, host: &dyn toolchain::Host) -> Verdict<()> {
+    let written = report(build, system, host)?;
+    let kept = crate::files::write_private(build.output, &written, 0o600);
+    kept.map_err(|_| {
+        Problem(format!(
+            "Report cannot be written: {}",
+            build.output.display()
+        ))
+    })
+}
+
+const USAGE: &str = concat!(
+    "usage: simplestchat-security native --vendor-report FILE --cargo-messages FILE\n",
+    "       --cargo-home DIR --openssl-prefix DIR --aws-lc-prefix DIR --output FILE [--root DIR]",
+);
+
+/// The paths that a command line names, in the order of `Build`'s fields.
+fn asked(root: &Path, arguments: &[String]) -> Option<[std::path::PathBuf; 7]> {
+    let options = [
+        "--root",
+        "--vendor-report",
+        "--cargo-messages",
+        "--cargo-home",
+        "--openssl-prefix",
+        "--aws-lc-prefix",
+        "--output",
+    ];
+    let mut named: [Option<std::path::PathBuf>; 7] = Default::default();
+    let mut rest = arguments.iter();
+    while let Some(option) = rest.next() {
+        let value = rest.next();
+        let value = value.filter(|value| !value.is_empty() && !value.starts_with('-'))?;
+        let at = options.iter().position(|held| held == option)?;
+        if named[at].replace(value.into()).is_some() {
+            return None;
+        }
+    }
+    named[0].get_or_insert_with(|| root.to_path_buf());
+    let mut paths = named.into_iter();
+    let mut next = || paths.next().flatten();
+    Some([
+        next()?,
+        next()?,
+        next()?,
+        next()?,
+        next()?,
+        next()?,
+        next()?,
+    ])
+}
+
+/// Run `native` for the checkout `root`: status 0 when the report was
+/// written, and otherwise one line on standard error and status 1.
+pub fn run(root: &Path, arguments: &[String]) -> std::process::ExitCode {
+    let Some(
+        [
+            root,
+            vendor_report,
+            cargo_messages,
+            cargo_home,
+            openssl,
+            aws_lc,
+            output,
+        ],
+    ) = asked(root, arguments)
+    else {
+        eprintln!("{USAGE}");
+        return std::process::ExitCode::from(2);
+    };
+    let real = |path: std::path::PathBuf| build::resolved(&path);
+    let (root, cargo_home) = (real(root), real(cargo_home));
+    let (openssl, aws_lc) = (real(openssl), real(aws_lc));
+    let build = Build {
+        root: &root,
+        vendor_report: &vendor_report,
+        cargo_messages: &cargo_messages,
+        cargo_home: &cargo_home,
+        openssl_prefix: &openssl,
+        aws_lc_prefix: &aws_lc,
+        output: &output,
+    };
+    match produce(&build, Path::new(SYSTEM_ROOT), &toolchain::Machine) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(Problem(complaint)) => {
+            eprintln!("Native provenance failed: {complaint}");
+            std::process::ExitCode::from(1)
+        }
+    }
 }
 
 #[cfg(test)]

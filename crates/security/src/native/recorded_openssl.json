@@ -1,0 +1,4732 @@
+{
+ "base": {
+  "Cargo.lock": {
+   "deflated": "eNqt0LluhDAUheGex3AbAd6XSPMkoyns62uwwiZskszbhykjUqb/j/Tp3O+bhw8/4OPRLH7GG/FfpZ2gLc9Cmk/cS16XG6GdVB0lTVmPHc5oxyGXuj/fxlq38t73Q67jETpY534/Sm0nvww97L5i6fLa5iXiN2lgRPgox3wjKURqJEcmlEIuFDjNbHIxpWActQIl9wGM0MpGdJIzCvqMLcqkQuSRNPeLfN1wKWW60F3HmPlHu0o6eZbSSbQ0RjBRcWcFhxSFNFpRVNoGdbIpBsu0Aw5cnnLHREDEv+wzxuxP4XbRM/M6/rooed4mLBVGX38PXv0PUJWZNQ==",
+   "spelled": false
+  },
+  "Cargo.toml": {
+   "deflated": "eNpdjDEOgCAQBHueQe9FS4t7CbE4zalEUMKBfl8sJNFmi5nNmOuImwSaeFCe/chR0AzKVAxlNlqKPouzx466hQ5arWKW1FTYQd8/1NT/Tp5Ri/XBsaRppaTfBtQ8ppj5k/q7kEdnZcWZnLC6AZmTP2M=",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUzNNQzUOJShir2D3D1Cw72ifcMjgfr4wIA5X4UTQ==",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/boringssl_prefix_symbols.h": {
+   "deflated": "eNpTTklNy8xLVXDyD/L0cw8O9okPCHJ184xQKM7MLchJLS5JzkgsiU8sL85JjjeNNzSMN+ACAL3tESc=",
+   "spelled": false
+  },
+  "aws-lc/lib/libcrypto-awslc.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+   "spelled": false
+  },
+  "aws-lc/share/rust/aws_lc_bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/CMakeCache.txt": {
+   "deflated": "eNptkM1qwzAQhO9+mBIfSqHQg37WzlJFK1brtDktbjA04ELBgb5+5aZpY5KLEPONVjPrNuYZ1HYYvMouwWMWxtg+8TAO/TRUJ5LXhsFrQJvPBmqaXyiQpSg3AFG4VucheaFDNDaAZurYgW7IY4POCFK8fm1ecnCamLbogW9McbxLQpoooENYxG0hAhsB5S6LWoy+kH9HrBa6iuEWRLfA+SJKffewqizN91KjJIEGX89wOnx8jsN03L/3R+2/pnGv91rXuqrcz54TZZx7afkDEpQjijrycBHi5MSYxYQwb8vjX8/x8FZ9AwOif/4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/aws-lc-source.tar.gz": {
+   "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t08FLwzAUx/Gc91eUeV77gl3vrpQRqJ00Oo+h2zI2KJ0Yh/++paLgLh6Uwdj3c3nh8cI7JL/mPUza9WQaax1Lsu/W7XHjk8OL70Jok1UTfLxTfyS9LE2H2jutoiX7Pg99nUqqVSTqDI7hrXnt16vrdLPx233no7tnW+ZuWdTWLCpXPd3PitrZx9pU82j8+TvGo6/hxUNRWVs6Y91wb6RwoZof+S9N3r9s8c87fsu/yO1J/iWbkv+zMDYnBAAAAAAAAAAAAAAAABfsA+My+EQAKAAAP0ZwOA==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/bindgen-cli.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZR74mA5GWh9u/icQ1/NJwDV9nwamkyLvEt6uojkta+PqxIz/qZ888k5Znd6fdTuTuE27T6aduBF9epjhLs2xxTVta+vNvZ+4Fb92yft/bpWtjVd2n6lec6zd7Wv3T33t+mvzhq7IsDMjgg3OYzf7r3gwaDAwAswY4Zg==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/build.json": {
+   "deflated": "eNqlVE1v20YQvftXGDrX0n5/9CZLtEtUFg1KTpsTsTs7axNlJIOU0aRB/nuHio1EruFLBYggOG/em9k3s1/Pzs8nsd2le9w1w0MQ2kx+PZ+E//mb/DLywn6X2/unHpv946Hd7wai/koBCl1Wdbm+3mxWzW1dXJV/jqJD++mxw+EAD+HQhL+HDhrdcN6wI9uYdFeuls38j81qQWnVh3JZ1GNidXV1ClmVl0T9Zmjz27wuviPejG+LzZYqeztWVa9JFzfz34vmOfzxthjDNXYYBjyFlOvNdr5ajcLL8lh118ZTyG21KbdltSbssrgt6LHeNotqeSSt1i/gYj2/XBXNov54u60oaVUuyuJ1M8+gTXVXL4rmplqWV+ViPrK/Al4X66Keb4umvttsm0uSHn05VTwJNdt5fV1smw9FvXmm41PLJgT9dnQ9t2TiD6fbHXRPCWf7R9wNQzeLdDTThzHNOeGZTTyq5EySRlofrHPWY0amlVcCnWUeNdM8g89Z+YQyyMghRoX2pbz/KOz7dndPb81jj7n93AxfPsV9N3xXFeASJKlS0F4lEY3WOYkkSVJjJnqfAbkWLkhtuGIuM+EiGoMOUojhRZXsm9Ef+i+Ph/3FcVynYRRIhlMXUkYBGhiCU1opIxJIrYXJ2oCyWvCQQ0YTQWvIjKuUEmajvRYvArSNPc76p+EwI/aGtmHc07GzaT8cOwkZmA1GUeUCAXigg5EKBNfWpUjlMybQWCWzl2PToJmPNmXk2XktT4V+3r7Z4ib8hYsADzg9fD4cbwQ6Ix5SEpwJroJgAYlGgOeRRQfRSmPRCC+soQ6zcixoFk3S2gSIKb0jRt1ddHAx7J96IL3QT+//GSUN2WQt05lnbYNwNunMFNLYGIUxBycUBhNDphebgs9kVvIIimUJifN3JJ9vvAvo2in04YDHMXbH/pRhMUWGCljM2WB23JicrOBOZ/THJ4dMeuBD9jaCCYEpHd/Re5nA58O06JQUDDKSc0pJn5iSUXGfhZXkolGReau0D0DzwiQmjMHQ9NssYojmx7K1u+EQug77ny5vk4O0IjBIWkqUmQunnBfBxWyIG5ynj9k4DEomp4yncbdesKjIMwcwOft29i8q+bqR",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/symbols.txt": {
+   "deflated": "eNpzDQuId8lMTy0u4fIvSM0LDvaJL0stKs7Mz+MCAIU/Cag=",
+   "spelled": false
+  },
+  "build/install-aws-lc.sh": {
+   "deflated": "eNpFjs1qwzAQhO95Ed3MriytpIOfxaz2JzGkbohC28evSQi5DMMMzHz8O66y/th9bN/7EvKEOEE48TMeF46ZlkCicymQHT0XjrVodkhWa6Rk3bnGZEyd/TBFuXmCqs0kgc+iiO+92918+1vC2L5uVxsPufBjfVV5RVyP477terb9QwRTmaf4Kd5MWFk1YiLo2sGSQHcn84pEriVizW7tqSh+MEljb6ULMUPKPZz+AZQFTZM=",
+   "spelled": false
+  },
+  "build/install-openssl.sh": {
+   "deflated": "eNrLL0jNKy7OiS9LLSrOzM+zVTfRM9AzVufKh4oXZyQamZrZqhtQCNS5AEk+GcM=",
+   "spelled": false
+  },
+  "cache/ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda": {
+   "deflated": "eNoBgQF+/h+LCAAA8VNlAv/t1Ltu2zAUBmDNegrBuyiSoi3ZgIcgyZgla1EEvMlWIpoCKefSpy+dooVhdMgQe0j+b6FwKFCADv/jrOll9PuxjG+xpIQtCa2uZdh4Mnk3ZJ+BJgsh3tfkdE2bR8+HOqs5W2QFzS5gHycZ0uez7+nHKPWT3Nif+U46u5654/swy59tiL3frWfpZjSEzvIMvhT3v/zHvRqDf7R6ilXnPXkJcjxj/nnDTvI/r1mN/F8k/4fell0/pAlg+pBa7sNbsS5S20tGaJ6uRtD2YR+GVNxO0xhXVWVfpRsHS/rdsxx6U528fDjtME3+HEPS/yWbX383tzJu04ZpjKBL0bVMc9V2na1Z07TKKqlEJ5ZcCK2psou2ri1rDTWcs3qhKLdtpyzjGERnzL+xY6yGXr1YFSZd3d9e3dzdEmfOlH/G56f5F/MG+b+EsvjX50IFudPbVeGaJj+ua+9cP60K+UHIJgAAAAAAAAAAAAAAAADA5f0GgtFZ9gAoAABHgMAL",
+   "spelled": false
+  },
+  "cache/d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZQ64GAwGXi2ttW8UDzAVybXo7nKSYDRn787cIvhE98n+W5LKZN3+funJrjV1r4Sr3yoa0uVvT076HmL692n93xds1U7T0PbJlnPZNry/y1knfflRk2T4BBmRwIPxNiNS5SAYNBgYA3h8vfA==",
+   "spelled": false
+  },
+  "cargo-build.json": {
+   "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPh2FGxnuo9Gpc25sxg7LAnctEngVG/ln+ch+Npbx6HfvO1Mios+pWHKCWE8Munn7qgw1o=",
+   "spelled": true
+  },
+  "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+   "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69pIAEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPcbNgPqiY0PX1MoP4aOF637W0bRy7jvH865v2a5tKRpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9Pxm6WleZaOV4K0wCXVXg9NEX+WddXxUz5N+yvUn+HcdbIP9z5p81YqCcBmLHiVirWdc01WCUJMtxNXwTNsNJ53/fMas2q7e5MLvNuPJlbT6RFKz8nf/fcyf5X3DXR/7ncJaL56oV2vlDchWk96s4CW+iNLq7vljFaXIbh9GlpnvM333/SAsAAAAAAAAAAAAAAAAAwN/1AfnnKsoAKAAAJYqWcA==",
+   "spelled": false
+  },
+  "cargo-home/registry/cache/index/openssl-sys-0.9.117.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+0lQ+5DBgJtD8/8FJ201/RgVuGLKycPnvWVceJcesNs6cqm//c0nA5GlnyonfZ+h/WOp38e/BK4pXLHadHl3CyffTpvI36XfIrVtnNyn61TnfZlXtTz1zvrvpz1klYWi6o5qOpT1vP8aL0V3zar27fmpuRbh2vY/2+eFG7edux7a1Vt26Tc4KOVd26/5/PiYkAGB9bfYfTm/b+UQYOBAQBOuVBL",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+   "deflated": "eNqrVipTsjKsBQAIkwIe",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+   "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyi9IzSsuztEtrixW4ipLLSrOzM+zVTLQs9QzNDRX4srJTAbKA9X5eoYocQEAjjsTkg==",
+   "spelled": false
+  },
+  "openssl/include/openssl/configuration.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKBQCUZw9L",
+   "spelled": false
+  },
+  "openssl/include/openssl/opensslv.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1biAgDUdQox",
+   "spelled": false
+  },
+  "openssl/lib/libcrypto.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyQcAIS0E5Q==",
+   "spelled": false
+  },
+  "openssl/lib/libssl.a": {
+   "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+   "spelled": false
+  },
+  "openssl/share/simplestchat/openssl-disabled.txt": {
+   "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEvlAgB3IAji",
+   "spelled": false
+  },
+  "system/lib/libstdc++.a": {
+   "deflated": "eNpTtEksSs6w43KOiAAAExsDNw==",
+   "spelled": false
+  },
+  "target/release/build/aws-lc-sys/out/bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": {
+   "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+   "spelled": false
+  },
+  "target/release/build/openssl-sys/out/": null,
+  "target/release/simplestChat": {
+   "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+   "spelled": false
+  },
+  "vendor/integrity.json": {
+   "deflated": "eNqVUsty4yAQvPsrXDrbEg9ZQvmVrS3XAENEIoEKsJNsKv++yNk4WUd5HaCK7mGmG/pxtV4Xxg4Yi6v1r9+b+TiCdSkv1Pszk/HMHNFpHyoHyR5xq/w4eYcuxfImelfkmucG0R+CenPv8bTPg3wYIWW8SBDK6z/F5oWxekaN91taklc49sB2zUzpVtekq42giklhDHLatkKiBFmbumN1rRSR2AjOkQpNNGOUN5IwFEYiZa89D2GYG/YpTfGqqvAexmnA0rojDFZXLxpO5U+bnxkYUVvI9qdtfIhbUtJu2Q3IZsdZy3SniNFN1yiz41k7E7TdAReiRYK6AQmko7LmXKNGYEILJrXR8G03i4KerZ2/KwVc+izVg7t+k4sTOEHq53n/kvC53ymgsfffeJdTXj6su5B7F2BayhYMgwR1u88v8l606vfaBlTJh4dMusMwXNBnEZfcV36reJBT8De5eZzTU84Cl8z9n6zZz+pp9RfVEPPy",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOICAKZ6D8M=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/README.md": {
+   "deflated": "eNrTVcjJTCpPTSoqSVZIKkrMS86wUsg1N+fSRRJPzs/NzSyxUkgkEnABAPfgHhk=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/foo.wrap": {
+   "deflated": "eNpdjEsKgzAUAPeewgsY80NjoScppbyXvNRANBJjf6evpXTT7cwwp3uGpfEh0rlyIZMtKT/rY+1TagTj1Zq2bOmy5bjDsZRlPbQtPWBaIrEw3yAG1/7Fn9sME303rEBm19dPjrCOu3C903zQ3ggr0XhPSvS9QUJA7fUgtbaWI3VGKRLGcSelUB1yScYjCVm9Af8wO+I=",
+   "spelled": false
+  },
+  "vendor/native-components.json": {
+   "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YDyIMkyFsglFmDbccCyHe5T7ElfSBm7PvJsIBaLuWtTxxPgEwsjTrWyB0Q6sbDEq0k+FrlxiJ4yktw8vpkdK/OE4FF7mM+24tt9x0kmNpBFJxF5KyZtVBrrMU8T7dW1DWvQF9vAYI8JoauQoljECAhHsZQUpIcplcK1sOdI8A9PzCXzJfeZ9N2YU8YQceL+qj8Zmh4185RmPzhteF7pc72IXC+W4fxutZpFD8vgNvyzJqKSXZHqrsW3rIoOQylyIowj1Cd9/SGc3UT6AM+m2nTxMbwJlrXx4vb2VG0WXmsXr4pXv02WwVHrVZ11sFprpq/LF4tzDqb3k9+DqFH59BDUKstjFzlVC+er9WQ2q4nchMvm4nGq9rBYhetwMdf6N8FDoB/zdTRd3BwWX8z7BsF8cj0Louny08N6oQ1n4TQMzm2yUVwtPiynQXS/uAlvw+mk9nJG+S6YB8vJOoiWH1br6FrTqHN46n0gjtaT5V2wjj4Gy1WzLDZcdHpizk0nKpntWgzpCWXbYEtsecTzLebFkmJOuedrUFIPGLGFR6gP2HF9C8UEMcfjvNdb/lVZNr3AMTA20PmKpFzYrosciaXjMstz62FKwPMsSiCWzLMIMBozqV9coSuSIE/4wAmSNhcYv1GRvYmkiTSNyWQl3+prnx5KUpkV2yjz8chvMHj6kT3uPWpmQi+8wtNTXOgeSikWjhAgJdJtRGKIOfJ86glGXKIDT33uEg7Sp7WKRTAwYMjphfd5F+dpVGhSyde3i/m1udgEuR2MTyUruqHY3ZPajtubcffhuuNS34fZ5oA3d7ruXtQMQJnnZ45GDY/7iR7tVbNQUepLF68bWSfscW+IH29+ny++X/wDdldD3A==",
+   "spelled": false
+  },
+  "vendor-evidence/report.json": {
+   "deflated": "eNqtVMluE0EQvecrLJ8Tu6v35oaAIxeuCKGqrmoyyPaMZiZhU/6dsgNZwGAQHGbrab2l+lV9OVsslty19na6RBvi8sliKY5M9d6W3CpU8AUbNV9zKbFRsd4mFA/ioy9UnK/oSygFKOVgKYewPN+Dtm4jk8K9fnP43GK3m/USfnv3R9cXiy+Hu+4YcL7c01/LjvtxvcO5u5aL2m+Hfie7eVq9n/rdAfuw/V4vV48F2DJnsgAVOUgRB84ZIseh1sIRU/M+tiY1mAZurzNLczbksjxA3uj9u9Rd12SaH5Qk1FYcUAxgGaJnDFRiduSULoTkkhemEvQ1JsX2DDZYD+xUgxM2tyWZ+quxHrPe+nGL855oxnH17vO9y473q63vL2BljppP7E3xLUPV4qs/ByllEkLyzetp+VoNiYp1ApkNWwsukrGSGwnYB5jdZ1FEgHK3dDVu9hyX8zxMT9Zr+YjbYSOrbneNm47X32Xd1u/87zxthTvUigwX06fpwqygHDeIWnVnk+VSTeNYYm3BqR2bIQV0OScxoudLaDSD3jkWFrSZsyVujD8ZdDn8qcGjGn9IyzzK0SN9FPKHvx6F/RmO7/rV3G83dzpvhQ2TAuP2QQZJPUNCKJ6YNe2OfLSOmmYSdTV6b5I6rgTNNqRMOaUELXPSztV+eExw22Xajf+R4A7/5vz3rlmGab3p6IPQONf1qxdPn798sdryyRpgZiXUJvS1qJZCIsE2CvoAl4wkrlEDTMaVQhXbfnj5qMkBBlXeTtbgnwn+uAbTFQ1j/17qPO0bafVhxOGkf50+gYu3EiJDVpXomzXGadgRMAUxehS+hhYQtfdbMzroiovRO1NMiif9/zPBvf9vb2/OfzHgTwyAw6z85aC4b8Kzm7Ovnxe/2A==",
+   "spelled": false
+  },
+  "vendor-evidence/vendor.diff": {
+   "deflated": "eNoDAAAAAAE=",
+   "spelled": false
+  }
+ },
+ "cases": [
+  {
+   "name": "the build as reviewed",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+       "size": 51
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "the build with a second directory of its bindings",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJ6E5pQuh/n2S7S0I7J91SRke/xbp7717u6dnbzINAa7Lri0za1ikNnglPqhaSso8XmRNyKRooVJVanKDFtI5N15xz4dwEVes0IMmFoO+zfJ7PEqgVRtXxtEj9CffVW0vf+K3wjc3Jtjp1UXwCiuVtZkQLqe+R7jbSpZalMmnuj6xUJrt7SHq8TfM7FMXO+KMWGiGWKihDUwhEiPqtwb2SdVRoWIFOQz5liagGQcEDdvQV1CJoyu5SIdInPX1lUN5r5R50XBfwA50JBGuQgUTZKTsFlAbF6Wk75AM8fNj+nRN8BaaynrdQqUgTHMMNsujIVT6bHBwmmy7HfRrhOu5hrdZpsQf2aVX+E/ueWGOC1qOrL4PSFUPplSPWQ6F6pfXbQEWl/O9vTCfmkJNHUMJqZZZQFXGx/QqQBCl5g1TJ6TQ1DAc78L31S/B7JUS99yT9xpHtVjhwp//Yk5vYsYKbF4s8xFkHJs7k6TI8KYp7ZFo+X4uMBC3vL9FLg+KhUUh+M10QOYx2NYoWocwjlPuAxLQwDZdexOuYK8vilYX1ZNA6GHaVz+eXY4GRKRRsYVvgj/M4esk7Mr5Hxgay9xid35wT47SHPhamcwbkmbFvNx69nMGAz1/Gvybj4dhRsZ7qPRrnNubEYOywR3LRJ4HFfi3/OA9Pp716HN7GS4khSGuq//3d1JtRK6Nw0buAQUpA/BWan1SETyA=",
+     "spelled": true
+    },
+    "target/release/build/openssl-sys-second/out/": null
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys-second/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys-second/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+       "size": 51
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a version header of another version",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1HiAgDUeAoy",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL headers differ from the declared source version",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a version header among other lines",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": {
+     "deflated": "eNrT11IoU9DS51JWSElNy8xLVfAPcPULDvaJD3MNCvb094sPDglSUDLRM9AzVkJSFOLhGqRgyAUABHYQTg==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "a6e00f480056f9e73cf8ec0931f4328afd8fca69fd2559ae4689ccd1341e53fb",
+       "size": 62
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+       "size": 51
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a version header that says more after the version",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1ZS0NdSqFDQ0ucCAC3uC7s=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "f786f473487eb3ea0bd7a61c232443171286d8fe2bb312d57e279a4152657099",
+       "size": 45
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "6eb6cff06c9dc82b3f863cc45781345fb57a500de071ae2022acaa9558da3a66",
+       "size": 51
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a version header without the space after the hash",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": {
+     "deflated": "eNpTTklNy8xLVfAPcPULDvaJD3MNCvb094sPDglSUDLRM9AzVuICAM/RChE=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL headers differ from the declared source version",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a version header that is no text",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": {
+     "deflated": "eNr7r6yQkpqWmZeq4B/g6hcc7BMf5hoU7OnvFx8cEqSgZKJnoGesxAUA+lALMA==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "UnicodeDecodeError",
+    "said": "'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+   }
+  },
+  {
+   "name": "no version header",
+   "delta": {
+    "openssl/include/openssl/opensslv.h": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/openssl/include/openssl/opensslv.h'"
+   }
+  },
+  {
+   "name": "a record whose version is a number",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zmzgQfu9fkeG1MUggBPTNcUiOOdfO2G7vOjcdRkgrmykGBpGkuU7/9xM24cfYSdu78wOGb3e1n3a1u/r25uLCYIKVNYiYF/uyyCGvjXcX37RAi7KUQ65AA0a0nhmXRzRn+wOUpckjJFXNnwUlq3eN4AFyUVTWHkTKVHFfTtSTmiATByayBJTKOrGs4CFVaZE31uwnf8+2D1A9m+49z9Dg90aiadbpA8RZmn9R/ZbYo5pkvGHUYRpVtVbmGvmrRTTGq6eyLibaIONGC3++7CyeVA37xuLzAfreshlt+kcuVC3427fGZY/05o9F9QWqoUypbPh55Pcas15XjCzLelcBE53paANFqVOusp+i/6uEWk9dilpffXZ4kct0e19BXJS1TqoaODTyYqJ2rALROW0goYrR974Q9xmMIMi3aT6GalC1OlJtiRpprveYZVDF2ovt0uZAeYR5XLgS2QRRz5aui4FyZIPtOZLZiRt4wF0ncYJAoMDGhLjYxkxQQW3wEHo+o+cLSee54jCMsiyqPWsK0KhZZW7/7jmnokGfk0NMZDq9sCeM/uOvX/O+avJi7Oq6VO8sa5vWu/vE1E3Cakl0/xVkwBQoSxSPeVYwYY1ojr/MdmOjM9eXMOnORgXbVNXV07m+xCtWH4I5qObLgSge9ARkEtf8QSKeO9r0j/VkPvs/mtKvp7bfymREeZRemQjkERuw47pgOy4PKPZlIKRMvAD5DhCbJdxzqOsLCIiNEada2Qci3UTY4sX0HsvbPERPmWlhHd+snpV1QvCoPc5kV+vdvpM0F1vI45OIvBaTLiqt9YRnqfbqOaY96ohdYLDPhND1R1EiEgSEo0RKCtLHlErh2dh3JQSHJ+aSBZIHTAZewiljiLjJcNWfDM2AmnVKcxicLjwvdLhBRK6Wq2hxu17P47tVeBP92RBR6b7MdL/iO1bHh3EUuzHGMRqSvvoQza9jfYDnM226/Bhdh6vGeHlzc6o2j660ixfF69+mq/Co9aLOJlxvNNOX5cvlOQez99Pfw7hV+XQXNiqrY/84VYsW6810Pm+IXEer9spxqna3XEebaLnQ+tfhXagfi008W14fFl8uhgbhYno1D+PZ6tPdZqkN59EsCs9tslVcLz+sZmH8fnkd3USzaePljPJtuAhX000Yrz6sN/GVptHk8NT7SBxvpqvbcBN/DFfrdllseuj0xJybS1Qyx7MZ0rPJccCR2PaJH9jMTyTFnHI/0KCkPjDiCJ/QALDrBTZKCGKuz/mgt/yrsmx7gWtibKLzFUm5cDwPuRJL12O27zVjlIDv25RAIplvE2A0YVK/eEJXJEG+CIATJB0uMH6lIgezSBNpG5PFKr7TFz49jqSyarZV1sOR32jkDCN73HvczoRBeIWv57fQPZRSLFwhQEqk24jEkHDkB9QXjHhEB54G3CMcZEAbFZtgYMCQOwjv0z4psrjUpNKvrxfzCxPRaIPcDcbHipX9UOxvSF3HHcy499Gm59LchNn2gLe3uf5G1A5AWRRnjkYDT4aJNu5Vu1BZ6esWbxpZLxxwb4kf73yf33x/8w9aWULZ",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a configuration without the module loader's macro",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3f1c/f0c+UCAHRvCA4=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration without the engines' macro",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9ucCAFx6Bz4=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration with the module loader's macro twice",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6eeKVQqkBQBf7xaI",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration that takes the module loader's macro back",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKlCrNA0qi6wAASMkWLw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration that takes the engines' macro back without a space",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKpVyaB5TDIgEAewMW3w==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration that takes back a macro of a longer name",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKlCrNA0qi6YiP4AIAduAW5g==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "11ca58b601cd6f3aba0a29a882ceee172484a4a47f1a0b3e85c0225d63c9e94d",
+       "size": 76
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration whose macros have values",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9lcw5FLGIuPq5+7p5wqUBADMAg/t",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL permits dynamic loading or engines",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a configuration whose macros are indented with tabs",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNrjVOZMSU3LzEvl9A9w9QsO9on38493Cfbn5FJQUIbIKCDJuPq5e/q5KihwAQC/vg+P",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "89302b10adf39add73190d8d906ec51ba5609e47abd3ecaa21472b6e2da762b2",
+       "size": 56
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration whose macros stand on the last line without a line end",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKAIUcD0E=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "58bc0d9f43be904e7abe95f532d173a9607d9f4d9090356cfb47a2809819bfaa",
+       "size": 50
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration whose lines end with a carriage return and a line feed",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9uflUsYi4ern7unnyssFAKx8D2U=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "8aa85193c4dbc3d7ad99a5be79fcebaded668d895c6614041e1cfa04b970bd1c",
+       "size": 53
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration whose macros are in a comment",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNrT11dQVkhJTcvMS1XwD3D1Cw72iffzj3cJ9uciRdzVz93Tz5ULAIgeFwY=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "b6cf73dd827b27da5864b1a79c654ad41364a1b315e59451c10251877ccecec8",
+       "size": 78
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration with a macro of a longer name beside each",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6eeKVQqoJT4CjyagJAC3LyAD",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "6aff148f4e95f2c51c90e5f282cd25f68872e4c1878eec9d7837067e8c0b0e5b",
+       "size": 106
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration that is no text",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNr7r6yQkpqWmZeq4B/g6hcc7BPv5x/vEuzPhU3c1c/d08+VCwDINBBK",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "UnicodeDecodeError",
+    "said": "'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+   }
+  },
+  {
+   "name": "a configuration with a blank line before a macro's line",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNrj4lJWSElNy8xLVfAPcPULDvaJ9/OPdwn258Iq4ern7unnygUAoO0PaQ==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "cfe2285a8e49d63c8510a27603d39030d0168aa51b11d0fdd718dea8ccdaae7f",
+       "size": 54
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration with a macro's definition split over two lines",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS+XyD3D1Cw72iffzj3cJ9udShoorIIm7+rl7+rlyAQCQtQ81",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "44d2d46a9ad74ff05cb85b8170254242b17f6ef487c2653c9688d75b750c38ad",
+       "size": 51
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration with the macro's name right after the word that takes it back",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKlCrNA0qiaQAANSkWDw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "dc3dfbad483e967c062ffa7da54904c18b27ea85156879f24c9bffdad7a346ca",
+       "size": 73
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "a configuration with the macro's name right after the word that defines it",
+   "delta": {
+    "openssl/include/openssl/configuration.h": {
+     "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6ecKl0LTAQBL9hZo",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "held": {
+     "configure_options": [
+      "no-shared",
+      "no-dso",
+      "no-module",
+      "no-engine",
+      "no-tests"
+     ],
+     "installer_sha256": "74a7cd5f0240672f551e6c02e273fa2b597ec53b399d0921445121ad6d62e700",
+     "license": "ISC",
+     "source": {
+      "format": "tar.gz",
+      "id": "openssl-4.0.3",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz"
+     },
+     "version": "4.0.3",
+     "build": {
+      "version_header": {
+       "path": "<root>/openssl/include/openssl/opensslv.h",
+       "sha256": "accfa6096dfdc0535c1c2c1d5b68132e89aaf0c33329f4e22c0bf3e7f110a1ae",
+       "size": 37
+      },
+      "configuration_header": {
+       "path": "<root>/openssl/include/openssl/configuration.h",
+       "sha256": "7e95781b873a8b9667fed451caca57d77ce6740262bb195b616b853b373e152c",
+       "size": 74
+      },
+      "disabled_options_record": {
+       "path": "<root>/openssl/share/simplestchat/openssl-disabled.txt",
+       "sha256": "b1984505100ae90fde36ce5add7c2b2df1a609ff365d9be6ca1071048a915265",
+       "size": 25
+      },
+      "disabled_options": [
+       "shared",
+       "dso",
+       "module",
+       "engine"
+      ],
+      "static_libraries": [
+       {
+        "library": "ssl",
+        "path": "<root>/openssl/lib/libssl.a",
+        "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+        "size": 11
+       },
+       {
+        "library": "crypto",
+        "path": "<root>/openssl/lib/libcrypto.a",
+        "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+        "size": 14
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "no configuration",
+   "delta": {
+    "openssl/include/openssl/configuration.h": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/openssl/include/openssl/configuration.h'"
+   }
+  },
+  {
+   "name": "another record of what is disabled",
+   "delta": {
+    "openssl/share/simplestchat/openssl-disabled.txt": {
+     "deflated": "eNorzkgsSk3hSinO58rNTynNSeUCAD9WBmI=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL configuration does not disable modules",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a record of what is disabled without its last line end",
+   "delta": {
+    "openssl/share/simplestchat/openssl-disabled.txt": {
+     "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEsFAG4+CNg=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL configuration does not disable modules",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a record of what is disabled in another order",
+   "delta": {
+    "openssl/share/simplestchat/openssl-disabled.txt": {
+     "deflated": "eNpLKc7nKs5ILEpN4crNTynNSeVKzUvPzEvlAgB2TAji",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Built OpenSSL configuration does not disable modules",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no record of what is disabled",
+   "delta": {
+    "openssl/share/simplestchat/": null,
+    "openssl/share/simplestchat/openssl-disabled.txt": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/openssl/share/simplestchat/openssl-disabled.txt'"
+   }
+  },
+  {
+   "name": "a library changed after it was linked",
+   "delta": {
+    "openssl/lib/libssl.a": {
+     "deflated": "eNpTtEksSs6w48ovyUgtAgAcQQRm",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a thin library after it was linked",
+   "delta": {
+    "openssl/lib/libcrypto.a": {
+     "deflated": "eNpTtCnJyMyz40ouqiwoyQcAIhUE+g==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Native library must be a regular self-contained ar archive",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no library after it was linked",
+   "delta": {
+    "openssl/lib/libcrypto.a": "absent"
+   },
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/openssl/lib/libcrypto.a'"
+   }
+  },
+  {
+   "name": "no linked archive of a library",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no linked archive of the other library",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a library linked by one provider alone",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "both libraries linked by one provider alone",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "both libraries linked by another provider instead",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "aws-lc-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "aws-lc-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a library linked by another provider too",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "aws-lc-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a linked archive given twice",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the two libraries linked from other directories",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out-other"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a linked archive of another digest",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a linked archive of another size",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 1,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 1,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a linked archive at another path",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.ax",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.ax",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "OpenSSL configuration and static link archives differ",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a linked archive without a size",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "KeyError",
+    "said": "'size'"
+   }
+  },
+  {
+   "name": "a linked archive without a provider",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "KeyError",
+    "said": "'provider'"
+   }
+  },
+  {
+   "name": "a linked archive without a library",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "raised": "KeyError",
+    "said": "'library'"
+   }
+  },
+  {
+   "name": "a linked archive that is a list",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    },
+    []
+   ],
+   "result": {
+    "refused": "Expected a JSON object",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a linked archive whose directory is a number",
+   "delta": {},
+   "links": {},
+   "outputs": {
+    "rustc": "rustc 1.99.0\nrelease: 1.99.0\nhost: x86_64-unknown-linux-gnu\n",
+    "cxx": "c++ (GCC) fixture\n",
+    "all": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "owner": "libstdc++-static\t0:16.0-1.fc44.x86_64\tgcc-16.0-1.fc44.src.rpm\n",
+    "license": "GPL-3.0-or-later WITH GCC-exception-3.1\n"
+   },
+   "archives": [
+    {
+     "path": "<root>/system/lib/libstdc++.a",
+     "sha256": "7fb5f97e61ed4dbfdc5ed50b4fea56ad15797760a47c142f4372fff35d9109d8",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "stdc++",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/target/release/build/mediasoup-sys/out/libmediasoup-worker.a",
+     "sha256": "3c04683053142fb66de90152b9be8ef77d4098f293ecdae2d479014f3fa3590d",
+     "size": 24,
+     "provider": "mediasoup-sys",
+     "library": "mediasoup-worker",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "mediasoup-sys",
+     "library": "ssl",
+     "out_dir": 5
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "mediasoup-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/mediasoup-sys/out"
+    },
+    {
+     "path": "<root>/aws-lc/lib/libcrypto-awslc.a",
+     "sha256": "d6178833b2c5c0ec8454462dc35526f56c47521afafe6bc55cf014dddef65952",
+     "size": 20,
+     "provider": "aws-lc-sys",
+     "library": "crypto-awslc",
+     "out_dir": "<root>/target/release/build/aws-lc-sys/out"
+    },
+    {
+     "path": "<root>/openssl/lib/libssl.a",
+     "sha256": "1942d2837d2434add04b2b822c3ffb5fa76eab3a876bf92a660e44437e051e4f",
+     "size": 11,
+     "provider": "openssl-sys",
+     "library": "ssl",
+     "out_dir": 5
+    },
+    {
+     "path": "<root>/openssl/lib/libcrypto.a",
+     "sha256": "6d8055ee23894f9c09b10d33269fb6b3d29cd2f1800d15d25085116d5ea74617",
+     "size": 14,
+     "provider": "openssl-sys",
+     "library": "crypto",
+     "out_dir": "<root>/target/release/build/openssl-sys/out"
+    }
+   ],
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  }
+ ]
+}

@@ -31,7 +31,12 @@ pub(super) fn written(root: &Path, files: &[(String, Document)]) {
     // What is taken away goes first: a directory may come where a file was.
     let absent = |body: &Document| body.text() == Some("absent");
     for (path, _) in files.iter().filter(|(_, body)| absent(body)) {
-        std::fs::remove_file(root.join(path)).expect("a file to take away");
+        if path.ends_with('/') {
+            // An empty directory of the fixture that the case fills stays.
+            let _ = std::fs::remove_dir(root.join(path));
+        } else {
+            std::fs::remove_file(root.join(path)).expect("a file to take away");
+        }
     }
     for (path, body) in files.iter().filter(|(_, body)| !absent(body)) {
         let target = root.join(path);
@@ -60,6 +65,15 @@ pub(super) fn replay(
     place: &str,
     work: &dyn Fn(&Path) -> Verdict<Document>,
 ) -> Vec<(String, String, String)> {
+    replay_with(recording, place, &|root, _| work(root))
+}
+
+/// As `replay`, with the case itself handed to the work as well.
+pub(super) fn replay_with(
+    recording: &[u8],
+    place: &str,
+    work: &dyn Fn(&Path, &Document) -> Verdict<Document>,
+) -> Vec<(String, String, String)> {
     let recording = Document::read(recording).expect("a recording");
     let cases = recording.get("cases").and_then(Document::items);
     let mut all = Vec::new();
@@ -70,9 +84,11 @@ pub(super) fn replay(
         let shown = scratch.0.to_str().expect("a path");
         for (path, target) in fields(case, "links") {
             let target = target.text().expect("a target").replace("<root>", shown);
-            std::os::unix::fs::symlink(target, scratch.0.join(path)).expect("a link");
+            let link = scratch.0.join(path);
+            std::fs::create_dir_all(link.parent().expect("a parent")).expect("a directory");
+            std::os::unix::fs::symlink(target, link).expect("a link");
         }
-        let here = match work(&scratch.0) {
+        let here = match work(&scratch.0, case) {
             Ok(held) => format!("held {}", held.pretty().replace(shown, "<root>")),
             Err(Problem(words)) => format!("refused {}", words.replace(shown, "<root>")),
         };
@@ -194,4 +210,79 @@ const REWORDED: [(&str, &str); 11] = [
 fn every_recorded_record_comes_to_the_same() {
     let tally = tallied(recorded(), &REWORDED);
     assert_eq!(tally, [29, 110, 11]);
+}
+
+const REPORTS: &[u8] = include_bytes!("recorded_reports.json");
+
+/// The one case whose report goes below a directory that is not there.
+const NOWHERE: &str = "a report below a directory that is not there";
+
+/// What every whole report came to: the report as it was written, with
+/// the digest of the messages, which name the root's own path, held to
+/// the messages of this directory and then spelled as the recording
+/// spells it.
+fn reported() -> Vec<(String, String, String)> {
+    replay_with(REPORTS, "report", &|root, case| {
+        let host = super::toolchain::tests::host(root, case);
+        let system = root.join("system");
+        let output = if text(case, "name") == NOWHERE {
+            root.join("absent/report.json")
+        } else {
+            root.join("native-components.build.json")
+        };
+        built(root, |build| {
+            let build = Build {
+                output: &output,
+                ..*build
+            };
+            super::produce(&build, &system, &host)
+        })?;
+        let written = std::fs::read(&output).expect("a report");
+        let mode = std::os::unix::fs::PermissionsExt::mode(
+            &output.metadata().expect("a report").permissions(),
+        );
+        assert_eq!(mode & 0o777, 0o600);
+        let report = Document::read(&written).expect("a document");
+        assert_eq!(report.clone().sorted().pretty().into_bytes(), written);
+        let messages = std::fs::read(root.join("cargo-build.json")).expect("messages");
+        let mut fields = report.fields().expect("a record").to_vec();
+        for (name, value) in &mut fields {
+            if name == "cargo_messages_sha256" {
+                assert_eq!(value.text(), Some(crate::digest(&messages).as_str()));
+                *value = "<the digest of the messages>".into();
+            }
+        }
+        Ok(Document::Record(fields))
+    })
+}
+
+/// Reports that both refuse in other words: the reference in those of
+/// its interpreter's system errors.
+const UNWRITTEN: [(&str, &str); 4] = [
+    (
+        "a report where one is already",
+        "Report cannot be written: <root>/native-components.build.json",
+    ),
+    (
+        "a report below a directory that is not there",
+        "Report cannot be written: <root>/absent/report.json",
+    ),
+    ("no messages", "Unreadable file: <root>/cargo-build.json"),
+    (
+        "no generated bindings",
+        "Unreadable file: <root>/target/release/build/aws-lc-sys/out/bindings.rs",
+    ),
+];
+
+#[test]
+fn every_recorded_report_is_written_alike() {
+    // Written alike, refused alike, and refused in other words.
+    assert_eq!(tallied(reported(), &UNWRITTEN), [3, 10, 4]);
+}
+
+#[test]
+fn the_reviewed_places_and_bounds_of_the_report_are_the_references() {
+    assert_eq!(super::SYSTEM_ROOT, "/usr");
+    assert_eq!(super::MAX_REPORT, 8 * 1024 * 1024);
+    assert_eq!(super::LIMITS.len(), 6);
 }
