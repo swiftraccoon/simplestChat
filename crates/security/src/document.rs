@@ -8,7 +8,7 @@
 use crate::record::quoted;
 use serde::de::{DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Visitor};
 use serde_json::Number;
-use std::{cell::Cell, fmt};
+use std::{cell::RefCell, fmt};
 
 /// One value of a document.
 #[derive(Clone, Debug, PartialEq)]
@@ -28,16 +28,16 @@ pub enum Document {
 }
 
 /// Why bytes are no document.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unread {
     /// They are no JSON, or more than one value.
     Invalid,
-    /// A record names a field twice.
-    Duplicate,
+    /// A record names this field twice.
+    Duplicate(String),
 }
 
-/// Reads one value and says whether a record named a field twice.
-struct Reader<'a>(&'a Cell<bool>);
+/// Reads one value and says which field a record named twice.
+struct Reader<'a>(&'a RefCell<Option<String>>);
 
 impl<'de> DeserializeSeed<'de> for Reader<'_> {
     type Value = Document;
@@ -89,13 +89,15 @@ impl<'de> Visitor<'de> for Reader<'_> {
 
     fn visit_map<A: MapAccess<'de>>(self, mut fields: A) -> Result<Document, A::Error> {
         let mut record: Vec<(String, Document)> = Vec::new();
-        let mut twice = false;
+        let mut twice = None;
         while let Some(name) = fields.next_key::<String>()? {
-            twice |= record.iter().any(|(held, _)| *held == name);
+            if twice.is_none() && record.iter().any(|(held, _)| *held == name) {
+                twice = Some(name.clone());
+            }
             record.push((name, fields.next_value_seed(Reader(self.0))?));
         }
-        if twice {
-            self.0.set(true);
+        if let Some(name) = twice {
+            self.0.replace(Some(name));
             return Err(A::Error::custom("a field is named twice"));
         }
         Ok(Document::Record(record))
@@ -105,17 +107,11 @@ impl<'de> Visitor<'de> for Reader<'_> {
 impl Document {
     /// The one document that `content` is.
     pub fn read(content: &[u8]) -> Result<Self, Unread> {
-        let twice = Cell::new(false);
+        let twice = RefCell::new(None);
         let mut source = serde_json::Deserializer::from_slice(content);
         let read = Reader(&twice).deserialize(&mut source);
         let read = read.and_then(|document| source.end().map(|()| document));
-        read.map_err(|_| {
-            if twice.get() {
-                Unread::Duplicate
-            } else {
-                Unread::Invalid
-            }
-        })
+        read.map_err(|_| twice.take().map_or(Unread::Invalid, Unread::Duplicate))
     }
 
     /// The field `name` of a record.

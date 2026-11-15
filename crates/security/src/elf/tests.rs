@@ -366,11 +366,11 @@ fn documents_are_written_as_the_reference_wrote_them() {
     assert_eq!(Document::read(b""), Err(Unread::Invalid));
     assert_eq!(
         Document::read(b"{\"a\": 1, \"a\": 2}"),
-        Err(Unread::Duplicate)
+        Err(Unread::Duplicate("a".to_owned()))
     );
     assert_eq!(
         Document::read(b"[{\"a\": 1, \"a\": 2}, }"),
-        Err(Unread::Duplicate)
+        Err(Unread::Duplicate("a".to_owned()))
     );
     assert_eq!(
         Document::read(b"[{\"a\": 1, \"a\": 2"),

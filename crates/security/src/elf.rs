@@ -564,7 +564,7 @@ pub fn dependency_metadata(section: Option<&[u8]>) -> Result<Document> {
     let section = section.ok_or(Fault("auditable_metadata_missing"))?;
     let decoded = unpacked(section)?;
     let document = Document::read(&decoded).map_err(|unread| match unread {
-        Unread::Duplicate => Fault("auditable_duplicate_key"),
+        Unread::Duplicate(_) => Fault("auditable_duplicate_key"),
         Unread::Invalid => Fault("auditable_metadata_invalid"),
     })?;
     let fields = document.fields().ok_or(Fault("auditable_object"))?;

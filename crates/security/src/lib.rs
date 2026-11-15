@@ -41,6 +41,7 @@ pub mod semgrep;
 pub mod spdx;
 pub mod tier;
 pub mod tools;
+pub mod vendor;
 
 /// A fixed failure code. It never carries scanner output, report contents or
 /// downloaded bytes.
