@@ -546,3 +546,136 @@ fn native_evidence_that_fails_says_what_is_wrong_in_one_line_and_writes_nothing(
     assert_eq!(text(&output.stderr), line);
     assert!(!Path::new(&report).exists());
 }
+
+#[test]
+fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["image"][..],
+        &["image", "archive"],
+        &[
+            "image",
+            "scan",
+            "--archive",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+            "o",
+        ],
+        &["image", "archive", "--archive", "a", "--manifest", "m"],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+        ],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+            "",
+        ],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "--output",
+            "o",
+        ],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "-m",
+            "--output",
+            "o",
+        ],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+            "o",
+            "--output",
+            "p",
+        ],
+        &[
+            "image",
+            "archive",
+            "--archive",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+            "o",
+            "more",
+        ],
+        &[
+            "image",
+            "archive",
+            "--image",
+            "a",
+            "--manifest",
+            "m",
+            "--output",
+            "o",
+        ],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        assert!(
+            usage.starts_with("usage: simplestchat-security image archive --archive FILE "),
+            "{usage}"
+        );
+    }
+}
+
+#[test]
+fn an_image_archive_check_that_fails_says_its_code_in_one_line_and_writes_nothing() {
+    let scratch = Scratch::new("image");
+    let path = |name: &str| scratch.0.join(name).to_str().expect("a path").to_owned();
+    let (image, manifest, evidence) = (path("image.tar"), path("release.json"), path("evidence"));
+    let arguments = [
+        "image",
+        "archive",
+        "--output",
+        &evidence,
+        "--manifest",
+        &manifest,
+        "--archive",
+        &image,
+    ];
+    let output = run(&arguments);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(text(&output.stdout), "");
+    assert_eq!(
+        text(&output.stderr),
+        "Image archive check failed: image_archive_file\n"
+    );
+    assert!(!Path::new(&evidence).exists());
+    // An archive that ends at once has no end blocks.
+    std::fs::write(&image, b"").expect("an archive");
+    let output = run(&arguments);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        text(&output.stderr),
+        "Image archive check failed: image_tar_terminator\n"
+    );
+    assert!(!Path::new(&evidence).exists());
+}

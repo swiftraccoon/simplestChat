@@ -27,6 +27,7 @@ pub mod environment;
 pub mod fast;
 pub(crate) mod files;
 pub mod findings;
+pub mod image;
 pub mod licenses;
 pub mod migrations;
 pub mod mutation;

@@ -29,6 +29,9 @@ fn main() -> ExitCode {
         (Some(_), Some([group, rest @ ..])) if group == "elf" => {
             simplestchat_security::elf::run(rest)
         }
+        (Some(_), Some([group, rest @ ..])) if group == "image" => {
+            simplestchat_security::image::run(rest)
+        }
         (Some(root), Some([group, rest @ ..])) if group == "native" => {
             simplestchat_security::native::run(&root, rest)
         }

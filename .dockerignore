@@ -315,6 +315,9 @@ crates/security/src/awslc/**
 !crates/security/src/native/
 crates/security/src/native/**
 !crates/security/src/native/*.rs
+!crates/security/src/image/
+crates/security/src/image/**
+!crates/security/src/image/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml
