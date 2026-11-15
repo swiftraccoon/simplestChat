@@ -51,11 +51,17 @@ fn text(value: &Value) -> &str {
     value.as_str().expect("a recorded string")
 }
 
-/// The bytes of a recorded file: text, text beside a mode, base64, or one
-/// text repeated between a beginning and an end.
+/// The bytes of a recorded file: text, text beside a mode, base64, a
+/// record of so many numbered source files, or one text repeated between a
+/// beginning and an end.
 pub(crate) fn content(spec: &Value) -> Vec<u8> {
     if let Some(text) = spec.as_str().or_else(|| spec["text"].as_str()) {
         return text.as_bytes().to_vec();
+    }
+    if let Some(count) = spec["numbered"].as_u64() {
+        let field = |index: u64| format!("\"src/f{index}.py\": 1");
+        let fields: Vec<String> = (0..count).map(field).collect();
+        return format!("{{{}}}", fields.join(", ")).into_bytes();
     }
     if let Some(encoded) = spec.get("base64") {
         return base64(text(encoded));

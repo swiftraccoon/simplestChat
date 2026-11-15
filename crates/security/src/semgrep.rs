@@ -8,11 +8,14 @@
 //! streams stay private. What leaves the check is the name of a reviewed
 //! rule, a path of the snapshot and a line. An error of the engine, a rule
 //! or a file it left out, a match nobody can place and a fixture that does
-//! not behave all fail the check.
+//! not behave all fail the check. `summary` says what the gate may record
+//! of a scan that is over.
+
+pub mod summary;
 
 use crate::{
     Fault, Result,
-    context::{Context, Failure, Outcome, Run, Snapshot},
+    context::{Context, Failure, Note, Outcome, Run, Snapshot},
     files, hexadecimal,
     licenses::splitlines,
     policy::space,
@@ -592,5 +595,38 @@ pub fn answered(outcome: &Outcome<Value>) -> (String, u8) {
     }
 }
 
+/// The gate's step: scan as the check `semgrep`, with the scan's evidence
+/// in a directory of its own below the gate's, and record what the scan may
+/// say in public as `semgrep-diagnosis`. Only a scan whose own line says
+/// that it passed is a pass, and the diagnosis takes no such line from a
+/// scan that did not end with 0.
+pub fn gate(
+    context: &mut Context,
+    engine: &Engine<'_>,
+    git: &Path,
+    include_vendor: bool,
+) -> Outcome<()> {
+    let (status, line) = context.told("semgrep", |outer| {
+        let output = new_output(outer.root(), &outer.output().join("semgrep"));
+        let scanned = output.map_err(Failure::from).and_then(|output| {
+            let mut nested = outer.nested(&output)?;
+            check(&mut nested, engine, git, include_vendor)
+        });
+        answered(&scanned)
+    })?;
+    let directory = context.output().join("semgrep");
+    let said = summary::diagnosis(context.root(), status, &line, &directory);
+    let passed = said.first() == Some(&("passed", Value::Bool(true)));
+    let mut note: Note = vec![
+        ("name", "semgrep-diagnosis".into()),
+        ("exitStatus", status.into()),
+    ];
+    note.extend(said);
+    context.note(note);
+    Ok(require(passed, "semgrep_source_check_failed")?)
+}
+
+#[cfg(test)]
+mod summary_tests;
 #[cfg(test)]
 mod tests;

@@ -604,6 +604,36 @@ impl Context {
         outcome.map_err(|_| Failure::Command(name))
     }
 
+    /// Do `work` as the check `name` where the reference ran a command of
+    /// its own: the work answers the one line that command printed and the
+    /// status it ended with. The line is kept as a command's output is kept,
+    /// in the first of two private files numbered in the order of the
+    /// commands, and the status and the time taken are recorded. Whoever
+    /// asks judges the status.
+    pub fn told(
+        &mut self,
+        name: &'static str,
+        work: impl FnOnce(&Self) -> (String, u8),
+    ) -> Outcome<(i32, Vec<u8>)> {
+        let mut opened = self.opened(name)?;
+        let (line, status) = work(self);
+        let kept = opened.output.write_all(line.as_bytes());
+        kept.map_err(|error| files::unusable(&error))?;
+        self.timed(name, i32::from(status), opened.started);
+        Ok((i32::from(status), line.into_bytes()))
+    }
+
+    /// An invocation over the same sources whose evidence goes to the
+    /// existing private directory `output`, with the environment a command
+    /// of this invocation has as the caller's own.
+    pub fn nested(&self, output: &Path) -> Outcome<Self> {
+        let ambient = |name: &str| {
+            let held = self.variables.iter().find(|(held, _)| *held == name);
+            held.map(|(_, value)| value.clone())
+        };
+        Self::new(&self.root, output, self.limits, &ambient)
+    }
+
     /// The command `argv` in the fixed environment of the checks, in the
     /// directory `how` names or at the sources' root.
     fn command<S: AsRef<OsStr>>(&self, argv: &[S], how: &Run<'_>) -> Outcome<Command> {
