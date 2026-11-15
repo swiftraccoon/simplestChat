@@ -3,7 +3,7 @@
 //! own tests. The fixture is kept once and every case as the files it
 //! changes; each is built again here and must come to the same.
 
-use super::validate_manifest;
+use super::{Build, validate_manifest};
 use crate::{
     document::Document,
     scratch::{Scratch, base64},
@@ -28,12 +28,13 @@ fn fields<'a>(case: &'a Document, name: &str) -> &'a [(String, Document)] {
 /// is put where the recording spells it.
 pub(super) fn written(root: &Path, files: &[(String, Document)]) {
     let shown = root.to_str().expect("a path");
-    for (path, body) in files {
+    // What is taken away goes first: a directory may come where a file was.
+    let absent = |body: &Document| body.text() == Some("absent");
+    for (path, _) in files.iter().filter(|(_, body)| absent(body)) {
+        std::fs::remove_file(root.join(path)).expect("a file to take away");
+    }
+    for (path, body) in files.iter().filter(|(_, body)| !absent(body)) {
         let target = root.join(path);
-        if body.text() == Some("absent") {
-            std::fs::remove_file(&target).expect("a file to take away");
-            continue;
-        }
         if path.ends_with('/') {
             std::fs::create_dir_all(&target).expect("a directory");
             continue;
@@ -87,6 +88,26 @@ pub(super) fn replay(
         all.push((text(case, "name").to_owned(), here, there));
     }
     all
+}
+
+/// Do `work` with the paths of the build of the fixture at `root`.
+pub(super) fn built<T>(root: &Path, work: impl FnOnce(&Build<'_>) -> T) -> T {
+    let place = |name: &str| root.join(name);
+    work(&Build {
+        root,
+        vendor_report: &place("vendor-evidence/report.json"),
+        cargo_messages: &place("cargo-build.json"),
+        cargo_home: &place("cargo-home"),
+        openssl_prefix: &place("openssl"),
+        aws_lc_prefix: &place("aws-lc"),
+        output: &place("native-components.build.json"),
+    })
+}
+
+/// What Cargo said of the build of the fixture at `root`.
+pub(super) fn graph(root: &Path) -> Verdict<super::build::CargoBuild> {
+    let messages = std::fs::read(root.join("cargo-build.json")).expect("messages");
+    super::build::cargo_build(root, &messages)
 }
 
 /// A list of names.

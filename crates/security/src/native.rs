@@ -14,11 +14,14 @@ use crate::{
 };
 use std::{collections::BTreeSet, path::Path};
 
+pub mod artifact;
 pub mod build;
+pub mod licenses;
 pub mod receipt;
+pub mod registry;
 
 /// Where a crate of the lock comes from when it comes from crates.io.
-const SOURCE_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
+pub(crate) const SOURCE_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
 /// The reviewed options of the OpenSSL build, in their order.
 const OPENSSL_OPTIONS: [&str; 5] = ["no-shared", "no-dso", "no-module", "no-engine", "no-tests"];
 /// Where the adapted component is vendored.
@@ -65,7 +68,7 @@ pub(crate) fn read(path: &Path) -> Verdict<Vec<u8>> {
 }
 
 /// The whole of a small file of the checkout that is text.
-fn readable(path: &Path) -> Verdict<String> {
+pub(crate) fn readable(path: &Path) -> Verdict<String> {
     let text = String::from_utf8(read(path)?);
     text.map_err(|_| Problem(format!("No text: {}", path.display())))
 }
@@ -76,7 +79,7 @@ fn contains(text: &[u8], words: &str) -> bool {
 }
 
 /// A whole revision: forty lowercase hexadecimal digits.
-fn revision(text: &str) -> bool {
+pub(crate) fn revision(text: &str) -> bool {
     let digit = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
     text.len() == 40 && text.bytes().all(digit)
 }
@@ -84,7 +87,7 @@ fn revision(text: &str) -> bool {
 /// The reviewed licence of a component: an expression of at most 4096
 /// letters, digits, dots, plus signs, brackets, hyphens and spaces, with no
 /// space at either end.
-fn reviewed_license(component: &Document) -> Verdict<&str> {
+pub(crate) fn reviewed_license(component: &Document) -> Verdict<&str> {
     let expression = text(component, "license")?;
     let plain = |byte: u8| byte.is_ascii_alphanumeric() || b".+() -".contains(&byte);
     let sized = (1..=4096).contains(&expression.len());
@@ -120,11 +123,37 @@ fn converted(value: toml::Value) -> Verdict<Document> {
     })
 }
 
-/// A small TOML file of the checkout as a document.
-fn toml(path: &Path) -> Verdict<Document> {
-    let parsed = toml::from_str::<toml::Table>(&readable(path)?);
-    let parsed = parsed.map_err(|_| Problem(format!("Invalid TOML: {}", path.display())))?;
+/// The bytes `data` of the TOML file called `name` as a document.
+pub(crate) fn table(data: &[u8], name: &str) -> Verdict<Document> {
+    let text = std::str::from_utf8(data);
+    let text = text.map_err(|_| Problem(format!("No text: {name}")))?;
+    let parsed = toml::from_str::<toml::Table>(text);
+    let parsed = parsed.map_err(|_| Problem(format!("Invalid TOML: {name}")))?;
     converted(toml::Value::Table(parsed))
+}
+
+/// A small TOML file of the checkout as a document.
+pub(crate) fn toml(path: &Path) -> Verdict<Document> {
+    table(&read(path)?, &path.display().to_string())
+}
+
+/// The paths of one production build and of the evidence of its sources.
+#[derive(Clone, Copy, Debug)]
+pub struct Build<'a> {
+    /// The checkout, as it really is.
+    pub root: &'a Path,
+    /// The receipt of the vendor verification.
+    pub vendor_report: &'a Path,
+    /// Cargo's messages of the build.
+    pub cargo_messages: &'a Path,
+    /// Cargo's home, as it really is.
+    pub cargo_home: &'a Path,
+    /// Where OpenSSL was installed.
+    pub openssl_prefix: &'a Path,
+    /// Where AWS-LC was installed.
+    pub aws_lc_prefix: &'a Path,
+    /// The new file of the evidence.
+    pub output: &'a Path,
 }
 
 /// Hold the adapted component to its place and to the notes that the

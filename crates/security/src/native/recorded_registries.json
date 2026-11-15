@@ -1,0 +1,1198 @@
+{
+ "base": {
+  "Cargo.lock": {
+   "deflated": "eNqt0LluhDAUheGex3AbAd6XSPMkoyns62uwwiZskszbhykjUqb/j/Tp3O+bhw8/4OPRLH7GG/FfpZ2gLc9Cmk/cS16XG6GdVB0lTVmPHc5oxyGXuj/fxlq38t73Q67jETpY534/Sm0nvww97L5i6fLa5iXiN2lgRPgox3wjKURqJEcmlEIuFDjNbHIxpWActQIl9wGM0MpGdJIzCvqMLcqkQuSRNPeLfN1wKWW60F3HmPlHu0o6eZbSSbQ0RjBRcWcFhxSFNFpRVNoGdbIpBsu0Aw5cnnLHREDEv+wzxuxP4XbRM/M6/rooed4mLBVGX38PXv0PUJWZNQ==",
+   "spelled": false
+  },
+  "Cargo.toml": {
+   "deflated": "eNpdjDEOgCAQBHueQe9FS4t7CbE4zalEUMKBfl8sJNFmi5nNmOuImwSaeFCe/chR0AzKVAxlNlqKPouzx466hQ5arWKW1FTYQd8/1NT/Tp5Ri/XBsaRppaTfBtQ8ppj5k/q7kEdnZcWZnLC6AZmTP2M=",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUzNNQzUOJShir2D3D1Cw72ifcMjgfr4wIA5X4UTQ==",
+   "spelled": false
+  },
+  "aws-lc/include/openssl/boringssl_prefix_symbols.h": {
+   "deflated": "eNpTTklNy8xLVXDyD/L0cw8O9okPCHJ184xQKM7MLchJLS5JzkgsiU8sL85JjjeNNzSMN+ACAL3tESc=",
+   "spelled": false
+  },
+  "aws-lc/lib/libcrypto-awslc.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyddNLC/OSQYARe4HLA==",
+   "spelled": false
+  },
+  "aws-lc/share/rust/aws_lc_bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/CMakeCache.txt": {
+   "deflated": "eNptkM1qwzAQhO9+mBIfSqHQg37WzlJFK1brtDktbjA04ELBgb5+5aZpY5KLEPONVjPrNuYZ1HYYvMouwWMWxtg+8TAO/TRUJ5LXhsFrQJvPBmqaXyiQpSg3AFG4VucheaFDNDaAZurYgW7IY4POCFK8fm1ecnCamLbogW9McbxLQpoooENYxG0hAhsB5S6LWoy+kH9HrBa6iuEWRLfA+SJKffewqizN91KjJIEGX89wOnx8jsN03L/3R+2/pnGv91rXuqrcz54TZZx7afkDEpQjijrycBHi5MSYxYQwb8vjX8/x8FZ9AwOif/4=",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/aws-lc-source.tar.gz": {
+   "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t08FLwzAUx/Gc91eUeV77gl3vrpQRqJ00Oo+h2zI2KJ0Yh/++paLgLh6Uwdj3c3nh8cI7JL/mPUza9WQaax1Lsu/W7XHjk8OL70Jok1UTfLxTfyS9LE2H2jutoiX7Pg99nUqqVSTqDI7hrXnt16vrdLPx233no7tnW+ZuWdTWLCpXPd3PitrZx9pU82j8+TvGo6/hxUNRWVs6Y91wb6RwoZof+S9N3r9s8c87fsu/yO1J/iWbkv+zMDYnBAAAAAAAAAAAAAAAABfsA+My+EQAKAAAP0ZwOA==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/bindgen-cli.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZR74mA5GWh9u/icQ1/NJwDV9nwamkyLvEt6uojkta+PqxIz/qZ888k5Znd6fdTuTuE27T6aduBF9epjhLs2xxTVta+vNvZ+4Fb92yft/bpWtjVd2n6lec6zd7Wv3T33t+mvzhq7IsDMjgg3OYzf7r3gwaDAwAswY4Zg==",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/build.json": {
+   "deflated": "eNqlVE1v20YQvftXGDrX0n5/9CZLtEtUFg1KTpsTsTs7axNlJIOU0aRB/nuHio1EruFLBYggOG/em9k3s1/Pzs8nsd2le9w1w0MQ2kx+PZ+E//mb/DLywn6X2/unHpv946Hd7wai/koBCl1Wdbm+3mxWzW1dXJV/jqJD++mxw+EAD+HQhL+HDhrdcN6wI9uYdFeuls38j81qQWnVh3JZ1GNidXV1ClmVl0T9Zmjz27wuviPejG+LzZYqeztWVa9JFzfz34vmOfzxthjDNXYYBjyFlOvNdr5ajcLL8lh118ZTyG21KbdltSbssrgt6LHeNotqeSSt1i/gYj2/XBXNov54u60oaVUuyuJ1M8+gTXVXL4rmplqWV+ViPrK/Al4X66Keb4umvttsm0uSHn05VTwJNdt5fV1smw9FvXmm41PLJgT9dnQ9t2TiD6fbHXRPCWf7R9wNQzeLdDTThzHNOeGZTTyq5EySRlofrHPWY0amlVcCnWUeNdM8g89Z+YQyyMghRoX2pbz/KOz7dndPb81jj7n93AxfPsV9N3xXFeASJKlS0F4lEY3WOYkkSVJjJnqfAbkWLkhtuGIuM+EiGoMOUojhRZXsm9Ef+i+Ph/3FcVynYRRIhlMXUkYBGhiCU1opIxJIrYXJ2oCyWvCQQ0YTQWvIjKuUEmajvRYvArSNPc76p+EwI/aGtmHc07GzaT8cOwkZmA1GUeUCAXigg5EKBNfWpUjlMybQWCWzl2PToJmPNmXk2XktT4V+3r7Z4ib8hYsADzg9fD4cbwQ6Ix5SEpwJroJgAYlGgOeRRQfRSmPRCC+soQ6zcixoFk3S2gSIKb0jRt1ddHAx7J96IL3QT+//GSUN2WQt05lnbYNwNunMFNLYGIUxBycUBhNDphebgs9kVvIIimUJifN3JJ9vvAvo2in04YDHMXbH/pRhMUWGCljM2WB23JicrOBOZ/THJ4dMeuBD9jaCCYEpHd/Re5nA58O06JQUDDKSc0pJn5iSUXGfhZXkolGReau0D0DzwiQmjMHQ9NssYojmx7K1u+EQug77ny5vk4O0IjBIWkqUmQunnBfBxWyIG5ynj9k4DEomp4yncbdesKjIMwcwOft29i8q+bqR",
+   "spelled": false
+  },
+  "aws-lc/share/simplestchat/symbols.txt": {
+   "deflated": "eNpzDQuId8lMTy0u4fIvSM0LDvaJL0stKs7Mz+MCAIU/Cag=",
+   "spelled": false
+  },
+  "build/install-aws-lc.sh": {
+   "deflated": "eNpFjs1qwzAQhO95Ed3MriytpIOfxaz2JzGkbohC28evSQi5DMMMzHz8O66y/th9bN/7EvKEOEE48TMeF46ZlkCicymQHT0XjrVodkhWa6Rk3bnGZEyd/TBFuXmCqs0kgc+iiO+92918+1vC2L5uVxsPufBjfVV5RVyP477terb9QwRTmaf4Kd5MWFk1YiLo2sGSQHcn84pEriVizW7tqSh+MEljb6ULMUPKPZz+AZQFTZM=",
+   "spelled": false
+  },
+  "build/install-openssl.sh": {
+   "deflated": "eNrLL0jNKy7OiS9LLSrOzM+zVTfRM9AzVufKh4oXZyQamZrZqhtQCNS5AEk+GcM=",
+   "spelled": false
+  },
+  "cache/ab653272d9c0fd696cf5368328175a3887e0ed6aba091b433dedea28d82bdfda": {
+   "deflated": "eNoBgQF+/h+LCAAA8VNlAv/t1Ltu2zAUBmDNegrBuyiSoi3ZgIcgyZgla1EEvMlWIpoCKefSpy+dooVhdMgQe0j+b6FwKFCADv/jrOll9PuxjG+xpIQtCa2uZdh4Mnk3ZJ+BJgsh3tfkdE2bR8+HOqs5W2QFzS5gHycZ0uez7+nHKPWT3Nif+U46u5654/swy59tiL3frWfpZjSEzvIMvhT3v/zHvRqDf7R6ilXnPXkJcjxj/nnDTvI/r1mN/F8k/4fell0/pAlg+pBa7sNbsS5S20tGaJ6uRtD2YR+GVNxO0xhXVWVfpRsHS/rdsxx6U528fDjtME3+HEPS/yWbX383tzJu04ZpjKBL0bVMc9V2na1Z07TKKqlEJ5ZcCK2psou2ri1rDTWcs3qhKLdtpyzjGERnzL+xY6yGXr1YFSZd3d9e3dzdEmfOlH/G56f5F/MG+b+EsvjX50IFudPbVeGaJj+ua+9cP60K+UHIJgAAAAAAAAAAAAAAAADA5f0GgtFZ9gAoAABHgMAL",
+   "spelled": false
+  },
+  "cache/d7d4094f81c2b8ffe31778bebab4f49244cc0be6833e18d0d22136b02e8fbe12": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+1ZQ64GAwGXi2ttW8UDzAVybXo7nKSYDRn787cIvhE98n+W5LKZN3+funJrjV1r4Sr3yoa0uVvT076HmL692n93xds1U7T0PbJlnPZNry/y1knfflRk2T4BBmRwIPxNiNS5SAYNBgYA3h8vfA==",
+   "spelled": false
+  },
+  "cargo-build.json": {
+   "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPh2FGxnuo9Gpc25sxg7LAnctEngVG/ln+ch+Npbx6HfvO1Mios+pWHKCWE8Munn7qgw1o=",
+   "spelled": true
+  },
+  "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+   "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69pIAEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPcbNgPqiY0PX1MoP4aOF637W0bRy7jvH865v2a5tKRpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9Pxm6WleZaOV4K0wCXVXg9NEX+WddXxUz5N+yvUn+HcdbIP9z5p81YqCcBmLHiVirWdc01WCUJMtxNXwTNsNJ53/fMas2q7e5MLvNuPJlbT6RFKz8nf/fcyf5X3DXR/7ncJaL56oV2vlDchWk96s4CW+iNLq7vljFaXIbh9GlpnvM333/SAsAAAAAAAAAAAAAAAAAwN/1AfnnKsoAKAAAJYqWcA==",
+   "spelled": false
+  },
+  "cargo-home/registry/cache/index/openssl-sys-0.9.117.crate": {
+   "deflated": "eNqT7+ZgYPgYnMr0/+0lQ+5DBgJtD8/8FJ201/RgVuGLKycPnvWVceJcesNs6cqm//c0nA5GlnyonfZ+h/WOp38e/BK4pXLHadHl3CyffTpvI36XfIrVtnNyn61TnfZlXtTz1zvrvpz1klYWi6o5qOpT1vP8aL0V3zar27fmpuRbh2vY/2+eFG7edux7a1Vt26Tc4KOVd26/5/PiYkAGB9bfYfTm/b+UQYOBAQBOuVBL",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+   "deflated": "eNqrVipTsjKsBQAIkwIe",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+   "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+   "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+   "spelled": false
+  },
+  "cargo-home/registry/src/index/openssl-sys-0.9.117/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyi9IzSsuztEtrixW4ipLLSrOzM+zVTLQs9QzNDRX4srJTAbKA9X5eoYocQEAjjsTkg==",
+   "spelled": false
+  },
+  "openssl/include/openssl/configuration.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iffzj3cJ9udSxiLu6ufu6efKBQCUZw9L",
+   "spelled": false
+  },
+  "openssl/include/openssl/opensslv.h": {
+   "deflated": "eNpTVkhJTcvMS1XwD3D1Cw72iQ9zDQr29PeLDw4JUlAy0TPQM1biAgDUdQox",
+   "spelled": false
+  },
+  "openssl/lib/libcrypto.a": {
+   "deflated": "eNpTtEksSs6w40ouqiwoyQcAIS0E5Q==",
+   "spelled": false
+  },
+  "openssl/lib/libssl.a": {
+   "deflated": "eNpTtEksSs6w4youzgEAE/UDlg==",
+   "spelled": false
+  },
+  "openssl/share/simplestchat/openssl-disabled.txt": {
+   "deflated": "eNorzkgsSk3hSinO58rNTynNSeVKzUvPzEvlAgB3IAji",
+   "spelled": false
+  },
+  "system/lib/libstdc++.a": {
+   "deflated": "eNpTtEksSs6w43KOiAAAExsDNw==",
+   "spelled": false
+  },
+  "target/release/build/aws-lc-sys/out/bindings.rs": {
+   "deflated": "eNorzswtyEktLknOSCyJTywvzkmON403NIw3iHcNC4h3yUwHyikU41TkX5CaFxzsE1+WWlScmZ8HAI3oHU4=",
+   "spelled": false
+  },
+  "target/release/build/mediasoup-sys/out/libmediasoup-worker.a": {
+   "deflated": "eNpTtEksSs6w48pNTclMLM4vLdAtzy/KTi0CAGYrCNI=",
+   "spelled": false
+  },
+  "target/release/build/openssl-sys/out/": null,
+  "target/release/simplestChat": {
+   "deflated": "eNqrd/VxY2JkZIABZgY7BgjPAYkEAg64EqCYBQMrkGQGqgSpZWVABg4oPAYB7DQTELPAGGAaVV8AGs0Bdx9UH8xSVlR9Mmg0zGeBT0tS2BiIBzD7goD6yHHnUAHwuGOB+IsLyuWG0r///8+HhiMHcngyMoyCYQFyMpOS9Yrz9cxGpvf1gf43M9HPSdHNycwrrdCtsDDTNTMBBYgRXeyvmNPbf5rrkIGAa71qyt22Y+yu9a67JC4FNnsuSwly9fp/10V8UdnDvHdnnsqkTXLvkpt0hzuW07Jh5wFOy+OHVZgrzkxOec3ePueMpXjx666Juq1FWVPCfG8a9l60ud3Hs2NTl0vr7Ecdll8tEl4YSvw+lH53ldDrvHVHbrOYr5u78uc5+3lnv0WnKKmkpHrWGWhUz7irlLJ8S97/RRVvdJ9c23Di4ttP14vN7Rn+HU4rGa4JQK84o7ikqCQxiUEvJbVAt8xgtEggBTBC62QMwA6hhLGoRwbcOOqSBmjFtJKA/lEwCkbBKBgFo2AUkA4A5F510g==",
+   "spelled": false
+  },
+  "vendor/integrity.json": {
+   "deflated": "eNqVUsty4yAQvPsrXDrbEg9ZQvmVrS3XAENEIoEKsJNsKv++yNk4WUd5HaCK7mGmG/pxtV4Xxg4Yi6v1r9+b+TiCdSkv1Pszk/HMHNFpHyoHyR5xq/w4eYcuxfImelfkmucG0R+CenPv8bTPg3wYIWW8SBDK6z/F5oWxekaN91taklc49sB2zUzpVtekq42giklhDHLatkKiBFmbumN1rRSR2AjOkQpNNGOUN5IwFEYiZa89D2GYG/YpTfGqqvAexmnA0rojDFZXLxpO5U+bnxkYUVvI9qdtfIhbUtJu2Q3IZsdZy3SniNFN1yiz41k7E7TdAReiRYK6AQmko7LmXKNGYEILJrXR8G03i4KerZ2/KwVc+izVg7t+k4sTOEHq53n/kvC53ymgsfffeJdTXj6su5B7F2BayhYMgwR1u88v8l606vfaBlTJh4dMusMwXNBnEZfcV36reJBT8De5eZzTU84Cl8z9n6zZz+pp9RfVEPPy",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "deflated": "eNqLLkhMzk5MT43lykvMTbVVyk1NyUwszi8t0C2uLFbiKkstKs7Mz7NVMtAzNNczUOICAKZ6D8M=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/README.md": {
+   "deflated": "eNrTVcjJTCpPTSoqSVZIKkrMS86wUsg1N+fSRRJPzs/NzSyxUkgkEnABAPfgHhk=",
+   "spelled": false
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/foo.wrap": {
+   "deflated": "eNpdjEsKgzAUAPeewgsY80NjoScppbyXvNRANBJjf6evpXTT7cwwp3uGpfEh0rlyIZMtKT/rY+1TagTj1Zq2bOmy5bjDsZRlPbQtPWBaIrEw3yAG1/7Fn9sME303rEBm19dPjrCOu3C903zQ3ggr0XhPSvS9QUJA7fUgtbaWI3VGKRLGcSelUB1yScYjCVm9Af8wO+I=",
+   "spelled": false
+  },
+  "vendor/native-components.json": {
+   "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YDyIMkyFsglFmDbccCyHe5T7ElfSBm7PvJsIBaLuWtTxxPgEwsjTrWyB0Q6sbDEq0k+FrlxiJ4yktw8vpkdK/OE4FF7mM+24tt9x0kmNpBFJxF5KyZtVBrrMU8T7dW1DWvQF9vAYI8JoauQoljECAhHsZQUpIcplcK1sOdI8A9PzCXzJfeZ9N2YU8YQceL+qj8Zmh4185RmPzhteF7pc72IXC+W4fxutZpFD8vgNvyzJqKSXZHqrsW3rIoOQylyIowj1Cd9/SGc3UT6AM+m2nTxMbwJlrXx4vb2VG0WXmsXr4pXv02WwVHrVZ11sFprpq/LF4tzDqb3k9+DqFH59BDUKstjFzlVC+er9WQ2q4nchMvm4nGq9rBYhetwMdf6N8FDoB/zdTRd3BwWX8z7BsF8cj0Louny08N6oQ1n4TQMzm2yUVwtPiynQXS/uAlvw+mk9nJG+S6YB8vJOoiWH1br6FrTqHN46n0gjtaT5V2wjj4Gy1WzLDZcdHpizk0nKpntWgzpCWXbYEtsecTzLebFkmJOuedrUFIPGLGFR6gP2HF9C8UEMcfjvNdb/lVZNr3AMTA20PmKpFzYrosciaXjMstz62FKwPMsSiCWzLMIMBozqV9coSuSIE/4wAmSNhcYv1GRvYmkiTSNyWQl3+prnx5KUpkV2yjz8chvMHj6kT3uPWpmQi+8wtNTXOgeSikWjhAgJdJtRGKIOfJ86glGXKIDT33uEg7Sp7WKRTAwYMjphfd5F+dpVGhSyde3i/m1udgEuR2MTyUruqHY3ZPajtubcffhuuNS34fZ5oA3d7ruXtQMQJnnZ45GDY/7iR7tVbNQUepLF68bWSfscW+IH29+ny++X/wDdldD3A==",
+   "spelled": false
+  },
+  "vendor-evidence/report.json": {
+   "deflated": "eNqtVMluE0EQvecrLJ8Tu6v35oaAIxeuCKGqrmoyyPaMZiZhU/6dsgNZwGAQHGbrab2l+lV9OVsslty19na6RBvi8sliKY5M9d6W3CpU8AUbNV9zKbFRsd4mFA/ioy9UnK/oSygFKOVgKYewPN+Dtm4jk8K9fnP43GK3m/USfnv3R9cXiy+Hu+4YcL7c01/LjvtxvcO5u5aL2m+Hfie7eVq9n/rdAfuw/V4vV48F2DJnsgAVOUgRB84ZIseh1sIRU/M+tiY1mAZurzNLczbksjxA3uj9u9Rd12SaH5Qk1FYcUAxgGaJnDFRiduSULoTkkhemEvQ1JsX2DDZYD+xUgxM2tyWZ+quxHrPe+nGL855oxnH17vO9y473q63vL2BljppP7E3xLUPV4qs/ByllEkLyzetp+VoNiYp1ApkNWwsukrGSGwnYB5jdZ1FEgHK3dDVu9hyX8zxMT9Zr+YjbYSOrbneNm47X32Xd1u/87zxthTvUigwX06fpwqygHDeIWnVnk+VSTeNYYm3BqR2bIQV0OScxoudLaDSD3jkWFrSZsyVujD8ZdDn8qcGjGn9IyzzK0SN9FPKHvx6F/RmO7/rV3G83dzpvhQ2TAuP2QQZJPUNCKJ6YNe2OfLSOmmYSdTV6b5I6rgTNNqRMOaUELXPSztV+eExw22Xajf+R4A7/5vz3rlmGab3p6IPQONf1qxdPn798sdryyRpgZiXUJvS1qJZCIsE2CvoAl4wkrlEDTMaVQhXbfnj5qMkBBlXeTtbgnwn+uAbTFQ1j/17qPO0bafVhxOGkf50+gYu3EiJDVpXomzXGadgRMAUxehS+hhYQtfdbMzroiovRO1NMiif9/zPBvf9vb2/OfzHgTwyAw6z85aC4b8Kzm7Ovnxe/2A==",
+   "spelled": false
+  },
+  "vendor-evidence/vendor.diff": {
+   "deflated": "eNoDAAAAAAE=",
+   "spelled": false
+  }
+ },
+ "cases": [
+  {
+   "name": "the wrapper as reviewed",
+   "delta": {},
+   "links": {},
+   "result": {
+    "held": {
+     "name": "AWS-LC",
+     "version": "5.11.0",
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "crate": "aws-lc-sys",
+     "crate_version": "0.45.0",
+     "source_sha256": "fbd0742e1355e235c9618f9dffb79083e42abc73658de94210c6e138e4f5bd2d",
+     "verified_files": 3,
+     "license": "ISC",
+     "unused_bundled_source": {
+      "version": "5.7.0",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    }
+   }
+  },
+  {
+   "name": "a build without the wrapper's artifact",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVNFu2zAMfN9XFM5jZivBNhQt1mFAP2MoDFmmHSGyJIhUmiDov4+y3TVB26TZmu1lb7bIO57vRG+zABKdza4vMuU6rw2EXAbSjVSUfbzIvFRL2UKp69TiJS2mDTddCyGk9xPUnTeApBaSvs+KeTFLoE5a3fBpmfoT7mtwjr6JWxlaV5DrTOoifgPi8jazsoPU90h3y3SpZaltmvsjq7TN7h6SnuDS/B5F3MkPjTQIXKqhim0pEYH1O4s7JeepNLACk4Z8yhJRA5JiAOzpa2hkNJTdpQLTJz1DZVQ+aBUBDNsFYk9nAsEaVCRZ9creAkqDeHpyh0KEhw/bP0tCrMDWLogOas000ee4wZwTuSpmk73DFNPl4ZwOcB3PsNHrZOxefEZX/yS+Z9HYaMxB66uoTZ2jCtpTPkChPpP9LlJZ6/D6jenF7HMKBiWs0XYJdcnGDhYgSdLqBqlW02lqGA+ewPcuLCHslBDNzpsKG0+ut3DkTt84kFvuWMHNySL3cc6D5ZkiXYZnRXmPuVEv15iRoBPDJTp1UQK0GilspgsijxxXq2kRq4KhIkSk3EjbChUkX8dCu5yvLKwno9YxsKtiPr88tDAqLUW+cB2Ix3kCgxI9mdghy0ey/2v0/uG8cZ120MeW6T0X5IWxZ1+Ps6YwSBpD+PzlpF/aE/ZIBIPpOfcb9dvWP5/2l5xvtNW4GCzHqBQg/tqWnyrTPAU=",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Declared native wrapper crate is absent from the production build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a build without the wrapper's build script",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFq3DAQfO9XBN/j1dYdbQkJTSnkM0owsry2xcmS0K4udxz592ptp7kjqZPQlFLaN1u7Mzve0eBDFkCis9nlWaZc77WBkMtAupGKsvdnmZdqI1sodc0tXlK3bFLTpRBCer9A3XsDSKqT9HVVrIsVg3ppdZNOS+5n3OfgHH0R1zK0riDXG+6i9AaUyofMyh64757uOtFxy0Zbnvstq7TNbu5YT3A8f0BR6kwPjTQIqVRDFdtSIkLS7ywelZyn0sAWDA/5kDFRA5JiABzoa2hkNJTdcCHRs56xMikftYoAJq0LxIlOBsEOVCRZDcpeAuJBaTpvh0KEu3eHX3NCbMHWLogeap1oos9xj3ly5KJYLU4O2abzeZ9muJ73sNE7XuyJfUZXf8S+R9bYaMzs6quoTZ2jCtpTPkKh/k3rd5HKWoef35hBzCmnSCDGGm03UJdpseMKkCRpdYVUq+WSG6aDB/CtCxsIRyVEc/Smwt6TG1Y4cfM3juQ2dWzh6tUiT3HOg00zBV+GR0V5i7lRT9cSI0Evxkv02qAEaDVS2C87Io/JrlZTF6siQUWISLmRthUqyHQdC+3ydGVht5i0ToZdFOv1+VxgFIci71wP4n6ewKDEQCaOyPKJ7H+M3t6cF8bpCP1cmN4yIE+M/XvjMcqZDPj4af5vMh+OB6p8pPo3otFoq7EbM4FRKUD80f0d3Xs/HA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Declared native wrapper crate is absent from the production build",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a wrapper record whose crate is a number",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGRVHT3nqvcd9dZCBnGMH+TgpZlN/liNZ9P/ox/9ela7njQeUB5kVsYCucQCbDsOWLbDfYo96QspY9dHng3EYjF3bep4AnxiYcSpVvaASCcWlng1s8fKNg7RU0aSm8c3s2NlnhA8ag+T2JZ5u+84ycQGsugkIm/FpI1KYz3maaK9urZhDZphGxjsMSF06VEUixgB4SiWkoL0MKVSuBb2HAn+4Ym5ZL7kPpO+G3PKGCJO3F/1J0PTo2ae0uwHpw3PK82tF5HrxTKc361Ws+hhGdyGf9ZEVLIrUt2q+JZV0WESRU6EcYT6pK8/hLObSB/g2VSbLj6GN8GyNl7c3p6qzcJr7eJV8eq3yTI4ar2qsw5Wa830dflicc7B9H7yexA1Kp8eglpleWwdp2rhfLWezGY1kZtw2dw2TtUeFqtwHS7mWv8meAj0Y76Opoubw+KLed8gmE+uZ0E0XX56WC+04SychsG5TTaKq8WH5TSI7hc34W04ndRezijfBfNgOVkH0fLDah1daxp1Dk+9D8TRerK8C9bRx2C5apbFhotOT8y5kUQls12LIT2WbBtsiS2PeL7FvFhSzCn3fA1K6gEjtvAI9QE7rm+hmCDmeJz3esu/KsumFzgGxgY6X5GUC9t1kSOxdFxmeW49QQl4nkUJxJJ5FgFGYyb1iyt0RRLkCR84QdLmAuM3KrI3hjSRpjGZrORbfdfTk0gqs2IbZT4e+Q2mTT+yx71HzUzohVd4enQL3UMpxcIRAqREuo1IDDFHnk89wYhLdOCpz13CQfq0VrEIBgYMOb3wPu/iPI0KTSr5+nYxvzYMmyC30/CpZEU3CbvLUdtxezPuPlx3XOpLMNsc8OYi112GmgEo8/zM0ajhcT/Ro71qFipKfdPidSPrhD3uDfHjde/zxfeLfwD4sj/6",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a wrapper record without a crate version",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zozYQfs9fkfHrxSCBEHBvjkNSpj47YzvX3nQyjJBWNnMYGESSpjf53ytswo+xk+ba+gHDt7vaT7vaXf04Oz8fMcGKCkTE812RZ5BVo8/nP7RAi9KEQ6ZAA6NwNR1dHNCM7fZQmsRPEJcVfxUUrNrWgkfIRF6aOxAJU/lDMVbPaowM7BvIFFAo88iyhMdEJXlWW7MP/l5tH6F8Nd257kiDL7VE06ySR4jSJPuuui2xJzVOec2oxTSqKq3MNfJHg2iMl89FlY+1QcpHDXx/0Vo8qwp2tcX9Hnpp2Aw2/U8uVCX4p0+jiw7pzJ/y8juUfZlSaf/zwO89Zp2uGFgW1bYEJlrTwQbyQqdcpR+i/7OEGk9tihpfXXZ4nslk81BClBeVTqrqORxl+VhtWQmidVpDQuWD710uHlIYQJBtkmwIVaAqdaDaEB0lmd5jmkIZaS+WQ+sD5RLmcuFIZBFEXUs6DgbKkQWWa0tmxY7vAnfs2PZ9gXwLE+JgCzNBBbXARej1jJ4uJJ3nkkM/yjIvd6wuwFHFSmPzV8c5ETX6mhxiIMPuhB1h9B9/3ZoPZZ2X0baqCvXZNDdJtX2IDd0kzIZE+19CCkyBMkX+lKU5E+aA5vDLaDY2OHO9Ej7srD0hJWwSVZXPp7oTL1m1D2mvpi8+0rgmv63Gs+n/0Xt+PoMdV90RiWOgU1mUsUAusQDbjgOW7XCfYk/6QsrY9ZFnA7FYzF2bOp4An1gYcaqVPSDSiYUl3szioYqNfeSUkeTm4c3sWJlHBA/aw4S1Jd3uO04ysYEsOorIezFpo9JYj3maaK+ubViDxtcGBntMCF1mFMUiRkA4iqWkID1MqRSuhT1Hgr9/Yi6ZL7nPpO/GnDKGiBP3V/1gaHrUzGOa/eC04XmjkfUicrlYhvOb1WoW3S6D6/D3mohKdkWq2xLfsiraT53IiTCOUJ/05V04u4r0AZ5Ntenia3gVLGvjxfX1sdosvNQu3hSvfpksg4PWmzrrYLXWTN+WLxanHEy/TH4Nokbl221QqywPbeJYLZyv1pPZrCZyFS6bm8Wx2u1iFa7DxVzrXwW3gX7M19F0cbVffDHvGwTzyeUsiKbLb7frhTachdMwOLXJRnG1uFtOg+jL4iq8DqeT2ssJ5ZtgHiwn6yBa3q3W0aWmUefw2PtAHK0ny5tgHX0NlqtmWWy46PjEnBo/VDLbtRjSI8i2wZbY8ojnW8yLJcWccs/XoKQeMGILj1AfsOP6FooJYo7Hea+3/KuybHqBY2BsoNMVSbmwXRc5EkvHZZbn1tOSgOdZlEAsmWcRYDRmUr+4QlckQZ7wgRMkbS4wfqcieyNHE2kak8lKvtX3Oj11pDIrtlHm44HfYLL0I3vYe9TMhF54hafHtNA9lFIsHCFASqTbiMQQc+T51BOMuEQHnvrcJRykT2sVi2BgwJDTC+/zLs7TqNCkkj/fL+a3Bl8T5HbyPZWs6KZedxFqO25vxn0J1x2X+sLLNnu8ubR1F59mAMo8P3E0anjcT/ToQTULFaW+VfG6kXXCHveG+OFqd3/2cvY3Nbg7qw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'crate_version'"
+   }
+  },
+  {
+   "name": "a wrapper record whose source has a field more",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zmzgQfs9fkfFrY5BACOib45Acc46dsd3edW46jJBWNlMMDMJJc53+7ydswo+xk7Z35wcM3+5qP+1qd/Xt4vJyxAQrKhARz3dFnkFWjd5fftMCLUoTDpkCDYzC1XR0dUQztjtAaRI/QVxW/EVQsGpbCx4hE3lp7kAkTOX7Yqye1RgZ2DeQKaBQ5ollCY+JSvKstmY/+XuxfYTyxXTnuiMNfq8lmmaVPEKUJtkX1W2JPalxymtGLaZRVWllrpG/GkRjvHwuqnysDVI+auDPV63Fs6pgV1t8PkDfGzaDTf/IhaoEf/dudNUhnflTXn6Bsi9TKu1/Hvm9xazTFQPLotqWwERrOthAXuiUq/Sn6P8qocZTm6LGV5cdnmcy2exLiPKi0klVPYejLB+rLStBtE5rSKh88L3LxT6FAQTZJsmGUAWqUkeqDdFRkuk9pimUkfZiObQ+UC5hLheORBZB1LWk42CgHFlgubZkVuz4LnDHjm3fF8i3MCEOtjATVFALXIRezuj5QtJ5Ljn0oyzzcsfqAhxVrDQ2f3ecE1GjL8khBjLsTtgRRv/x1625L+u8jLZVVaj3prlJqu0+NnSTMBsS7X8JKTAFyhT5U5bmTJgDmsMvo9nY4Mz1Svi4s/aElLBJVFU+n+tOvGTVIaS9mr7qiaLessggjvGDdLz0tckfq/Fs+n+0pl9PcLeV8YBy3Rrysl4Kn8m6jAVyiQXYdhywbIf7FHvSF1LGro88G4jFYu7a1PEE+MTCiFOt7AGRTiws8WrWj1VvHMKpjCQ3j29mR9M8YXzUHia4bQFtIOIkExvIopMQvRWkNkyN9Zinifbq2oY1aJRtYLDHhNBlSVEsYgSEo1hKCtLDlErhWthzJPiHJ+aS+ZL7TPpuzCljiDhxf9WfDE2PmnlKsx+cNjyvNL5eRK4Xy3B+t1rNoodlcBv+WRNRya5IdRvjW1ZFhykVORHGEeqTvv4Qzm4ifaJnU226+BjeBMvaeHF7e6o2C6+1i1fFq98my+Co9arOOlitNdPX5YvFOQfT+8nvQdSofHoIapXlsa2cqoXz1Xoym9VEbsJlcxM5VXtYrMJ1uJhr/ZvgIdCP+TqaLm4Oiy/mfYNgPrmeBdF0+elhvdCGs3AaBuc22SiuFh+W0yC6X9yEt+F0Uns5o3wXzIPlZB1Eyw+rdXStadQ5PPU+EEfryfIuWEcfg+WqWRYbLjo9MefGFZXMdi2G9MiybbAltjzi+RbzYkkxp9zzNSipB4zYwiPUB+y4voVigpjjcd6bKP+qLJte4BgYG+h8RVIubNdFjsTScZnlufV0JeB5FiUQS+ZZBBiNmdQvrtAVSZAnfOAESZsLjN+oyN6I0kSaxmSykm/1PVBPKanMim2U+XjkN5hE/cge9x41Q6IXXuHpsS50D6UUC0cIkBLpNiIxxBx5PvUEIy7Rgac+dwkH6dNaxSIYGDDk9ML7vIvzNCo0qeTr28X82qBsgtxOyqeSFd2U7C5ObcftDb37cN1xqS/IbHPAm0ted1FqJqLM8zNHo4bH/USP9qpZqCj1LYzXjawT9rg3xI9Xwc8X3y/+AXwfR1Q=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Unexpected manifest fields: ['more']",
+    "kind": "vendor"
+   }
+  },
+  {
+   "name": "the wrapper from a manifest outside the registry",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVe9r2zAQ/b6/ojgfM1kJ2ygt6xj0zxjFyPLZFpElIZ3yg9D/fSfbXRLaJemWMgb9FvvuvXu+d49sMw8iWJPdXmXSdk5p8Ex4VLWQmH28ypyQC9FAoarU4gS205qabjnnwrlJUJ3TEFC2Ar/P8nk+S6BOGFXT2yL1J9xXby1+4/fCNzZH2+nUhfQESOVtZkQHqe+J7p7oUstCmTT3R1Yqkz08Jj3epvk9CqmTftRCB6BSBWVsChECkH5rwl7JOiw0LEGnIZ+yRFSDwOgh9PQV1CJqzB5SgeiTnqEyKh+0cg+a1gX8QGcCwRpkRFH2ys4BpUE0PW0HfYTHD9u/c4IvwVTW8w4qRTTRsbAJjBy5yWeTg5fJpuvjPh3hOu1hrdZpsQf2aVX+E/ueWWOi1kdXX0alKxakVw7ZAIXqjdZvIxaV8r+/mF7MIScnUMJqZRZQFbTYYQUBBSp5F7CS02lqGF/swCvrF+D3SiHovSfpNw5tv8KRO33jQG6oYwl3rxZ5iLMODM3k6RieFcUqMC1frhEjQseHI3ptUDw0KqDfTFtEF8iuRmEby5yg3MeATAvTcOkFnWOuLKOThfVk1DoadpPP59fHAiNTKFhrO+BP83jwkvdkfI+MjWTvMbq8OWfGaQ99KkyXDMgLY//feAxyRgM+fzn+bwJ0fasWPPAdjA2w9xhc2oQzQ7DDnsjAcPWM+rX849t/Pu3NT3/YfK2MCu2w8hClhBB++fQT4Ha71g==",
+     "spelled": true
+    },
+    "elsewhere/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native artifact escaped its declared directory",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the wrapper from a manifest that is not there",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVdFq2zAUfd9XFOcxk5WwjdKyjkGf9wWjGEW+tkVkSehepQmh/z7JdpeEtE67pYxB32zde849vkcHbzMPAq3Jri8yaVunNHgmPKlKSMo+XmROyKWooVBlanGCmmkVm64558K5CarWaUCSjaDvs3yezxKoFUZV8bRI/Qn31VtL3/it8LXNybY6dVF8A4rlbWZEC6nvke420qWWpTJp7s9soUx295D0eJvmdyiKnfGhEhohlkpYhLoQiBD1W4N7Jeuo0LACnYZ8yhJRBYKCB+zoS6hE0JTdpUKkT3r6yqC818o96Lgu4Ac6EwjWIAOJRafsJaA0KE5P2yEf4OHD9u+c4CswpfW8hVJFmuAYbpBFR67y2eTgMNl0Oe7TCNdpDyu1Tos9sE+rxT+x78gaE7QeXf0iKF0ylF45Yj0Uyjdavw1UlMo/f2M6MYecPIISViuzhLKIi+1XgCRIyRukUk6nqWE42IHvrV+C3ysh6r036TeObLfCgTt9Y09uYscKbl4t8hBnHZg4k6fLcFQU98i0fLoWGQla3l+i1wbFQ62Q/GbaEDmMdtWKmrDII5T7gMS0MDWXXsTrmCvL4pWF9WTQOhh2lc/nl2OBkSkUrLEt8Md5HL3kHRnfI2MD2XuMzm/OC+O0hz4VpnMG5Imx/288ejmDAZ+/jP9NxsOxo2I9Ff+hEJWp38NxPmteGI0d9kQy+iyw2K/lHyfieNqbB6LffKWMwqZfOQYpAfG3T78A4JzESA==",
+     "spelled": true
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Missing.toml'"
+   }
+  },
+  {
+   "name": "the wrapper from a directory of another name",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/T2e7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqqIWJ3AxrVPTLedcODcJqnUaAsqFwO+zfJ7PCNQKo+p0WlA/4b56a/Ebvxe+sTnaVlMXpjfAVN5mRrRAfc9094mOWpbK0NwfWalM9vBEeryl+R0KU2d6qIUOkEoVlLEpRAiQ9FsT9krWYaFhBZqGfMqIqAaB0UPo6CuoRdSYPVAh0ZOevjIo77VyDzqtC/iBTgLBGmREUXbKzgHRoDSdtoM+wtOH7d85wVdgKut5C5VKNNGxsAksOXKTzyYHh2TT9bhPI1ynPazVmhZ7YJ9W5T+x78gaE7UeXX0Zla5YkF45ZD0Uqjdav41YVMr//sZ0Yg45eQIRViuzhKpIi+1XEFCgkncBKzmdUsNwsAM/Wr8Ev1cKQe+9Sb9xaLsVDtz0jT25SR0ruHu1yEOcdWDSTE6X4agoHgPT8uVaYkRoeX+JXhsUD40K6DfTBaILya5G4SKWeYJyHwMyLUzDpRfpOubKsnRlYT0ZtA6G3eTz+fVYYCSFgi1sC/x5Hg9e8o6M75Gxgew9Rpc358w47aFPhemSAXlh7P8bj17OYMDnL+N/k/Fw7KhYRzV/j8aljTkzGDvsiVz0SWCpX8s/zsPxtDePQ7/5WhkVFv3KQ5QSQvjl00+9HcNb",
+     "spelled": true
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.1/.cargo-ok": {
+     "deflated": "eNqrVipTsjKsBQAIkwIe",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.1/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.1/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQSKHEBAEx+Hww=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.1/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4gIANG0Mcg==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": "absent",
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": "absent",
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": "absent",
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": "absent"
+   },
+   "links": {},
+   "result": {
+    "refused": "Native registry source directory differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the wrapper from a directory a level deeper",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsnx2RGRJSKc0IfS/72S7S0I6J91SxqDfbN29d8/39PA28yCCNdntVSZt65QGz4RHVQuJ2cerzAm5FA0UqkotTuBiWlPTLedcODcJqnUaAsqFwO+zfJ7PEqgVRtV0WqT+hPvqrcVv/F74xuZoW526kN4AqbzNjGgh9T3T3RNdalkqk+b+yEplsoenpMfbNL9DIXXSQy10ACpVUMamECEA6bcm7JWsw0LDCnQa8ilLRDUIjB5CR19BLaLG7CEViD7p6SuD8l4r96BpXcAPdCYQrEFGFGWn7BxQGkTT03bQR3j6sP07J/gKTGU9b6FSRBMdC5vAyJGbfDY5OEw2XY/7NMJ12sNardNiD+zTqvwn9h1ZY6LWo6svo9IVC9Irh6yHQvVG67cRi0r539+YTswhJydQwmplllAVtNh+BQEFKnkXsJLTaWoYDnbgR+uX4PdKIei9N+k3Dm23woE7fWNPbqhjBXevFnmIsw4MzeTpMhwVxWNgWr5cI0aElveX6LVB8dCogH4zXSC6QHY1ChexzAnKfQzItDANl17QdcyVZXRlYT0ZtA6G3eTz+fVYYGQKBVvYFvjzPB685B0Z3yNjA9l7jC5vzplx2kOfCtMlA/LC2P83Hr2cwYDPX8b/JuPhqAAceL5jZD3je0Iu7c+Z+dhhT8SjDwSjfi3/OBbH0948Ff3ma2VUWPQrD1FKCOGXTz8By7TF/g==",
+     "spelled": true
+    },
+    "cargo-home/registry/src/index/deeper/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native registry source directory differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "the wrapper from a manifest directly in the index",
+   "delta": {
+    "cargo-build.json": {
+     "deflated": "eNrtVWFr2zAQ/b5fUZyPmayEbZSWdQz6M0Yxsny2RWRJSKc0IfS/72S7S0LaNO1SxqDfbN29d8/39PAm8yCCNdn1RSZt55QGz4RHVQuJ2eeLzAm5EA0UqkotTmA7ranpmnMunJsE1TkNAWUr8Ocsn+ezBOqEUTWdFqk/4b57a/EHvxW+sTnaTqcupDdAKm8yIzpIfY90t0SXWhbKpLm/slKZ7O4h6fE2ze9RSJ30UAsdgEoVlLEpRAhA+q0JOyXrsNCwBJ2GfMkSUQ0Co4fQ01dQi6gxu0sFok96hsqofNDKPWhaF/A9nQkEK5ARRdkrOwWUBtH0tB30ER4+bf7OCb4EU1nPO6gU0UTHwjowcuQqn032DpNNl8d9OsL1soe1WqXF7tmnVflP7DuwxkStj66+jEpXLEivHLIBCtU7rd9GLCrln78xvZh9Tk6ghNXKLKAqaLHDCgIKVPImYCWn09QwHmzB99YvwO+UQtA7b9KvHdp+hSN3+saB3FDHEm5eLXIfZx0YmsnTZTgoivvAtHy6RowIHR8u0WuD4qFRAf162iK6QHY1CttY5gTlPgZkWpiGSy/oOubKMrqysJqMWkfDrvL5/PJYYGQKBWttB/xxHg9e8p6M75CxkewjRuc358Q47aBfCtM5A/LE2P83HoOc0YCv347/TZ4Lx5aEDSQfoTi3JSdGYot9IRFDBhj1a/nmJBxOe/cgDJuvlVGhHVYeopQQwh+ffgONAMET",
+     "spelled": true
+    },
+    "cargo-home/registry/src/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvIMdlbiAgBWuhKR",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native registry source directory differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no archive of the wrapper in the cache",
+   "delta": {
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate'"
+   }
+  },
+  {
+   "name": "an archive of the wrapper with other bytes",
+   "delta": {
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNqT7+ZgYPgYnMr0/+1ZR65mA5GWh+VT4hQyp6TrX5jMorlrA8ukji/f7GI8ryt1/N8+M9FMePqjZfemxhcezH5++LPs5wk1vvc9+YTOeJd6f56/7Hbp7dlh0lPdJwifWXos53uR/8q++ToMyKBhdSTjj73rgxg0GBgA9dI1ag==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Source SHA-256 or size differs: aws-lc-sys-0.45.0",
+    "kind": "vendor"
+   }
+  },
+  {
+   "name": "an archive of the wrapper below another name",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DluwzAQheFex2AbSOK+GPBJDBfUcCgJ1gYNlcS3j10GSpn+f8CHd7ttER6xx/u9WuKMVxa/qJ6gpiex6hN3GtflynijTcNZReuxwyvasR+p7M+PoZSNLm3bj2U4ugbWud0PKvUUl76FPRakZlzrcUn4zSoYEB50zFfmheHZZbCWR5EwoPJeWQwpuqBk9J3XIJWNwlutOGjBvTch2c5ZYaV3rLqd5OuGC9F0oodGCPePdpNtjiJn/XLylMAlI4NXEnJS2lnD0VjfGQyaY+eFDSBBatQ5CNUh4l/2GdMYX8LtpBfuffx5QeO8TUgFhlh+D979D9PQl/I=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4i6ssWglFaC1oL4sS5FSnKvUSHNPSt69JIQEXpYtWGvp/mzMcBmZz/jP0Jo06M+S7NDhzPWaZAfVFx4auqZUfwkcL193X0bRy7jvH865v2a5tKxpXZrCVA/Xj88r/9Lih7IUKsVZbasRSp8M86Oqr6GXVtUt9PxlcV+sqE60cb4VJoKsKnD76Iv+s66tihvxbtjfJv+N4PvI/Z/5ZIwbKaSB2nIi1mnVNUw1GSbIcV8M3YTOcdP4/O2bVZvU2F2a3GVe+rM0nkoKVv/P/e+4k/wvuceR/Dme5eK5aoZ0/JFdBer+Kk/AmSqO764tVnCa3cRhdarrH/N33j7QAAAAAAAAAAAAAAAAAAPxdHy+f12QAKAAAHT6Phg==",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvozgUfu+vqPI6DdhcjJm3NKVdtGlSkXR2R6sKGV8SNAQQJu10R/3vawLhoiSdzu7mgcC5+Hzn7h8Xl5cjwkhechbSbJtnKU/L0efLH4qhWElMeSq5Ioz85XR0VVNTst2Tkjh64VFR0gMjJ+WmYjzzlGWFvuUsJjLb5WP5KsdAg64GdMZzqR9pFvw5lnGWVtrkg7+D7jMvDqpbxxkp4lvFUTDL+JmHSZx+k51L5EWOE1ohammKKkslTBXlr4aiaLR4zctsrBQSOmrIT1etxqss+bbSeNqT3ho0A6d/ZkKWjH76NLrqKJ36S1Z840WfJ2XS/6zxvYesk2UDzbzcFJywVnXgQJarlMvkQ/B/FVBjqU1RY6vLDs1SEa93BQ+zvFRJlT2DozQbyw0pOGuNViQms8H3NmO7hA9IPF3H6ZBUclnKGmoDdBSnysck4UWorBg2qgrKsYhDmS2AYQHkGMK2IUcUGNxwTEGMyHYdTm0zMl2XAdeAlmVDAxKGGDK4A8ChRk83kspzQXk/yiIrtqRqwFFJCm39d4c5ZhX1kBxLA5rZMTvA4D/+ujN3RZWX0aYsc/lZ19dxudlFmhoSegOi/S94wonkUmfZS5pkhOkDmMMvrXFsUHO9Fq49ayuk4OtYlsXrqelEC1LuQ9rr6aseK+wdCzTL1n6SjsNcm/yxHM+m/8do+vUEd66MB5AHScbQBsIRFCFAIOMuNzE2EXcZcVzTIDjCFjVMRCBGlgmoBQHGtstQ5CCIDOycTXLd5No+elKLM71+0ztU+hHAWnqYz7bjW7+jOGVrnoZHEXkvJm1UGu0xTWJl1TE1YzAX28BATBhTXYhAxCLALQoiIRAXGCIkmGNAbAvu7p+QCuIK6hLhOhFFhADLjvqnfjA0PWj6Mcx+cNrwnJlzvYhcLwJ/frdczsKHwLv1/6yAyHibJ2pq0Q0pw/1SCu0QwhD0QV8/+rObUBXwbKpUF1/8Gy+olBe3t8diM/9amTjLXv42Cbxa6qzMyluuFNLz/MXilIHp/eR3L2xEvj54lUhQT5FjMX++XE1mswrIjR80F49jsYfF0l/5i7mSv/EePPWYr8Lp4mZ/+GLeV/Dmk+uZF06Drw+rhVKc+VPfO+VkI7hcPAZTL7xf3Pi3/nRSWTkhfOfNvWCy8sLgcbkKrxWMKofH1gfscDUJ7rxV+MULls2xUHPAccWc2k5IENMxCFAbyjS5KaCBLexWA0AgSBHFajKo+secWCbDFnI5tB3XAJEFiI0p7c2Wf9WWzSywNQg1cLojEWWm4wBbQGE7RM2eaplaHGMDWTwSBBsWJygiQr04THWkBTBzObWAMCmD8J2O7G0kBaQZTDop6EZd+9RSElIvyVrqzzW+weLpR7b2PWx2Qi+8DKstzmz1RJDZjHEhgBojAvKIAuwizIjlWCrwyKWORblwUSViWJATToDdC+/rNsqSMFeg4u/vN/O5vdgEuV2MLwXJu6XY3ZPaidvbcff+qsNS3YfJek9v7nTdvahZgCLLTpRGRR73Ez3ayeagvFCXLloNso7Zw94Ar29+TxdvF/8AL9VCmQ==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Native crate archive prefix differs",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an archive of the wrapper with a file beside its name",
+   "delta": {
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBRgG5/h+LCAAA8VNlAv/t1c1PgzAYx3HO/BULnillFDjtMJGYJQ4T8OVgluUR6kbkZaFM438vc4mLO6gHR7L5+1xKGpJe+n1Kr8osUlO9KZMz4TJuBdQsatbWZaH9Ed7xhPhYO/sr576z+97s20MxtLUB13qwVi013fHa//SwovSZFnKmV1TKkUGf98HQX2Sj8roaGdubYehFnspKdX9NksDQNTh+9E3/rG7yRQ/920N3r3/HcT3032f/rJQtZdQS292ImZ7WZZm35pLUshsNv4TJcNT9b3esvEqLdSatetWNfFVYj6QkWx7m/XfFXv8eFz7678NZJp/ySg7G98lVML8L42RyHc2j2+l5GM+Tm3gSXQ4Ml/mb5x+1nJ44HF9Mw8Oe8WP/3P7aP/c8W6D/PjRIAAAAAAAAAAAAAAAA4KS8A26I4h8AKAAAXhmnCQ==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Source SHA-256 or size differs: aws-lc-sys-0.45.0",
+    "kind": "vendor"
+   }
+  },
+  {
+   "name": "an unpacked file more than the archive has",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/extra.c": {
+     "deflated": "eNrLzCtRSK0oKUq05gIAGTAD1Q==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an unpacked file fewer than the archive has",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": "absent"
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an unpacked file with other bytes",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNU4gIANHAMcw==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "no mark that the archive was unpacked",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": "absent"
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "another mark that the archive was unpacked",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+     "deflated": "eNqrVipTsjKqBQAIlQIf",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a mark with a line end",
+   "delta": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/.cargo-ok": {
+     "deflated": "eNqrVipTsjKs5QIACrsCKA==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled native source differs from authenticated crate bytes",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an unpacked link",
+   "delta": {},
+   "links": {
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/link": "Cargo.toml"
+   },
+   "result": {
+    "raised": "OSError",
+    "said": "[Errno 62] Too many levels of symbolic links: '<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/link'"
+   }
+  },
+  {
+   "name": "a wrapper without its original manifest",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0LtuhDAQheGex3AbAbbxNdI+yWoLMx6DFW5iTJJ9+7BlRMr0/5E+nft9C/ARBnw8qiXMeGPhi+oJanoSqz5xp7wuN8YbpRvOKlqPHc5oxyFT2Z9vYykbvbftkMt49A2sc7sfVOopLEMLeyhITV7rvET8ZhWMCB90zDcWLddouQUvY/AeBHg0nVUGuXI+eozS9r1KychgUoQz77RI6JyRnIeOVfeLfN1wIZoudN8IYf/RrpNJQaSkZHA8nraopXedhBQ7ZY3mqI3rNXrFsXfCeJAgFarkRdcj4l/2GWMOp3C76IV9HX9dUJ63CanAGMrvwav/ASlCmQ4=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNqT7+ZgYPgYnMr0/+1lR+/DBiLsH+b81vSyMT+btmte2QWjJQtEo+aySz69eTTyzKWLOV33751pPLTnVcC3/7FxFTYV7Xvs9+46YTKxuniiiJag0bkV8SVJd3V5fytektb8Grj3r1Zq1a+v976xO5vKbAjYxHxjh+nXOltrv+/aWfMyF6Y3Ll0qV/xrD7vcnhf3ts6V/Xw39cOBLb3bzvk/DT3GzPZfvvb0/3XC27cZzt7Zt3vq/6L0R+xFUTZ//f4Jb53+f2KI5qd6DvXivzeiZOfdDZ0eaTt3Smhd7JWjb6/+XLJm9WwjfT2neR0l0vVLWBlQwYP3lezZmSyqDBoMDADlKnoM",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGCQuAubNcUiWWseksDO7U1spSuhiU4OBQjiZ7FT+fYXBXMp2JrO7fsBwult91K3u1o+Ly0sFU1xUjEYk3xZ5xrJK+Xz5QwqkKE0IywSTgOIvZ8pVg2Z4u4fSJH5hcVmRg6DA1aYWPLOM5qW2ZTTBIt8VE/EqJkCFrgo0ygqhHVmW7DkRSZ7V1viDv4PtMysPplvbViT4VkskzSp5ZlGaZN9EvyX8IiYpqRl1mERFJZWJRP5qEYmR8rWo8ok0SInSwk9XncWrqNi2tnjaQ28tm9Gmf+ZCVJR8+qRc9Uhv/pKX31g5lAmRDj8bfu8x63XpyLKoNiXDtDMdbSAvZMpF+iH6v0qo9dSlqPXVZ4fkGU/Wu5JFeVHJpIqBQyXLJ2KDS0Y7pzVERT763uZ0l7IRxLJ1ko2hiolKNFRbokqSyT2mKSsj6UW3UH2gbBPbhFoc6CZAts4tCzJEgM502+BYjy3XZsQyYsN1KXB1aJoW1CGmiCKd2QAczujpQpJ5LgkbRpnn5RbXBahUuFTXf/ecE1qjh+SYKlCNXtgTBv/x16+5K+u8KJuqKsRnTVsn1WYXq7JJaC2J7r9kKcOCCY3mL1maY6qNaI6/1HZjozM3KOFmZ90JKdk6EVX5eqo7kRJX+5AOavpqIIoGywLVtNSfpOPQ16Z/LCfz2f/Rmn49wf1WJiPKoyRTG1jydNnE1Sl2XQKJy5Bhm4gB03Gpy6hux7HJOdIx4pRIdcOCnDkO0gHAxtkkN0Wu7qMn1CTXmjetZ6UdEWy0x/nsKr7bd5xkdM2y6Cgi78Wki0prPSFpIr3ahqqP+mIXGOhgSmUVIhDTGDCTgFgGgXEHIhkHW4eOxZm7f0LCscuJi7lrxwRhDEwrHq76wdAMqGnHNIfB6cJzps8NInIdhP7ibrmcRw+hd+v/WRMRybZIZdciG1xF+6EUWRGEERiSvn705zeRPMDzmTQNvvg3XlgbB7e3x2pz/1q6OCte/jYNvUbrrM7KW64k0/PyIDjlYHY//d2LWpWvD16tEjZd5FjNXyxX0/m8JnLjh+3F41jtIVj6Kz9YSP0b78GTj8UqmgU3+8WDxdDAW0yv5140C78+rAJpOPdnvndqk63iMngMZ150H9z4t/5sWns5oXznLbxwuvKi8HG5iq4ljTqHx95H4mg1De+8VfTFC5ftslC1wfGJOTWdEMeGrWMgJ5RhMIND3ZH1r2Mn5ggSRBxXghw5DJsGdUzkMmjZrg5iE2DLIWTQW/5VWba9wFIhVMHpikSEGrbsPxxyy8a6Y9fD1JSdSEcmizl2dJNhFGMuX2zZzLgJHNnAiAm4QSiE71TkYCJJIm1j0nBJNvLaJ4cSF1qF10J7bviNBs8wss3eo3YmDMJLHTnFqSWfCFKLUsY5kG2EQxYT4LjIodi0TRl45BLbJIy7qFbRTcgww8AahPd1G+dpVEhSyff3i/ncXGyD3A3GlxIX/VDs70ldxx3MuHt/1XOp78N4vcfbO11/L2oHIM/zE0ejhifDRCs70S5UlPLSRepG1gsH3Fvizc3v6eLt4h99LkO1",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'Cargo.toml.orig'"
+   }
+  },
+  {
+   "name": "an original manifest that is no TOML",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0D1uxCAQBeDex6CNbAMGA5H2JKsthmGwUfwng5Ps7eMtI6dMM9V70vfmft8AP2Cgx6NaYKYbg69cT1jnZ2bVJ+05rcuN8UbphrMqr8eOZ2inIeWyP9/GUrb83rZDKuPhG1zndj9yqSdYhhZ3KJSbtNZpCfTNKhwJP/Ix35gOVlsfwJB05w0UrdfgVeTWorOdAXIOtSAJZKSlvnPadkoil+A7GVh1v8jXjZacpwvdNUKY/7THPoKIUUmwPAQ0QcuTLDGGTplec9L9uYac4uSt6B1KlIpUdKLzRPSXfaaQ4BRuF70wr8dfGznN20S54Ajld+GV/wHutZmg",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBFAHr/h+LCAAA8VNlAv/t1U9LwzAAh+Ge+ylKPDdN13Q97TDLkIJWaP1zECmxi7WYJaPZFL+9nQWFHjxpUfZ7LgkhkEveRLxaX9W+fbM+ozymLEhF1xi6Mxvl/BDWm3P+MfbGI2NJ9DU/rIczPgsdjzkT2Nud6PrjneN0txX1s2jkvavFRi6I+LwPxH2RnW2NXpDhZhBXtbXUtt+VlSlxHfj/xDf9U9O1zRT9h+Go/yiKGfqfsn/UjP6H/oeVoNW12q9lYLb9k29V8CCspE+/03/MR/3PGU/Q/xRO1vKx1dJb3pbnaXWzKsrsMq/y64vTVVGVV0WWn3kkpsnh+0ctAAAAAAAAAAAAAAAAAAB/1zvonM9PACgAABL1jGY=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT+UCABFZAzI=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvo0YUfs+viHjdGIbrDPvmOCRFdUyEnW1XVYSGudhoMSAGJ5uu8t87GMxFtrPZtn7AcC5zvnOfHxeXlwqmuKgYjUi+LfKMZZXy+fKHZEhWmhCWCSYJir+cKVcNNcPbPSlN4hcWlxU5MApcbWrGM8toXmpbRhMs8l0xEa9iAlTdVYFGWSG0I82SPSciybNaG3/wd9B9ZuVBdQuhIolvNUfCrJJnFqVJ9k30LuEXMUlJjaijSaqopDCRlL9aiqSR8rWo8olUSInSkp+uOo1XUbFtrfG0J721aEZO/8yEqCj59Em56im9+ktefmPlkCdEOvxs8L2HrJelI82i2pQM00515EBeyJSL9EPwfxVQa6lLUWurzw7JM56sdyWL8qKSSRUDg0qWT8QGl4x2RmsSFfnoe5vTXcpGJJatk2xMqpioRAO1BaokmfQxTVkZSSuG7dQFBS0MCbU5MCzgQIPbts4cAgxmQJNjI7ZdyIhtxqbrUuAaumXZuqFj6lDHYBCAQ42ebiSZ55KwYZR5Xm5x3YBKhUt1/XePOaE19ZAcSwWq2TN7wOA//vozd2WdF2VTVYX4rGnrpNrsYlUOCa0F0f2XLGVYMKHR/CVLc0y1Eczxl9o6Nqq5QQs3nnUVUrJ1Iqry9dR0IiWu9iEd9PTVgBUNjgWqZas/Scdhrk3/WE7ms/9jNP16gntXJiPIoyTbFNkophgyw5VPyjiKbRxbHCBEXGRCzFyXyFI1MIMGYo7p2si0DFm4ODYNejbJTZOr++gJNcm15k3rUWlHABvpcT67ju/8jpOMrlkWHUXkvZh0UWm1JyRNpFVoqsZoLnaB0RGmVHahA2IaA2YREHPuyPDojsMpNHRkc+bunzrh2OXExdyFMXEwBpYdD0/9YGgG0LRjmMPgdOE5M+cGEbkOQn9xt1zOo4fQu/X/rIGIZFukcmqRDa6i/VKK7EjXIzAEff3oz28iWcDzmVQNvvg3XlgrB7e3x2Jz/1qaOMte/jYNvUbqrMzKW64k0vP8IDhlYHY//d2LWpGvD14tEjZT5FjMXyxX0/m8BnLjh+3F41jsIVj6Kz9YSPkb78GTj8UqmgU3+8ODxVDBW0yv5140C78+rAKpOPdnvnfKyVZwGTyGMy+6D278W382ra2cEL7zFl44XXlR+LhcRdcSRp3DY+sjdrSahnfeKvrihcv2WF2F4LhiTm0nh2MTGhjIDWWazOS6gSzkGhjF3NGJQ5AridxBDFsmRZbjMt2GrgFiC2AbETKYLf+qLdtZYKu6roLTHekQakIIbK5zG2IDwXqZWgwhw7FYzDEyLIadGHP5AqnsSAsg6jJiAW4SquvvdORgI0kg7WDScEk28tonlxIXWoXXQntu8I0WzzCyje9RuxMG4aVIbnFqy6ejU5vKMcuBHCNcZzEByHUQxRa0ZOAdl0CLMO46tYhh6QwzDOxBeF+3cZ5GhQSVfH+/mc/txTbI3WJ8KXHRL8X+ntRN3MGOu/dXPZb6PozXe3p7p+vvRe0C5Hl+ojRq8mSYaGUn2oOKUl66SD3IeuYAewu8ufk9Xbxd/ANUL0RH",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "TOMLDecodeError",
+    "said": "Expected ']' at the end of a table declaration (at line 1, column 9)"
+   }
+  },
+  {
+   "name": "an original manifest without a package",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0D1uhDAQBeCeY7iNANvYYK/ESVZb2OMxWMufGJNkbx+2jEiZcqT3pO/N/b45eLoBH49icTP2zH1ROUFJL2LFJ+6U1qVnvFK64qyg9djhDO04JMr762PMeaNbXQ8pj4evYJ3r/aBcTm4ZathdRqrSWqYl4DcrYER40jH3TJgOOvRtMEJGEJxz6y3I6EXkCs+70WikM0baoBvUQaGxxgYVlXONVqy4X+TrhgvRdKHbSojuH+06ttGJGNXp4yFAF7S0ppEQQ6O6VnPUrfEareLojWjPXSAVqmhF4xHxL/uMIblTuF30ons//tqgNG8TUobR5d+Fd/4H0veYzA==",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBHAHj/h+LCAAA8VNlAv/t1U9rgzAcxnHPvgrJzsZYYz31sEkZwuZA9+cwhmQ2c1KbFNOu7N0vXaEDDzttstHnc0kIQi75/hQ743e1b96NzyiPKQtS0TeabvSqc34Is6acf67WcGUsib72+/Nwwieh4zFnBFuzEb293jlNj2tRL0Ujn1wlVnJGxPE9EPdN9qbVakYOL4O4XVtLZexXWZkS14H/T3zTP9V924zRf8gH/UdRHKH/Ufrf6X5p7BCwEwA1oH8WHE6CVtXddiEDvbYj33TBszCSvv5O//Gw/ynjCfofw9lCvrRKeucP5VVa3c+LMrvJq/zu+mJeVOVtkeWXHolpsv/9oxYAAAAAAAAAAAAAAAAAgL/rA1hy2+UAKAAAz5qLLA==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLs8vyi4uSExOjeUCACBGBJI=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1v4jgQ/t5fUfF1S2Inztt+ozTtRUehArp3q1MVOfYYog1JFId2e6v+93Mg5EVAt3t3fAjJMzOexzOeGf+4uLwcUE7zEnjIsk2epZCWg8+XP5RAiZKYQSpBAYNgMR5c7dGUbnZQEkcvEBUlOwhyWq4rwTOkPCv0DfCYymybD+WrHCINexrSOeRSP7Is4DmWcZZW1vSDv4PtMxQH043jDBT4VkkUzTJ+hjCJ02+y3RJ9kcOEVYwaTKGyVMpMIX/ViMJY8ZqX2VAZJGxQw09XjcWrLGFTWTztoLeaTW/TP3MhS84+fRpctUhr/pIV36DoyqRMup97fu8xa3V5zzIv1wVQ3pj2NpDlKuUy+RD9XyVUe2pSVPtqs8OyVMSrbQFhlpcqqbLjcJBmQ7mmBfDGaQVxmfW+NxnfJtCDIF3FaR8qQZZyT7UmOohTtcckgSJUXgzLrg6UQ6jDuCWQQZDtGMKyMNgMGWA4pqBGZHkOMMuMTM/jyDMwIRY2MOU2tw1wEDqc0dOFpPJcMOhGWWTFhlYFOChpoa3+bjnHvEIPySEa0sxW2BJG//HXrrktqrwM1mWZy8+6vorL9TbSVJPQaxLNfwEJUAlS59lLmmSU6z2a/S+t3ljvzHVKeL+z5oQUsIplWbye6k6soOUupJ2avuqIws6ySCOW9pN0HPra6I/FcDL+P1rTrye43cqwR7mXZOw6zIHI5i42BMMqbV7kMUNEWCAC6tu0wDWo6xoet0ywOAHXcz1OBKHUtMjZJO+LXNtFT2pxpu/f9JaVfkRwr93PZ1Pxzb6jOOUrSMOjiLwXkyYqtfWQJbHy6pia0euLncBQzlUV2ijiEQLCUCSEDcLFti24Y2DXEuDtnpgJ6gnmUeE5EbMpRcSKuqt+MDQdavoxzW5wmvCc6XOdiFzP5sH0brGYhA9z/zb4syIi402eqK7F1rQMd0MptEKMQ9Qlff0YTG5CdYAnY2U6+xLc+PPKeHZ7e6w2Ca6Vi7PixW+jub/XOquz9BdLxfS8fDY75WB8P/rdD2uVrw9+pTLfd5FjtWC6WI4mk4rITTCvLx7Hag+zRbAMZlOlf+M/+OoxXYbj2c1u8dm0a+BPR9cTPxzPvz4sZ8pwEowD/9Qma8XF7HE+9sP72U1wG4xHlZcTynf+1J+Pln44f1wsw2tFo8rhsfeeOFyO5nf+Mvzizxf1slhz0PGJOTWdbEFNx6BITSjTBFNgwyWupwo/EjZmNnM9BQrbBUpM7hLbA2w5noEigqjlMtbpLf+qLOteYGkYa+h0RdqMm46DLIGF5VDDdaphqtqRa9gEIkFdgwC1IyrUi8NVRRLkcg8YQcJkHON3KrIzkRSRujHptGBrde1TQ0lIvaQrqT/v+fUGTzey+72H9UzohJe7aopzSz1tzC3OQQik2ojAEDHkerbLKXGICrztMYcwEJ5dqRgEAwWKrE54XzdRloS5IhV/f7+Yz83FOsjNYHwpaN4Oxfae1HTczoy7D5Ytl+o+TFc7vL7TtfeiegCKLDtxNCp42E30YCvrhfJCXbpY1chaYYd7TXx/83u6eLv4B8PSQ3M=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'package'"
+   }
+  },
+  {
+   "name": "an original manifest without metadata",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DtuwzAQBNBex1AbSCIpfg34JIYLcrmUCOsHLZXEt49dBkqZfgbzMLfb5uHhB7zfq8XPeK39FzUTNPSkuvrEnfK6XGvWStWyuqL12OEV2nHIVPbnx1jKRpeuG3IZj9DCOnf7QaWZ/DJ0sPuC1Oa1yUvE77qCEeFBx/xa6QNjKcrAuUvRRaODNdqboKHvpRABEktWJyt1dElxpXliApz2UglmQl3dTvJ1w4VoOtFdy7n5R7tKOnmekhTeshjBRCWc7QWk2EujFUOlbVDoJMNguXYgQEiUyfE+IOJf9hlj9i/hdtJz8z7+3KA8bxNSgdGX34V3/gcbMJj6",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBEwHs/h+LCAAA8VNlAv/t1U9LwzAAh+Ge+ylKPDfN1mQ97aBlSEErtP45iJTYxRrMmtFsit/ezoFCD560Kvs9l4QQyCVvIl9caOrQvbqQUS4oi1LZNZZu7Mp434T1Zpy/j73hyFgSf85365Mpn068gHkj2LqN7PrjvcN0u5b1k2zUnd/KlZoT+XEfiP+sOqdtOyf7m0F8o2vVun5XVqbE9+D/k1/0T22nmzH6j/mg/zgWAv3/dv+o4xD7369Euq3Ndqkiu+6ffGeie+kUffyZ/sWw/xnjCfofw9FSPehWBcc35VlaXS+KMrvIq/zq/GRRVOVlkeWnARE02X3/qAUAAAAAAAAAAAAAAAAA4O96A2P8c/cAKAAANH2Qug==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiAgCR6gmO",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpPw6MUhcJJg3xyFZah07hZ3ZndpKUUIXmxoMFMLJZKfy7ysM5lK2M5nd9QOG093qo251t35cXF6OCCN5yVlIs22epTwtR58vfyiBEiUx5ankChj5y+noqkZTst1DSRy98Kgo6UGQk3JTCZ55yrJC33IWE5nt8rF8lWOgQVcDOuO51I8sC/4cyzhLK2vywd/B9pkXB9MtxiMFvlUSRbOMn3mYxOk32W2JvMhxQitGLaZQWSplqpC/GkRhtHjNy2ysDBI6auCnq9biVZZ8W1k87aG3hs1g0z9zIUtGP30aXXVIZ/6SFd940ZdJmfQ/a37vMet02cAyLzcFJ6w1HWwgy1XKZfIh+r9KqPHUpqjx1WWHZqmI17uCh1leqqTKnsNRmo3lhhSctU4riMls8L3N2C7hA4in6zgdQiWXpaypNkRHcar2mCS8CJUXw0bVgcIWwZTZAhgWQNgQtg05osDgBjYFMSLbxZzaZmS6LgOuAS3LhgYkDDFkcAzA4YyeLiSV54LyfpRFVmxJVYCjkhTa+u+Oc8wq9JAcSwOa2Qk7wuA//ro1d0WVl9GmLHP5WdfXcbnZRZpqEnpDov0veMKJ5FJn2UuaZITpA5rDL63Z2ODM9Uq43ll7Qgq+jmVZvJ7qTrQg5T6kvZq+6onC3rJAs2ztJ+k49LXJH8vxbPp/tKZfT3C3lfGA8iDJxIwAEMyKIHQFcxlGkYMRwRGipmkZRkQFEA4SjoWYK2xoI6hOMHURsWwD4Ohskusi1/bRk1qc6fWb3rHSjwjW2sN8thXf7juKU7bmaXgUkfdi0kalsR7TJFZesakZg77YBgY6hDFVhQhELALcoiASAnHhQIQEwwZ0bMHd/RNSQVxBXSJcHFFECLDsqL/qB0PTo6Yf0+wHpw3PmT7Xi8j1IvDnd8vlLHwIvFv/z4qIjLd5oroW3ZAy3A+l0A4hDEGf9PWjP7sJ1QGeTZXp4ot/4wWV8eL29lht5l8rF2fFy98mgVdrndVZecuVYnpevliccjC9n/zuhY3K1wevUgnqLnKs5s+Xq8lsVhG58YPm4nGs9rBY+it/MVf6N96Dpx7zVThd3OwXX8z7Bt58cj3zwmnw9WG1UIYzf+p7pzbZKC4Xj8HUC+8XN/6tP51UXk4o33lzL5isvDB4XK7Ca0WjyuGx94E4XE2CO28VfvGCZbMs1DA4PjGnphMSxMQGAWpCmSY3BTQcy3EN4kQCQYqo4ypQIIcTy2SqGbgc2tg1QGQBYjuU9nrLvyrLphfYGoQaOF2RiDITY2ALKGxMDAdXw9TijmMgi0eCOIbFCYqIUC+YqYq0gMNcTi0gTMogfKciexNJEWkak04KulHXPjWUhNRLspb6c81vMHj6ka33HjYzoRde5qgpzmz1RJDZjHEhgGojAvKIAsdFDiMWtlTgkUuxRblwUaViWJATToDdC+/rNsqSMFek4u/vF/O5udgEuR2MLwXJu6HY3ZPajtubcff+quNS3YfJeo83d7ruXtQMQJFlJ45GBY/7iR7tZLNQXqhLF60aWSfscW+I1ze/p4u3i38AA4hDoQ==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'metadata'"
+   }
+  },
+  {
+   "name": "an original manifest without the wrapper's metadata",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0L1uxCAQBODej0Eb2QYDBiLdk5yuWJbFRvGfDE5ybx9fGTllypFmpE9zv2+AHzDQ41EtMNONwVeuJ6zzM7Pqk/ac1uXGeKN0w1mV12PHs7TTkHLZn29jKVt+b9shlfHwDa5zux+51BMsQ4s7FMpNWuu0BPpmFY6EH/mYb8yS8VJFH3xUIG30vYxn0i5K9DxgHyEQWOAYvZUIEQzvemskcQEOBKvuF/m60ZLzdKG7Rgjzj3YdT52IUXVgeQhogu6clR3GIJXpNSfdW6/JKU7eit5hh50iFZ2Qnoj+ss8UEpzC7aIX5nX8dZHTvE2UC45Qfg9e/R/eTpst",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBIgHd/h+LCAAA8VNlAv/t1U1rgzAAxnHPfgrJzsZYo5562KQMYXOgezmMIplmVqamGLuXbz+7wgYedtpko8/vkhACueSfiBdtN4Wt37TNKPcpcyLRV4oOqm2MH8JGAecf42g6MhZ6X/P9urvgC9ewmDGDnR5EPx5vHKf7rSieRCXXZidauSTi8z4Q81n2ulbdkhxuBjGbupCdHnfFWURMA/4/8U3/VPV1NUf/nj/p3/P8AP3P2T9t5SBKMQiqho3s1+br0kXhx9j/YcWpu6LZldJR2/HJ143zILSkm9/p3+eT/gPGQ/Q/h5NSPtadtE7vsosov12lWXyV5MnN5dkqzbPrNE7OLeLTcP/9oxYAAAAAAAAAAAAAAAAAgL/rHVCY9mIAKAAABfeTQA==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdTLL8lILYrlqrA15AIApMsKPg==",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGCRugnlzHJKl1jEp7Mzu1FaKErrY1GCgEE4mO5V/X2Ewl7KdyeyuHzCc7lYfdau79ePi8lLBFBcVoxHJt0WesaxSPl/+kAIpShPCMsEkoPjLmXLVoBne7qE0iV9YXFbkIChwtakFzyyjealtGU2wyHfFRLyKCVChqwKNskJoR5Yle05Ekme1Nf7g72D7zMqD6RYhRYJvtUTSrJJnFqVJ9k30W8IvYpKSmlGHSVRUUplI5K8WkRgpX4sqn0iDlCgt/HTVWbyKim1ri6c99NayGW36Zy5ERcmnT8pVj/TmL3n5jZVDmRDp8LPh9x6zXpeOLItqUzJMO9PRBvJCplykH6L/q4RaT12KWl99dkie8WS9K1mUF5VMqhg4VLJ8Ija4ZLRzWkNU5KPvbU53KRtBLFsn2RiqmKhEQ7UlqiSZ3GOasjKSXnTLrg8UMjEi1OJAN4GNdG5ZkNkE6ExHBsd6bLmIEcuIDdelwNWhaVpQh5ja1NYZAuBwRk8XksxzSdgwyjwvt7guQKXCpbr+u+ec0Bo9JMdUgWr0wp4w+I+/fs1dWedF2VRVIT5r2jqpNrtYlU1Ca0l0/yVLGRZMaDR/ydIcU21Ec/ylthsbnblBCTc7605IydaJqMrXU92JlLjah3RQ01cDUTRYFqimpf4kHYe+Nv1jOZnP/o/W9OsJ7rcyGVEeJdlhKDZMHtOYm9hweGwbXH5ZLjdIDCixOaYMOxgQHjsGwRwjoNsOMhiA2MXwbJKbIlf30RNqkmvNm9az0o4INtrjfHYV3+07TjK6Zll0FJH3YtJFpbWekDSRXpGh6qO+2AUGOphSWYU2kLEBzCQg5txm3IG2zSnSoWNx5u6fkHDscuJi7qKY2BgD04qHq34wNANq2jHNYXC68Jzpc4OIXAehv7hbLufRQ+jd+n/WRESyLVLZtcgGV9F+KEVWBGEEhqSvH/35TSQP8HwmTYMv/o0X1sbB7e2x2ty/li7Oipe/TUOv0Tqrs/KWK8n0vDwITjmY3U9/96JW5euDV6uETRc5VvMXy9V0Pq+J3Phhe/E4VnsIlv7KDxZS/8Z78ORjsYpmwc1+8WAxNPAW0+u5F83Crw+rQBrO/Znvndpkq7gMHsOZF90HN/6tP5vWXk4o33kLL5yuvCh8XK6ia0mjzuGx95E4Wk3DO28VffHCZbssVBE4PjGnppOscwPpssypZRjM4FB3TMfVsRNzGxKbOK4Eue0wbBrUMW2XQQu5OohNgC2HkEFv+Vdl2fYCS4VQBacr0ibUQAhYHHILYd1B9TA1mePotslijh3dZNiOMZcviMqKNIFDXUZMIHsZhfCdihxMJEmkbUwaLslGXvvkUOJCq/BaaM8Nv9HgGUa22XvUzoRBeKkjpzi15NOG1KKUcQ5kG+GQxQQ4ru1QbCJTBt52CTIJ465dq+gmZJhhYA3C+7qN8zQqJKnk+/vFfG4utkHuBuNLiYt+KPb3pK7jDmbcvb/qudT3Ybze4+2drr8XtQOQ5/mJo1HDk2GilZ1oFypKeekidSPrhQPuLfHm5vd08XbxD5utRdQ=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'aws-lc-sys'"
+   }
+  },
+  {
+   "name": "an original manifest without a commit",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqtz8tugzAQheE9j8G24mJjGxyJJ0FZ2DNjsMJNjGmbty9dVsmy+/9I3xmG3cHDjXS/Z6tbqM/dFxczFPzkPPukg+O29nldKl3WecbbecAVHTRGTsfzY0pp51tVjTFNpy9hW6rj5FTMbh0rOFwiLuNWxBXpO89gInjwufS5MVp1XlkSirDFJmjRUiAg8hbQSidJu9oAoUerpNQB0GBjNNmGQF2U4UW+7bQyzy90WwrR/qNdBxOcCEFJ19WI0KKWtmskBGxUa3RN2nT+kqqafCeMBQlSkQpWNJ6I3tkXwugu4f6iF2359i3HZZ+JE0wu/R389j/A1Jpa",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBIQHe/h+LCAAA8VNlAv/t1c1LhEAYx3HP/hViZ8dRx/W0h5IlhDLQXg6xyJNOJvmyOG4v/31uCy146FRS7O9zGRkGvDzfGXpVVp1b6l1ZnAmfcTukvuzY0DW19kP4aCHE5zqarpwH3uF7t++4wnU0g2sz2KqB+vH32nG631D+TKVc6y01cmnS1zyY+ovsVdW1S3M/GaZeV7ls1XgqSkNT1+D/o2/6Z11flXP0L9xJ/57nC/Q/Z/+skQMVNBA7TMRaf1s6yPzI+t/v2FWb19tC2t1mvPJVbT+Qkuzpd/r3xaT/BRcB+p/DSSEfq1Yap3fpRZjdrpI0uoqz+ObybJVk6XUSxeeG6bNg9/yjFgAAAAAAAAAAAAAAAACAv+sDAeuSJQAoAAA9EJTf",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuWqsDXkAgDfEAvv",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9vozgQfu9fUeV1GzBgDOxbmtIeujSpknTvVqcKGXucoCWAMGm3t+r/fiYh/FCSbvfu8kDgmxnP5xnPjH9cXF4OKKd5CTxk2SbPUkjLwefLH0qgREnMIJWggEGwGA+u9mhKNzsoiaMXiIqSHQQ5LdeV4BlSnhX6BnhMZbbNh/JVDpFmeBrSOeRSP7Is4DmWcZZW1vSDv4PtMxQH043jDBT4VkkUzTJ+hjCJ02+y3RJ9kcOEVYwaTKGyVMpMIX/ViMJY8ZqX2VAZJGxQw09XjcWrLGFTWTztoLeaTW/TP3MhS84+fRpctUhr/pIV36DoyqRMup97fu8xa3V5zzIv1wVQ3pj2NpDlKuUy+RD9XyVUe2pSVPtqs8OyVMSrbQFhlpcqqbLjcJBmQ7mmBfDGaQVxmfW+NxnfJtCDIF3FaR8qQZZyT7UmOohTtcckgSJUXkybVAfKwdRh3BbIxIg4prBtAwhDJpiOJagZ2Z4DzLYiy/M48kwDY9swDcoJJyY4CB3O6OlCUnkuGHSjLLJiQ6sCHJS00FZ/t5xjXqGH5GANaVYrbAmj//hr19wWVV4G67LM5WddX8XlehtpqknoNYnmv4AEqASp8+wlTTLK9R7N/pdWb6x35jolvN9Zc0IKWMWyLF5PdSdW0HIX0k5NX3VEYWdZpGFb+0k6Dn1t9MdiOBn/H63p1xPcbmXYo9xLMiE2diPsgYGBO9wStuGAAAYQeYx7JjXBpogw4BH3sGnagqkTaREbPAsYPp/kfZFru+hJLc70/ZvestKPCO61+/lsKr7ZdxSnfAVpeBSR92LSRKW2HrIkVl4dSzN7fbEJjOFSzlUVEhTxCAFmKBKCgHANQgR3TMO1BXi7p8EE9QTzqPCciBFKEbaj7qofDE2Hmn5MsxucJjxn+lwnItezeTC9Wywm4cPcvw3+rIjIeJMnqmuxNS3D3VAK7dAwQtQlff0YTG5CdYAnY2U6+xLc+PPKeHZ7e6w2Ca6Vi7PixW+jub/XOquz9BdLxfS8fDY75WB8P/rdD2uVrw9+pTLfd5FjtWC6WI4mk4rITTCvLx7Hag+zRbAMZlOlf+M/+OoxXYbj2c1u8dm0a+BPR9cTPxzPvz4sZ8pwEowD/9Qma8XF7HE+9sP72U1wG4xHlZcTynf+1J+Pln44f1wsw2tFo8rhsfeeOFyO5nf+Mvzizxf1sobmoOMTc2o6EUEtx6RITSjLAksYpotdVf5uJIjBCHM9BQriAsUWdzFRDcN2PBNFGFHbZazTW/5VWda9wNYMQ0OnK5IwbjkOsoUhbIearlMNUwyuaxIMkaCuiYGSiAr14nBVkRi53KualLAYN4x3KrIzkRSRujHptGBrde1TQ0lIvaQrqT/v+fUGTzey+72H9UzohJe7aopzWz2JwW3OQQik2ogwIGLI9YjLKXawCjzxmIMZCI9UKiY2gAJFdie8r5soS8JckYq/v1/M5+ZiHeRmML4UNG+HYntPajpuZ8bdB8uWS3UfpqsdXt/p2ntRPQBFlp04GhU87CZ6sJX1QnmhLl2samStsMO9Jr6/+T1dvF38Aw8ERQE=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'commit-hash'"
+   }
+  },
+  {
+   "name": "an original manifest with a short commit",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0E1uwyAQBeC9j8G2sg0YMETKSaIsYBhsFP/Jg9vm9k2WlbvsbhbvSd+b223z8PAD3u/V4me8Mv9F9QQ1PYlVn7hTXpcr443SDWcVrccOr9COQ6ayPz/GUja6tO2Qy3iEBta53Q8q9eSXoYXdF6Qmr3VeIn6zCkaEBx3zlXU2SW1EQmVDkK+bg7WBW4+9ByMTSuGMBKl6CbrzSrsOeEJAjFIFJVh1O8nXDRei6UR3jRD9P9p1MsmLlJT0lscIfdTS2U5Cip3qjeaojQ0aneIYrDAO3kNQJSe6gIh/2WeM2b+E20kv+vfjzw3K8zYhFRh9+V14538Abx2ZTw==",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLAHT/h+LCAAA8VNlAv/t1c1rgzAYx3HP/hXizsa0aj31sEkZwuZA93IYRZ5ppjJfirEb+++XrtCCh7HDJiv7fS6REPCS7xN6k1adWfJdWpy5HuN2QH3RsaFrau2HcGXhup+rMl45953j925/NnfnM83g2gS2cqBe/V77nx43lL1QIdZ6S41YmnS4D6b+KnpZde3S3N8MU6+rTLRSnQqTwNQ1OH30Rf+s66tigv5V7qP+Hcfz0P+U/bNGDJTTQOx4I9Z61jVNNVglyVKNhu/BYDjt/vc7dtVm9TYXdrdRI1/W9hNJwcrfef+9cf8L7vrofwpnuXiuWmGcPyRXQXq/ipPwJkqju+uLVZwmt3EYXRqmx/zd849aAAAAAAAAAAAAAAAAAAD+rg/O9K4eACgAANWBmpc=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVSiQOKHEBACzcHqs=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttu2zgQfc9XBH5tLJEUdeub4yhZYR07sN3uFotCoMihLVSWBFFOmi3670vZii6wk7a76wdZOjPDOZzhzPDbxeXliAlWVCAinu+KPIOsGr2//KYFWpQmHDIFGhiFq+no6ohmbHeA0iR+gris+IugYNW2FjxCJvLS3IFImMr3xVg9qzEysG8gU0ChzBPLEh4TleRZbc1+8vdi+wjli+nOdUca/F5LNM0qeYQoTbIvqtsSe1LjlNeMWkyjqtLKXCN/NYjGePlcVPlYG6R81MCfr1qLZ1XBrrb4fIC+N2wGm/6RC1UJ/u7d6KpDOvOnvPwCZV+mVNr/PPJ7i1mnKwaWRbUtgYnWdLCBvNApV+lP0f9VQo2nNkWNry47PM9kstmXEOVFpZOqeg5HWT5WW1aCaJ3WkFD54HuXi30KAwiyTZINoQpUpY5UG6KjJNN7TFMoI+2F2E59oFzKXC5siQhFjkukbWNwOCJAXEsyEtu+C9y2Ysv3BfIJptTGBDPhCIeAi9DLGT1fSDrPJYd+lGVe7lhdgKOKlcbm745zImr0JTnUQIbVCTvC6D/+ujX3ZZ2X0baqCvXeNDdJtd3Hhm4SZkOi/S8hBaZAmSJ/ytKcCXNAc/hlNBsbnLleCR931p6QEjaJqsrnc92Jl6w6hLRX01c9UdRbFhnUNn6Qjpe+NvljNZ5N/4/W9OsJ7rYyHlAeJNnypH7DEqgXx0S/I+55MfIYuIw7RALBvkM4oS7Rh5NR27c4ksABBKExxa8m+VjkxiF6ykhy8/hmdqzME4JH7WE+24pv9x0nmdhAFp1E5K2YtFFprMc8TbRX1zLIoC+2gcEeE0JXoYNiESOgHMVSOiA97DhSuAR7tgT/8MRcMl9yn0nfjbnDGKJ23F/1J0PTo2ae0uwHpw3PK32uF5HrxTKc361Ws+hhGdyGf9ZEVLIrUt21+JZV0WEoRXaEcYT6pK8/hLObSB/g2VSbLj6GN8GyNl7c3p6qzcJr7eJV8eq3yTI4ar2qsw5Wa830dflicc7B9H7yexA1Kp8eglpleewip2rhfLWezGY1kZtw2Vw8TtUeFqtwHS7mWv8meAj0Y76Opoubw+KLed8gmE+uZ0E0XX56WC+04SychsG5TTaKq8WH5TSI7hc34W04ndRezijfBfNgOVkH0fLDah1daxp1Dk+9D8TRerK8C9bRx2C5apbFhotOT8y56eRIZrmEIT2hLAssiYlHPZ8wL5YO5g73fA1KxwNGLeFRxwdsuz5BMUXM9jjv9ZZ/VZZNL7ANjA10viIdLizXRbbE0nYZ8dx6mFLwPOJQiCXzCAXmxEzqF1foiqTIEz5wiqTFBcZvVGRvImkiTWMyWcm3+tqnh5JUZsU2ynw88hsMnn5kj3uPmpnQC6/w9BQXtn46WNhCgJRItxGJIebI8x1PMOpSHXjH5y7lIH2nViEUAwOG7F54n3dxnkaFJpV8fbuYX5uLTZDbwfhUsqIbit09qe24vRl3H647LvV9mG0OeHOn6+5FzQCUeX7maNTwuJ/o0V41CxWlvnTxupF1wh73hvjx5vf54vvFPyDIQ/Y=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an original manifest with a commit in capitals",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0MtuwyAQheG9H4NtZRswYIiUJ4myGIbBRvFNBrfN2zdZVu6y+/9In87ttgE+YKD7vVpgpiuDr1xPWOdnZtUn7Tmty5XxRumGsyqvx46vaKch5bI/P8ZStnxp2yGV8fANrnO7H7nUEyxDizsUyk1a67QE+mYVjoSPfMxXhoZARtv5ANwK6xwYZ5SyCEEJiYKsMpGcBoPgSKg+eOCd8V5DEFYTq24n+brRkvN0ortGiP4f7TqaCCJGJcHyELAPWjrbSYyhU73RnLSxXpNTnLwVxqFEqUhFJzpP9Kd9ppDgJdxOetG/jz8vcpq3iXLBEcrvwbv/AfxWmb0=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLQHS/h+LCAAA8VNlAv/t1UtLw0AUhuGs8yvCuM5kcl91UUuRgEZIvCykhGM6psFcSiZV/PemFixkIS40WPyezYRhIJvzztCrMqvcVG/KFNzzubAW1BUt79u60n6IGASe97EOxqsQoXv83u/bjufYmiG0CexUT93we+1/ethS/kyFXOkN1XLG6HMemP4iO1W2zYwdJoPpVZnLRg2nonTBdA1OH33RP2+7spigf9vxR/27rh+g/yn757XsaU098eNErPS8reuyNzekNjM2/ybcDCfd/2HHKpu82q2l1W6HK19V1iMpyTe/8/773qj/QHgh+p/C2Vo+lY005vfp5SK7WyZpdB1n8e3V+TLJ0pskii8M5vNw//yjFgAAAAAAAAAAAAAAAACAv+sd1Qb/2QAoAACqbJwe",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrBVciQSKHEBANvvGgw=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVllvo0gQfs+viPw6MXRD08C8OQ7JonXsCDuzO1pFqOnDRoMB0TiZ7Cj/fRuDOWQ7k9ldP2Coo+urqq7jx8Xl5YgwkpechTTb5lnK03L0+fKHYihWElOeSq4II385HV3V1JRs96Qkjl54VJT0wMhJuakYzzxlWaFvOYuJzHb5WL7KMdCgqwGd8VzqR5oFf45lnKWVNvng76D7zIuD6ta2R4r4VnEUzDJ+5mESp99k5xJ5keOEVohamqLKUglTRfmroSgaLV7zMhsrhYSOGvLTVavxKku+rTSe9qS3Bs3A6Z+ZkCWjnz6NrjpKp/6SFd940edJmfQ/a3zvIetk2UAzLzcFJ6xVHTiQ5SrlMvkQ/F8F1FhqU9TY6rJDs1TE613BwywvVVJlz+AozcZyQwrOWqMVicls8L3N2C7hAxJP13E6JJVclrKG2gAdxanyMUl4ESorhoWrC2UjYlNmCWAggG1DWBbkmAKDG7YpiBFZrs2pZUam6zLgGhAhCxqQMMywwW0ADnf0dCGpPBeU96MssmJLqgIclaTQ1n93mGNWUQ/JQRrQzI7ZAQb/8deduSuqvIw2ZZnLz7q+jsvNLtJUk9AbEO1/wRNOJJc6y17SJCNMH8AcfmmNY4M71yvh2rP2hhR8HcuyeD3VnWhByn1IezV91WOFvWOBhiztJ+k49LXJH8vxbPp/tKZfT3DnyngAeZBkijkxhGNGjAAHOq5LsIsRcihhCBoUcgdhwV2LYEpcDpHNIgJMHEUWYdCx+Nkk10Wu7aMntTjT6ze9Q6UfAaylh/lsK771O4pTtuZpeBSR92LSRqXRHtMkVlZtUzMGfbENDHQIY6oKMYhYBDiiIBICc+FAjAWzDeW8isv+CakgrqAuEa4dUUwIQFbUP/WDoelB049h9oPThudMn+tF5HoR+PO75XIWPgTerf9nBUTG2zxRXYtuSBnuh1JohRCGoA/6+tGf3YTqAs+mSnXxxb/xgkp5cXt7LDbzr5WJs+zlb5PAq6XOyqy85UohPc9fLE4ZmN5PfvfCRuTrg1eJBHUXORbz58vVZDargNz4QbN4HIs9LJb+yl/MlfyN9+Cpx3wVThc3+8MX876CN59cz7xwGnx9WC2U4syf+t4pJxvB5eIxmHrh/eLGv/Wnk8rKCeE7b+4Fk5UXBo/LVXitYFQ5PLY+YIerSXDnrcIvXrBsjoWaDY5vzKnphAUxbYMANaFMk5sCGg5yXIM4kcCQYuq4iiiwwwkymeoJqhdYtmuACAFiOZT2esu/KsumF1gahBo4XZGYMtO2gSWgsGxiOHY1TBF3HAMjHgniGIgTHBGhXmymKhIBh7mcIiBMyiB8pyJ7E0kBaRqTTgq6UWufGkpC6iVZS/25xjcYPP3I1r6HzUzohZc5aoozSz0xZBZjXAig2oiAPKLAcbHDCLKRCjx2qY0oFy6uRAwEOeEEWL3wvm6jLAlzBSr+/n4xn5uLTZDbwfhSkLwbit2e1Hbc3oy791cdlmofJus9vdnpur2oGYAiy05cjYo87id6tJPNQXmhli5aNbKO2cPeAK83v6eLt4t/AP3NRGQ=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "an original manifest whose commit is a number",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0EtuhDAQBNA9x/A2AvwFHGlOMppF026DFX6iTZK5fZhlRJbZV0mv6n7fAD9goMejWGCmm4AvLics+cmi+KSd07rchKysq6QoeD12PEM7DYnz/nwbc974va6HlMejr3Cd6/3gXE6wDDXukImrtJZpCfQtChwJP/iYb8K3RgJ5a6wC2cToXQzWKGm0RkQrDQVlqLEtxCh72QVtAQI59M4bFaMo7hf5utHCPF3ovlKq/Ue7i02E02A1dDIEbIPTvjMaYzC2bZwk13S9O9dJ6jvVeNSoLdnolemJ6C/7TCHBKdwuetW+jr82OM3bRJxxhPy78Mr/AFr2mUg=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBJAHb/h+LCAAA8VNlAv/t1U9rgzAYx3HPvorizsa0xnrysEkZwuZAt+4wijzTTMP8U4zd2LufXWGFHnYastHf5xIJAS/PN6F3bde5rT+0zZnwGHdC6suODV1TG7+Ej5ZCfK2j05Vz3z1+7/fnC7GYGzNuTGCnB+rH3xvn6WlL+SuVcmO21MjAou95sMw32WvVtYF1mAzLrFUuWz2eitLQMg34/+iH/lnXq3KK/j1x0r/rej76n7J/1siBChqIHSdiY+Zd06jBrkhXgYfgz6L/w46j2rzeFdLptuOVr2vnmbRk1UT9L7lA/5O4KOSLauXs8jG9CbP1KkmjuziLH26vVkmW3idRfD2zPObvn3/UAgAAAAAAAAAAAAAAAADwd30CnizAOgAoAAD5YJhh",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml.orig": {
+     "deflated": "eNqLLkhMzk5MT9XLTS1JTEksSdRLLC/WzUnWLa4sjuVKzs/NzSzRzUgszrA15QIAcqgP1Q==",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1v4jgQ/t5fUfF1S2Inztt+ozTtRUehArp3q1MVOfYYog1JFId2e6v+93Mg5EVAt3t3fAjJMzOexzOeGf+4uLwcUE7zEnjIsk2epZCWg8+XP5RAiZKYQSpBAYNgMR5c7dGUbnZQEkcvEBUlOwhyWq4rwTOkPCv0DfCYymybD+WrHCINexrSOeRSP7Is4DmWcZZW1vSDv4PtMxQH043jDBT4VkkUzTJ+hjCJ02+y3RJ9kcOEVYwaTKGyVMpMIX/ViMJY8ZqX2VAZJGxQw09XjcWrLGFTWTztoLeaTW/TP3MhS84+fRpctUhr/pIV36DoyqRMup97fu8xa3V5zzIv1wVQ3pj2NpDlKuUy+RD9XyVUe2pSVPtqs8OyVMSrbQFhlpcqqbLjcJBmQ7mmBfDGaQVxmfW+NxnfJtCDIF3FaR8qQZZyT7UmOohTtcckgSJUXgzLrg6UQ6jDuCWQQZDtGMKyMNgMGWA4pqBGZHkOMMuMTM/jyDMwIRY2MOU2tw1wEDqc0dOFpPJcMOhGWWTFhlYFOChpoa3+bjnHvEIPySEa0sxW2BJG//HXrrktqrwM1mWZy8+6vorL9TbSVJPQaxLNfwEJUAlS59lLmmSU6z2a/S+t3ljvzHVKeL+z5oQUsIplWbye6k6soOUupJ2avuqIws6ySCOW9pN0HPra6I/FcDL+P1rTrye43cqwR7mXZM8xEQWPmARTZAvhWYITEyPTMBhjBJnAsQk2cagQKEIuNwilHCzmWZ6JhTib5H2Ra7voSS3O9P2b3rLSjwjutfv5bCq+2XcUp3wFaXgUkfdi0kSlth6yJFZeHVMzen2xCQx2KeeqCm0U8QgBYSgSwgbhYtsW3DGwawnwdk/MBPUE86jwnIjZlCJiRd1VPxiaDjX9mGY3OE14zvS5TkSuZ/NgerdYTMKHuX8b/FkRkfEmT1TXYmtahruhFFohxiHqkr5+DCY3oTrAk7EynX0Jbvx5ZTy7vT1WmwTXysVZ8eK30dzfa53VWfqLpWJ6Xj6bnXIwvh/97oe1ytcHv1KZ77vIsVowXSxHk0lF5CaY1xePY7WH2SJYBrOp0r/xH3z1mC7D8exmt/hs2jXwp6PriR+O518fljNlOAnGgX9qk7XiYvY4H/vh/ewmuA3Go8rLCeU7f+rPR0s/nD8uluG1olHl8Nh7TxwuR/M7fxl+8eeLelmsOej4xJyaTragpmNQpCaUaYIpsOES1zOoGwkbM5u5ngKF7QIlJneJ7QG2HM9AEUHUchnr9JZ/VZZ1L7A0jDV0uiJtxk3HQZbAwnKo4TrVMCXguoZNIBLUNQhQO6JCvThcVSRR7coD1cSEyTjG71RkZyIpInVj0mnB1urap4aSkHpJV1J/3vPrDZ5uZPd7D+uZ0Akvd9UU55Z62phbnIPqpqqNCAwRQ65nu5wSh6jA2x5zCAPh2ZWKQTBQoMjqhPd1E2VJmCtS8ff3i/ncXKyD3AzGl4Lm7VBs70lNx+3MuPtg2XKp7sN0tcPrO117L6oHoMiyE0ejgofdRA+2sl4oL9Sli1WNrBV2uNfE9ze/p4u3i38A5utD7w==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Expected a JSON string",
+    "kind": "plain"
+   }
+  },
+  {
+   "name": "a wrapper without its bundled header",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0EtuhDAQBNA9x2AbAbZp23ikOQmahT9tsIafaJNkbh9mGZFl9lWlp+r7zfqnHfDxKBY74720X1RNvqIXlcUn7pTW5V6yGmTNyoLWY/dnaMchUd5fH2POG92aZkh5PFzt17nZD8rVZJeh8bvNSHVaq7QE/C4LP6J/0jGfgzwwAA5aSCsjcmCRtwJcEEIZjIq5LghjY5SKcxeV9q2DoLUAEWSLuiz6i3zdcCGaLnRTc67/0S6jipbHCMJ2LASvgxSma4WPoQWtJEOpOifRAEPXcWW88AIQouGtQ8S/7DOGZE/hdtFz/T7+2qA0bxNS9qPNvwvv/A9we5iI",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoB3QAi/x+LCAAA8VNlAv/t1D1PwzAUhWHP/hXIe4zzVaZOnZg7og5XwUojkriKTRH/HgMSlTogBhQJ8T7LtSxLXs658hKLsSviayycbVrrbney9MGmMI3ql7hs0zQfM7uezt3Vl/P7fVk1ValunFrBc0yy5O/V//Rwku5Jen/Qs0x+a+QrD0af/RKHMG/NZzKMHofOzzG/ut/vjFb4++Sb/tuwDP0K/S+r9qr/dd1u6P+a/beTT/IoSewlEQfdhWkaUnGUeMyr4YfYDAAAAAAAAAAAAAAAACt6A2PYrNEAKAAABmZstw==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/": null,
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvozgUfu+vqPI6DdjGYJi3NKVdtGlSJensjlYVMr4kaAggTNrpjvrf1ySEi5J0OrubBwLn4vP5Oz7n+MfF5eWAcpqXgocs2+RZKtJy8Pnyh1ZoVRIzkSqhBYNgMR5c7aUp3exESRy9iKgo2UGR03JdKZ5FyrPC3AgeU5Vt86F6VUNgQM8AJhe5Mo88C/EcqzhLK2/6wd/B91kUB9cNIQMtfKs0GmYZP4swidNvqt0SfVHDhFWIGpmWqlIbMy35q5ZoGSte8zIbaoeEDWrx01Xj8apKsak8nnaitxpNb9M/C6FKzj59Gly1ktb9JSu+iaKrUyrpfu7xvYesteU9z7xcF4LyxrW3gSzXKVfJh+D/KqA6UpOiOlabHZalMl5tCxFmeamTqjoBB2k2VGtaCN4ErURcZb3vTca3ieiJRLqK076oFKpUe6g10EGc6j0miShCHQXZTnWgCKaEcVsChIFDkLRtKBwGkEDEkhRFtkcEs63I8jwOPAQxtiGClDvcQYIAcDijpwtJ57lgosuyzIoNrQpwUNLCWP3dYo55JT0kBxvAsFplCxj8x1+75rao8jJYl2WuPpvmKi7X28jQTcKsQTT/hUgEVUKZPHtJk4xyswez/2XUG+uduU4J73fWnJBCrGJVFq+nuhMraLmjtFPTVx1V2FkWGNg2fpKOQ18b/bEYTsb/R2v69QS3Wxn2IPeTDDnAGGKCbGpLATGQ0EI44gg5npAOiFyOPCql7UAYSYcwK8KcEIQRty1BziZ5X+TGjj1lxJm5fzNbVOYRwL11P59NxTf7juKUr0QaHjHyHicNK7X3kCWxjkosA/X6YkMMdCnnugo1AzwCAjMQSekI6ULHkZwg6Gq6vN0TMkk9yTRLHomYQynAdtRd9YPUdKCZxzC75DT0nOlzHUauZ/NgerdYTMKHuX8b/FkBUfEmT3TXYmtahruhFNohhCHogr5+DCY3oT7Ak7F2nX0Jbvx55Ty7vT02mwTXOsRZ9eK30dzfW521WfqLpUZ6Xj+bnQowvh/97oe1ydcHvzKZ77vIsVkwXSxHk0kF5CaY1xePY7OH2SJYBrOptr/xH3z9mC7D8exmt/hs2nXwp6PriR+O518fljPtOAnGgX9qk7XhYvY4H/vh/ewmuA3GoyrKCeM7f+rPR0s/nD8uluG1hlHl8Dh6Tx0uR/M7fxl+8eeLelloEHB8Yk5NJ0dSiyAK9ISyLGFJiFzseoi6uuYhc5jraaF0XEGxxV2sewO0iYdAhAG1XcY6veVflWXdC2wDQgOcrkiHcYsQYEsobUKRS6phioXrIgeLSFIXYUGdiEr9QriuSAxc7gmmW5rFOITvVGRnImkgdWMyacHW+tqnh5JUZklXynze4+sNni6z+72H9Uzo0MtdPcW5rZ8O5DbnQkqg24iEImLA9RyXU0ywJt7xGMFMSM+pTBCGggoK7A69r5soS8Jcg4q/v1/M5+ZiTXIzGF8KmrdDsb0nNR23M+Pug2WLpboP09VOXt/p2ntRPQBllp04GpV42E30YKvqhfJCX7pY1chaZQd7DXx/83u6eLv4B/N0Qy8=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'aws-lc/include/openssl/base.h'"
+   }
+  },
+  {
+   "name": "a bundled header that is no text",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0L1uxCAQBODej0Eb2QYMBiLdk5yugGWxUfwnL05ybx9fGTllpp6RPs39vnn48AM+HtXiZ7wx/0X1BDU9iVWfuFNelxvjjdINZxWtxw5nacchU9mfb2MpG7237ZDLeIQG1rndDyr15Jehhd0XpCavdV4ifrMKRoQPOuYbsxJ7g1F2Dp0EiMiBGy4j+KQTj5ZH7qJEoc70xlqTPHcYvAwh+pQcq+4X+brhQjRd6K4RwvyjXac+eZGSkv50RjBRS2c7CSl2yvSao+5t0OgUx2BF70CCVKiSE11AxL/sM8bsT+F20QvzOv66oDxvE1KB0Zffg1f/B2gJmho=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBAQH+/h+LCAAA8VNlAv/t1b1OwzAUhmHPvgrkPY7z26lTJ2ZG1OHgWomFHVexC+LqwVCJShkQA0QqfM/iyIqU5bwn9BwLp4v4Egsl206qckfzEGQK3rEforK+bT/ObHkqtWkuz+/3Vd3WFbtRbAWnmGjOn2f/0/2R9CMNZs8n8mYr6HMeBH8yc7Rh2orzZAjurDZTzG/d3u0EZ3D96Iv+ZZjtsEL/Vd0t+m+arkf/a/YvvUl0oETyMhF7roP3NhUjxTGvhm/CZrjq/s83pZ20Ox1MGY555UdXPlA0cvyd/7+qFv33qtmg/zW8IgEAAAAAAAAAAAAAAAAAgD/hDfKaG0YAKAAAYXF8nA==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNr7DwABAAEA",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvozgUfu+vqPI6DZirYd7SlHbRpklF0tkdrSpk7OMEDQGESTvdUf/7mkC4KEmns7t5IHAuPt+5+8fF5eWIMJKXwEKabfMshbQcfb78IRmSlcQUUgGSMPKX09FVTU3Jdk9K4ugFoqKkB0ZOyk3FeIaUZYW6BRYTke3ysXgVY6RoroJUBrlQjzQLeI5FnKWVNvng76D7DMVBdYvxSBLfKo6EWcbPECZx+k10LpEXMU5ohailSaoopTCVlL8aiqTR4jUvs7FUSOioIT9dtRqvooRtpfG0J701aAZO/8yEKBn99Gl01VE69Zes+AZFnydE0v+s8b2HrJNlA8283BRAWKs6cCDLZcpF8iH4vwqosdSmqLHVZYdmKY/XuwLCLC9lUkXP4CjNxmJDCmCt0YrERDb43mZsl8CABOk6ToekEkQpaqgN0FGcSh+TBIpQWtEtuyoobBJMmcWRbiIb69yyNLAp0kHHBid6ZLkYqGVEhusy5OqaaVqarhFmM1sHjNChRk83ksxzQaEfZZ4VW1I14KgkhbL+u8Mcs4p6SI6pIMXomB1g9B9/3Zm7osrLaFOWufisquu43OwiRQ4JtQHR/heQABEgVJa9pElGmDqAOfxSGscGNddr4dqztkIKWMeiLF5PTSdakHIf0l5PX/VYYe9YpJiW8pN0HOba5I/leDb9P0bTrye4c2U8gDxIsqODjYHphguuTikDRBFGOqOEy1JlDpK1yHSQ1WiaNnYczAlyIZL1GjHCuXs2yXWTK/voCSXO1PpN7VCpRwBr6WE+245v/Y7ilK0hDY8i8l5M2qg02mOaxNIqNhR9MBfbwGgOYUx2oY0iFiEwKYo4t4E7mm1zhnXNsTi4+6dGOXE5dQl3cURtQpBpRf1TPxiaHjT1GGY/OG14zsy5XkSuF4E/v1suZ+FD4N36f1ZARLzNEzm16IaU4X4phVaoaSHqg75+9Gc3oSzg2VSqLr74N15QKS9ub4/FZv61NHGWvfxtEni11FmZlbdcSaTn+YvFKQPT+8nvXtiIfH3wKpGgniLHYv58uZrMZhWQGz9oLh7HYg+Lpb/yF3Mpf+M9ePIxX4XTxc3+8MW8r+DNJ9czL5wGXx9WC6k486e+d8rJRnC5eAymXni/uPFv/emksnJC+M6be8Fk5YXB43IVXksYVQ6PrQ/Y4WoS3Hmr8IsXLJtjNQWj44o5tZ1sTgysEyQ3lGGAwTXdMR1XJ07EbY3a1HElkdsOENNgjmm7oFnY1VFkImI5lPZmy79qy2YWWIqmKeh0R9qUGRgji2vcwkR3cLVMTXAc3TYh4sTRTSB2RLh8wUx2pIkc5gI1ETco07R3OrK3kSSQZjCppKAbee2TS4kLtSRroT7X+AaLpx/Z2vew2Qm98DJHbnFmyaetMYsx4BzJMcI1iChyXNthxMSmDLztUmxS4K5dieimBgQIsnrhfd1GWRLmElT8/f1mPrcXmyC3i/GlIHm3FLt7Ujtxezvu3l91WKr7MFnv6c2drrsXNQuQZ9mJ0qjI436iRzvRHJQX8tJFq0HWMXvYG+D1ze/p4u3iH13bRME=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "UnicodeDecodeError",
+    "said": "'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+   }
+  },
+  {
+   "name": "a bundled header without a version",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0MtuwyAQheG9H4NtZRswGIiUJ4myGIbBRvFNBrfN2zdZVu6y+/9In87ttgE+YKD7vVpgpiuDr1xPWOdnZtUn7Tmty5XxRumGsyqvx46vaKch5bI/P8ZStnxp2yGV8fANrnO7H7nUEyxDizsUyk1a67QE+mYVjoSPfMxXpiR6qS1Z0REqEr3h4NApTcZ2JvbSA3KQrhM+xhCd5KCkNloDKSvRsup2kq8bLTlPJ7prhDD/aNexjyBiVBIsDwFN0NLZTmIMnTK95qR76zU5xclb0TuUKBWp6ETniegv+0whwUu4nfTCvI8/L3Kat4lywRHK78G7/wEM/pj8",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBEAHv/h+LCAAA8VNlAv/t1TFPhDAYxnHmfgqCM6VAwemmi4lOJupmbngtFRqBXmhP47e3eomXMBgHJSH3/JaShoTl/b/Qm0t7lbp3lwouKy6yLU2t5d4OffRHRFBL+XUG81OIy/L0/HmfF7LIo1hECzg4T1P4fHSeHvekXqjVOzbSoDcJfc9Dwl715IwdN8lxMhLWG6VHF966ud8mLIL1ox/653Yy7QL950U1678sqxr9L9k/H7Snhjzx00TsmLLDYHzakevCavglbIZV93+8ycyo+kOjM7sPK9/12RM5zbv/+f8XYtZ/LaRA/0u4aPSzGXV8+3B9dRfnSBcAAAAAAAAAAAAAAAAAYKU+AGoeOuQAKAAAhVyCfg==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVfAP8XANUjDkAgAraQSM",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmAbg2G/pSntoUuTKkn3bnWqkPFLgpYAwqTd3qr//UxCeFGSbvfu8oHAMzOexzOeGf+4uLwcUE7zUvCQZZs8S0VaDj5f/tACLUpiJlIlNDAIFuPB1R5N6WYHJXH0IqKiZAdBTst1JXgWKc8KcyN4TFW2zYfqVQ2BAT0DmFzkyjyyLMRzrOIsrazpB38H22dRHEw3hAw0+FZJNM0yfhZhEqffVLsl+qKGCasYNZhGVamVmUb+qhGNseI1L7OhNkjYoIafrhqLV1WKTWXxtIPeaja9Tf/MhSo5+/RpcNUirflLVnwTRVemVNL93PN7j1mry3uWebkuBOWNaW8DWa5TrpIP0f9VQrWnJkW1rzY7LEtlvNoWIszyUidVdRwO0myo1rQQvHFaQVxlve9NxreJ6EEiXcVpHyqFKtWeak10EKd6j0kiilB7QbZTHSiCKWHclgBh4BAkbRsKhwEkELEkRZHtEcFsK7I8jwMPQYxtiCDlDneQIAAczujpQtJ5LpjoRllmxYZWBTgoaWGs/m45x7xCD8nBBjCsVtgSBv/x1665Laq8DNZlmavPprmKy/U2MnSTMGsSzX8hEkGVUCbPXtIko9zs0ex/GfXGemeuU8L7nTUnpBCrWJXF66nuxApa7kLaqemrjijsLAsMbBs/Scehr43+WAwn4/+jNf16gtutDHuUe0nGiEXIdoULLcGwgA4B1GMetgVxLSIdFFEGKPIsGEnJpYcAxcgmtk0FdhFzzyZ5X+TGLnrKiDNz/2a2rMwjgnvtfj6bim/2HcUpX4k0PIrIezFpolJbD1kSa6/EMlCvLzaBgS7lXFehAyIeAYEZ0AFwhHSh40hOEHRtKbzdEzJJPck8Kj0SMYdSgO2ou+oHQ9OhZh7T7AanCc+ZPteJyPVsHkzvFotJ+DD3b4M/KyIq3uSJ7lpsTctwN5RCO4QwBF3S14/B5CbUB3gy1qazL8GNP6+MZ7e3x2qT4Fq7OCte/Daa+3utszpLf7HUTM/LZ7NTDsb3o9/9sFb5+uBXKvN9FzlWC6aL5WgyqYjcBPP64nGs9jBbBMtgNtX6N/6Drx/TZTie3ewWn027Bv50dD3xw/H868Nypg0nwTjwT22yVlzMHudjP7yf3QS3wXhUeTmhfOdP/flo6Yfzx8UyvNY0qhwee++Jw+Vofucvwy/+fFEvCw0Cjk/MqenkSGoRRIGeUJYlLAmRi10PUTeSDmQOcz0NSscVFFvcxY4noE10N4gwoLbLWKe3/KuyrHuBbUBogNMV6TBuEQJsCaVNKHJJNUyxcF3kYBFJ6iIsqBNRqV8I1xWJgcs93dWAtBiH8J2K7EwkTaRuTCYt2Fpf+/RQksos6UqZz3t+vcHTjex+72E9Ezrh5a6e4tzWTwdym3MhJdBtREIRMeB6jsspJlgH3vEYwUxIz6lUEIaCCgrsTnhfN1GWhLkmFX9/v5jPzcU6yM1gfClo3g7F9p7UdNzOjLsPli2X6j5MVzu8vtO196J6AMosO3E0KnjYTfRgq+qF8kJfuljVyFphh3tNfH/ze7p4u/gHABhDow==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header whose version has a letter",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0MtugzAQheE9j+FtBfgOjpQnibKwx2Owwk2MaZu3b7Ks6LL7/0ifzu22eXj4Ae/3avEzXpn/onqCmp7Eqk/cKa/LlfFGm4azitZjh1e045Cp7M+PsZSNLm075DIeoYF1bveDSj35ZWhh9wWpyWudl4jfrIIR4UHHfGXOmRSEEjE6jCZKDxzQ9qB4b4LsgrZBCMUhRRnR2QTYodBeK0gaQuhZdTvJ1w0XoulEd40Q3T/aTbLJi5S09D2PEbpopOuVfGGV7qzhaGwfDDrNMfTCOpAgNerkhAqI+Jd9xpj9S7id9KJ7H39eUJ63CanA6Mvvwbv/AZnPmkA=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBKgHV/h+LCAAA8VNlAv/t1c1LhEAYx3HP/hUynR3Ht93THkqWEMpAeznEIk86qeTL4rhF/33WQgseokNJS7/PZWQQvDzfR3pRZp2Z6lWZgns+F1ZAfdHxoWtq7YeI0cLzPs7R9BRi6R6e3+9tx3NszRDaDHZqoH78vPY/3W8pe6JCbvSWGrli9DkPTH+Wvaq6dsX2k8H0uspkq8a3wiRgugbHj77on3d9VczQv+34k/5d11+g/zn7540cKKeB+GEiNnrWNU01mCWpclwN34TNcNT972+sqs3qXS6tbjuufFVbD6QkL3/n/+9P+18IX6D/OZzk8rFqpXF6l1wE6e06TsKrKI1uLs/WcZpcx2F0bjCfL7lA1wAAAAAAAAAAAAAAAAAAf9kbh1kz0gAoAABU/ZX8",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNIVOICAEHWDNM=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmDzYmC/pSntoUuTKkn3bnWqkLHHCVoCCJN2e6v+9zMJ4UVJut27ywcCz8x4Hs94Zvzj4vJyQDnNS+AhyzZ5lkJaDj5f/lACJUpiBqkEBQyCxXhwtUdTutlBSRy9QFSU7CDIabmuBM+Q8qzQN8BjKrNtPpSvcog07GlI55BL/ciygOdYxllaWdMP/g62z1AcTDeOM1DgWyVRNMv4GcIkTr/Jdkv0RQ4TVjFqMIXKUikzhfxVIwpjxWteZkNlkLBBDT9dNRavsoRNZfG0g95qNr1N/8yFLDn79Glw1SKt+UtWfIOiK5My6X7u+b3HrNXlPcu8XBdAeWPa20CWq5TL5EP0f5VQ7alJUe2rzQ7LUhGvtgWEWV6qpMqOw0GaDeWaFsAbpxXEZdb73mR8m0APgnQVp32oBFnKPdWa6CBO1R6TBIpQeTFsUh0ox6IO47ZAhoWIYwjbxkAYMsBwTEGNyPYcYLYZmZ7HkWdgy7KxgSknnBjgIHQ4o6cLSeW5YNCNssiKDa0KcFDSQlv93XKOeYUekmNpSDNbYUsY/cdfu+a2qPIyWJdlLj/r+iou19tIU01Cr0k0/wUkQCVInWcvaZJRrvdo9r+0emO9M9cp4f3OmhNSwCqWZfF6qjuxgpa7kHZq+qojCjvLIs2ytZ+k49DXRn8shpPx/9Gafj3B7VaGPcq9JHueLSJsYs494DY3KEMMiMtM5NqR4UQWiTA2ERPc4OARwcABbFHLZMJiUeSeTfK+yLVd9KQWZ/r+TW9Z6UcE99r9fDYV3+w7ilO+gjQ8ish7MWmiUlsPWRIrr46pGb2+2AQGu5RzVYUERTxCYDEUCUFAuJgQwR0Du7YAb/fETFBPMI8Kz4kYoRRZdtRd9YOh6VDTj2l2g9OE50yf60TkejYPpneLxSR8mPu3wZ8VERlv8kR1LbamZbgbSqEdYhyiLunrx2ByE6oDPBkr09mX4MafV8az29tjtUlwrVycFS9+G839vdZZnaW/WCqm5+Wz2SkH4/vR735Yq3x98CuV+b6LHKsF08VyNJlURG6CeX3xOFZ7mC2CZTCbKv0b/8FXj+kyHM9udovPpl0Dfzq6nvjheP71YTlThpNgHPinNlkrLmaP87Ef3s9ugttgPKq8nFC+86f+fLT0w/njYhleKxpVDo+998ThcjS/85fhF3++qJfFmoOOT8yp6UQENR2DIjWhTBNMgQ3Xcj2DupEgmBHmegoUxAVV+ty1iAfYdjwDRRaitstYp7f8q7Kse4GtYayh0xVJGDcdB9kCC9uhhutUw9QC1zWIBZGgrmEBJREV6sXhqiIt5KquxiwkTMYxfqciOxNJEakbk04LtlbXPjWUhNRLupL6855fb/B0I7vfe1jPhE54uaumOLfVk2DVZjkIgVQbERgihlyPuJxajqUCTzzmWAyERyoVw8JAgSK7E97XTZQlYa5Ixd/fL+Zzc7EOcjMYXwqat0OxvSc1Hbcz4+6DZculug/T1Q6v73TtvagegCLLThyNCh52Ez3YynqhvFCXLlY1slbY4V4T39/8ni7eLv4BXBZE5w==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header whose version line is indented",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0MtugzAQheE9j+FtBfhuHClPEmUxHo8BhZuwaZu3b7Ks6LL7/0ifzu22AT6gp/u9WmCmK4OvXE9Y52dm1SfteVyXK+ONNg1nVV6PHV/RTv2Yy/78GErZ8qVt+7EMR2hwndv9yKWeYOlb3KFQbsa1HpdI36zCgfCRj/nKrOiSgWCjIw7KGgcycK28Cg48T9YAJoUd6mgBO+UCKAKZIhiQBpxh1e0kXzdacp5OdN8I4f7RbpJNIFLSEjoeI7popO+UxBSVdtZwMrYLhrzmFDphPUqUmnTyQgUi+ss+UxzhJdxOeuHex58XeZy3iXLBAcrvwbv/ARafmdk=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLQHS/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4zSqLVkIRWgvay6IEOdWpSr0Ex7T07WsaSMBF6aKVhv7f5gyHgdmc/wy9SaPODPkuDc5cj3EzoL7o2NA1tfJD+Mh33c86mlbOF87xvOtbtmtbisaVGWzlQP34vPI/PW4oe6FCrNWWGrHU6TAPuvoqell17VLfT4au1lUmWjneCpNAVxU4ffRF/lnXV8UM+bdsb5J/x/F85H/O/LNGDJTTQOw4EWs165qmGoySZDmuhm/CZjjp/O87ZtVm9TYXZrcZV76szSeSgpW/8/970/z73OPI/xy0s1w8V63Qzh+SqyC9X8VJeBOl0d31xSpOk9s4jC413WOL3f+PuAAAAAAAAAAAAAAAAAAA/FkfVDatuAAoAAD87JnF",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTUE5JTcvMS1VwDA/2cY4Pcw0K9vT3i/cL9XVyDYoPDgny9HNXUDLVM9czUOICADoODJI=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGMRNgnlzHJKl1jEp7Mzu1FaKErrY1GCgEE4mO5V/X2Ewl7KdyeyuHzCc7lYfdau79ePi8lLBFBcVoxHJt0WesaxSPl/+kAIpShPCMsEkoPjLmXLVoBne7qE0iV9YXFbkIChwtakFzyyjealtGU2wyHfFRLyKCVB1VwUaZYXQjixL9pyIJM9qa/zB38H2mZUH0y1CigTfaomkWSXPLEqT7Jvot4RfxCQlNaMOk6iopDKRyF8tIjFSvhZVPpEGKVFa+Omqs3gVFdvWFk976K1lM9r0z1yIipJPn5SrHunNX/LyGyuHMiHS4WfD7z1mvS4dWRbVpmSYdqajDeSFTLlIP0T/Vwm1nroUtb767JA848l6V7IoLyqZVDFwqGT5RGxwyWjntIaoyEff25zuUjaCWLZOsjFUMVGJhmpLVEkyucc0ZWUkvRg2rA8UsjAi1ObAsABEBrdtnUECDGYgk2Mjtl3EiG3GputS4Bq6Zdm6oWMKKTQYAuBwRk8XksxzSdgwyjwvt7guQKXCpbr+u+ec0Bo9JMdSgWr2wp4w+I+/fs1dWedF2VRVIT5r2jqpNrtYlU1Ca0l0/yVLGRZMaDR/ydIcU21Ec/ylthsbnblBCTc7605IydaJqMrXU92JlLjah3RQ01cDUTRYFqiWrf4kHYe+Nv1jOZnP/o/W9OsJ7rcyGVEeJRnqDrdxDCliAJvQRvIkAst0zRhhF3BoY8JN4hCLQkwcE8XYZNjgFNtyBYzss0luilzdR0+oSa41b1rPSjsi2GiP89lVfLfvOMnommXRUUTei0kXldZ6QtJEekWmaoz6YhcY3cGUyiqEIKYxYBYBMeeQcUeHkFNk6I7Nmbt/6oRjlxMXcxfFBGIMLDservrB0Ayoacc0h8HpwnOmzw0ich2E/uJuuZxHD6F36/9ZExHJtkhl1yIbXEX7oRTZka5HYEj6+tGf30TyAM9n0jT44t94YW0c3N4eq839a+nirHj52zT0Gq2zOitvuZJMz8uD4JSD2f30dy9qVb4+eLVK2HSRYzV/sVxN5/OayI0fthePY7WHYOmv/GAh9W+8B08+FqtoFtzsFw8WQwNvMb2ee9Es/PqwCqTh3J/53qlNtorL4DGcedF9cOPf+rNp7eWE8p238MLpyovCx+UqupY06hweex+Jo9U0vPNW0RcvXLbL6ioCxyfm1HSCHJvIwEBOKNNkJtcNx3JcAzsxhzqBxHElyKHDsGVSx4Iu023kGiC2ALYdQga95V+VZdsLbFXXVXC6IiGhJkLA5jqv25SD6mFqMccxoMVijh3DYhjGmMsXRGVFWsChLiMWkB2M6vo7FTmYSJJI25g0XJKNvPbJocSFVuG10J4bfqPBM4xss/eonQmD8FJHTnFqyyfUqU0p4xzINsJ1FhPguNCh2EKWDDx0CbII4y6sVQxLZ5hhMGiz4nUb52lUSFLJ9/eL+dxcbIPcDcaXEhf9UOzvSV3HHcy4e3/Vc6nvw3i9x9s7XX8vagcgz/MTR6OGJ8NEKzvRLlSU8tJF6kbWCwfcW+LNze/p4u3iH66yRIA=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header whose version line has more after it",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DluwzAQheFex2AbaCHF1YBPYrggh0OJsDZoqCS+fewyUMr0/wM+vNtt8/DwA97v1eJnvDL/RfUENT2JVZ+4U16XK+saqZqOVbQeO7yiHYdMZX9+jKVsdGnbIZfxCA2sc7sfVOrJL0MLuy9ITV7rvET8ZhWMCA865iuLyRkXZVSd1klpBIzS+2S5RSG5kX0ngggRYlDaC+NlFMI6hUo6mZJzrLqd5OuGC9F0oruGc/OPdpV08jwlKbztYgQTlXC2F5BiL41WHSptg0InOwyWawcChESZHO8DIv5lnzFm/xJuJz037+PPC8rzNiEVGH35PXj3P6vVmXE=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBMgHN/h+LCAAA8VNlAv/t1ctKw0AUBuCs8xQhrjOZXLvqQkORgEZItC6khGMytsFcSib18vaOFixkIS40WPy/zRkOA7M5/xl6llZdWPJVWpz5AeN2RP26Y0PX1NoP4Uro+x9VGVfOZ97h/N53XN91NINrE9jJgXr1vPY/3W2peKS1WOktNWJu0uc8mPqT6GXVtXNzPxmmXleFaKW6FWeRqWtw/OiL/LOur9YT5N9xg1H+PS8Ikf8p888aMVBJA7HDRKz0omuaarA2JDdqNXwTNsNR53/fsau2qHelsLutWvmytu9JCrb5nf8/dEb5D7kfIP9TOCnFQ9UK4/Q2u4jy5SLN4qskT24uzxZpnl2ncXJumAGbqe/fsG3jBdkGAAAAAAAAAAAAAAAAAPib3gDVKbRaACgAACoplts=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQUtDXV6jgAgB2LA2I",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1v4jgQ/t5fUfF1S+I4ztt+ozTtRUehArp3q1MVOfYYog1JFId2e6v+93Mg5EVAt3t3+RDIMzOexzOeGf+4uLwcUE7zEnjIsk2epZCWg8+XP5RAiZKYQSpBAYNgMR5c7dGUbnZQEkcvEBUlOwhyWq4rwTOkPCv0DfCYymybD+WrHCLN8DSkc8ilfmRZwHMs4yytrOkHn4PtMxQH043jDBT4VkkUzTJ+hjCJ02+y3RJ9kcOEVYwaTKGyVMpMIX/ViMJY8ZqX2VAZJGxQw09XjcWrLGFTWTztoLeaTW/TP3MhS84+fRpctUhr/pIV36DoyqRMup97fu8xa3V5zzIv1wVQ3pj2NpDlKuUy+RD9XyVUe2pSVPtqs8OyVMSrbQFhlpcqqbLjcJBmQ7mmBfDGaQVxmfW+NxnfJtCDIF3FaR8qQZZyT7UmOohTtcckgSJUXrBlVwfKIdRh3BIIE2Q7WFiWATZDGLBjCoojy3OAWWZkeh5HHjYIsQxsUG5zG4OD0OGMni4kleeCQTfKIis2tCrAQUkLbfV3yznmFXpIDtGQZrbCljD6j0+75rao8jJYl2UuP+v6Ki7X20hTTUKvSTS/BSRAJUidZy9pklGu92j2v7R6Y70z1ynh/c6aE1LAKpZl8XqqO7GClruQdmr6qiMKO8sijVjaT9Jx6GujPxbDyfj/aE2/nuB2K8Me5V6SufAcjxNuIdsWlg0MOKFUuIYLmBgOMRGOcMQZjyybYocSjrHrWWARjwjheWeTvC9ybRc9qcWZvv+nt6z0I4J77X4+m4pv9h3FKV9BGh5F5L2YNFGprYcsiZVXx9Rwry82gTFcyrmqQhtFPEJAGIqEsEFFRgWKO9hwLQHe7m0wQT3BPKpiGTGbUkSsqLvqB0PToaYf0+wGpwnPmT7Xicj1bB5M7xaLSfgw92+DPysiMt7kiepabE3LcDeUQis0jBB1SV8/BpObUB3gyViZzr4EN/68Mp7d3h6rTYJr5eKsePHbaO7vtc7qLP3FUjE9L5/NTjkY349+98Na5euDX6nM913kWC2YLpajyaQichPM64vHsdrDbBEsg9lU6d/4D756TZfheHazW3w27Rr409H1xA/H868Py5kynATjwD+1yVpxMXucj/3wfnYT3AbjUeXlhPKdP/Xno6Ufzh8Xy/Ba0ahyeOy9Jw6Xo/mdvwy/+PNFvayhOej4xJyaTragpoMpUhPKNMEUBnaJ62HqRsI2mM1cT4HCdoESk7vE9sCwHA+jiCBquYx1esu/Ksu6F1iaYWjodEXajJuOgyxhCMuh2HWqYUrAdbFNIBLUxQSoHanmhYnDVUUS5HIPGEHCZNww3qnIzkRSROrGpNOCrdW1Tw0lIfWSrqT+vOfXGzzdyO73HtYzoRNe7qopzi31tg1ucQ5CINVGhAERQ65nu5wS1WzBtD3mEAbCsysV1YKBAkVWJ7yvmyhLwlyRir+/X8zn5mId5GYwvhQ0b4die09qOm5nxt0Hy5ZLdR+mqx1e3+nae1E9AEWWnTgaFTzsJnqwlfVCeaEuXaxqZK2ww70mvr/5PV28XfwDFHFEGA==",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header whose version line is among others",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DtuwzAQBNBex2AbSOJXFA34JIaLJbmUCOsHLZXEt49dBkqZfgZ4M7fbBuEBA97v1QIzXhl8UT2Fmp7Eqk/cKa/LlfFGm4azitZjD6/QjkOmsj8/xlI2urTtkMt4+Casc7sfVOoJlqENOxSkJq91XiJ+syqMGB50zFcmFYBQ3gStuAduHXCe+h6MMN55sIIjF1o53qHtpFU6oJbGG+GdSjJaVt1O8nXDhWg60V0jhP1Hu0ldApGSltDzGIONRrpeyZCi0rYzHE3Xe4NOc/S96FyQQWrUyb0WI+Jf9hljhpdwO+mFfR9/blCetwmphBHK78I7/wMq85hE",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBQQG+/h+LCAAA8VNlAv/t1k1rgzAYB3DPfgpxZ2NstT31sIkMobOj2cthFHmmmcp8KcZu7NvPtmyFHsYOm6Ps/7skhIQc8vwfQq/KKhNLvSmLM9dj3PapzRrWNVWp/RDem7jubuwdj5xPx4f5dt0ZuSNHM7g2gI3qqO2v1/6nhzUlz5TJlV5TJWcmfdaDqb/IVhVNPTP3lWHqZZHIWvW7QuGbuganj77IP2vaIhsg/87IO8r/eOxNkP8h888q2VFKHbFDRaz0pKmqorNyUnnfGr4JneGk879fsYs6KTeptJt13/JVaT+Skiz/nfw7x/mfcNdD/odg28b2ZfWzVD4VtTTO78Xcj++CpQgXURzdXl0Ey1jcLMPo0jA9Nt1+Az72Lq6DSIh5HIp4dwy5BwAAAAAAAAAAAAAAAAD4O+8Av4bwACgAANp4oe0=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNrT11dISixO5VJOSU3LzEtVcAwP9nGOD3MNCvb094v3C/V1cg2KDw4J8vRzV1Ay1TPXM1CCq/UPcPULDvaJ9wyOB2vjAgBxNBZF",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGCRugnlzHJKl1jEp7Mzu1FaKErrY1GCgEE4mO5V/X2Ewl7KdyeyuHzCc7lYfdau79ePi8lLBFBcVoxHJt0WesaxSPl/+kAIpShPCMsEkoPjLmXLVoBne7qE0iV9YXFbkIChwtakFzyyjealtGU2wyHfFRLyKCVChqwKNskJoR5Yle05Ekme1Nf7g72D7zMqD6RYhRYJvtUTSrJJnFqVJ9k30W8IvYpKSmlGHSVRUUplI5K8WkRgpX4sqn0iDlCgt/HTVWbyKim1ri6c99NayGW36Zy5ERcmnT8pVj/TmL3n5jZVDmRDp8LPh9x6zXpeOLItqUzJMO9PRBvJCplykH6L/q4RaT12KWl99dkie8WS9K1mUF5VMqhg4VLJ8Ija4ZLRzWkNU5KPvbU53KRtBLFsn2RiqmKhEQ7UlqiSZ3GOasjKSXnTLrg8UMjEi1OJAN4GNdG5ZkNkE6ExHBsd6bLmIEcuIDdelwNWhaVpQh5ja1NYZAuBwRk8XksxzSdgwyjwvt7guQKXCpbr+u+ec0Bo9JMdUgWr0wp4w+I+/fs1dWedF2VRVIT5r2jqpNrtYlU1Ca0l0/yVLGRZMaDR/ydIcU21Ec/ylthsbnblBCTc7605IydaJqMrXU92JlLjah3RQ01cDUTRYFqimpf4kHYe+Nv1jOZnP/o/W9OsJ7rcyGVEeJVk3MIZGbBHTADEGyMUAcMfBFrRiN8YIAgagabjAZsiWJ9UkzNSt2IKxa3CdorNJbopc3UdPqEmuNW9az0o7Ithoj/PZVXy37zjJ6Jpl0VFE3otJF5XWekLSRHpFhqqP+mIXGOhgSmUV2iCmMWAmATHnNuMOtG1OkQ4dizN3/4SEY5cTF3MXxcTGGJhWPFz1g6EZUNOOaQ6D04XnTJ8bROQ6CP3F3XI5jx5C79b/syYikm2Ryq5FNriK9kMpsiIIIzAkff3oz28ieYDnM2kafPFvvLA2Dm5vj9Xm/rV0cVa8/G0aeo3WWZ2Vt1xJpuflQXDKwex++rsXtSpfH7xaJWy6yLGav1iupvN5TeTGD9uLx7HaQ7D0V36wkPo33oMnH4tVNAtu9osHi6GBt5hez71oFn59WAXScO7PfO/UJlvFZfAYzrzoPrjxb/3ZtPZyQvnOW3jhdOVF4eNyFV1LGnUOj72PxNFqGt55q+iLFy7bZaGKwPGJOTWdbI4NpGMgJ5RhMIND3TEdV8dOzG1IbOK4EuS2w7BpUMe0XQYt5OogNgG2HEIGveVflWXbCywVQhWcrkibUAMhYHHILYR1B9XD1GSOo9smizl2dJNhO8ZcviAqK9IEDnUZMQE3CIXwnYocTCRJpG1MGi7JRl775FDiQqvwWmjPDb/R4BlGttl71M6EQXipI6c4teTThtSilHEOZBvhkMUEOK7tUGwiUwbedgmSPZa7dq2im5BhhoE1CO/rNs7TqJCkku/vF/O5udgGuRuMLyUu+qHY35O6jjuYcff+qudS34fxeo+3d7r+XtQOQJ7nJ45GDU+GiVZ2ol2oKOWli9SNrBcOuLfEm5vf08XbxT9AGULr",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "name": "AWS-LC",
+     "version": "5.11.0",
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "crate": "aws-lc-sys",
+     "crate_version": "0.45.0",
+     "source_sha256": "23aa13b5c430ba079a00f88a515b9ba710e0143906e762734ce425b51b93f2d7",
+     "verified_files": 3,
+     "license": "ISC",
+     "unused_bundled_source": {
+      "version": "5.7.0",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    }
+   }
+  },
+  {
+   "name": "a bundled header whose version line has no line end",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0E1uhDAMBeA9x2BbAUlISFJpTjKaheM4gMqfcGg7ty+zrOiy+/fk7/l+3wA/oKfHo1hgplsJX1xNWPGTy+KTdh7X5VaKWptalAWvx45naKd+5Lw/34acN35vmn7MwxFqXOdmPzhXEyx9gztk4npcq3GJ9F0WOBB+8DGfV4SWSmqNFEJH0TnQxsc2EHgFSaMFZVqAkJQw3mrvnEoEMhCJpMhCWdwv8nWjhXm60H0tpf1Hu0ldApmSVuBEjGijUd61ClNste2MINO5YMhrQcHJzqNCpUknL8+BRH/ZZ4ojnMLtopf29fhrg8d5m4gzDpB/F175H1Vzmgk=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLAHT/h+LCAAA8VNlAv/t1ctKw0AUBuCs8xQhrjOZ3NpVFxqKBDRC4mUhJRyTMQnmUjKp4ts7WrCQhbjQYPH/NjMcBmZz/nPoRVpNbslXaXHmB4zbIQ1lz8a+bbQfwpWF73+cyvTkfOkd7u91x/VdRzO4NoOdHGlQ32v/0/2W8icqxUbvqBUrkz77wdSfxSDrvluZ+84w9abORSfVqygNTV2D40df5J/1Q13OkH/HDSb597xggfzPmX/WipEKGokdOmKj533b1qNVkazUaPgmTIajzv++Ytdd3uwKYfdbNfJlYz+QFKz6nf0fTPf/gvvI/yxOCvFYd8I4vUsvwux2naTRVZzFN5dn6yRLr5MoPjfMgC3V+kdYAAAAAAAAAAAAAAAAAAD+sDdvlHfgACgAADAtlhE=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQAgAn+wxo",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvozgUfu+vqPI6Ddjcmbc0pV20aVKRdHZHqwoZ+zhBQwBh0k531P++JhAuStLp7G4eCJyLz3fu/nFxeTkijOQlsJBm2zxLIS1Hny9/SIZkJTGFVIAkjPzldHRVU1Oy3ZOSOHqBqCjpgZGTclMxniFlWaFugcVEZLt8LF7FGCnYVZDKIBfqkWYBz7GIs7TSJh/8HXSfoTiobm17JIlvFUfCLONnCJM4/SY6l8iLGCe0QtTSJFWUUphKyl8NRdJo8ZqX2VgqJHTUkJ+uWo1XUcK20njak94aNAOnf2ZClIx++jS66iid+ktWfIOizxMi6X/W+N5D1smygWZebgogrFUdOJDlMuUi+RD8XwXUWGpT1NjqskOzlMfrXQFhlpcyqaJncJRmY7EhBbDWaEViIht8bzO2S2BAgnQdp0NSCaIUNdQG6ChOpY9JAkUorWimVRWUbRCbMpMjzUCWrXHTxGBRpIFm65xokenaQE090l2XIVfDhmFiDRNmMUsDG6FDjZ5uJJnngkI/yjwrtqRqwFFJCmX9d4c5ZhX1kBxDQYreMTvA6D/+ujN3RZWX0aYsc/FZVddxudlFihwSagOi/S8gASJAqCx7SZOMMHUAc/ilNI4Naq7XwrVnbYUUsI5FWbyemk60IOU+pL2evuqxwt6xSDFM5SfpOMy1yR/L8Wz6f4ymX09w58p4AHmQZIIMXNUahSiygDkOMUyX6REQVyPcoLYU1AmJuIZkgRqu42gcCI4AEJdlSc4muW5yZR89ocSZWr+pHSr1CGAtPcxn2/Gt31GcsjWk4VFE3otJG5VGe0yTWFq1dUUbzMU2MNghjMnIWChiEQKDoohzC7iDLYszW8OOycHdPzHlxOXUJdy1I2oRGVMz6p/6wdD0oKnHMPvBacNzZs71InK9CPz53XI5Cx8C79b/swIi4m2eyKlFN6QM90spNEOMQ9QHff3oz25CWcCzqVRdfPFvvKBSXtzeHovN/Gtp4ix7+dsk8GqpszIrb7mSSM/zF4tTBqb3k9+9sBH5+uBVIkE9RY7F/PlyNZnNKiA3ftBcPI7FHhZLf+Uv5lL+xnvw5GO+CqeLm/3hi3lfwZtPrmdeOA2+PqwWUnHmT33vlJON4HLxGEy98H5x49/600ll5YTwnTf3gsnKC4PH5Sq8ljCqHB5bH7DD1SS481bhFy9YNsdixUbHFXNqO1mc6LZGkNxQug46x5pjOHIEOBG3MLWo40oitxwghs4cw3IBm7arochAxHQo7c2Wf9WWzSwwFYwVdLojLcp020Ymx9yUY8mxq2VqgJxIlgERJ45mALEiwuWLzWRHGshhLlADcZ0yjN/pyN5GkkCawaSSgm7ktU8uJS7UkqyF+lzjGyyefmRr38NmJ/TCyxy5xZkpnxZmJmPAOZJjhGOIKHJcy2HEsA0ZeMulthzG3LUqEc3AQIAgsxfe122UJWEuQcXf32/mc3uxCXK7GF8KkndLsbsntRO3t+Pu/VWHpboPk/We3tzpuntRswB5lp0ojYo87id6tBPNQXkhL120GmQds4e9AV7f/J4u3i7+Ae/FRLA=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "name": "AWS-LC",
+     "version": "5.11.0",
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "crate": "aws-lc-sys",
+     "crate_version": "0.45.0",
+     "source_sha256": "a0412144cebb6ed88a459d3bea92af4c7a253aabf2059749882fea1bee0f2e7a",
+     "verified_files": 3,
+     "license": "ISC",
+     "unused_bundled_source": {
+      "version": "5.7.0",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    }
+   }
+  },
+  {
+   "name": "a bundled header whose version line ends with a carriage return",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DluwzAUBNBex2AbSOK+GPBJDBfk56dEWBtEKolvH7sMlDL9DPBmbrfNw8MPeL83i5/xSvxXaSdoy7OQ5hP3ktflSmgnVUdJU9Zjh1doxyGXuj8/xlq3cun7IdfxCB2sc78fpbaTX4Yedl+xdHlt8xLxmzQwIjzKMV+J0VSg8dyilUkhE8hRaYSQOAtcOaqodVQ4KznTwhkQ4FykwQrUmisgze0kXzdcSplOdNcxZv7RrpJOnqUkubc0RjBRcWcFhxSFNFrR1xIbFDpJMVimHXDgEmVyTARE/Ms+Y8z+JdxOembex58bJc/bhKXC6Ovvwjv/A/rzmBs=",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLwHQ/h+LCAAA8VNlAv/t1U1Lw0AQBuCcA/6HEM/ZbNpse+pBQ5GARmisHqSEMVmTYD5KNlX8964WLOQgHjRYfJ/LLMPCXuadpRflVKmjXpXDmS8YdwPq8pb1bV0ZP4RrM9//qNqwcj6fHs7vfW/iTzzD4sYIdqqnTj9v/E/3W0qfKJcbs6FaLmz6nAfbfJadKttmYe8nwzarMpWN0rfCOLBNA44ffZF/1nZlPkL+vYkY5H86FTPkf8z8s1r2lFFP7DARGzNt67rsnYJUoVfDN2EzHHX+9x23bNJql0m33eqVryr3gZRkxe/8/2KY/xkXHPkfw2kmH8tGWmd38WWQ3C5XcXgdJdH66ny5SuKbVRhdWLZgc/39nyDXAAAAAAAAAAAAAAAAAAB/1xsFSoSAACgAAK81kDA=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4uUCAEDvDH8=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmDzYmC/pSntoUuTKkn3bnWqkLHHCVoCCJN2e6v+9zMJ4UVJut27ywcCz8x4Hs94Zvzj4vJyQDnNS+AhyzZ5lkJaDj5f/lACJUpiBqkEBQyCxXhwtUdTutlBSRy9QFSU7CDIabmuBM+Q8qzQN8BjKrNtPpSvcog07GlI55BL/ciygOdYxllaWdMP/g62z1AcTDeOM1DgWyVRNMv4GcIkTr/Jdkv0RQ4TVjFqMIXKUikzhfxVIwpjxWteZkNlkLBBDT9dNRavsoRNZfG0g95qNr1N/8yFLDn79Glw1SKt+UtWfIOiK5My6X7u+b3HrNXlPcu8XBdAeWPa20CWq5TL5EP0f5VQ7alJUe2rzQ7LUhGvtgWEWV6qpMqOw0GaDeWaFsAbpxXEZdb73mR8m0APgnQVp32oBFnKPdWa6CBO1R6TBIpQeTFsUh0ox6IO47ZAhoWIYwjbxkAYMsBwTEGNyPYcYLYZmZ7HkWdgy7KxgSknnBjgIHQ4o6cLSeW5YNCNssiKDa0KcFDSQlv93XKOeYUekmNpSDNbYUsY/cdfu+a2qPIyWJdlLj/r+iou19tIU01Cr0k0/wUkQCVInWcvaZJRrvdo9r+0emO9M9cp4f3OmhNSwCqWZfF6qjuxgpa7kHZq+qojCjvLIs2ytZ+k49DXRn8shpPx/9Gafj3B7VaGPcq9JDsEmeBQwwXXEjZgEwywCbBIGDgybA/ZyPWQ6bmWgYnpOcxk1fmMXBMIMWx2Nsn7Itd20ZNanOn7N71lpR8R3Gv389lUfLPvKE75CtLwKCLvxaSJSm09ZEmsvDqmZvT6YhMY7FLOVRUSFPEIgcVQJAQB4WJCBHcM7NoCvN0TM0E9wTwqPCdihFJk2VF31Q+GpkNNP6bZDU4TnjN9rhOR69k8mN4tFpPwYe7fBn9WRGS8yRPVtdialuFuKIV2iHGIuqSvH4PJTagO8GSsTGdfght/XhnPbm+P1SbBtXJxVrz4bTT391pndZb+YqmYnpfPZqccjO9Hv/thrfL1wa9U5vsucqwWTBfL0WRSEbkJ5vXF41jtYbYIlsFsqvRv/AdfPabLcDy72S0+m3YN/OnoeuKH4/nXh+VMGU6CceCf2mStuJg9zsd+eD+7CW6D8ajyckL5zp/689HSD+ePi2V4rWhUOTz23hOHy9H8zl+GX/z5ol4Waw46PjGnphMR1HQMitSEMk0wBTZcy/UM6kaCYEaY6ylQEBeoZXLXIh5g2/EMFFmI2i7r9IF/V5Z1L7A1jDV0uiIJ46bjIFtgYVcdy6mGqQWuaxALIkFdwwJKIirUi8NVRVrI5R4wCwmTcYzfqcjORFJE6sak04Kt1bVPDSUh9ZKupP6859cbPN3I7vce1jOhE17uqinObfUkmNucgxBItRGBIWKqwRKXU8uxVOCJxxyLgfBIpWJYGChQZHfC+7qJsiTMFan4+/vFfG4u1kFuBuNLQfN2KLb3pKbjdmbcfbBsuVT3Ybra4fWdrr0X1QNQZNmJo1HBw26iB1tZL5QX6tLFqkbWCjvca+L7m9/TxdvFPzOQQsI=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header with an empty version",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DtuwzAQBNBex2AbSOJXJA34JIYLcrmUBOsHLZXEt49dBkqZdjADPMzttgV4hB7v92oJM15Z+KJ6gpqexKpP3GlclyvjjTYNZxWtxw6v0o79SGV/fgylbHRp234swxEbWOd2P6jUU1j6FvZQkJpxrccl4TerYEB40DFfWU7OC6m0kUIkl02WgWchs1WQUEv1SiJ33mnBncNOGeEAOoU2WiFiiKy6neTrhgvRdKL7Rgj7j3aTuxxEzloGx1MCm4z0TknISWnbGY6mc9Gg1xyjE50HCVKjzl6oiIh/2WdMY3gJt5Ne2Pfx5wWN8zYhFRhC+T14938Aw+mYxg==",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBKQHW/h+LCAAA8VNlAv/t1ctKw0AUBuCs8xRhXGcyubWrLjQUCWiExMtCSjgmYxLMpWRSxbc3WrCQhbjQYPH/Nmc4DMzm/GfoRZl1ZqpXZQru+VxYAfVFx4euqbUfIkYLz/uoo2kVYukezu992/EcWzOENoOdGqgfn9f+p/stZU9UyI3eUiNXjD7ngenPsldV167YfjKYXleZbNV4K0wCpmtw/OiL/POur4oZ8m87/iT/rusvkP85888bOVBOA/HDRGz0rGuaajBLUuW4Gr4Jm+Go87/vWFWb1btcWt12XPmqth5ISV7+zv/vLSf5Xwgf//8sTnL5WLXSOL1LLoL0dh0n4VWURjeXZ+s4Ta7jMDo3GBINAAAAAAAAAAAAAAAAAPDnvQG+YH4sACgAAIqXjv0=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQUuICAPb2C3o=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGCRugnlzHJKl1jEp7Mzu1FaKErrY1GCgEE4mO5V/X2Ewl7KdyeyuHzCc7lYfdau79ePi8lLBFBcVoxHJt0WesaxSPl/+kAIpShPCMsEkoPjLmXLVoBne7qE0iV9YXFbkIChwtakFzyyjealtGU2wyHfFRLyKCVChqwKNskJoR5Yle05Ekme1Nf7g72D7zMqD6RYhRYJvtUTSrJJnFqVJ9k30W8IvYpKSmlGHSVRUUplI5K8WkRgpX4sqn0iDlCgt/HTVWbyKim1ri6c99NayGW36Zy5ERcmnT8pVj/TmL3n5jZVDmRDp8LPh9x6zXpeOLItqUzJMO9PRBvJCplykH6L/q4RaT12KWl99dkie8WS9K1mUF5VMqhg4VLJ8Ija4ZLRzWkNU5KPvbU53KRtBLFsn2RiqmKhEQ7UlqiSZ3GOasjKSXnTLrg8UMjEi1OJAN4GNdG5ZkNkE6ExHBsd6bLmIEcuIDdelwNWhaVpQh5ja1NYZAuBwRk8XksxzSdgwyjwvt7guQKXCpbr+u+ec0Bo9JMdUgWr0wp4w+I+/fs1dWedF2VRVIT5r2jqpNrtYlU1Ca0l0/yVLGRZMaDR/ydIcU21Ec/ylthsbnblBCTc7605IydaJqMrXU92JlLjah3RQ01cDUTRYFqimpf4kHYe+Nv1jOZnP/o/W9OsJ7rcyGVEeJZlTx4W6YVo6hNThFtcx4FDnyCCUmbohkRg4rmNC4DjMNizoEGIbDMUIwhjHZ5PcFLm6j55Qk1xr3rSelXZEsNEe57Or+G7fcZLRNcuio4i8F5MuKq31hKSJ9IoMVR/1xS4w0MGUyiq0QUxjwEwCYs5txh1o25wiHToWZ+7+CQnHLicu5i6KiY0xMK14uOoHQzOgph3THAanC8+ZPjeIyHUQ+ou75XIePYTerf9nTUQk2yKVXYtscBXth1JkRRBGYEj6+tGf30TyAM9n0jT44t94YW0c3N4eq839a+nirHj52zT0Gq2zOitvuZJMz8uD4JSD2f30dy9qVb4+eLVK2HSRYzV/sVxN5/OayI0fthePY7WHYOmv/GAh9W+8B08+FqtoFtzsFw8WQwNvMb2ee9Es/PqwCqTh3J/53qlNtorL4DGcedF9cOPf+rNp7eWE8p238MLpyovCx+UqupY06hweex+Jo9U0vPNW0RcvXLbLQhWB4xNzajrZHBtI1r6cUIbBDNkCHNNxdezE3IbEJo4rQW47DJsGdUzbZdBCrg5iE2BLtoRBb/lXZdn2AkuFUAWnK9Im1EAIWBxyC2HdQfUwNZnj6LbJYo4d3WTYjjGXL4jKijSBQ11GTMBlM4PwnYocTCRJpG1MGi7JRl775FDiQqvwWmjPDb/R4BlGttl71M6EQXipI6c4teTThtSilHEOZBvhkMVEtlfbodhEpgy87RJkEsZdu1bRTcgww8AahPd1G+dpVEhSyff3i/ncXGyD3A3GlxIX/VDs70ldxx3MuHt/1XOp78N4vcfbO11/L2oHIM/zE0ejhifDRCs70S5UlPLSRepG1gsH3Fvizc3v6eLt4h+UfkNt",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Authenticated AWS-LC wrapper lacks its bundled source identity",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a bundled header with two versions",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0LluwzAQBNBen8E20EGapwF/ieGCXC4lwrqgpZL47yOXgVKmnwHezP2+enj6Hh+PavYT3pj/onqEml7Eqk/cKC/zjXWNVE3HKlr2DY7Qhn2msr0+hlJWurZtn8uwhwaWqd12KvXo576FzRekJi91niN+swoGhCft042FoLl2Eow1IiSVAtfKOw/SRhW0dFxFGx0kbg3nUki00oEOJrlkpFCBVfeTfFlxJhpPdNdwbv7RrpJOnqckhbddjGCiEs5eBKR4kUarDpW2QaGTHQZ7zAQBxwKZHL8ERPzLPmHM/hCuJz037+PPDcrTOiIVGHz5XXjnfwAAkpjt",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBMgHN/h+LCAAA8VNlAv/t1ctqg0AUBmDXPoXYteN4S7rJopVQhNaC9rIoQU51qlIvwTEtfftqAw24KFm0Quj/bWY4HJjN+c/QuzSq1JAf0uDM9Rg3ferylvVtXSm/hA8Wrvt1DqYn50vncB/rlu3alqJxZQY72VM3PK/8T09bSl8pFxu1oVqsdPqeB119E50s22al7ydDV6syFY0cuoLY11UFTh/9kH/WdmU+Q/4t25vk33G8BfI/Z/5ZLXrKqCd2mIiNmrZ1XfZGQbIYVsORsBlOOv/7ilk2abXLhNluh5UvK/OZpGDF3+Tf4ZP8L7hrI/9zOMvES9kI7eIxvvaTh3UUB7dhEt7fXK6jJL6LgvBK0z22HL//I3vPx14kCwAAAAAAAAAAAAAAAABgXp+sHzy0ACgAAC1rk/Y=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/aws-lc/include/openssl/base.h": {
+     "deflated": "eNpTTklNy8xLVXAMD/Zxjg9zDQr29PeL9wv1dXINig8OCfL0c1dQMtUz1zNQ4lImTq0FSC0AjGkY5A==",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmATY8N+S1PaQ5cmFUn3bnWqkPFLgpYAwqTd3qr//UxCeFGSbvfu8oHAMzOexzOeGf+4uLwcUE7zUvCQZZs8S0VaDj5f/tACLUpiJlIlNDDwF5PB1R5N6WYHJXH0IqKiZAdBTst1JXgWKc8KcyN4TFW2zYfqVQ2BAV0DmFzkyjyyLMRzrOIsrazpB38H22dRHEw3hAw0+FZJNM0yfhZhEqffVLsl+qKGCasYNZhGVamVmUb+qhGNseI1L7OhNkjYoIafrhqLV1WKTWXxtIPeaja9Tf/MhSo5+/RpcNUirflLVnwTRVemVNL93PN7j1mry3uWebkuBOWNaW8DWa5TrpIP0f9VQrWnJkW1rzY7LEtlvNoWIszyUidVdRwO0myo1rQQvHFaQVxlve9NxreJ6EEiXcVpHyqFKtWeak10EKd6j0kiilB7sWxcHSiCKGHclsBCABNL2jYUmAFLWGQkqRXZLhHMHkUj1+XAtSBCNrQg5ZhjSxAADmf0dCHpPBdMdKMss2JDqwIclLQwVn+3nGNeoYfkIAMYo1bYEgb/8deuuS2qvAzWZZmrz6a5isv1NjJ0kzBrEs1/IRJBlVAmz17SJKPc7NHsfxn1xnpnrlPC+501J6QQq1iVxeup7sQKWu5C2qnpq44o7CwLDGQbP0nHoa+N/1gMp5P/ozX9eoLbrQx7lHtJjiIMsYsYcYgVSVtGENvUpQw53I4wcqHNHe4yCR0CIbKQcJDLcESkKwmy7OhskvdFbuyip4w4M/dvZsvKPCK41+7ns6n4Zt9RnPKVSMOjiLwXkyYqtfWQJbH2SkaG1euLTWCgQznXVYhBxCMgEAORlFhIB2IsObGgY0vh7p6QSepK5lLpkohhSgHqBObjoelQM49pdoPThOdMn+tE5Hoe+LO7xWIaPgTerf9nRUTFmzzRXYutaRnuhlJohxCGoEv6+tGf3oT6AE8n2nT+xb/xgsp4fnt7rDb1r7WLs+LFb+PA22ud1Vl6i6Vmel4+n59yMLkf/+6FtcrXB69SCfZd5FjNny2W4+m0InLjB/XF41jtYb7wl/58pvVvvAdPP2bLcDK/2S0+n3UNvNn4euqFk+Drw3KuDaf+xPdObbJWXMwfg4kX3s9v/Ft/Mq68nFC+82ZeMF56YfC4WIbXmkaVw2PvPXG4HAd33jL84gWLelloEHB8Yk5NJyzpiFgU6Ak1GomRhJaDHNeiTiQxZJg5rgYldgRFI+4g7ApoE9cCEQLUdhjr9JZ/VZZ1L7ANCA1wuiIx4yNCgC2htAm1HFINU92QHAsjEUnq6O5EcUSlfiFcVyQCunUJhoAcMQ7hOxXZmUiaSN2YTFqwtb726aEklVnSlTKf9/x6g6cb2f3ew3omdMKrmyi2uK2fGHKbcyEl0G1EQhEx4LjY4RQRpAOPXUYQE9LFlYqFoKCCArsT3tdNlCVhrknF398v5nNzsQ5yMxhfCpq3Q7G9JzUdtzPj7v1ly6W6D9PVDq/vdO29qB6AMstOHI0KHnYTPdiqeqG80JcuVjWyVtjhXhPf3/yeLt4u/gGi7kOU",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "held": {
+     "name": "AWS-LC",
+     "version": "5.11.0",
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "crate": "aws-lc-sys",
+     "crate_version": "0.45.0",
+     "source_sha256": "bb61694c7872bf5fb165a9ac48d5b64915d8d9cf18711424e849c6b7f9f7425b",
+     "verified_files": 3,
+     "license": "ISC",
+     "unused_bundled_source": {
+      "version": "5.7.0",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     }
+    }
+   }
+  },
+  {
+   "name": "a wrapper under another licence than reviewed",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0MtugzAQheE9j+FtBdiOATsSTxJlMR6PwQo3MaZt3r7JsqLL7v8jfTq32wb4gIHu92KBmXoBX1xOWPKTRfFJO6d16YWsTFNJUfB67PiKdhoS5/35Mea88bWuh5THw1e4zvV+cC4nWIYad8jEVVrLtAT6FgWOhA8+5l54q1FqaSDq6KVWLXXGAXi0zhkXAJRU0vugrQmOlO80GYpK+eDQk2pFcTvJ140W5ulEd5VS3T/am9hGUDEaDVaGgF1otLMXjTFcTNc2kprW+oackeStah1q1IZMdOriiegv+0whwUu4nfSqex9/XnCat4k44wj59+Dd/wAEMpnK",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBLgHR/h+LCAAA8VNlAv/t1U1Lw0AQBuCc8ytKPGez+T71oKVIwEZIqh6khDFZk2A+SjZV/PemFlrIQTxosPg+l1mGhb3MO0tvUq9SXb5LnTPHZdxYUJe3rG/rSvkhfOA5zmcdjCvnvn067/um5VimMuPKBHayp254XvmfHreUvlAuNmpDtZhrdJwHTX0VnSzbZq4dJkNTqzIVjRxurYK1pipw/uiL/LO2K/MJ8m9a7ij/tu16yP+U+We16CmjnthpIjZq2tZ12esFyWJYDd+EzXDW+T90jLJJq10mjHY7rHxZGU8kBSt+5/93nVH+Pe74yP8ULjLxXDZidvkQ3yyS+2UUB7dhEt6trpZREq+jILyeaS7z998/0gIAAAAAAAAAAAAAAAAA8Hd9ANzvEj4AKAAAeeOQZw==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOLKyUxOzSsGqvL1DFHiAgBW2RKc",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttuo0gQfc9XRH6dGLqhuc2b45AsWseOsDO7o1WE+mqjwYBonEx2lH/fxmAusp3J7K4fMJyq6jpd1VXVPy4uL0eY4bzkLKLZNs9Snpajz5c/lECJkpjyVHIFjILldHRVoyne7qEkJi+cFCU9CHJcbirBM09ZVuhbzmIss10+lq9yDDToaUBnPJf6kWXBn2MZZ2lljT/4O9g+8+JgunWckQLfKomiWcbPPEri9JvstoRf5DihFaMWU6gslTJVyF8NojBavOZlNlYGCR018NNVa/EqS76tLJ720FvDZrDpn7mQJaOfPo2uOqQzf8mKb7zoy6RM+p81v/eYdbpsYJmXm4Jj1poONpDlKuUy+RD9XyXUeGpT1PjqskOzVMTrXcGjLC9VUmXP4SjNxnKDC85apxXEZDb43mZsl/ABxNN1nA6hkstS1lQboqM4VXtMEl5Eyoth2dWBchB2KLMEMBCwHUNYFuQ2BQY3HFNgg1iew6llEtPzGPAMiJAFDYiZzWyDOwAczujpQlJ5LijvR1lkxRZXBTgqcaGt/+44x6xCD8lBGtDMTtgRBv/x1625K6q8jDZlmcvPur6Oy82OaKpJ6A2J9r/gCceSS51lL2mSYaYPaA6/tGZjgzPXK+F6Z+0JKfg6lmXxeqo70QKX+5D2avqqJ4p6ywINWdpP0nHoa5M/luPZ9P9oTb+e4G4r4wHlQZKJa6gzCBAWhiDAgDZ3kIcxoa7nIY9hDAEEhDDDRczjkDgGR1xASJhHCYf22STXRa7toye1ONPrN71jpR8RrLWH+Wwrvt03iVO25ml0FJH3YtJGpbEe0yRWXh1TMwZ9sQ0MdDFjqgptQBgBHFFAhLC5cKFtC+YY0LUE9/ZPSAX2BPWw8BxCbYwBskh/1Q+GpkdNP6bZD04bnjN9rheR60UYzO+Wy1n0EPq3wZ8VERlv80R1LbrBZbQfSpEVQRiBPunrx2B2E6kDPJsq08WX4MYPK+PF7e2x2iy4Vi7Oipe/TUK/1jqrs/KXK8X0vHyxOOVgej/53Y8ala8PfqUS1l3kWC2YL1eT2awichOEzcXjWO1hsQxWwWKu9G/8B1895qtourjZL76Y9w38+eR65kfT8OvDaqEMZ8E08E9tslFcLh7DqR/dL26C22A6qbycUL7z5344WflR+LhcRdeKRpXDY+8DcbSahHf+Kvrih8tmWag54PjEnJpOtsCmY2CgJpRpclNAVfCuZ2CXCBtSW7UDBQrb5RiZzEW26gWW4xmAIIAtl9Jeb/lXZdn0AkuDUAOnK9KmzHQcYAkoLAcbrlMNU8Rd17ARJwK7BuLYJlioF4epikTAVT2LIiBMyiB8pyJ7E0kRaRqTjgu6Udc+NZSE1Eu8lvpzzW8wePqRrfceNTOhF17mqinOLPW0IbMY40IA1UYE5IQC17NdhpGDVOBtjzqIcuHZlYqBIMccA6sX3tctyZIoV6Ti7+8X87m52AS5HYwvBc67odjdk9qO25tx98Gq41Ldh/F6jzd3uu5e1AxAkWUnjkYFj/uJHu1ks1BeqEsXrRpZJ+xxb4jXN7+ni7eLfwBLlkRx",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled AWS-LC license differs from authenticated source",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a wrapper without a licence",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0LtuhDAQheGex3AbAb5jIu2TrLYYxmNA4SbGJNm3D1tGpEz/H+nTud83wA/o6fEoFpjpJuCLywlLfrIoPmnncV1uQlbWVVIUvB47ntFO/ch5f74NOW/8Xtf9mIejq3Cd6/3gXE6w9DXukImrcS3HJdK3KHAg/OBjvgkjQ6vQaOXBewnOBGVsoMYFMhCiNEFG5ZVBZzoIlpRGrxqfdNRnnqIo7hf5utHCPF3obaVU8492l3wClZLVcCojNtHpNhiNKRrbeCfJ+dA5aq2kLijfokZtyaZWmY6I/rLPFEc4hdtFr5rX8dcFj/M2EWccIP8evPofrIWX9A==",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBHwHg/h+LCAAA8VNlAv/t1U1Pg0AQBmDO/AqCZ5aFLvTUgzaNaaKYgB8H05ARViAC27BU478XbWITDsaDEj/e5zKbuexl3hl60k6dOfpZO5yJgHF3SV2hWK+a2vgifBAK8VYH48p5EBzer33PF75nWNyYwE731A3fG//T7ZayByrkxmypkQub3ufBNh9lpyvVLuz9ZNimAX8NfZB/prqqmCD/nj/O/2wWhMj/lPlnjewpp57YYSI2ZqaapuqdknQ5rIZPwp741fnfd9yqzepdLl21la3WtXtHWrLym+6/GOU/5GKO/E/hKJf3VSut45vkbJler+JkfRGl0dX5ySpOk8t4HZ1adsDmOP8AAAAAAAAAAAAAAAAAAD/bCytmza0AKAAAOwCPWg==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT43lykvMTbVVSiwv1s1J1i2uLFbiKkstKs7Mz7NVMtAzMdUzUOICAGj1DkQ=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVttyozgQfc9XpHidGCQuAubNcUiWWseksDO7U1spSuhiU4OBQjiZ7FT+fYXBXMp2JrO7fsBwult91K3u1o+Ly0sFU1xUjEYk3xZ5xrJK+Xz5QwqkKE0IywSTgOIvZ8pVg2Z4u4fSJH5hcVmRg6DA1aYWPLOM5qW2ZTTBIt8VE/EqJkCFrgo0ygqhHVmW7DkRSZ7V1viDv4PtMysPplvbViT4VkskzSp5ZlGaZN9EvyX8IiYpqRl1mERFJZWJRP5qEYmR8rWo8ok0SInSwk9XncWrqNi2tnjaQ28tm9Gmf+ZCVJR8+qRc9Uhv/pKX31g5lAmRDj8bfu8x63XpyLKoNiXDtDMdbSAvZMpF+iH6v0qo9dSlqPXVZ4fkGU/Wu5JFeVHJpIqBQyXLJ2KDS0Y7pzVERT763uZ0l7IRxLJ1ko2hiolKNFRbokqSyT2mKSsj6UW3UH2gbBPbhFoc6CZAts4tCzJEgM502+BYjy3XZsQyYsN1KXB1aJoW1CGmiCKd2QAczujpQpJ5LgkbRpnn5RbXBahUuFTXf/ecE1qjh+SYKlCNXtgTBv/x16+5K+u8KJuqKsRnTVsn1WYXq7JJaC2J7r9kKcOCCY3mL1maY6qNaI6/1HZjozM3KOFmZ90JKdk6EVX5eqo7kRJX+5AOavpqIIoGywLVtNSfpOPQ16Z/LCfz2f/Rmn49wf1WJiPKoyQbwHEhMXSIMEIAW4YDDdNhtuUwAzsUGA6gEEGjPpnYMRnUCYI24jrVpTqnZ5PcFLm6j55Qk1xr3rSelXZEsNEe57Or+G7fcZLRNcuio4i8F5MuKq31hKSJ9Gobqj7qi11goIMplVWIQExjwEwCYs4R4w5EiFNbh47Fmbt/QsKxy4mLuWvHBGEMTCservrB0Ayoacc0h8HpwnOmzw0ich2E/uJuuZxHD6F36/9ZExHJtkhl1yIbXEX7oRRZEYQRGJK+fvTnN5E8wPOZNA2++DdeWBsHt7fHanP/Wro4K17+Ng29RuuszspbriTT8/IgOOVgdj/93Ytala8PXq0SNl3kWM1fLFfT+bwmcuOH7cXjWO0hWPorP1hI/RvvwZOPxSqaBTf7xYPF0MBbTK/nXjQLvz6sAmk492e+d2qTreIyeAxnXnQf3Pi3/mxaezmhfOctvHC68qLwcbmKriWNOofH3kfiaDUN77xV9MULl+2yULXB8Yk5NZ0Qx4atYyAnlGEwg0PdMR1Xx07MESSIOK4EOXIYNg3qmMhl0LJdHcSmbBoOIYPe8q/Ksu0FlgqhCk5XJCLUsG1gccgtG+uOXQ9TkzmOjkwWc+zoJsMoxly+2FRWpAkc6jJiAm4QCuE7FTmYSJJI25g0XJKNvPbJocSFVuG10J4bfqPBM4xss/eonQmD8FJHTnFqySeC1KKUcQ5kG+GQxUR2YORQbNqmDDxyiW0Sxl1Uq+gmZJhhYA3C+7qN8zQqJKnk+/vFfG4utkHuBuNLiYt+KPb3pK7jDmbcvb/qudT3Ybze4+2drr8XtQOQ5/mJo1HDk2GilZ1oFypKeekidSPrhQPuLfHm5vd08XbxDxNMQps=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Bundled AWS-LC license differs from authenticated source",
+    "kind": "native"
+   }
+  },
+  {
+   "name": "a wrapper whose manifest is no TOML",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0L1uhDAQBOCex6CNANusbRzpnuR0hb1eAwp/Yk2Se/twZUTK9DOjT3O/bx4/fE+PR7H4mW6l/+JqwoqfXBaftPO4LrdS1KBrURa8HjueoZ36kfP+fBty3vi9afoxD0eocZ2b/eBcTX7pG9x9Jq7HtRqXSN9lgQPhBx/zOWihtTpKHTtlELRxOgoQQRgFEIVDcAHbNmhNIWgCmYI0qDqfQKsUbFncL/J1o4V5utBdLaX9R7tOJnmZEijfiRjRRq1c1ypMsQVrtCBtuhPtQFDopHGoUAFBcrINRPSXfaY4+lO4XfTSvo6/Nnict4k44+Dz78Ir/wNozJiN",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBCwH0/h+LCAAA8VNlAv/t1UFPgzAYxnHO+xQEz5SytezkQZfFLFFMQOfBGPIKFYhAF9rF+O1FPSzhYDwo0ez5Xdq8l176b+nF+E3um1fjcyYk48GK+lIzq9vG+SF8EAnxsQ7GK+dheNi/z8O5GEYudyawN5b64XjnON3vKH+mUs0cOEb0Rf9M93U5Qf/hXI76XyxkhP6n7J+1ylJBltjhRjzMct22tfUrMtWpR9/k4S35z/1/ToK6y5t9oQK9U50xTfBIRrHqd/5/KUb9R1ws0f8UTgr1VHfKPbtLL1fZdp2km+s4i2+vztdJlt4km/jC9SRbMo6sAQAAAAAAAAAAAAAAAAD+sjeugKm9ACgAAGT/iHY=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLkhMzk5MT+UCABFZAzI=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmCDbWC/pSntoUuTKkn3bnWqkPFLgpYAwqTd3qr//UxCeFGSbvfu8oHAMzOexzOeGf+4uLwcUE7zUvCQZZs8S0VaDj5f/tACLUpiJlIlNDAIFuPB1R5N6WYHJXH0IqKiZAdBTst1JXgWKc8KcyN4TFW2zYfqVQ2BAT0DmFzkyjyyLMRzrOIsrazpB38H22dRHEw3jjPQ4Fsl0TTL+FmESZx+U+2W6IsaJqxi1GAaVaVWZhr5q0Y0xorXvMyG2iBhgxp+umosXlUpNpXF0w56q9n0Nv0zF6rk7NOnwVWLtOYvWfFNFF2ZUkn3c8/vPWatLu9Z5uW6EJQ3pr0NZLlOuUo+RP9XCdWemhTVvtrssCyV8WpbiDDLS51U1XE4SLOhWtNC8MZpBXGV9b43Gd8mogeJdBWnfagUqlR7qjXRQZzqPSaJKELtxcKkOlAOog7jWAILAeJYEmMoCAOWsBxbUivCniMYtiPb8zjwLIgQhhaknHBiCQeAwxk9XUg6zwUT3SjLrNjQqgAHJS2M1d8t55hX6CE5yACG3QpbwuA//to1t0WVl8G6LHP12TRXcbneRoZuEmZNovkvRCKoEsrk2UuaZJSbPZr9L6PeWO/MdUp4v7PmhBRiFauyeD3VnVhBy11IOzV91RGFnWWBgbDxk3Qc+troj8VwMv4/WtOvJ7jdyrBHuZ9kB9kO5hBz1yIMYeJhDhCIALEQ0ueQIS9ith1hLKIICwRlBAmzXCoRtmTknE3yvsiNXfSUEWfm/s1sWZlHBPfa/Xw2Fd/sO4pTvhJpeBSR92LSRKW2HrIk1l4d27B6fbEJDHQp57oKCYh4BARiIJKSCOlCQiR3LOhiKbzdEzJJPck8Kj0nYoRSgHDUXfWDoelQM49pdoPThOdMn+tE5Ho2D6Z3i8UkfJj7t8GfFREVb/JEdy22pmW4G0ohDiEMQZf09WMwuQn1AZ6MtensS3Djzyvj2e3tsdokuNYuzooXv43m/l7rrM7SXyw10/Py2eyUg/H96Hc/rFW+PviVynzfRY7VguliOZpMKiI3wby+eByrPcwWwTKYTbX+jf/g68d0GY5nN7vFZ9OugT8dXU/8cDz/+rCcacNJMA78U5usFRezx/nYD+9nN8FtMB5VXk4o3/lTfz5a+uH8cbEMrzWNKofH3nvicDma3/nL8Is/X9TLQsMBxyfm1HQiktqORYGeULYtbAktF7meRd1IEsgIcz0NSuIKimzuIuIJiB3PAhECFLuMdXrLvyrLuhdgA0IDnK5IwrjtOABLKLFDLdephikSrm5cSESSuhYSlERU6heH64pEwOWeYAhIm3EI36nIzkTSROrGZNKCrfW1Tw8lqcySrpT5vOfXGzzdyO73HtYzoRNe7uopzrF+Esgx50JKoNuIhCJiwPWIyynSnVjYxGMOYkJ6pFKxEBRUUIA74X3dRFkS5ppU/P39Yj43F+sgN4PxpaB5OxTbe1LTcTsz7j5Ytlyq+zBd7fD6Ttfei+oBKLPsxNGo4GE30YOtqhfKC33pYlUja4Ud7jXx/c3v6eLt4h8GuUM0",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "TOMLDecodeError",
+    "said": "Expected ']' at the end of a table declaration (at line 1, column 9)"
+   }
+  },
+  {
+   "name": "a wrapper whose manifest has no package",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0DtuwzAQBNBex2AbSCIpfg34JIYLcrmUBOsHLZXEt49dBkoZTDsDPMzttgV4hB7v92oJM15Z+KJ6gpqexKpP3GlclyvjjdINZxWtxw6v0o79SGV/fgylbHRp234swxEbWOd2P6jUU1j6FvZQkJpxrccl4TerYEB40DFfmcsWTLY++6gctzx4lyKXoLwTLmYRVIfGpRwTcInceJFRc2e4DK/YxKrbSb5uuBBNJ7pvhLD/aNfZ5CByVjI4nhLYpKV3nYScOmWN5qiNixq94hidMB4kSIUqe9FFRPzLPmMaw0u4nfTCvo8/L2ictwmpwBDK78G7/wNXppk0",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNoBEwHs/h+LCAAA8VNlAv/t1U9rgzAYx3HPfRXizsbYRnvqoStlFDYHuj+HUeSZZipVU0xK2buf2w4FD2OHTTb6+1wSnksu+SZ01G6dufpVu5yJgHFvRV2hmFFNbf0Q3guF+Fh7w5VzX5z273N/KvqRza0RHLShrj/eOk9PR9Xt9J4yuZ1YcHboi/6Z6qpihP79aTDofzYLQvQ/Sv99+jsqJGukoZwMsdON2E4y1TSVcUvS5cKhb3LwkPzn/j8nXtVm9SGXntrLVuvaeyYtWfk7/38w/P9DLubofwwXuXypWmkvH5PrVfqwjpPNbZRG9zeX6zhN7uJNdGU7AZszjqwBAAAAAAAAAAAAAAAAAP6yN17fks8AKAAAox2GxQ==",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": {
+     "deflated": "eNqLLs8vyi4uSExOjeUCACBGBJI=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVm1vozgQ/t5fUeXrNmDzYsN+S1PaQ5cmFUn3bnWqkPFLgpYAwqTd3qr//UwgvChJt3t3iUTCMzOexzOeGf+4uLwcEUbykrOQZts8S3lajj5f/lACJUpiylPJFTDyl9PRVY2mZLuHkjh64VFR0oMgJ+WmEjzzlGWFvuUsJjLb5WP5KsdAg64GdMZzqR9ZFvw5lnGWVtbkg5+D7TMvDqZbjEcKfKskimYZP/MwidNvstsSeZHjhFaMWkyhslTKVCF/NYjCaPGal9lYGSR01MBPV63Fqyz5trJ42kNvDZvBpn/mQpaMfvo0uuqQzvwlK77xoi+TMum/1vzeY9bpsoFlXm4KTlhrOthAlquUy+RD9H+VUOOpTVHjq8sOzVIRr3cFD7O8VEmVPYejNBvLDSk4a51WEJPZ4H2bsV3CBxBP13E6hEouS1lTbYiO4lTtMUl4ESovho2qA4UtgimzBTAsgLAhbBtyRIHBDWwKYkS2izm1zch0XQZcA1qWDQ1IGGLI4BiAwxk9XUgqzwXl/SiLrNiSqgBHJSm09d8d55hV6CE5lgY0sxN2hMF//HRr7ooqL6NNWebys66v43KzizTVJPSGRPtb8IQTyaXOspc0yQjTBzSHb1qzscGZ65VwvbP2hBR8HcuyeD3VnWhByn1IezV91ROFvWWBZtnaT9Jx6GuTP5bj2fT/aE2/nuBuK+MB5UGSHYEpEtgVbmQ5AAPiOiwCBrVcBzqRgMQyOXKYiFh1VAFyoeA2cBAwiPpidjbJdZFr++hJLc70+p/esdKPCNbaw3y2Fd/uO4pTtuZpeBSR92LSRqWxHtMkVl6xqRmDvtgGBjqEMVWFCEQqINyiIBICceFAhATDBnRswd39E1JBXEFdIlwcUUQIsOyov+oHQ9Ojph/T7AenDc+ZPteLyPUi8Od3y+UsfAi8W//PioiMt3miuhbdkDLcD6XQDiEMQZ/09aM/uwnVAZ5Nlenii3/jBZXx4vb2WG3mXysXZ8XL3yaBV2ud1Vl5y5Viel6+WJxyML2f/O6FjcrXB69SCeoucqzmz5eryWxWEbnxg+bicaz2sFj6K38xV/o33oOnHvNVOF3c7BdfzPsG3nxyPfPCafD1YbVQhjN/6nunNtkoLhePwdQL7xc3/q0/nVReTijfeXMvmKy8MHhcrsJrRaPK4bH3gThcTYI7bxV+8YJlsyzUMDg+MaemExLExAYBakKZJjcFNBzLcQ2iegCCFFHHVaBADlcNgTkWcjm0sWuAyALEdijt9ZZ/VZZNL7A1CDVwuiIRZSbGwBZQ2JgYDq6GqcUdx0AWjwRxDIsTFBGh/mCmKtICDnM5tYAwKYPwnYrsTSRFpGlMOinoRl371FASUi/JWurPNb/B4OlHtt572MyEXniZo6Y4s9UTQWYzxoUAqo0IyCMKHFd1WGJh1WpN5FJsUS5cVKkYFuSEE2D3wvu6jbIkzBWp+Pv7xXxuLjZBbgfjS0Hybih296S24/Zm3L2/6rhU92Gy3uPNna67FzUDUGTZiaNRweN+okc72SyUF+rSRatG1gl73Bvi9c3v6eLt4h94B0Pb",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "raised": "KeyError",
+    "said": "'package'"
+   }
+  },
+  {
+   "name": "a wrapper without its manifest",
+   "delta": {
+    "Cargo.lock": {
+     "deflated": "eNqt0LtuhDAUBNCez3AbAbbxM9J+yWoL+/oaUHiJa5Ls34ctI1KmmWpGOpr7fQvwEXp8PKolzHhj4YvqCWp6Eqs+cadxXW6MN0o3nFW0HjucpR37kcr+fBtK2ei9bfuxDEdsYJ3b/aBST2HpW9hDQWrGtR6XhN+sggHhg475xiAKzTvhNCSVcgjqzAjB5oRGezAmB64ct0rF6C04maVwpnNGW+dcMqy6X+TrhgvRdKH7Rgj7j3adT53IWcngeEpgk5bedRJy6pQ1mqM2Lmr0imN0wniQIBWq7EUXEfEv+4xpDKdwu+iFfR1/XdA4bxNSgSGU34NX/wd9b5k/",
+     "spelled": false
+    },
+    "cargo-home/registry/cache/index/aws-lc-sys-0.45.0.crate": {
+     "deflated": "eNqT7+ZgYPgYnMr0/+3lg96HDUSOf5zzPXxKVd6sXM/yTwuSexrDMkrlXE5t7s3dmOs2WfHf92mc1jniiRYi9fNPc7//pPfz0m7eWTYb5M0EYrT0Dll+Xfrw3BZe89rYTZc7HVWe5vHxLZfwv/Jv7+3+5cGihv4bjG9Euf8tmPfX31/61P0VV/Zc7eMqOpL5X3me+87M27dYRW++urQ8/5M7zz8uq1f/s4Wvxd7L4Zad1ftuTe4h8U2zwu0v7Q/4tOC/xwnJX/bt3U77r839tk7u8uzKbXEqL1/pnXvUfvu166Sl309qxVXte2SsN8GUARUcyP/CyWVWVsGgwcAAAIf8d+U=",
+     "spelled": false
+    },
+    "vendor/native-components.json": {
+     "deflated": "eNqtVltvozgUfu+vqPI6DdhgbJi3NKVdtGlSJensjlYVMr4kaAggTNrpjvrf1ySEi5J0OrubBwLn4vP5Oz7n+MfF5eWAcpqXgocs2+RZKtJy8Pnyh1ZoVRIzkSqhBYNgMR5c7aUp3exESRy9iKgo2UGR03JdKZ5FyrPC3AgeU5Vt86F6VUNgQM8AJhe5Mo88C/EcqzhLK2/6wd/B91kUB9cNIQMtfKs0GmYZP4swidNvqt0SfVHDhFWIGpmWqlIbMy35q5ZoGSte8zIbaoeEDWrx01Xj8apKsak8nnaitxpNb9M/C6FKzj59Gly1ktb9JSu+iaKrUyrpfu7xvYesteU9z7xcF4LyxrW3gSzXKVfJh+D/KqA6UpOiOlabHZalMl5tCxFmeamTqjoBB2k2VGtaCN4ErURcZb3vTca3ieiJRLqK076oFKpUe6g10EGc6j0miShCHcVycHWgCKKEcUcCCwFMLOk4UGAGLGERW1IrcjwimGNHtudx4FkQIQdakHLMsSUIAIczerqQdJ4LJrosy6zY0KoAByUtjNXfLeaYV9JDcpABDLtVtoDBf/y1a26LKi+DdVnm6rNpruJyvY0M3STMGkTzX4hEUCWUybOXNMkoN3sw+19GvbHemeuU8H5nzQkpxCpWZfF6qjuxgpY7Sjs1fdVRhZ1lgYEc4yfpOPS10R+L4WT8f7SmX09wu5VhD3IvySyCDrCh6zCOuKQU6WfEKJFcYMdjGEsKkAsIQlHkEeZa0oIutl3sENd1OT6b5H2RGzv2lBFn5v7NbFGZRwD31v18NhXf7DuKU74SaXjEyHucNKzU3kOWxDoqsQ2r1xcbYqBLOddViEHEIyAQA5GUWEgXak440Sw4Uni7J2SSepJ5VHokYphqxpyou+oHqelAM49hdslp6DnT5zqMXM/mwfRusZiED3P/NvizAqLiTZ7orsXWtAx3Qyl0QghD0AV9/RhMbkJ9gCdj7Tr7Etz488p5dnt7bDYJrnWIs+rFb6O5v7c6a7P0F0uN9Lx+NjsVYHw/+t0Pa5OvD35lMt93kWOzYLpYjiaTCshNMK8vHsdmD7NFsAxmU21/4z/4+jFdhuPZzW7x2bTr4E9H1xM/HM+/Pixn2nESjAP/1CZrw8XscT72w/vZTXAbjEdVlBPGd/7Un4+Wfjh/XCzDaw2jyuFx9J46XI7md/4y/OLPF/Wy0CDg+MScmk66zm1iUaAnlG0LW0LLRa5nUTeSGDLMXE8LJXYFRTZ3EfYEdIhngQgB6riMdXrLvyrLuhc4BoQGOF2RmHGbEOBIKB1CLZdUwxQJ17UwEpGkroUExRGV+oVwXZEIuNwTDAFpMw7hOxXZmUgaSN2YTFqwtb726aEklVnSlTKf9/h6g6fL7H7vYT0TOvRy3Sot7ugnhtzhXEgJdBuRUEQMuB52OUUEaeKxxwhiQnq4MrEQFFRQ4HTofd1EWRLmGlT8/f1iPjcXa5KbwfhS0Lwdiu09qem4nRl3HyxbLNV9mK528vpO196L6gEos+zE0ajEw26iB1tVL5QX+tLFqkbWKjvYa+D7m9/TxdvFP9j7Q+Y=",
+     "spelled": false
+    },
+    "cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml": "absent"
+   },
+   "links": {},
+   "result": {
+    "raised": "FileNotFoundError",
+    "said": "[Errno 2] No such file or directory: '<root>/cargo-home/registry/src/index/aws-lc-sys-0.45.0/Cargo.toml'"
+   }
+  },
+  {
+   "name": "a reviewed licence with a space at its end",
+   "delta": {
+    "vendor/native-components.json": {
+     "deflated": "eNqtVt9zmzgQfu9fkfFrY5BACOib45Acc66dsd3edW46jJBWNlMMDCJJc5387ydswo+znUvvzg8Yvt3VftrV7urHu4uLEROsqEBEPN8VeQZZNfpw8UMLtChNOGQKNDAKV9PR5QHN2G4PpUn8CHFZ8RdBwaptLXiATOSluQORMJXfF2P1pMbIwL6BTAGFMo8sS3hIVJJntTV74+/F9gHKF9Od6440+FxLNM0qeYAoTbJvqtsSe1TjlNeMWkyjqtLKXCN/NIjGePlUVPlYG6R81MBfL1uLJ1XBrrb4uoeeGzaDTf+TC1UJ/v796LJDOvPHvPwGZV+mVNr/PPB7jVmnKwaWRbUtgYnWdLCBvNApV+mb6P8socZTm6LGV5cdnmcy2dyXEOVFpZOqeg5HWT5WW1aCaJ3WkFD54HuXi/sUBhBkmyQbQhWoSh2oNkRHSab3mKZQRtqL5dD6QLmEuVw4ElkEUdeSjoOBcmSB5dqSWbHju8AdO7Z9XyDfwoQ42MJMUEEtcBF6OaOnC0nnueTQj7LMyx2rC3BUsdLY/NlxTkSNviSHGMiwO2FHGP3HX7fmfVnnZbStqkJ9MM1NUm3vY0M3CbMh0f6XkAJToEyRP2ZpzoQ5oDn8MpqNDc5cr4QPO2tPSAmbRFXl06nuxEtW7UPaq+nLnijqLYsM4hhn0nHx98Y2+W01nk3/j9708xnu9jIecB5kWcYCucQCbDsOWLbDfYo96QspY9dHng3EYjF3bep4AnxiYcSpVvaASCcWljib5UOVG/vwKSPJzcOb2bEyjwgetIcJbUu+3XecZGIDWXQUkddi0kalsR7zNNFeXduwBo2xDQz2mBC6DCmKRYyAcBRLSUF6mFIpXAt7jgR//8RcMl9yn0nfjTllDBEn7q/6xtD0qJnHNPvBacNzptH1InK1WIbz29VqFt0tg5vw95qISnZFqtsW37Iq2k+lyIkwjlCf9NWncHYd6QM8m2rTxefwOljWxoubm2O1WXilXZwVr36ZLIOD1lmddbBaa6bn5YvFKQfTj5Nfg6hR+XIX1CrLQxs5Vgvnq/VkNquJXIfL5uZxrHa3WIXrcDHX+tfBXaAf83U0XVzvF1/M+wbBfHI1C6Lp8svdeqENZ+E0DE5tslFcLT4tp0H0cXEd3oTTSe3lhPJtMA+Wk3UQLT+t1tGVplHn8Nj7QBytJ8vbYB19DparZllsuOj4xJwaT1Qy27UY0iPKtsGW2PKI51vMiyXFnHLP16CkHjBiC49QH7Dj+haKCWKOx3mvt/yrsmx6gWNgbKDTFUm5sF0XORJLx2WW59bTlIDnWZRALJlnEWA0ZlK/uEJXJEGe8IETJG0uMH6lInsjSRNpGpPJSr7V9z49laQyK7ZR5sOB32Dy9CN72HvUDIVeeIWnx7jQPZRSLBwhQEqk24jEEHPk+dQTjLhEB5763CUcpE9rFYtgYMCQ0wvv0y7O06jQpJLvrxfzucHYBLmdjI8lK7qp2F2U2o7bG3Ifw3XHpb4Qs80eby513cWoGYAyz08cjRoe9xM9ulfNQkWpb128bmSdsMe9IX64+n199/zuL7S9Q/w=",
+     "spelled": false
+    }
+   },
+   "links": {},
+   "result": {
+    "refused": "Missing or invalid reviewed native license expression",
+    "kind": "native"
+   }
+  }
+ ]
+}
