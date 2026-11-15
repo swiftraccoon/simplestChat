@@ -4,7 +4,7 @@
 //! of a library, `REWORDED` gives the words here.
 
 use super::{
-    Problem, Verdict,
+    Bounds, Problem, Verdict,
     compare::{self, Files},
     manifest::{self, Change, Manifest, Tree},
     wrap,
@@ -252,7 +252,7 @@ fn files(recorded: &Document) -> Files {
 #[test]
 fn every_recorded_tree_is_compared_alike() {
     let recording = recording();
-    let mut tally = [0; 3];
+    let (mut tally, mut edges) = ([0; 3], 0);
     for case in list(&recording, "trees") {
         let name = text(case, "name");
         let side = |side: &Document| side.text().map(str::to_owned);
@@ -274,6 +274,7 @@ fn every_recorded_tree_is_compared_alike() {
             &tree,
             &files(field(case, "upstream")),
             &files(field(case, "local")),
+            &Bounds::REVIEWED,
         );
         let recorded = field(case, "result");
         if let (Ok(compared), Some(held)) = (&compared, recorded.get("held")) {
@@ -286,9 +287,25 @@ fn every_recorded_tree_is_compared_alike() {
                 .collect();
             assert_eq!(&Document::List(errors), field(held, "errors"), "{name}");
         }
+        // The differences are no more than their bound.
+        let whole = compared.as_ref().map_or(0, |compared| compared.diff.len());
+        if whole > 0 {
+            let bounded = |differences: usize| {
+                let bounds = Bounds {
+                    differences,
+                    ..Bounds::REVIEWED
+                };
+                let (upstream, local) = (field(case, "upstream"), field(case, "local"));
+                compare::tree(&tree, &files(upstream), &files(local), &bounds)
+            };
+            assert_eq!(bounded(whole), compared, "{name}");
+            let budget = Problem("Vendor diff budget exceeded".to_owned());
+            assert_eq!(bounded(whole - 1), Err(budget), "{name}");
+            edges += 1;
+        }
         tally[alike(name, &compared, recorded)] += 1;
     }
-    assert_eq!(tally, [16, 4, 0]);
+    assert_eq!((tally, edges), ([16, 4, 0], 12));
 }
 
 #[test]

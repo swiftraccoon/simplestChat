@@ -145,7 +145,7 @@ static CP437: LazyLock<Vec<char>> = LazyLock::new(|| {
     .collect()
 });
 
-fn decoded(raw: &[u8], utf8: bool) -> Result<String> {
+pub(crate) fn decoded(raw: &[u8], utf8: bool) -> Result<String> {
     if utf8 {
         return Ok(std::str::from_utf8(raw).map_err(|_| PATH)?.to_owned());
     }
@@ -160,7 +160,7 @@ fn decoded(raw: &[u8], utf8: bool) -> Result<String> {
 
 /// The name a Unicode path field gives the entry, when the field is bound to
 /// the header's own name by its checksum.
-fn renamed(
+pub(crate) fn renamed(
     raw: &[u8],
     mut fields: rawzip::extra_fields::ExtraFields<'_>,
 ) -> Result<Option<String>> {

@@ -5,9 +5,12 @@
 //! vendored tree: it names the path or the record that is wrong, in the
 //! reference's words.
 
+pub mod archive;
 pub mod compare;
 pub(crate) mod diff;
 pub mod manifest;
+pub mod tree;
+pub mod verify;
 mod wrap;
 
 /// What the verifier complains of.
@@ -22,6 +25,38 @@ impl std::fmt::Display for Problem {
 
 /// An answer of the verifier, or what it complains of.
 pub type Verdict<T> = Result<T, Problem>;
+
+/// The bounds of a verification: nothing is read, unpacked or kept past
+/// them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bounds {
+    /// The most bytes a source may have.
+    pub source: usize,
+    /// The most bytes one file may have, in an archive or vendored.
+    pub member: u64,
+    /// The most bytes an archive may unpack to, the vendored directory may
+    /// hold, and every source together may have.
+    pub content: u64,
+    /// The most members an archive, or entries the vendored directory,
+    /// may have.
+    pub entries: usize,
+    /// The most bytes the record may have.
+    pub record: usize,
+    /// The most bytes of differences that are kept.
+    pub differences: usize,
+}
+
+impl Bounds {
+    /// The reviewed bounds.
+    pub const REVIEWED: Self = Self {
+        source: 128 * 1024 * 1024,
+        member: 32 * 1024 * 1024,
+        content: 256 * 1024 * 1024,
+        entries: 20000,
+        record: 2 * 1024 * 1024,
+        differences: 64 * 1024 * 1024,
+    };
+}
 
 fn problem(text: impl Into<String>) -> Problem {
     Problem(text.into())

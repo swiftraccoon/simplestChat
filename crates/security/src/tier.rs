@@ -16,10 +16,11 @@ use crate::{
     mutation::{self, Mutation},
     openssl, policy, record, require, scope, semgrep,
     tools::{self, Curl, Site},
+    vendor,
 };
 use serde_json::Value;
 use std::{
-    cell::OnceCell,
+    cell::{OnceCell, RefCell},
     ffi::{OsStr, OsString},
     fs::DirBuilder,
     io::{ErrorKind, Write},
@@ -34,8 +35,6 @@ const USAGE: &str = concat!(
     "       [--engine docker|podman] [--deep-check all|native|mutation]\n",
     "       [--openssl-prefix DIR] [--mutation-tool-platform linux-x86_64|darwin-x86_64]",
 );
-/// How long holding the vendored tree to its record may take.
-const VENDOR: Duration = Duration::from_secs(900);
 /// How long preparing the native suites, or running one, may take.
 const NATIVE: Duration = Duration::from_secs(1800);
 /// The native suites, each under the name of its check.
@@ -147,6 +146,11 @@ pub trait Host {
 
     /// Run the mutation check and answer whether it passed.
     fn mutation(&self, options: &Mutation<'_>) -> Outcome<bool>;
+
+    /// Hold the vendored tree of `root` to its record, with the sources
+    /// kept in `cache` and the evidence in the new directory `output`, and
+    /// answer what is wrong with it.
+    fn vendor(&self, root: &Path, cache: &Path, output: &Path) -> std::result::Result<(), String>;
 }
 
 /// This machine: the lock and the scanner cache of the checkout, the
@@ -216,6 +220,16 @@ impl Host for Machine<'_> {
 
     fn mutation(&self, options: &Mutation<'_>) -> Outcome<bool> {
         mutation::run(options)
+    }
+
+    fn vendor(&self, root: &Path, cache: &Path, output: &Path) -> std::result::Result<(), String> {
+        let verified = vendor::verify::fetching(&vendor::verify::Verification {
+            root,
+            cache,
+            output,
+            bounds: vendor::Bounds::REVIEWED,
+        });
+        verified.map_err(|vendor::Problem(complaint)| complaint)
     }
 }
 
@@ -445,32 +459,23 @@ fn deep(
     programs: &dyn Programs,
     git: &Path,
 ) -> Outcome<()> {
-    let python = programs.python()?;
     let (cache, output) = (
         context.output().join("vendor-cache"),
         context.output().join("vendor"),
     );
-    let arguments = [
-        OsStr::new("build/security_vendor.py"),
-        OsStr::new("verify"),
-        OsStr::new("--root"),
-        context.root().as_os_str(),
-        OsStr::new("--cache"),
-        cache.as_os_str(),
-        OsStr::new("--output"),
-        output.as_os_str(),
-    ];
-    let slow = Run {
-        within: VENDOR,
-        ..Run::default()
+    // What is wrong with the vendored tree is kept as the line the
+    // reference's command printed, and never leaves the evidence.
+    let said = RefCell::new(String::new());
+    let verified = |outer: &Context| {
+        let verified = host.vendor(outer.root(), &cache, &output);
+        verified.map_err(|complaint| {
+            said.replace(format!("Vendor integrity failed: {complaint}\n"));
+            Failure::Command("vendor-integrity")
+        })
     };
-    let argv: Vec<OsString> = command(&python, &arguments)
-        .into_iter()
-        .map(OsStr::to_owned)
-        .collect();
-    context.run("vendor-integrity", &argv, &slow)?;
+    context.step("vendor-integrity", verified, |_| said.take())?;
     if request.include_vendor && request.check != "mutation" {
-        native(context, &python, request.engine)?;
+        native(context, &programs.python()?, request.engine)?;
     }
     if request.check != "native" {
         mutated(context, request, host, programs, git)?;

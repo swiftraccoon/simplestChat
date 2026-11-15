@@ -2,15 +2,12 @@
 //! coverage of the whole vendored directory by the record.
 
 use super::{
-    Verdict, diff, listed,
+    Bounds, Verdict, diff, listed,
     manifest::{self, Manifest, Tree, unread},
     problem, wrap,
 };
 use crate::{digest, document::Document};
 use std::collections::{BTreeMap, BTreeSet};
-
-/// The most bytes of differences that are kept.
-pub(super) const MAX_DIFF: usize = 64 * 1024 * 1024;
 
 /// Files by their paths, in the order of their paths.
 pub type Files = BTreeMap<String, Vec<u8>>;
@@ -32,7 +29,7 @@ pub struct Compared {
 /// Compare every file of `tree`: what `upstream` holds below the tree's
 /// prefix with what is vendored in `local`. A deviation must be declared
 /// with both digests, and a declared one must be there.
-pub fn tree(tree: &Tree, upstream: &Files, local: &Files) -> Verdict<Compared> {
+pub fn tree(tree: &Tree, upstream: &Files, local: &Files, bounds: &Bounds) -> Verdict<Compared> {
     let prefix = format!("{}/", tree.prefix);
     if upstream.keys().any(|path| !path.starts_with(&prefix)) {
         return Err(problem(format!(
@@ -69,7 +66,7 @@ pub fn tree(tree: &Tree, upstream: &Files, local: &Files) -> Verdict<Compared> {
         actual.insert(path, (before, after));
         let whole = format!("{}/{path}", tree.path);
         let rendered = diff::rendered(&whole, old.map(Vec::as_slice), new.map(Vec::as_slice));
-        if differences.len() + rendered.len() > MAX_DIFF {
+        if differences.len() + rendered.len() > bounds.differences {
             return Err(problem("Vendor diff budget exceeded"));
         }
         differences.extend(rendered);

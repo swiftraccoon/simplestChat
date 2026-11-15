@@ -29,6 +29,9 @@ fn main() -> ExitCode {
         (Some(_), Some([group, rest @ ..])) if group == "elf" => {
             simplestchat_security::elf::run(rest)
         }
+        (Some(root), Some([group, rest @ ..])) if group == "vendor" => {
+            simplestchat_security::vendor::verify::run(&root, rest)
+        }
         (Some(root), Some([group, rest @ ..])) if group == "tools" => {
             simplestchat_security::tools::run(&root, rest)
         }

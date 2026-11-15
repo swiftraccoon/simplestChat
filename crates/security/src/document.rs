@@ -167,6 +167,24 @@ impl Document {
         )
     }
 
+    /// The document with the fields of every record in the order of their
+    /// names.
+    #[must_use]
+    pub fn sorted(self) -> Self {
+        match self {
+            Self::List(items) => Self::List(items.into_iter().map(Self::sorted).collect()),
+            Self::Record(fields) => {
+                let sorted = fields
+                    .into_iter()
+                    .map(|(name, value)| (name, value.sorted()));
+                let mut fields: Vec<(String, Self)> = sorted.collect();
+                fields.sort_by(|left, right| left.0.cmp(&right.0));
+                Self::Record(fields)
+            }
+            other => other,
+        }
+    }
+
     /// The document as the reference writes one to be read: two spaces a
     /// level, ASCII only, and a line end after it.
     pub fn pretty(&self) -> String {

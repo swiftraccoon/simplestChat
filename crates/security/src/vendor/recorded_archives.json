@@ -1,0 +1,4192 @@
+{
+ "tars": [
+  {
+   "name": "two files",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgQEAdVg8+A==",
+    "bytes": 132,
+    "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "two files in the old format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgQEAdVg8+A==",
+    "bytes": 132,
+    "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "two files in the GNU format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vOPI5GAg4XIy0dtVvmPbIxlUpSfno36kRHXNZO3/kG0+++V+yXc+s0y/20ongkoCo3ecfWDW/2ZL/Xeu8d2BU3AafzZ+9Tvrv9PiQ/Phi/e3fW+pesN95dz8jmetXvbPvfwYkMH8bk0g97xQGDQYGAKn9NVw=",
+    "bytes": 127,
+    "sha256": "6f67dbbfec88b5b49085567d64f4db9f348cc57cc83adbcfe93d8f762f03a496"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "files and their directories",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vGPI1OQi0PlxpyyoukDY18fxmB6ceXsa9+6WTEzl4j+q5/Vs/8+Wyikrje+2btbdOajHJevXLdvHTmJt7rfRbPdnO/xRcVhHUl/nnyf37y161fzLPfzLf+H9AmfW3/5vO/H8lrTnlz2Ru9YONtf//m13kv3Gnfvm5nn/PL1yqZ4CDH9z60528Ghg0GBgAoMhGYA==",
+    "bytes": 152,
+    "sha256": "4ad9620bffb5fb5e45c32eb1c6be6d1db351f911108ae08607d0dd2229f14ac2"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a directory named after its files",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vGvI1K4g0PDT/LrK3gWvticoFvlKPk3L27j/ftjBxU7PFj/rT1YmJvxJl4qau9RV+1f7m6Ip1ufuDnwbfrfv29c79WvVwZdYz7/1nfPGyXF4gOOfGjF/134KFy6uY/727L/Va5u90gZfz/wX/P/73/893c6//k/3LzAAHG04yvZ3MpMSgwcAAAG/yRoM=",
+    "bytes": 146,
+    "sha256": "e50ef0d6d88d61fa45ec400da2371b5e8fdfb27d2c8bbf4f9a2a256457c6fa9b"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an empty file",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGnIdchBxvbh/So7DZ3a2zfNEkhSdLnhOvJvusXJrU4Ffcfz3ab/fhpyzjJP3vv3IetPuK1Vbqt8/15sZ3Kn4mP1a+Oz5f+0YYOBB/Rvh/nWdDBoMDAAuIimQ",
+    "bytes": 99,
+    "sha256": "075e872e805c19f5f2f6496f0e59f02747fb8d5c27c6d433c2007ec575e8aa68"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/empty": [
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+     ]
+    }
+   }
+  },
+  {
+   "name": "no member",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28PMvICGYcWfPfP5TNfwAADDebMs+7JqjNoMDAAAPeRCgg=",
+    "bytes": 45,
+    "sha256": "272adeccafe73e7009d51f2ec2be9871db5e0eb14239f483ea429be26c3c6402"
+   },
+   "result": {
+    "files": {}
+   }
+  },
+  {
+   "name": "nothing",
+   "archive": {
+    "deflated": "eNoDAAAAAAE=",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "empty file"
+   }
+  },
+  {
+   "name": "no gzip",
+   "archive": {
+    "deflated": "eNrt1D0KwkAQBtCtPYUXMNnV/JwnURCxCVHv7yoWks4iAcl7zTdMM9U3w/W8S0Usu+IY5hKzpqremU0z23/Nr317aJuwjWEBj9u9G/PJsE7dJrBiw6f/p8tY9jP9gJ/7n2Kqa/1fQq//AAAAAAAAAAB/7Qn9miDm",
+    "bytes": 10240,
+    "sha256": "2fec599fdf8d81703914da2552f97b97303b2d0f1415b0da456d63569453d2f7"
+   },
+   "result": {
+    "raised": "BadGzipFile",
+    "said": "Not a gzipped file (b'pk')"
+   }
+  },
+  {
+   "name": "text",
+   "archive": {
+    "deflated": "eNrLyy9RSMxTSCxKzsgsSwUAJpsFQw==",
+    "bytes": 14,
+    "sha256": "6bbf954ab0045bc546f16a6db16c95afef820dccd807348411ea924dabb972e9"
+   },
+   "result": {
+    "raised": "BadGzipFile",
+    "said": "Not a gzipped file (b'no')"
+   }
+  },
+  {
+   "name": "gzip of text",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/6dP6wd6nAn20PE6d0LHm5Vhqs8ZVj6gDACtbgnB",
+    "bytes": 34,
+    "sha256": "1b48d06466d3b439b79cd909e90d0e9ae060d10c0f91d8f973947c2ffca74314"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "truncated header"
+   }
+  },
+  {
+   "name": "gzip of nothing",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/8wMMAAAGIwBtw==",
+    "bytes": 20,
+    "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "empty file"
+   }
+  },
+  {
+   "name": "gzip cut short",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+UEAJE0Okk=",
+    "bytes": 124,
+    "sha256": "8940619a047f1e25d07115b0627fcdf46b1152eccce5993e057728e106c74b2f"
+   },
+   "result": {
+    "raised": "EOFError",
+    "said": "Compressed file ended before the end-of-stream marker was reached"
+   }
+  },
+  {
+   "name": "gzip with a wrong check",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+WEMQFjmjpJ",
+    "bytes": 132,
+    "sha256": "b7799265ad849337392fdd2abd1897ce8e448baca90a9e41a49a0f50d1b87c16"
+   },
+   "result": {
+    "raised": "BadGzipFile",
+    "said": "CRC check failed 0x0 != 0x647fc8dc"
+   }
+  },
+  {
+   "name": "gzip and more bytes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgSE3vygVAG2RPqs=",
+    "bytes": 136,
+    "sha256": "36a50492ca8c7a97b40a64ddae4213d433193ec783114cc19936477ef48ae93c"
+   },
+   "result": {
+    "raised": "BadGzipFile",
+    "said": "Not a gzipped file (b'mo')"
+   }
+  },
+  {
+   "name": "gzip and zero bytes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDAQMAAEUUPPg=",
+    "bytes": 148,
+    "sha256": "a71966d501f9699c4f54def19a246cf11a130688b26823289da9554b9d99bae6"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "two gzip members",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/9on/K6bXjG+4H/FO22BqAEDk7GwsAEvywsTAQnFjY6Pnh17lsbDxcZTwrD0qGqnq4O2pJuax5MkCVZlCQaGlYu+3GVgYWCQh5v29qwh16EAAZYLa4u59BM+7Ve5d1yC46Dbop37u6fe0O54b2rsY3z99J71uS+Xpb499k1mfsClje/nz7xnLBtX9W7rlcSO2E79G3nfL8/6/nH+MTUGKPiRyC946cd9BhUGBgAr/0mK",
+    "bytes": 185,
+    "sha256": "d91f88c6dbea354d80a30fa5e4bd267f8c68d6d764d5d5baca750a6cff8dd4e0"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a tar cut short inside a file",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/9on/K6bXjG+4H/FO22BqAEDk7GwsAEvywsTAQnFjY6Pnh17lsbDxcZTwrD0qGqnq4O2pJuax5NFvTsZAifMux/BxMAAAIo1GRM=",
+    "bytes": 75,
+    "sha256": "ea217d2d581887483d50f629b63e6ee12c4cfd912e0e8eb16aea55dc39827e3f"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "unexpected end of data"
+   }
+  },
+  {
+   "name": "a tar cut short after a header",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/9on/K6bXjG+4H/FO22BqAEDk7GwsAEvywsTAQnFjY6Pnh17lsbDxcZTwrD0qGqnq4O2pJsaA8MmqRQuBiYGBgARnRSD",
+    "bytes": 71,
+    "sha256": "7399a9c8bfcea38cdd8bea987604e6712bace5024703b5620122031b27e009c5"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "unexpected end of data"
+   }
+  },
+  {
+   "name": "a tar without its end blocks",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/9on/K6bXjG+4H/FO22BqAEDk7GwsAEvywsTAQnFjY6Pnh17lsbDxcZTwrD0qGqnq4O2pJuax5MkCVZlCRGHz/VeaRPrhHpPMUz6vH9h48KVLzP+LWf3kDr7X1mKgUGIf/J8BqA1AKsLJY4=",
+    "bytes": 108,
+    "sha256": "b71f068ae926c65301f712a6d4b2c1853f837733c5ee557b27e4a5cb55498f74"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a tar with a damaged header check",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vGHIdchBgvbDWtlXc4CZv5/ebGh1LOAPfv1cSO3guifVk9Vn5GUmr7D+XWC5R27bTsjUqqfDN73Cx+ZElqyu38tt/2HH3c5BfW+6p3Qfazr7/N3+9t3XYL8b47/ZHTXgS1///2vuLnwECPlyf16qqZsegwcAAAAyDOIg=",
+    "bytes": 127,
+    "sha256": "ab82dafecb7d78cf5bec7ca62a2f678162f492ede0f46c1d965d42360af88362"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "bad checksum"
+   }
+  },
+  {
+   "name": "a tar with bytes after its end",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cgYefLy7q/VGpIpC5fqfbZnLfqVZyJuv7EgNf3M4JOlayFXtze/PbJP/XHz/3S21NckzDr4tenusxkgneDuXzo0P7/4/NJn218X+wfN/y2e8ivr//MJrewYIOBC/m7n7K8NswX/qDDoMDAAx/EGi",
+    "bytes": 136,
+    "sha256": "01ff92e51bba8cd01b3de3d8bedfd92f0914c107e68af6792ad6769fbaa36df7"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a symbolic link",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vOfI1GQg4XIys5tJT8Mnmfq45Q6LJkOXrv74jrYnHF804UT87c9fLV9tl209fnBq1dNPkmCtXFM9c1ln+Mf7197rirCzNELMPe+wvpbifslvanHD8mP//53WrbvmUH3j1b+4uiZf13Lp/L+//Wv82//D7e/Wx394nTzj0/M+UC/YMcPCgfw+D1Hb24wwaDAwAbQ5LJg==",
+    "bytes": 154,
+    "sha256": "edebf4596977f38a34e8cc333671946006c5baeca1b4513a57a2bef7c9aab176"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a hard link",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v+fI1GQg4PIys5tJTOBNRdy7YwJAlWerK7+hO7sN9rKYb39/2uewbvj53hp679tZPTxWqL65Y+zrV7bXk3H3X3v89V7pWRIvT5j2//XFlVf9/Cicifnypl3u+6v5Lvht39q805f27/MJl+7/H/61/nPvr7u/9UbMtlwdFeHywPLmnngEODtRXMPY+/SfOoMHAAACsukgy",
+    "bytes": 156,
+    "sha256": "08dcead6ae90477b62416bb53f65d04c12af93f01c38c72a5c2f79b656c2ad59"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a named pipe",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PWnM1GDC4HJQ5yv2DufP5RgHB2Q+e/2Pz3hgqkDZr+91lqVq3V628POfYh0lq3bHlpru/J37f2L+w4yHz8W382ft4GGDgg7z6blGWbQwaDAwATvclwA==",
+    "bytes": 94,
+    "sha256": "5ba65a3e374e7c6c15d8a873e928c25ed1e82dd6447d1b7185825f48b5a57c40"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a character device",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/Pb+RtNmBgceifxKrgZpgopyLA6uvi9Oz4IqcLTFdjP9/f+8+YzzX0WPr1/4dDk775ZZ7NmX887ugyv4cfucxn7N9fdupz+pw785gZoKCBW9dp4aRdDBoMDADc/ig1",
+    "bytes": 101,
+    "sha256": "c3ea99abdd2124c734e09f991f5bc51c0d71d6573b3c5ec811f2096cf95969ae"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a block device",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PW3M1OzCwXLD10luwbsOrSpajSr4fJn9O91S9tepq9Vkf8zPPbUVLJVcn/mnbfWSN78v5Nw3P7+2LvdwSzsV/Y9rW+Z//iKp/f84AAw/c7AVmcdgxaDAwAACbQim6",
+    "bytes": 101,
+    "sha256": "064a6756c7015984d74a7fc17f6acde676973275b829f31c804cd1e3de7cd1bf"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a contiguous file",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXIiv5tJfsCbt8bz2gIgJCwL37F8turC95UOc8eTMZzfv+08vztp13OCYU1Dp6Z/zr9qsfr3k/7egoM7kTtGae8m/V03f6H9XkQEGbizQf/25djqDBgMDAMS7Lxs=",
+    "bytes": 106,
+    "sha256": "e7eeefefc8533cc47f9b1e180452524a7f44ae748a21d6438ac8a1be6f2bb65b"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/cont": [
+      2,
+      "a3a5e715f0cc574a73c3f9bebb6bc24f32ffd5b67b387244c2c909da779a1478"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file of the old kind",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/POnI1JUiwXMh/q7nLIevn4ueCTWKsbrf+/s4VfSd65LuZ8Zm0uP7fP4OuXf2w52jUqzW+L6ffNNr8On7+dz1T3zlJ3PMLX93/adSXqcHEAAUNsr+Y/I+XnWDQYGAAAN7SLjE=",
+    "bytes": 105,
+    "sha256": "4293e72a82151e27a513ab1685ee1fefffb8c8b0e5e98efb5fb4c66eca35e534"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/old": [
+      2,
+      "7427d152005f9ed0fa31c76ef9963cf4bb47dce6e2768111d9eb0edbfe59c704"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of an unknown kind",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1BYiwHAgv5tJXWPTwcewbHw8dDQUN3uXPk1PfKBqeM9l9M639XaHN9Ksr82/f8JpqWvr33Bvrzafd479ne2nybb9x8EvN3eM1kv8z9ZgYoKBBfgvD9886xxg0GBgAcKAsuQ==",
+    "bytes": 108,
+    "sha256": "4bac63137ac178e93145f1edfd3cebb7b6b889f3664bad3c156d7ef993408d67"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a directory with bytes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/POnI1JUiwXMi/q7mnIXPRv+ecLR1mi0rr/0d1Vrd+2HuWZ/PMj1818q/vkpoXLGq9cvO+3PqZucbZYX93L9dbqrHL4kB63f3lNZLPTWKYGKCgwX4Lg0Ox4iUGDQYGAMZFK+w=",
+    "bytes": 106,
+    "sha256": "69d16a36b1f8e6bccb2c8bb954e73433c5cb4c7944a9adfee6fcc3509810f83c"
+   },
+   "result": {
+    "refused": "Nonempty archive directory"
+   }
+  },
+  {
+   "name": "a file named twice",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vW/M1OYiwXtguYs5wTuNUFQcrK+/HzfXuWk79nTOLZ/0umh1+N3XerDvLPl/oK5wScmd33tmk+a737tzft//bdoulPxq/fza1OXV6RTBf1rYb9Vd/75/BAAUH4n8zBHy2usGgwcAAABGKM7s=",
+    "bytes": 113,
+    "sha256": "e76f18f707c8a1ccc96518a95ffca09a8c3761b527b6d214fd347fa5e81b7726"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a directory named twice",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vWnO1GDCwXJA5yv2j2eX8ZoWOHOV19+4naN7W6nhvanxXxLj++Ka1s6pmTLOKWXJyl0T/mXM/l39f6b/Q4yHb7fy/OpVGey6/+R/+n58BCmyu88kv2NrPoMHAAAAAySws",
+    "bytes": 103,
+    "sha256": "7c9b26a8334a94dd7eff1e6881c0f922ee229ce2b99151f00623805f0d8fedf2"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a file and then a directory of its name",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vW/MdMhBguWDrpeeQJMw+X12U1ffI838SKipTmvg0PsUZL87dNutpyZ2ndrzFNf5ZfEttNkemT77/63Hc55BF3h+Zt58utds+faOv5Y1NT7f+fzj/d/z3XfLZJZP/MjNAwAH38p9vTKwZNBgYADy8MqA=",
+    "bytes": 119,
+    "sha256": "eab1b10744496b4eb2d0c30d102cd829123a6c49bf59da947fba8370d665ab71"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a directory and then a file of its name",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vWvM1OYi0XdwtYrbgzAuF1ws3LVC0+/a+paXtxiLFOZf/bN991Lz3e7Dd8rKMZOOVu6Ya5W+9p19ev/PbxZKPzO+fZ1dcmV7oc/mS/b+b9ut/P1/nMvnL/Rg+BihIWG+32SfiDIMGAwMAn/A2tA==",
+    "bytes": 115,
+    "sha256": "a1f81a7962660799aa1a4e1ef60944a34356ecb42bc2aaf2d09857d972f9ea48"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a file and then a file below it",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vG/I1OQg4XLTsEncoK5z42SE50Tng/fuspKQ3qlL3stOMzobU282ftcf/rcT9yauSNc9H1p7T2v+2//eE30K7RbR3xK57HBR/zOxpwuln4f/ffvH+K98W9z/7hQoDFHy4/s7rffZ7Bg0GBgD+nDW0",
+    "bytes": 118,
+    "sha256": "23e0fc162c1fee7a6445b426eb02398dd09d1ecbb42036e7130a488934717faf"
+   },
+   "result": {
+    "refused": "Archive file/directory collision"
+   }
+  },
+  {
+   "name": "a file and then a file above it",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vW3MdchBhvbBdxHzBzIudkf45QTdY7H+Xi7B4Sno4FPkVy6/feVV2/WE7+aDL5tMjvFadW1qzaVba1Pp33/dbl+a+CVrzoLL+y/YoydslPNty/ryrP9gn+ft87sb/pinCDFDwI1t/j8ycEwwaDAwARcE0FQ==",
+    "bytes": 122,
+    "sha256": "0a9dd0e23859cb0b378a1cc35015c23428092f2730c0adca4f22bf0f875df982"
+   },
+   "result": {
+    "refused": "Archive file/directory collision"
+   }
+  },
+  {
+   "name": "a file and then a directory above it",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vWws1OQiwXLDkEheYNr9azofDR+Pi791SEWKNM6U+xF2Knexz5XSl3ZbSrGXPRO5P6npsYLP5RtrFfV+P236v7NE6yn/n2usSTf3k+bsSzk+7/u9x/+/73+58tVx18R8jAwQ8WGy9XePYaQYNBgYALyc3Jw==",
+    "bytes": 120,
+    "sha256": "93082475cb10969e6f575d4330dda5878dd9619fa16dc15adef81e2fa2a9542c"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a/b": [
+      1,
+      "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file and then a directory below it",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vG/IdMhBgOVDtZcewTVW90j9DI0NJ4X+/o5OT5osGJeOz69btzHp++mdAn6XvR9udklm1aZvPLtvz9XitTm2v3nF+ne2/S3L1k+d7bUj/nP3/5ZR/2//nyr+esPj1W3kGKLCLYny57M5dBg0GBgDrjjQ/",
+    "bytes": 121,
+    "sha256": "de2bf4fa00e2bc439f516b6a1e019c0d124dad73c2564aff28a5b608684d457c"
+   },
+   "result": {
+    "refused": "Archive file/directory collision"
+   }
+  },
+  {
+   "name": "an absolute name",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0VPQOdn0/GZAwA2Jqb83BwlW+fC8NzWembbrefK+r7mvvKyPegaZPtuTWnpm1f2v7+vOO/epHeXXee9fefX0jmVCDDDwZ7GoW/JCIwYNBgYAq+cqDQ==",
+    "bytes": 103,
+    "sha256": "0c5c61322d183fe50a3475bf6672f8eacf6610e8f511d502b35324925a881584"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '/pkg-1.0/a.c'"
+   }
+  },
+  {
+   "name": "a name that steps up",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/P2nIdcpBgufBeY2fD7FiOjzbdrlzSJ8//jV3bVMt08PssyWUzrxfvmjrl95Rfs+QKO+70HP5w9pn57E2v5/+1myYT2yecczrqeZnk/5VsDDAQ/oVNXt2ejUGDgQEAv1QsRg==",
+    "bytes": 105,
+    "sha256": "de7f05077a5dc935d1121ab14a9f74269d572d7029658a4d592af3a366c429e0"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/../a.c'"
+   }
+  },
+  {
+   "name": "a name that begins with a dot and a slash",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0X+wieNUpZmYmBnb039rQlrkhB5Xn/VZNvPKnnn9xbOLgi/Zfpu4Ovq+fmTu5qzwv7v5r78TWi7DPuPefKNrp3/4qzLAwA9X40+7GMQZNBgYAKR1KWw=",
+    "bytes": 104,
+    "sha256": "331d30ec3eda780cb2ce34b92786d623f3a5a8008f5d433ee72f050a907d0617"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: './pkg-1.0/a.c'"
+   }
+  },
+  {
+   "name": "a name with two slashes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0VPQOdn0/GZAwA2Jqb83BwlW+fC8NzWemTav/+e17Stfe1kf9QwyfbYntfTMqvtf39edd+5TO8qv896/8urpHcuEGGDgz2JRltuXjjNoMDAAALzCK0I=",
+    "bytes": 103,
+    "sha256": "dc414fb35092d4984246b621c22fbe9010e794d8ba84375440d15134decdf912"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0//a.c'"
+   }
+  },
+  {
+   "name": "a file's name that ends with a slash",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0VPQOdn0/GZAwA2Jqb83BwlW+fC8NzWemTav/+e17Su131456hlk+mxPaumZVfe/vq8779yndpRf571/5dXTO5YJMcDAn8WiGe/VvBk0GBgA0VUrDg==",
+    "bytes": 103,
+    "sha256": "096cf81feeb7f5683a61fc9640eb4aac3f137b9eddef4bd529bad36c9c12d4b0"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/a.c/'"
+   }
+  },
+  {
+   "name": "a name with a backslash",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0VOIPKM1feHNiIgbEhd+bw4QrPLoeW9qPDPt3vrnS7MvB9xyl1EN/T7n+ppvkaWz972p3Re72LOw6f0XzeS9Pf9DmBigoCHehJknU+AUgwYDAwDwGypJ",
+    "bytes": 104,
+    "sha256": "56d46e4d64587c0b46db4263886830d2cf332ddc1f49be65f7481d7129166187"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0\\\\a.c'"
+   }
+  },
+  {
+   "name": "a name with a colon",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgX0Vd4pybts+ds26FDbQvuzL/adcHZqWb9zJMmxvvmXb+zNLqWZ+P0K1+W/tl0M21y+N/d973PFXoWNvz8uzJ4d8//EGYGKGgwjmKoud63nEGDgQEAjw4uWw==",
+    "bytes": 104,
+    "sha256": "1fc182ebbcb2d8a0ff095c1b84d99c649dfa7c53d2648b68dfb09764d7cb02f6"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/a:c'"
+   }
+  },
+  {
+   "name": "a name that is no ASCII",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vb+Q9ZCDgcHH1zEPcCfN7DUWbJk0S1eFQuOii6BHZaRnBo8S1wCNTZcp/qfl3Ygp/XYvcfu9ZXvDT2qsegr+Mvqxq+zLvd/36g+ePlHxivu49e/bzKsnlAj5zb1/eZCe//N6q208P/zUT7Dly/G740rIvgcsl2n+H/7+7X++ZZlfgL329yQxI4EB8NUOuV+NkBg0GBgAX/EgZ",
+    "bytes": 161,
+    "sha256": "88117a6dd0d9d29773d6c1573c8e18d51a4f7b88a422e45cb69340f4fb36e4d9"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/caf\u00e9'"
+   }
+  },
+  {
+   "name": "a name that is no ASCII in the GNU format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/29PHOQ85CDielEzVcrgXMvBOjZH8bwjKq5L+aQ/P/a6o90yZ/PO/vL9sfylGseL99tc/yKtOieq2rzG/Eq/bL1ucszOJfYRy3baF/lZXxVmgIHoL0zSs9icGDQYGACmkSaB",
+    "bytes": 106,
+    "sha256": "02609be5bfcf951614a74aa1dc4641dc32f06e2e5c44664f4a5b2583e5bef6cc"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/caf\u00e9'"
+   }
+  },
+  {
+   "name": "a name with a space",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/P2vI1OUiwXHivEeMQIZRwfnNUxA2JunfnnVLfmBruu34mZVal3bvp+3xjM9e91bVTDr1sMCdyb/rV/V+Szyefu7jkR1Nu5OkY/cf2Uxlg4IH4W73F7CwMGgwMAAxLKtc=",
+    "bytes": 104,
+    "sha256": "e4a17ec1f26cee658f0b1ff4364e29e154ae440f8d6c9d192920d5dda09bf7ec"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a b.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an empty name",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/P7eRtMBBgOaDdKtRjsExu+4HL9m0cE5tbZnh+23Iy7sjnoOAiu8070y/Hv1ssv3yhy/S4H7rbUtcWz+6pX8XIAAUHxN+Wpbq/ZNBgYAAAiwQkRg==",
+    "bytes": 90,
+    "sha256": "cfe600821703ae6a60fc66dd474db5f815fc9f05bef09839f883856ed37af1d2"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: ''"
+   }
+  },
+  {
+   "name": "a name of a hundred characters",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PWnMxOYqwHCgX0d9gZf/MTliS4/SmV39lDQSLWTdqvVw2+Z7ec1X5y5l/F5h8vaZku/f5lPhfd7JfLj2meFT8zvrtG8///uGvzAADP1z5E5/9LmDQYGAAAM4hKSQ=",
+    "bytes": 100,
+    "sha256": "54216cb1a730c560c863c693382d8b28d33da8df4fd37ae685c16cd34869d065"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a long name in the old format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PHeRqChBgvfBd82/DzyPT6/oFdnC4rPm3f+HUHZM2KFikF7fvnjEz81fMLc32dVPK23Lb0kzd4/Vy7y8L9rP/sMe+TfWc/N7yfb2hxee+fs3mqyz2YICBP4vF103UPcqgwcAAADBtMDs=",
+    "bytes": 112,
+    "sha256": "c7ec404b9a984553ebda7bd41094f1bcd2683f053fe3ef85b4b3093f50043b18"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a long name in the GNU format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vO3I1Gwg4XLT00ruQckViu62D3kMvl45F3/4t5WjVY9q1QeHf9pmJ2w5vP7crXSZY/LfJCcuSybNfOf+9u736ckuQzxT7Ct1sa2llc1Peu4s3vBIqe/z/eM0ivnvpv8N1636vP2UVkjTln/91LgYksO4Nr0bM1M0MGgwMAEsFOeI=",
+    "bytes": 138,
+    "sha256": "ef838100bfc5c1830da05e56bdcc6219e4ff451ba8158741bfc3a942e26eda38"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a long name in the newer format",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28v23IdchBoe7jS9mjcgbs35cOkDxotDY8w0OAQSmqRie9ViGDJEeLY52982CS4puZa5Hb7KftWnd6Ylyr0y8zMNPdTuvy7OGePpKqZB/9em/rtZ9y/4C/Rl6e825Ott3zr9lfrftzM+vnzvODv1Vcsl178t/rX+3/HJziLLP5SX+TKgAQ2pPDLth0sYtBgYAAAQCFGiQ==",
+    "bytes": 156,
+    "sha256": "2590f5ffcc6ccfad741ae0ecb99ffa880bb3e7a11b73c0b3de2b40b17ab61112"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "the longest name",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vbuRrMhBoeDi7lmtew7eqF2mPXrzQjlHiFFbs4OzP500sSGg5+O9+ke90v+v7+Up32Nbs2/4vx/2ma0zOWZGr1z4XrTdc6WV6mvHe+pPH/+yZ4rl47uqDy99Ztcg5LPRr+iTz8XX94rrMWWv/pf+6Xb85Zef/if/en4tkZICDH9zyFj+VVRk0GBgAswZFhw==",
+    "bytes": 149,
+    "sha256": "c42d77ab1d02ec8abd9c419810aded2b9e3249b1bc10b75432b2b5156d5a44e3"
+   },
+   "result": {
+    "files": {
+     "p/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a name too long",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vbuQ65MBz7OMZu6O2jvo7rXdx9vXtczrQNHlK1ML+/KUWJS9u8N37v10l5eSUGt+cR0+fXd76udr8hF7JxtDJUT+/nr5jEjnJ4CTjvfUX2yv3Xjlpsn3h94+F7x4LO6z1a3ol8/Hr/oX3pm2a+t84+nn9Oc3ZLKr/y5/PYUCAP638BR7OAgwaDAwABfVICA==",
+    "bytes": 149,
+    "sha256": "635fbf7cd007b4a9594f54838f9998254bd8fc51c67b613d8bf83a2cd0976e35"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'p/nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"
+   }
+  },
+  {
+   "name": "a global extended header",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v7OVrMhBxeHjOjlVfYcufYwfTFXWvZLEodnT255ca7pIQTpzwWXf7ztNz/aprdWMvS96dUr0627rj/uS4ecv6X+7113z85Oe+91O9uiJY/M48KJL7+uB8d2rQ7AWvbl2bd2ytWWhueZ7qBpm/F9eGaijLhk2+++PG/p7439Ndg54oTfhib+n77sv73+v5nVPUfjHvexfvOTX1iz27838GOPggnieUu+sygwYDAwCzw1So",
+    "bytes": 182,
+    "sha256": "3f0dd1ec851c0fad4fbb03963cb6ee536ec9aec17224566f020a110d57263b23"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an extended header that renames the next file",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28v+3IdMhBoexhZ3RVzoETIe3PR+0vaLVIiLJq5R+X2BwrUf3Nc8n7zzEQzY4Oa3xZvg2yW1K1Q03TZvGydvOnvdav2VX79vjNYfs6MJPa9u/mS33yuilR77yt+/PI2a/nr57JKPc1vr2Ph/vinesvaPzr/X9l/Xp8oLGXo9a+7O0WWAQEerD8rupB9AYMGAwMADStDIg==",
+    "bytes": 156,
+    "sha256": "7c7b60cecf5534e0394754e6c63b0a301ffbd6cb98c29ac547f427290a3286dd"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/new.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an extended header that resizes the next file",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vG/IdMuBpTTw/R0l8QektLVFm6+T1CY4tAtxZDqssbBuXHpBTvPI/et7To3H3Ei7r3VLsWzlvicBZp+t7jX77hb5//nPn91stYTEb2+/dvXT1WE3ctMzHl17Kba9TjVh0+ueOb1Ovhb19mv73+rPN/29trxVY/mW/xeIfDEig/i3jn7canQwaDAwAolJIGw==",
+    "bytes": 150,
+    "sha256": "aa2081ca3ef3e493bd61f1b29b7e9bd716b69994c3d73c93f65d709129b97d58"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a sparse file of the GNU kind",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+P7eZtNmBwcOx/xMrxTFkskYnLxTH54QZ7jdQVjk67su+dfh1kOj9kuk1uKt92j+UL39fb/v3+yzdrt94RQ5sE/fuZ3YYMMHCgW4Ypc2MtgwYDAwDkmiMv",
+    "bytes": 97,
+    "sha256": "0dbc527f011449189b64ccf71f80867479fef5c2a7a78189dbbe06a9cec43827"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a file with every permission and an owner",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PbeRqdhBoebj2s0hl44zYyL3PLZtiEgUti9+/Z9VZ80Zkyv9stjbNNKnLp6Vqjz9Tdg+8GvD3stPy2zFbk+5tlWvade3emerpy09xnvrTvTNO8/OE72Wa9adVtgvLMzEggx0LWC8qfnNl0GBgAADBUjSc",
+    "bytes": 125,
+    "sha256": "a6d185fd192235ac3b4279273069fce87ffb4d2ea301c2d5758d37e2b087966e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file larger than its bytes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2PI5OAg4PFw59xCrgfaO80qCF3P+3LnvIpIRovKo9mzOspuvfCV2HVk66+eWictXrOxKmv3MKvTuw9zfFcs/NaXO+ptx/7T9T48PyYnv9789vqbuBdudb+t/rqzfzb5Op/VffMBlewYEOLB8LSebtQeDBgMDABb6PNk=",
+    "bytes": 130,
+    "sha256": "abf21f8749f79c6e0a2a3a00f6adbe44e4b51c779dd9a9cdc077b7ba30cb52fc"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "bad checksum"
+   }
+  },
+  {
+   "name": "a file of the old kind whose name ends with a slash",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vOnI1BYi0XdwtYj5hn3ra64ktHU1Hsv7bzkpN7n4x52R9evkH3+WH1a6v3Dnn+EcL841tIV9iv99J2vm+3C/3lqvo/IL999p27un/b7L3m/yrv+a/nqf+r7vtNvVL/F0BBig4sL6KobNXWI1Bg4EBAEVvOkA=",
+    "bytes": 122,
+    "sha256": "54a5b08d038efc78c4079d8411b447f12e0cc343e3754ce677511fbb0af9b482"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/olddir/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an extended header that names the next file with a slash",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28v+3IdMhBoe7jG1lUvwcjXe3PR+0vaPKYaHEG3umz3BQrUf3Nc8n7zzEQzY4Ma67nbPb9nSvzN4Zq4JneW+9l9qz061v+zW/9JRSL6zYLy6YWXFNebnxbJuv265M6X5Yd3FT06//KV1X6jiLbn96+WPkv/Of3DzPrO0pxe0U/xc4RKGRCgYX8Zc4F7pRGDBgMDALgsReE=",
+    "bytes": 157,
+    "sha256": "5b442716bf8a98a379515b54b06912173ad2f85e786a83c0b7231c75ff622136"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/new.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a directory whose name ends with two slashes",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+vOHI1Gwi0Poys5tJf4GnS+byTSymv6dZv8yl6XSJLujmO/r995k3axwrh6SuNtoY93qOlWvniSPTvWScL625av18zxU/vw41vG5ZNLvL/OLd+RXuO+bnP+X0/t8+dHjS5vmyhwJ2IPz/+1y6T/1D8v9fs3MX/2l++yDPAQcP+7yzGUxsnM2gwMAAAkl1HCw==",
+    "bytes": 148,
+    "sha256": "c108e2bb5152f74c4ea92feb75769aa5047fb797b3da236c7a0af171157c1e44"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file after the end blocks",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2fIdMuBpSzw/Z5H4gl5F3/OT/3EoGoUsvTN/S5LDXSsTjqe1YtGRRrXbjh9/u2bpypqbJwN9nqyJzd6y9uLT1fH3Zmc/XmIw6cBry9+adZqVn9Qdjx3z//f7d8hW9rMNd3+GLy71/ReccdKeIWXv/+b57ffv/t+19//c4G/1XI0QF8DAgfgq5lxO7RwGEwYGAHaUSHU=",
+    "bytes": 158,
+    "sha256": "5c951c2c0c6f2959c45a4ac6994b5abf444756ce8f9d3f2481adf5aaf2131d45"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file whose name begins another's",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vW/MdcuBxcJRv5Ra4lsL5nJOX1ffI8386Hh4d8zimzDw2TTo830r2+s2pZys61mueDXhdbDZ/88ntfwvvf7c8suoIT9701xV5+skzjSI2vbxa/yfk/87Vv+YfDmNigIL6t3yic+pKGDQYGABqjTI/",
+    "bytes": 118,
+    "sha256": "751c0daeb22b774d575492b69dc5ebf634d064c4bfaedff5ba9f86f963f24afb"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/ab": [
+      1,
+      "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+     ],
+     "pkg-1.0/a": [
+      1,
+      "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file whose name another's begins",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/28vW3M1GPA0PJQ5yh0hvfarjd2Bg641d+5rcTzKE/y7X1XRe1m9zK+Q3rNZlX28e4qP87wzvnB6331t3bkqYUoRz5fOO+T9c3nMh/THN+s/r/rH/fWLfPMkhr/v/87Wy75/ef953b/HAyYwIEDNIbY3dk7VDBoMDABneTri",
+    "bytes": 132,
+    "sha256": "b0d82fad8ce6d4404942a4269408b71cab46929b904baa25851e12f9771b9d99"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a": [
+      1,
+      "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+     ],
+     "pkg-1.0/ab": [
+      1,
+      "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+     ],
+     "pkg-1.0/a.d/c": [
+      1,
+      "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+     ]
+    }
+   }
+  },
+  {
+   "name": "many files",
+   "archive": {
+    "deflated": "eNq1lU9IFFEcx5dQ8JSnKPCwh7JDZh4CoRLnUBE5ieJ687BQh4iQRTxIkb7jHqIWwpTUGCJXXSO81EaUDSEIYrW0rmFoO1nGsmtlMrvqzu68XzPv7cq4zs4fozn9mPf9fX7v/d7v93vO22UO9dsHv75M3m0rPXT+443e146vwvVMR/hIaWPJuW/rM82lY53PKj9dqxu4XPc+XP2mOjM7waHTcEv6MRdfjPa8i0Ky45UsS/gE3JSDYhfDA+4488Hj7ImA6OuWZZ+Pn3x4dO3AEufZQNH+tSzH4pqs6GGh/x5UQXYxDM9XYJqBYBJVpXkxxFfLAovLcfqFHx6vwFt1BcrSaGgrJvRhrhJ+K04ReLIiyBxqk5hRiVG0AWiFUVgWRrBL5rAXDUpNKSQ5cXuCmYc42tIIWCJY1ApeguhxQQCHCJIftopsIYKgnqAAOWKC5CME+dQoZgHSXwRZQz1Wdx3cHFmYS51U2UQyLbJTvS8UgDn442lTFppgim+UlVByOdSmuAQkGVUwTgQuPcESqJtqhi5GhbPgM8i76f6ooJkIplVBhlTYpRTKivrhjffnpIIFRdAJMRqTIhvsIr1UsKERaJG1SVR/X+KnRI7esjem/Eu5E7BfybGhwUlZJmdgNzHgeLqLoN20ocJwah7WQ5YOXg9Fz7MzA+iiWQYSGZSydvutEMPqbHC7cgVV6NFPPII2CiqPFFoKkH7i0b6HGt1Guv5D2V/4FxgVjBHBle32RMN2p2deUE4FP3d1PBqxizxLBBWZokME+a0iNW1tNJcqJH6oQRaW0yFSOJqWwj5do6kbczkDJoiBerOroIa8OsOrvZmCY6Sj+nAooAgMh5EKM0syYeaKwA/sOHzn9Dwim5CwNvFoaZKa2FS2F4eBBGzF9vhuFEH25ZB7eTd2Ir0Sn5mhj5KdxjadqzSdhy3POuMGIgeg49M2UvNu5AUFyJNWkTrvRhFklRnyEUHeMYqpRQ4+2P19RhsHe6KzrGOhxPEXdtx3cQ==",
+    "bytes": 2661,
+    "sha256": "ff7ba6a345818bfcc878d49bb7fe332390d917210c6c476a95c0f7cd13036d0e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/f0000": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0001": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0002": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0003": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0004": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0005": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0006": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0007": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0008": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0009": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0010": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0011": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0012": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0013": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0014": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0015": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0016": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0017": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0018": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0019": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0020": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0021": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0022": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0023": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0024": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0025": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0026": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0027": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0028": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0029": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0030": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0031": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0032": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0033": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0034": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0035": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0036": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0037": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0038": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0039": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0040": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0041": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0042": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0043": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0044": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0045": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0046": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0047": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0048": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0049": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0050": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0051": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0052": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0053": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0054": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0055": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0056": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0057": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0058": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0059": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0060": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0061": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0062": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0063": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0064": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0065": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0066": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0067": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0068": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0069": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0070": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0071": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0072": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0073": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0074": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0075": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0076": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0077": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0078": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0079": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0080": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0081": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0082": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0083": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0084": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0085": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0086": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0087": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0088": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0089": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0090": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0091": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0092": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0093": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0094": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0095": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0096": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0097": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0098": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0099": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0100": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0101": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0102": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0103": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0104": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0105": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0106": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0107": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0108": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0109": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0110": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0111": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0112": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0113": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0114": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0115": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0116": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0117": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0118": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0119": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0120": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0121": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0122": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0123": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0124": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0125": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0126": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0127": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0128": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0129": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0130": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0131": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0132": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0133": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0134": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0135": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0136": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0137": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0138": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0139": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0140": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0141": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0142": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0143": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0144": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0145": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0146": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0147": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0148": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0149": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0150": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0151": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0152": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0153": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0154": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0155": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0156": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0157": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0158": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0159": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0160": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0161": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0162": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0163": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0164": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0165": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0166": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0167": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0168": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0169": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0170": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0171": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0172": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0173": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0174": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0175": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0176": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0177": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0178": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0179": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0180": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0181": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0182": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0183": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0184": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0185": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0186": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0187": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0188": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0189": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0190": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0191": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0192": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0193": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0194": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0195": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0196": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0197": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0198": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0199": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0200": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0201": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0202": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0203": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0204": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0205": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0206": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0207": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0208": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0209": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0210": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0211": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0212": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0213": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0214": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0215": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0216": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0217": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0218": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0219": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0220": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0221": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0222": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0223": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0224": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0225": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0226": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0227": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0228": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0229": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0230": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0231": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0232": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0233": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0234": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0235": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0236": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0237": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0238": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0239": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0240": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0241": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0242": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0243": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0244": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0245": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0246": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0247": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0248": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0249": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0250": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0251": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0252": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0253": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0254": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0255": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0256": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0257": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0258": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0259": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0260": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0261": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0262": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0263": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0264": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0265": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0266": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0267": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0268": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0269": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0270": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0271": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0272": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0273": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0274": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0275": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0276": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0277": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0278": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0279": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0280": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0281": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0282": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0283": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0284": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0285": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0286": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0287": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0288": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0289": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0290": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0291": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0292": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0293": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0294": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0295": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0296": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0297": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0298": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0299": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ]
+    }
+   }
+  }
+ ],
+ "zips": [
+  {
+   "name": "two files",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sFIA8+goQg==",
+    "bytes": 234,
+    "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "two stored files",
+   "archive": {
+    "deflated": "eNoL8GZmEWEAAZ7g/Fj2ha/uMgHZIMwNxAXZ6bqGegb6iXrJiVwBKEqPfDr+DaaUH0lpSmaRfpJechJQOSOTCDNus2GggZEB1SZ0jeg2ITRqY9ob4M3KxgBWzMRQBqSjwEoBpkUmiw==",
+    "bytes": 230,
+    "sha256": "c0bf582b077e9d7e49104200ca95b2e66285a85bf018fc93fb6e99921e61592f"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "files and their directories",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOjwUyGJgYIIADiAuy03UN9Qz0mRkCcKrjQVKXklmEoZZ94au7LFD13EhqE/WSvZ8woSk+8un4N5hifjSDk4AaHoE0MDKJMON2MwQIMPx1ZEAyAJ8uHhRdGmjWoutE9w8MNDCGoPoOXSO63xAaGzF9GuDNygaSZAHCZ0B6E1gpAJ31QAY=",
+    "bytes": 430,
+    "sha256": "eda89131c5a6707f50b74ef61007443f68b88064aa561ab211c4b54af83a2794"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an empty file",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOjwUyGJgYIIAXiAuy03UN9Qz0U3MLSiqZGQK8GZlEmHErh4EGRgZ0zQHerGwgQUYgtAbSumCFAKTbDlA=",
+    "bytes": 126,
+    "sha256": "2a935901d8485fca16ed598a9b410168fe58df5607c623347dcd1f0b918d543e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/empty": [
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+     ]
+    }
+   }
+  },
+  {
+   "name": "no member",
+   "archive": {
+    "deflated": "eNoL8GZlY8AAAA3zAKc=",
+    "bytes": 22,
+    "sha256": "8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85"
+   },
+   "result": {
+    "files": {}
+   }
+  },
+  {
+   "name": "nothing",
+   "archive": {
+    "deflated": "eNoDAAAAAAE=",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "File is not a zip file"
+   }
+  },
+  {
+   "name": "text",
+   "archive": {
+    "deflated": "eNrLyy9RSMxTSCxKzsgsSwUAJpsFQw==",
+    "bytes": 14,
+    "sha256": "6bbf954ab0045bc546f16a6db16c95afef820dccd807348411ea924dabb972e9"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "File is not a zip file"
+   }
+  },
+  {
+   "name": "a comment",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4IOZkSFRIzs/NTc0rAQBuxyu/",
+    "bytes": 243,
+    "sha256": "ceae7b4f8bfd0019bbb699074d3e94a6b612f1c517e9971bf395a66aa0ffb017"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "bytes before the archive",
+   "archive": {
+    "deflated": "eNorKEpNy6woIIsM8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiQFV8ZFPx7/BFPMjKU7JLNJPAmp4BNLAyCTCjNt8GGhgZEC1DV0jul0IjbqYNgd4s7IxgBUzMZQB6TiwUgBamUHO",
+    "bytes": 294,
+    "sha256": "febf71ba837b223840e3e768455397d0fbcda30fb125495841e1b867377280ad"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "bytes after the archive",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sNLi0rS0zAoA7pIq1w==",
+    "bytes": 240,
+    "sha256": "cadc5a908ebbc6a50f5ba40966edf3ed2f4591d8f900243e191b92a4a8bb2042"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an archive cut short",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzEAAGK9J24=",
+    "bytes": 224,
+    "sha256": "8196f809ba747e27d991362efdf85c8e859246230b833ef55c2be5be3836accc"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "File is not a zip file"
+   }
+  },
+  {
+   "name": "a file named twice",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj93+/k4zM5DHCMTcQFyQna5rqGegn6iXbMzCEICilnffVSlcapmAahmZRJhxmwwDDSABZL3oGtGtQWjUQdfIygaSYALCIiAdAVYGAAp4IQ8=",
+    "bytes": 224,
+    "sha256": "c34cce0b1a7ee8301d6ab65531bdf71edae926e64fe96b5690adef448d480d7a"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a file and then a file below it",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj93+/k4zM5DHCMScQFyQna5rqGegn2jMwhCAopJ331UpmEpuZJX6ScZMQLWMTCLMuM2FgQaQAEIvujZ0SxDatFCtDPBmZQNJMAFhAZAOAysDADTdH+M=",
+    "bytes": 220,
+    "sha256": "c2afa0ab5051f096c50053081dd7e6902d5d91e29650b67e1357dc6788b7f1af"
+   },
+   "result": {
+    "refused": "Archive file/directory collision"
+   }
+  },
+  {
+   "name": "a file and then a file above it",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj+Xdd1WKGchjBGJuIC7ITtc11DPQT9RPMmZiCEBRu/39nWaYWk5ktcYsQJWMTCLMuM2FgQaQALIt6BrRLUFo1EHWGODNygYSZgLCAiAdBlYEAM76H+U=",
+    "bytes": 220,
+    "sha256": "73f8a6d5fc1083c50e0b3630bbfe455f0c1c2eb774cfd1bd29262133e7027b64"
+   },
+   "result": {
+    "refused": "Archive file/directory collision"
+   }
+  },
+  {
+   "name": "a directory and then a file of its name",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOjwUyGJgYIIALiAuy03UN9Qz0E/WZGQJQVG5/f6eZGchjBGJOZJXGLECVjEwizLhNhQABhr+ODCh2oOtDtwMGGhi1kPUFeLOyQaxgYsgH0iFgRQBKZBw9",
+    "bytes": 217,
+    "sha256": "2d85869c0b6b9b73d9623a5731c6fd7a06e7b7031612d503fb029e78467e132e"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a file and then a directory of its name",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj93+/k4zM5DHCMScQFyQna5rqGegn2jMwhCAohLIYGBigAAuZJX6zECVjEwizLhNhYEGkABCJ7o2dCsgQIDhr6MWioUB3qxsELVMDPlAOgSsDgBCrhw9",
+    "bytes": 217,
+    "sha256": "2d19813928d7a27b887d147f3b19b97ed49623ea90f05b8f0e8107e4322166f0"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a directory with bytes",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGM153ZzACWSDMA8QF2em6hnoG+imZRfopAd6MTCLMuBXDQANIAEVrgDcrGwNYJSODFZDWBqsDAE07EBw=",
+    "bytes": 123,
+    "sha256": "7a95b46e2a27a130e312cc8a6c3304698829a87aa1f50fe5634914bbd59af346"
+   },
+   "result": {
+    "refused": "Nonempty archive directory"
+   }
+  },
+  {
+   "name": "a regular file by its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMDcQF2em6hnoG+ol6yYkB3oxMIsy41cLAkkYGVJ0B3qxsDGCFjAyWQFoLrAwAJ0gP6w==",
+    "bytes": 121,
+    "sha256": "e73602af8dc30ed5af014d5cf73294dfc886cc69bb099257e5d67eb20770c183"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a directory by its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUGZMADxAXZ6bqGegb6KZlF+gHejEwizLjVwsBbRwYMnaxsIDFGILQC0lpgdQCSIwtK",
+    "bytes": 122,
+    "sha256": "ca95af38cdab877515463c7963a983ffd8e7447d2e3d719d3e357c25cb1055ca"
+   },
+   "result": {
+    "files": {}
+   }
+  },
+  {
+   "name": "a directory by its mode without a slash",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUGZMANxAXZ6bqGegb6KZlFAd6MTCLMuJXCwFtHBnSNrGwgIUYgtATSmmBlAHA6Cug=",
+    "bytes": 120,
+    "sha256": "3b79661210c9c666196baaefa4df6395c400381d22a69b2dc5ea6455e533902f"
+   },
+   "result": {
+    "refused": "Ambiguous zip directory"
+   }
+  },
+  {
+   "name": "a regular file by its mode with a slash",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUGZMAFxAXZ6bqGegb6ifoB3oxMIsy4VcLAkkYGNH2sbCARRiC0ANIaYFUAGv0JfQ==",
+    "bytes": 118,
+    "sha256": "b1dc4a04b3a9bab2682aca41e2408daf9fb58acd29d20ce554788f49d9f03cff"
+   },
+   "result": {
+    "refused": "Ambiguous zip directory"
+   }
+  },
+  {
+   "name": "a symbolic link by its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWG044vMpmBLBDmAeKC7HRdQz0D/ZzMvOxEveQAb0YmEWbcymHg/0IGNM0B3qxsIDFGILQC0rpgdQC0dxH3",
+    "bytes": 125,
+    "sha256": "1fbab06843651eb89e28faba42c941c18b1736a2ae3a4cda71e863ceb60dc6ad"
+   },
+   "result": {
+    "refused": "Unsupported zip member type"
+   }
+  },
+  {
+   "name": "a named pipe by its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUGZMADxAXZ6bqGegb6BZkFqQHejEwizLjVwsASQQYMnaxsIDFGILQC0lpgdQCZrwtR",
+    "bytes": 122,
+    "sha256": "b2e87b85e22a8aaa4befeea9bdfc50cef2c6f60b9729a796049916566a5dffb0"
+   },
+   "result": {
+    "refused": "Unsupported zip member type"
+   }
+  },
+  {
+   "name": "a device by its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUGZMANxAXZ6bqGegb6KallAd6MTCLMuJXCwBKwFIpGVjaQECMQWgJpTbAyAGBTCn8=",
+    "bytes": 120,
+    "sha256": "44c0c35ecbe4f805094b2022d86601d3c156442b6ca23eb410de46a089ce96d9"
+   },
+   "result": {
+    "refused": "Unsupported zip member type"
+   }
+  },
+  {
+   "name": "only permissions as its mode",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMDcQF2em6hnoG+ol6yYkB3oxMIsy41cLAEpAAss4Ab1Y2BrBCRgZLIK0FVgYAFEgPaw==",
+    "bytes": 121,
+    "sha256": "4c29e4bdb7906f1fd093de0a27af56e0bc7a335ea5b31df32d9632087828ab87"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an encrypted member",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgZOBg4AnOj2Vf+OouCwMDAxMQcwNxQXa6rqGegX6iXrL3EyaGALBiBqjiI5+Of4Mp5kdSnJJZpJ8E1PAIpIGRSYQZt/kw0MDIgGobTCMuuxAadTFtDvBmZWMAK2ZiKAPScWClAPVQKEQ=",
+    "bytes": 234,
+    "sha256": "8d38bba351ad3896f5d71261a5aef99a73bbb4b2e53b51abfb51506842ca5921"
+   },
+   "result": {
+    "refused": "Unsupported zip member type"
+   }
+  },
+  {
+   "name": "an absolute name",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMQ8QKxfkJ2ua6hnoJ+ol+zNwhDgzcgkwoxbOQw0gARQNAd4s7IxgFUyMlgBaV2wOgD/QBHB",
+    "bytes": 125,
+    "sha256": "d1f422a80a982a19534979bd91eb1193d0f0180c16180c9828ff4d46acb7ca9e"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '/pkg-1.0/a.c'"
+   }
+  },
+  {
+   "name": "a name that steps up",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMR8QFyQna5rqGegr6enn6iX7M3CEODNyCTCjFsDDDSABNC0B3izsjGA1TIy2ABpfbBKAFkrEoE=",
+    "bytes": 129,
+    "sha256": "3f162aef34d06378a9067982228e3c897ce0eafffdceda1fa3f8acfba27cbc2c"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/../a.c'"
+   }
+  },
+  {
+   "name": "a name with a backslash",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMTcQFyQna5rqGcQk6iX7M3CEODNyCTCjFs1DDSABJD1BnizsjGAFTIyWAJpHbAyAOjOEbk=",
+    "bytes": 123,
+    "sha256": "bae0a5a7c264dd8eb8f2ebe657377a331ece0f7b2893ba971e8e411f0cd22186"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0\\\\a.c'"
+   }
+  },
+  {
+   "name": "a name with a zero byte",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMScQFyQna5rqGegn+jNwhDgzcgkwoxbLQw0gAQQOgO8WdkYwMoYGcyBtBZYEQBqzhA1",
+    "bytes": 119,
+    "sha256": "24691ec9bd962c42148b442baf841417ffccf20208a1f88d18771adaaef9ee3d"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a name that is no ASCII",
+   "archive": {
+    "deflated": "eNoL8GZmEWFg4OBg4AnOj3Xet/0FMwMDAyMQ8wJxQXa6rqGegX5yYtrhld4sDAHejEwizLjVw0ADSABVd4A3KxsDWCkjgzWQ1gMrBADAmRS/",
+    "bytes": 127,
+    "sha256": "d5bbbb92ddd39b99ae39e9a1c97c7c64af09c69b685596dd1f2f22fda6c658b5"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/caf\u00e9'"
+   }
+  },
+  {
+   "name": "a name with a space",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMS8QFyQna5rqGegn6iQpJfszcIQ4M3IJMKMWz0MNIAEUHUHeLOyMYCVMjJYA2k9sEIAPXESaw==",
+    "bytes": 127,
+    "sha256": "f091d554786fac430a6e2bcdadc271c581415fc69365361d0cb2c5e5b9bbcc24"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a b.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "an empty name",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHyAAB3iwMAd6MTCLMuJXAQANYIMCblY0BLMvIoAekFcFyAMFcCvU=",
+    "bytes": 101,
+    "sha256": "89ca72101c4f9d8279e429cdb81a9c0bcc057f5f3392169c45b50af57c7f29c1"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: ''"
+   }
+  },
+  {
+   "name": "a damaged member",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sFIA8+goQg==",
+    "bytes": 234,
+    "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a stored member that is damaged",
+   "archive": {
+    "deflated": "eNoL8GZmEWEAAZ7g/Fj2ha/uMgHZIMwNxAXZ6bqGegb6iXrJVVwBKEqPfDr+DaaUH0lpSmaRfpJechJQOSOTCDNus2GggZEB1SZ0jeg2ITRqY9ob4M3KxgBWzMRQBqSjwEoBuLompA==",
+    "bytes": 230,
+    "sha256": "c0cff268f6a871de5661d049e669223cecec5a766cfd0f414e78e162800682bd"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "Bad CRC-32 for file 'pkg-1.0/a.c'"
+   }
+  },
+  {
+   "name": "a member packed with bzip2",
+   "archive": {
+    "deflated": "eNoL8GZm0WNgYOBh4AnOj2Vf+OquOpDHBMTcQFyQna5rqGegn6iX7BSVYWnoGKkWHJlsd+0RUO4gA4OAAoMCgyJD08ZyleBWTjbjt3kKASjmHfl0/BvMPH4k81Iyi/STkM0UvNppCDVTANlMRtmIyQIB3oxMesy4XQkDDYwMqG5G14juHITGAEzHBXizsjGAFTMxlAHpJWClAM9uO68=",
+    "bytes": 304,
+    "sha256": "36d8e457f4531b6dbe08bbee00221386ea890b78220aabda2b3fbbea29ab9f0d"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member packed with lzma",
+   "archive": {
+    "deflated": "eNoL8GZmsWdgYuBj4AnOj2Vf+OquKAMDkM/AwA3EBdnpuoZ6BvqJesmcLKwMsQwMDQwMBk1z/gPBB6B8AIruI5+Of4Pp5kfSnZJZpJ+EbIIhE5IJjEz2zLhdAAMNjAyo7kHXiG45QqMdplMCvFnZGMCKmRjKGMBuAgIAvCg1Tg==",
+    "bytes": 268,
+    "sha256": "af49a87e8ed79c879d57ed0c2ef71c23eafa77f4b4d4725f04c22d0cefff8bda"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a name with a zero byte in the archive",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMTcQFyQna5rqGegn8iQ5M3CEODNyCTCjFs1DDSABJD1BnizsjGAFTIyWAJpHbAyAMFMEQE=",
+    "bytes": 123,
+    "sha256": "0b424f82fb35cebbf8645c4231860e473623a89c56aaa090c0fae29d62aa24b0"
+   },
+   "result": {
+    "refused": "Ambiguous zip member name"
+   }
+  },
+  {
+   "name": "a name with a high byte and no flag",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMTcQFyQna5rqGegn/gyyZuFIcCbkUmEGbdqGGgACSDrDfBmZWMAK2RksATSOmBlACOnEtM=",
+    "bytes": 123,
+    "sha256": "e5bc3ae18727aeee00c5b71659d754832ae2b80f3bcd8d308caa680214231b83"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg-1.0/a\u0398b'"
+   }
+  },
+  {
+   "name": "a Unicode path field of the same name",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMzSDCUJCdrmuoZ6CfqJdcWiDAwPj00g4pJLHEAG9GJhFm3PphoAEkQMi0AG9WNgawZkYGXyBtB9YKAH0dHNM=",
+    "bytes": 161,
+    "sha256": "8855f74d9305dd465a924e8d34713239e5c02d9ab98827decc3587798ecf9168"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a Unicode path field of another name",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMzSDCUJCdrmuoZ6CfqJdcWiDAwPj00g4pmFiSXnJigDcjkwgzbv0w0AASIGRagDcrGwNYMyODL5C2A2sFAH2dHNU=",
+    "bytes": 161,
+    "sha256": "3ff3e5e9ca112ff9d9e0711feb09151ea9fcdaf3ba003e197658efa7cee20075"
+   },
+   "result": {
+    "refused": "Ambiguous zip member name"
+   }
+  },
+  {
+   "name": "a Unicode path field bound to another name",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMzSDCUJCdrmuoZ6CfqJdcWiDAwKhgGnETJpakl5wY4M3IJMKMWz8MNIAECJkW4M3KxgDWzMjgC6TtwFoB4gYazw==",
+    "bytes": 161,
+    "sha256": "564dfe87769ab91bff63d7fa46b9d1599ff332bb9afc862ddf92fc4d3d287c70"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      1,
+      "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a Unicode path field that is cut short",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMzcDKUJCdrmuoZ6CfqJdcWsDIwJgY4M3IJMKMWwMMNIAEMLQHeLOyMYBVMzLYAWl9sFoA4zQRKQ==",
+    "bytes": 131,
+    "sha256": "95bb8c92d84965b75791b0ceedc3561aea6dc48c87fb96f0bd645dd330002fa3"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "Corrupt unicode path extra field (0x7075)"
+   }
+  },
+  {
+   "name": "an extra field that is cut short",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEUG533bXzACWSDMzcDKUJCdrmuoZ6CfqJc8cyYnA2NigDcjkwgzbg0w0AASwNAe4M3KxgBWzchgB6T1wWoBCaoR0w==",
+    "bytes": 131,
+    "sha256": "a0f314fb2e45c8e3d53567ccf4731157618c8813322ff17ee19ccb771b953bea"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "Corrupt extra field 9999 (size=9)"
+   }
+  },
+  {
+   "name": "a file whose name begins another's",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj93+/k4zM5DHCMRcQFyQna5rqGegn5hkzMIQgKKUd99VKZhSTmSlxkxAlYxMIsy4jYWBBpAAkiXo+tDtQOjTRtYX4M3KBhJmAsJ8IB0KVgQAApkfgg==",
+    "bytes": 218,
+    "sha256": "0b0766f25264018acc10be7deca86a926a19c040d854b24f3ee5768ce37a8244"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/ab": [
+      1,
+      "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+     ],
+     "pkg-1.0/a": [
+      1,
+      "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file whose name another's begins",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj+Xdd1WKGchjBGJOIC7ITtc11DPQTzRmYghAUbn9/Z1mmEouZJVJxixoSmf3XcqFKeVFVqqXop9szAZUzcgkwozbETDQABJA6EbXhu4ihDYtFPeh60N3HkJfKLpjA7xZ2UBSzEC4Ckg3gxUCAKx7MTY=",
+    "bytes": 323,
+    "sha256": "6286ed2eb8bf446b49bd8040641839aff6e7148f93b92e8b1d3f8729c334b08b"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a": [
+      1,
+      "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+     ],
+     "pkg-1.0/ab": [
+      1,
+      "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+     ],
+     "pkg-1.0/a.d/c": [
+      1,
+      "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member whose own header names it otherwise",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj3Xet/0FM5DHCMTcQFyQna5rqGegnxiZ5M3CEODNyCTCjFs1DDSABBB6I5ICvFnZGMAKGRksgbQOWBkA5sARsg==",
+    "bytes": 123,
+    "sha256": "a3a5571571f13a87eefca2f941e28fcf0a6f3dcc67241c4066c3db554dc6bcb8"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "File name in directory 'pkg-1.0/aXb' and header b'pkg-1.0/aYb' differ."
+   }
+  },
+  {
+   "name": "many files",
+   "archive": {
+    "deflated": "eNqVnG1o1mUYR5+9qGutpbaW2TLTadPm3HU97xERUREVIRURYSIhFhY1REQiQkpCYoSIhISIRIiYRIiEiIiEiISEhEiIhESEhESIRIhIE+pDB4L7CH6wnvPpdz6dm+u/4pmu7oFKpdJT6XvhnVc/HLww2TX1r46pv7dN/Z148/VlMTa+fO341J8vK5UVxb8O9etUv66qX9fUr+vq1w3166b6dUv9um1+HWrLUFuG2jLUlqG2DLVlqC1DbRlqy1Bbptoy1Zaptky1ZaotU22ZastUW6baMtWWVbVlVW1ZVVtW1ZZVtWVVbVlVW1bVllW1ZVVtWVNb1tSWNbVlTW1ZU1vW1JY1tWVNbVlTW9bUlnW1ZV1tWVdb1tWWdbVlXW1ZV1vW1ZZ1tWVdbdlQWzbUlg21ZUNt2VBbNtSWDbVlQ23ZUFs21JZNtWVTbdlUWzbVlk21ZVNt2VRbNtWWTbVlU23ZUlu21JYttWVLbdlSW7bUli21ZUtt2VJbttSWbbVlW23ZVlu21ZZttWVbbdlWW7bVlm21ZdtsGar7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO4TqvuE6j6huk+o7hOq+4TqPqG6T6juE6r7hOo+obpPqO6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk+q7pOq+6TqPqm6T6ruk6r7pOo+qbpPqu6Tqvuk6j6puk/+0306Oge6/v/3//7ZfPM//Pfuqxwd4xFYObqSF2Hl6Mc8DytHD/NWrBz9lYdj5ehAB67IytHHgDbL0QmgrXJ0N9B2OXq6A5dn5eg1oMKmkU7cpJWjLwEVNm0BKmw6CFTYdBGosKm/C0dt5ejDQIVN64AKm3Z24fatHD0JVNh0FaiwaUE3TuTK0RVAhU3vAxU2HQAqbDoPVNjUMw03duVoA6iwac00XN+Vo9uBCpuOAxU2/Q5U2DQ0HRd75ejTQIVNm4AKm/YCFTadBSps6pyBk79ydHwG7v/K0VVAhU2TQIVNR4AKmy4BFTYN9uCAsBx9HKiwaT1QYdMeoMKm74EKm6734AKxHF16C84Ry9GXgQqbPgIqbDoEVNj0M1Bh08xe3DOWo48AFTa9BVTY9BlQYdOpXtxAlqN/AhU2Dd+K68hy9HmgwqbNQIVNXwEVNl0AKmzq7cN5ZTnaAipsWgtU2LSjD1eY5ei3QIVNfwAVNs27Dcea5eizQIVN7wIVNu0DKmw6B1TY1N2Pa89yNIEKm1b34w60HP0EqLDpKFBh029AhU1zbsftaDn6JFBh0wagwqbPgQqbzgAVNt0AKmwanYlL1HL0FaDCpq1AhU3fABU2/QJU2DR7Fk5Zy9FHgQqb3gYqbNoFVNj0HVBh01+zcAtbji6ejcPYcvRFoMKmD4AKm74GKmz6Caiwqe8OXNaWow8BFTa9AVTY9ClQYdOJO3CNW45eASpsmj+AO91y9Dmgwqb3gAqb9gMVNv0IVNg0/U4c+pajNaDCpteACpu23Yl74HL0GFBh02Wgwqa5gzgbLkefAips2ghU2PQFUGHTD0CFTZW7cHcs3l+BCptW3oWLZPH+ClTYdBiosOlXoMKmgTm4Yhbvr0CFTRNAhU27gQqbTgMVNl0DKmwauRs30eL9FaiwaQtQYdNBoMKmi0CFTf1zcVQt3l+BCpvWARU27QQqbDoJVNh0dS6ussX76z040Rbvr0CFTe8DFTYdACpsOg9U2NQzhBtv8f4KVNi0BqiwaTtQYdPxIdyFi/dXoMKmoXtxMS7eX4EKmzYBFTbtBSpsOgtU2NQ5Dyfn4v0VqLBpFVBh0+Q8XKaL91egwqZLQIVNg/fhgF28vwIVNq0HKmzaA1TY9D1QYdN1oMKmpfNxDi/eX+fjNl68vwIVNh0CKmz6Gaiwaeb9uKcX769AhU1vARU2fQZU2HQKqLDpT6DCpuEFuM4X769AhU2bgQqbvgIqbLoAVNjUuxDn/eL9FaiwaS1QYdMOoMKmb4EKm/5YiO8DiPfXYXwsQLy/AhU2vQtU2LQPqLDpHFBhU/cifG1AvL8CFTatBips+gSosOnoInyhQLy/AhU2zVmMbxeI91egwqYNQIVNnwMVNp0BKmy6AVTYNPoAvoQg3l+BCpu2PoBvJIj3V6DCpl+ACptmj+BTCuL9Faiw6W2gwqZdQIVN3wEVNv0FVNi0eAk+zCDeX5fgKw3i/RWosOlroMKmn4AKm/qW4ssO4v0VqLDpDaDCpk+BCptOABU2XQEqbJr/IL4TId5fgQqb3gMqbNoPVNj0I1Bh0/RRfGhCvL8CFTa9BlTYtA2osOkYUGHT5VF8qUK8vy7DZyvE+ytQYdNGoMKmL4AKm34AKmyqjOG7F+L9FaiwaSVQYdPHQIVNh8fwrQzx/gpU2DSwHF/REO+vQIVNE0CFTbuBCptOAxU2XQMqbBoZxzc5xPsrUGHTlnF8rUO8vwIVNl0EKmzqD3zUQ7y/AhU2rQMqbNoJVNh0Eqiw6SpQYdOCxCdCxPtr4nsh4v0VqLDpAFBh03mgwqaeKr4xIt5fgQqb1gAVNm0HKmw6DlTY9DtQYdNQDV8sEe+vQIVNm4AKm/YCFTadBSps6qzjkyfi/RWosGkVUGHTJFBh0xGgUzZNm37zf412jHYMP1GpXKrf/NffDqximw==",
+    "bytes": 31522,
+    "sha256": "79e876b8e8a07bccdd3746e5cafd9a7952d9c0200e786749dede2960c28f15c1"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/f0000": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0001": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0002": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0003": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0004": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0005": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0006": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0007": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0008": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0009": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0010": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0011": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0012": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0013": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0014": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0015": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0016": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0017": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0018": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0019": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0020": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0021": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0022": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0023": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0024": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0025": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0026": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0027": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0028": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0029": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0030": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0031": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0032": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0033": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0034": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0035": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0036": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0037": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0038": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0039": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0040": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0041": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0042": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0043": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0044": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0045": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0046": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0047": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0048": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0049": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0050": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0051": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0052": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0053": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0054": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0055": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0056": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0057": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0058": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0059": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0060": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0061": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0062": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0063": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0064": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0065": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0066": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0067": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0068": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0069": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0070": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0071": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0072": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0073": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0074": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0075": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0076": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0077": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0078": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0079": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0080": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0081": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0082": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0083": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0084": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0085": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0086": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0087": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0088": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0089": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0090": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0091": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0092": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0093": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0094": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0095": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0096": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0097": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0098": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0099": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0100": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0101": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0102": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0103": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0104": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0105": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0106": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0107": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0108": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0109": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0110": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0111": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0112": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0113": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0114": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0115": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0116": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0117": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0118": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0119": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0120": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0121": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0122": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0123": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0124": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0125": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0126": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0127": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0128": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0129": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0130": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0131": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0132": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0133": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0134": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0135": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0136": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0137": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0138": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0139": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0140": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0141": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0142": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0143": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0144": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0145": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0146": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0147": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0148": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0149": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0150": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0151": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0152": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0153": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0154": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0155": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0156": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0157": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0158": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0159": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0160": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0161": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0162": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0163": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0164": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0165": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0166": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0167": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0168": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0169": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0170": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0171": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0172": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0173": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0174": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0175": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0176": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0177": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0178": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0179": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0180": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0181": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0182": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0183": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0184": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0185": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0186": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0187": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0188": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0189": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0190": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0191": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0192": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0193": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0194": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0195": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0196": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0197": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0198": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0199": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0200": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0201": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0202": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0203": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0204": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0205": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0206": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0207": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0208": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0209": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0210": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0211": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0212": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0213": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0214": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0215": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0216": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0217": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0218": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0219": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0220": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0221": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0222": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0223": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0224": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0225": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0226": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0227": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0228": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0229": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0230": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0231": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0232": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0233": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0234": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0235": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0236": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0237": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0238": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0239": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0240": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0241": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0242": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0243": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0244": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0245": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0246": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0247": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0248": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0249": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0250": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0251": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0252": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0253": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0254": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0255": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0256": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0257": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0258": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0259": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0260": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0261": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0262": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0263": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0264": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0265": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0266": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0267": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0268": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0269": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0270": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0271": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0272": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0273": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0274": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0275": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0276": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0277": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0278": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0279": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0280": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0281": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0282": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0283": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0284": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0285": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0286": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0287": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0288": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0289": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0290": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0291": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0292": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0293": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0294": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0295": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0296": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0297": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0298": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ],
+     "pkg-1.0/f0299": [
+      1,
+      "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a file of many zero bytes",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj5V5ZbGckwXIZRBg4AWSBdnpuoZ6BvpVqUX5xW8PGjICxQ4t+OqfyxG/gGEUjIJRMOKAHXOANyOTCDPuUgMGGkDFBWoZEuDNygYSZARCayBtAtYGAI8xGJs=",
+    "bytes": 1157,
+    "sha256": "a5c73adbba4e542ff24ac93f1b0ff37438dc0ae7edb7e4147e1bd2517a9e5eaf"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/zeros": [
+      1048576,
+      "30e14955ebf1352266dc2ff8067e68104607e750abb9d3b36582b8af909fcb58"
+     ]
+    }
+   }
+  }
+ ],
+ "sources": [
+  {
+   "name": "a tarball",
+   "format": "tar.gz",
+   "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgQEAdVg8+A==",
+    "bytes": 132,
+    "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a zip",
+   "format": "zip",
+   "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sFIA8+goQg==",
+    "bytes": 234,
+    "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/a.c": [
+      2,
+      "87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7"
+     ],
+     "pkg-1.0/dir/b.c": [
+      2,
+      "0263829989b6fd954f72baaf2fc64bc2e2f01d692d4de72986ea808f6e99813f"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a tarball said to be a zip",
+   "format": "zip",
+   "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgQEAdVg8+A==",
+    "bytes": 132,
+    "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88"
+   },
+   "result": {
+    "raised": "BadZipFile",
+    "said": "File is not a zip file"
+   }
+  },
+  {
+   "name": "a zip said to be a tarball",
+   "format": "tar.gz",
+   "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sFIA8+goQg==",
+    "bytes": 234,
+    "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e"
+   },
+   "result": {
+    "raised": "BadGzipFile",
+    "said": "Not a gzipped file (b'PK')"
+   }
+  },
+  {
+   "name": "a raw file",
+   "format": "file",
+   "sha256": "8e5ceeca3a438135cfd1372eafe969ccc4440798e378d8b8ed24242f026a704f",
+   "archive": {
+    "deflated": "eNorSiznAgAD5wFV",
+    "bytes": 4,
+    "sha256": "8e5ceeca3a438135cfd1372eafe969ccc4440798e378d8b8ed24242f026a704f"
+   },
+   "result": {
+    "refused": "A raw file cannot be parsed as an archive"
+   }
+  },
+  {
+   "name": "a tarball with another digest",
+   "format": "tar.gz",
+   "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2+v2HIdchBgu7DWtlXc4ObVP3PUAwU2cga+f68lNumcEuPJ6rPmPsZXzQ9/3ePtqrP7kcQzoc3LVt2b6Wt8u/7s+trqjNkbehMZ+2/vlf58coPfXbUNSYeX/19+OuKb8d+G+b/nJ63K/hvvtP4/AxTUv+W8c6I+hUGDgQEAdVg8+A==",
+    "bytes": 132,
+    "sha256": "4e97eabbd647daaaf1309c10cbe2490f69d9bf73af81bc04152bec1a0a79dc88"
+   },
+   "result": {
+    "refused": "Source SHA-256 or size differs: upstream"
+   }
+  },
+  {
+   "name": "a zip with another digest",
+   "format": "zip",
+   "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "archive": {
+    "deflated": "eNoL8GZmEWFgYOBg4AnOj2Vf+OouC5DHBMTcQFyQna5rqGegn6iX7P2EiSEARfGRT8e/wRTzIylOySzSTwJqeATSwMgkwozbfBhoYGRAtQ1dI7pdCI26mDYHeLOyMYAVMzGUAek4sFIA8+goQg==",
+    "bytes": 234,
+    "sha256": "583f3caf8772aa8a587dc6ff262f41edf0c90b72074fcb2d42af042c3c5daa2e"
+   },
+   "result": {
+    "refused": "Source SHA-256 or size differs: upstream"
+   }
+  }
+ ],
+ "limits": {
+  "MAX_DOWNLOAD": 134217728,
+  "MAX_MEMBER": 33554432,
+  "MAX_CONTENT": 268435456,
+  "MAX_FILES": 20000
+ }
+}

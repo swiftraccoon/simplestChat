@@ -20,6 +20,7 @@ mod tests;
 
 pub use crate::{Fault, Result};
 use crate::{digest, files, require};
+pub(crate) use archive::{decoded, renamed};
 pub use cli::run;
 pub use install::{Site, install, path};
 pub use transport::{Answer, Curl, Transport};

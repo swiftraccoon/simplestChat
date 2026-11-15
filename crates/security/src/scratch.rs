@@ -9,15 +9,23 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 pub(crate) struct Scratch(pub(crate) PathBuf);
 
+/// How many directories the tests of this process have asked for.
+static MADE: AtomicUsize = AtomicUsize::new(0);
+
 impl Scratch {
+    /// A new directory that no other test has, whatever it is called:
+    /// tests run side by side, and two that chose one name would otherwise
+    /// remove each other's files.
     pub(crate) fn new(name: &str) -> Self {
         let path = std::env::temp_dir().join(format!(
-            "simplestchat-security-{}-{name}",
-            std::process::id()
+            "simplestchat-security-{}-{}-{name}",
+            std::process::id(),
+            MADE.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).expect("scratch directory");

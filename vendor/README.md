@@ -35,12 +35,14 @@ Run the verifier before compiling downloaded or vendored native code:
 
 ```bash
 vendor_check="$(mktemp -d "${TMPDIR:-/tmp}/simplestchat-vendor.XXXXXXXX")"
-python3 build/security_vendor.py verify \
+cargo run --locked -q -p simplestchat-security -- vendor verify \
   --cache "$vendor_check/cache" --output "$vendor_check/evidence"
 ```
 
-The helper requires Python 3.12 or newer and uses only the standard library and
-the repository's bounded-process helper. Both cache and evidence directories
+The verifier is a command of the security gate's executable and fetches with
+the system's `curl`. The deep tier of the gate runs it as its `vendor-integrity`
+check, and the production image build runs the same checks through
+`build/security_vendor.py verify`. Both cache and evidence directories
 must belong to the caller and be private (`0700`). The evidence directory must
 be new. Reuse a private cache on later runs and pass `--offline` to prohibit
 network access; missing or corrupt cached bytes then fail verification. Cache
@@ -48,9 +50,10 @@ filenames are the complete source SHA-256, and every use checks the bytes again.
 
 Each `sources` record identifies one HTTPS URL, SHA-256 and format. The verifier
 authenticates every source before parsing an archive. It never extracts archives
-or executes imported code. Downloads have a 120-second process deadline and a
-128 MiB compressed-size limit; archive members, total expansion, file counts and
-retained diffs have separate limits. Redirects must remain on HTTPS. Tar/ZIP
+or executes imported code. A download has 120 seconds, all of them together
+fifteen minutes, and a source at most 128 MiB; archive members, total
+expansion, file counts and retained diffs have separate limits. Redirects must
+remain on HTTPS. Tar/ZIP
 links, special files, duplicate names, ambiguous paths and directory collisions
 are rejected. These checks authenticate previously reviewed bytes; they do not
 establish publisher identity or prove that imported source is safe.

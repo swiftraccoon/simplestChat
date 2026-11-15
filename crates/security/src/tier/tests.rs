@@ -7,7 +7,7 @@
 //! summary's text and what was left. For the summaries it replaced the
 //! tiers by one that records the given checks and ends as told.
 
-use super::{Host, NATIVE, Request, VENDOR, announced, deep, gate, parse, ruled, summary};
+use super::{Host, NATIVE, Request, announced, deep, gate, parse, ruled, summary};
 use crate::{
     Fault, Result,
     context::{Context, Failure, Limits, Note, Outcome},
@@ -113,6 +113,10 @@ impl Host for Bare {
 
     fn mutation(&self, _: &Mutation<'_>) -> Outcome<bool> {
         Err(Failure::Fixed("the_mutation_check_was_asked_for"))
+    }
+
+    fn vendor(&self, _: &Path, _: &Path, _: &Path) -> std::result::Result<(), String> {
+        Err("the vendored tree was asked for".to_owned())
     }
 }
 
@@ -248,12 +252,15 @@ fn summaries_are_written_as_the_reference_wrote_them() {
     assert_eq!(tally, (7, 8, 1));
 }
 
-/// A host of the deep tier's own checks: an environment, a mutation tool
-/// that is installed or not as the case says, and a mutation check that
-/// ends as the case says. What it is asked is kept.
+/// A host of the deep tier's own checks: an environment, a vendored tree
+/// that is as recorded or not as the case says, a mutation tool that is
+/// installed or not as the case says, and a mutation check that ends as
+/// the case says. What it is asked is kept.
 struct Deep<'a> {
     variables: Vec<(&'static str, OsString)>,
     install: Option<&'static str>,
+    verified: bool,
+    vendored: RefCell<Vec<Value>>,
     passes: bool,
     root: &'a str,
     place: &'a str,
@@ -347,7 +354,24 @@ impl Host for Deep<'_> {
         ]);
         Ok(self.passes)
     }
+
+    fn vendor(&self, root: &Path, cache: &Path, output: &Path) -> std::result::Result<(), String> {
+        // What the reference gave its command is what the check is handed.
+        let mut call = vec![json!("build/security_vendor.py"), json!("verify")];
+        for (option, path) in [("--root", root), ("--cache", cache), ("--output", output)] {
+            call.extend([json!(option), json!(self.spelled(path))]);
+        }
+        self.vendored.borrow_mut().push(call.into());
+        if self.verified {
+            Ok(())
+        } else {
+            Err("a tree is not as recorded".to_owned())
+        }
+    }
 }
+
+/// The case whose vendor check the reference's gate stopped.
+const STOPPED: &str = "a vendored tree whose check is stopped";
 
 /// The interpreter of a case and nothing else.
 struct Interpreter(PathBuf);
@@ -389,8 +413,9 @@ fn logged(log: &Path, root: &str, place: &str) -> Vec<Value> {
 #[test]
 fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
     let recording: Value = serde_json::from_str(RECORDING).expect("a recording");
-    // Passed and failed alike, and failed where the reference raised.
-    let mut tally = (0, 0, 0);
+    // Passed and failed alike, failed where the reference raised, and failed
+    // with another status.
+    let mut tally = (0, 0, 0, 0);
     for case in recording["deep"].as_array().expect("cases") {
         let name = text(&case["name"]);
         let scratch = Scratch::new("tier-deep");
@@ -428,6 +453,8 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         let host = Deep {
             variables,
             install: install.map(|code| &*Box::leak(code.to_owned().into_boxed_str())),
+            verified: case["statuses"]["vendor"] == 0,
+            vendored: RefCell::default(),
             passes: case["statuses"]["mutation"] == 0,
             root: &root.display().to_string(),
             place: &spelled,
@@ -457,10 +484,27 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
             written["failure"] = recorded.into();
             assert_eq!(failure.as_deref(), recorded.map(named), "{name}");
         }
-        assert_eq!(written, case["summary"], "{name}");
-        // The mutation check is no command here: what the reference gave
-        // its command is what the check is handed.
-        let mut calls = logged(&log, &root.display().to_string(), &spelled);
+        // Holding the vendored tree to its record is no command here, so
+        // it ends with one where the reference's command was stopped.
+        let mut recorded = case["summary"].clone();
+        if name == STOPPED {
+            assert_eq!(recorded["checks"][0]["exitStatus"], 143, "{name}");
+            recorded["checks"][0]["exitStatus"] = 1.into();
+        }
+        assert_eq!(written, recorded, "{name}");
+        // Neither is the mutation check: what the reference gave its
+        // command is what the check is handed.
+        let mut calls = host.vendored.borrow().clone();
+        assert_eq!(calls.len(), 1, "{name}");
+        calls.extend(logged(&log, &root.display().to_string(), &spelled));
+        let complaint = std::fs::read_to_string(target.join("01-vendor-integrity.stderr"));
+        let complaint = complaint.expect("what the check complained of");
+        let wanted = if host.verified {
+            ""
+        } else {
+            "Vendor integrity failed: a tree is not as recorded\n"
+        };
+        assert_eq!(complaint, wanted, "{name}");
         let mutation = |call: &&Value| call[0] == "<the mutation command>";
         let there = case["calls"].as_array().expect("calls");
         if let Some(call) = there.iter().find(mutation) {
@@ -484,17 +528,18 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         there.retain(|entry| *entry != "summary.json");
         assert_eq!(json!(left), json!(there), "{name}");
         match (failure.is_some(), raised) {
+            _ if name == STOPPED => tally.3 += 1,
             (false, _) => tally.0 += 1,
             (true, false) => tally.1 += 1,
             (true, true) => tally.2 += 1,
         }
     }
-    assert_eq!(tally, (5, 23, 5));
+    assert_eq!(tally, (5, 22, 5, 1));
 }
 
 #[test]
 fn the_slow_checks_have_their_reviewed_time() {
-    assert_eq!(VENDOR, Duration::from_secs(900));
+    assert_eq!(crate::vendor::verify::WHOLE, Duration::from_secs(900));
     assert_eq!(NATIVE, Duration::from_secs(1800));
 }
 

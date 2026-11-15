@@ -326,3 +326,146 @@ fn an_elf_audit_of_no_image_is_reported_and_ends_with_one() {
     );
     assert_eq!(std::fs::read_to_string(&report).expect("a report"), written);
 }
+
+#[test]
+fn a_vendor_check_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["vendor"][..],
+        &["vendor", "verify"],
+        &["vendor", "verify", "--cache", "/nowhere/cache"],
+        &["vendor", "_download", "--url", "https://example.invalid/"],
+        &[
+            "vendor",
+            "verify",
+            "--cache",
+            "/nowhere/cache",
+            "--output",
+            "/nowhere/evidence",
+            "more",
+        ],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        assert!(
+            usage.starts_with("usage: simplestchat-security vendor verify --cache DIR "),
+            "{usage}"
+        );
+    }
+}
+
+#[test]
+fn a_vendor_check_that_fails_says_what_is_wrong_in_one_line() {
+    let scratch = Scratch::new("vendor");
+    let path = |name: &str| scratch.0.join(name);
+    let (root, cache, evidence) = (path("root"), path("cache"), path("evidence"));
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&root)
+        .expect("a checkout");
+    let named = |path: &Path| path.to_str().expect("a path").to_owned();
+    let arguments = [
+        "vendor".to_owned(),
+        "verify".to_owned(),
+        "--offline".to_owned(),
+        "--root".to_owned(),
+        named(&root),
+        "--cache".to_owned(),
+        named(&cache),
+        "--output".to_owned(),
+        named(&evidence),
+    ];
+    let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    let output = run(&arguments);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(text(&output.stdout), "");
+    let real = root.canonicalize().expect("the checkout");
+    let line = format!(
+        "Vendor integrity failed: Not a source directory: {}/vendor\n",
+        real.display()
+    );
+    assert_eq!(text(&output.stderr), line);
+    // The cache and the evidence were made, private, and nothing is in them.
+    for made in [&cache, &evidence] {
+        use std::os::unix::fs::PermissionsExt as _;
+        let held = made.metadata().expect("a directory");
+        assert_eq!(held.permissions().mode() & 0o777, 0o700);
+        assert_eq!(std::fs::read_dir(made).expect("entries").count(), 0);
+    }
+    // Evidence is never written over.
+    let again = run(&arguments);
+    assert_eq!(again.status.code(), Some(1));
+    let line = format!(
+        "Vendor integrity failed: Directory cannot be made: {}\n",
+        evidence.display()
+    );
+    assert_eq!(text(&again.stderr), line);
+}
+
+#[test]
+fn a_vendor_check_that_may_fetch_nothing_asks_for_nothing() {
+    use sha2::Digest as _;
+    let scratch = Scratch::new("vendor-offline");
+    let path = |name: &str| scratch.0.join(name);
+    let vendor = path("root/vendor");
+    std::fs::create_dir_all(&vendor).expect("a vendored directory");
+    let license = b"license\n";
+    let digest: String = sha2::Sha256::digest(license)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let record = serde_json::json!({
+        "sources": [{
+            "id": "license",
+            "url": "https://example.invalid/license",
+            "sha256": digest,
+            "format": "file",
+        }],
+        "trees": [],
+        "files": [{"path": "vendor/LICENSE", "source": "license"}],
+        "maintained_files": ["vendor/README.md"],
+        "wraps": [],
+    });
+    for (name, content) in [
+        ("integrity.json", record.to_string().as_bytes()),
+        ("LICENSE", &license[..]),
+        ("README.md", b"A vendored directory.\n"),
+    ] {
+        std::fs::write(vendor.join(name), content).expect("a file");
+    }
+    let named = |name: &str| path(name).to_str().expect("a path").to_owned();
+    let (root, cache) = (named("root"), named("cache"));
+    let check = |evidence: &str, more: &[&str]| {
+        let evidence = named(evidence);
+        let mut arguments = vec!["vendor", "verify", "--root", &root, "--cache", &cache];
+        arguments.extend(["--output", &evidence]);
+        arguments.extend(more);
+        run(&arguments)
+    };
+    // The source is not in the cache, and nothing may be fetched.
+    let output = check("first", &["--offline"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        text(&output.stderr),
+        "Vendor integrity failed: Offline source missing: license\n"
+    );
+    // With the source in the cache, the directory is what its record says.
+    std::fs::write(path("cache").join(&digest), license).expect("a source");
+    let output = check("second", &["--offline"]);
+    assert_eq!((text(&output.stdout), text(&output.stderr)), ("", ""));
+    assert_eq!(output.status.code(), Some(0));
+    let report = std::fs::read_to_string(path("second/report.json")).expect("a report");
+    assert!(
+        report.starts_with("{\n  \"diff_sha256\": \"e3b0c442"),
+        "{report}"
+    );
+    assert_eq!(
+        std::fs::read(path("second/vendor.diff")).expect("differences"),
+        b""
+    );
+    // And so it is when sources may be fetched: none is asked for.
+    let output = check("third", &[]);
+    assert_eq!((text(&output.stdout), text(&output.stderr)), ("", ""));
+    assert_eq!(output.status.code(), Some(0));
+}
