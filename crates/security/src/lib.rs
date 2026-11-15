@@ -9,8 +9,9 @@
 //! reads the dependency declarations of the npm and Python locks, asks the
 //! registries about them and reviews the licences of what a change declares
 //! anew, `actions` reviews the actions a change pins anew, `spdx` judges a
-//! licence expression against an allowlist, and `fast` holds the checks of
-//! the fast tier.
+//! licence expression against an allowlist, `fast` holds the checks of the
+//! fast tier, and `rulesets` reconciles the repository's rulesets on GitHub
+//! with their policy.
 
 pub mod actions;
 pub mod context;
@@ -21,6 +22,7 @@ pub mod findings;
 pub mod licenses;
 pub mod policy;
 pub(crate) mod record;
+pub mod rulesets;
 pub mod scope;
 #[cfg(test)]
 pub(crate) mod scratch;

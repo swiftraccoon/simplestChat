@@ -345,9 +345,9 @@ substitute for GitHub's OIDC signature or manufacture hosted analysis receipts.
 currently enforced policy. Reconcile the maintained ruleset with:
 
 ```sh
-python3 build/security_rulesets.py plan
-python3 build/security_rulesets.py check
-python3 build/security_rulesets.py apply --revision FULL_GREEN_MAIN_COMMIT_SHA
+cargo run --locked -q -p simplestchat-security -- rulesets plan
+cargo run --locked -q -p simplestchat-security -- rulesets check
+cargo run --locked -q -p simplestchat-security -- rulesets apply --revision FULL_GREEN_MAIN_COMMIT_SHA
 ```
 
 `plan` reports differences; `check` also exits nonzero on drift. `apply` updates

@@ -56,8 +56,47 @@ fn a_command_that_is_not_one_is_told_the_usage() {
         let output = run(arguments);
         assert_eq!(output.status.code(), Some(2), "{arguments:?}");
         assert!(output.stdout.is_empty(), "{arguments:?}");
-        assert!(text(&output.stderr).starts_with("usage: simplestchat-security tools "));
+        assert!(text(&output.stderr).starts_with("usage: simplestchat-security tools"));
     }
+}
+
+#[test]
+fn a_rulesets_command_that_is_not_one_is_told_the_usage_and_asks_nobody() {
+    let usage = "usage: simplestchat-security rulesets plan|check|apply [--revision COMMIT]\n";
+    for arguments in [
+        &["rulesets"][..],
+        &["rulesets", "remove"],
+        &["rulesets", "plan", "check"],
+        &["rulesets", "apply", "--revision"],
+        &["rulesets", "plan", "--rev", "x"],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert!(output.stdout.is_empty(), "{arguments:?}");
+        assert_eq!(text(&output.stderr), usage, "{arguments:?}");
+    }
+    let output = run(&["rulesets", "--help"]);
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(text(&output.stdout), usage);
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn a_rulesets_command_without_its_program_fails_with_one_line() {
+    // The maintained policy is read first; then no directory of the search
+    // path holds the program that asks GitHub, so nobody is asked.
+    let output = Command::new(env!("CARGO_BIN_EXE_simplestchat-security"))
+        .args(["rulesets", "check"])
+        .env_clear()
+        .env("PATH", "/nonexistent")
+        .output()
+        .expect("the executable runs");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        text(&output.stderr),
+        "Ruleset reconciliation failed: missing_security_prerequisite_gh\n"
+    );
 }
 
 #[test]

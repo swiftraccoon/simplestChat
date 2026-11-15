@@ -1,11 +1,12 @@
-//! `simplestchat-security tools install|path`: the security gate's command line.
+//! `simplestchat-security tools install|path` and `rulesets plan|check|apply`:
+//! the security gate's command line.
 
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
 
-const USAGE: &str = "usage: simplestchat-security tools install|path ...";
+const USAGE: &str = "usage: simplestchat-security tools|rulesets ...";
 
 /// The checkout this executable was built from holds the lock and the cache.
 fn repository_root() -> Option<PathBuf> {
@@ -23,6 +24,10 @@ fn main() -> ExitCode {
     match (repository_root(), arguments.as_deref()) {
         (Some(root), Some([group, rest @ ..])) if group == "tools" => {
             simplestchat_security::tools::run(&root, rest)
+        }
+        (Some(root), Some([group, rest @ ..])) if group == "rulesets" => {
+            let search = std::env::var_os("PATH");
+            simplestchat_security::rulesets::run(&root, rest, search.as_deref())
         }
         _ => {
             eprintln!("{USAGE}");

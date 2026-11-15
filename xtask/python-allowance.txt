@@ -1,4 +1,4 @@
-total 101027
+total 100328
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -43,7 +43,6 @@ total 101027
 152	build/security_openssl.py
 185	build/security_policy.py
 286	build/security_rpm_notices.py
-322	build/security_rulesets.py
 417	build/security_runtime.py
 88	build/security_secret_projection.py
 239	build/security_secret_spans.py
@@ -164,7 +163,6 @@ total 101027
 183	ops/ansible/tests/test_security_rpm_license.py
 198	ops/ansible/tests/test_security_rpm_notices.py
 464	ops/ansible/tests/test_security_rpm_secrets.py
-377	ops/ansible/tests/test_security_rulesets.py
 382	ops/ansible/tests/test_security_runtime.py
 367	ops/ansible/tests/test_security_runtime_licenses.py
 118	ops/ansible/tests/test_security_secret_projection.py

@@ -282,6 +282,9 @@ crates/security/src/licenses/**
 !crates/security/src/actions/
 crates/security/src/actions/**
 !crates/security/src/actions/*.rs
+!crates/security/src/rulesets/
+crates/security/src/rulesets/**
+!crates/security/src/rulesets/*.rs
 !crates/security/src/spdx/
 crates/security/src/spdx/**
 !crates/security/src/spdx/*.rs

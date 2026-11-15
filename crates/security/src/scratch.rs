@@ -52,7 +52,7 @@ fn text(value: &Value) -> &str {
 }
 
 /// The bytes of a recorded file: text, text beside a mode, base64, or one
-/// character repeated before the rest.
+/// text repeated between a beginning and an end.
 pub(crate) fn content(spec: &Value) -> Vec<u8> {
     if let Some(text) = spec.as_str().or_else(|| spec["text"].as_str()) {
         return text.as_bytes().to_vec();
@@ -61,8 +61,9 @@ pub(crate) fn content(spec: &Value) -> Vec<u8> {
         return base64(text(encoded));
     }
     let times = usize::try_from(spec["times"].as_u64().expect("a count"));
-    let mut written = text(&spec["repeat"]).repeat(times.expect("a small count"));
-    written.push_str(text(&spec["then"]));
+    let mut written = spec["first"].as_str().unwrap_or_default().to_owned();
+    written.push_str(&text(&spec["repeat"]).repeat(times.expect("a small count")));
+    written.push_str(spec["then"].as_str().unwrap_or_default());
     written.into_bytes()
 }
 

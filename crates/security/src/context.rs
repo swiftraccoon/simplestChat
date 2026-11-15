@@ -246,6 +246,96 @@ pub fn executable(name: &'static str, path: Option<&OsStr>) -> Outcome<PathBuf> 
         .ok_or(Failure::Prerequisite(name))
 }
 
+/// Run `command` to its end and answer its exit status, whatever it is, and
+/// what it printed; what it complains of is dropped. It may take `within`,
+/// print `room.0` bytes and complain in `room.1`. The command keeps the
+/// environment it was given: one that is no check of the gate, and needs
+/// what its caller holds, is run through here.
+pub(crate) fn asked(
+    command: &mut Command,
+    input: &[u8],
+    within: Duration,
+    room: (u64, u64),
+) -> Outcome<(i32, Vec<u8>)> {
+    let (hand, handed) = mpsc::channel();
+    let kept: (Box<dyn Write + Send>, Box<dyn Write + Send>) =
+        (Box::new(Handed(hand)), Box::new(std::io::sink()));
+    let patience = (within, Limits::REVIEWED.grace);
+    let status = pumped(command, input, patience, kept, room)?;
+    // Both streams were closed, so everything printed has been handed on.
+    Ok((status, handed.try_iter().flatten().collect()))
+}
+
+/// Run `command` to its end, or stop it at its deadline or when a stream
+/// says more than its `room`. A command is over when both streams are closed
+/// and its leader has exited, so one that leaves a descendant holding a
+/// stream runs until the deadline. It reads `input`, and what it prints goes
+/// to the two `kept` writers, standard output first. Its `patience` is how
+/// long it may take, and how long it is given to end once it is stopped.
+fn pumped<W: Write + Send + 'static>(
+    command: &mut Command,
+    input: &[u8],
+    patience: (Duration, Duration),
+    kept: (W, W),
+    room: (u64, u64),
+) -> Outcome<i32> {
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .map_err(|error| files::unusable(&error))?;
+    let pid = Pid::from_child(&child);
+    let (sender, events) = mpsc::channel();
+    let mut open = 0;
+    if let Some(mut stream) = child.stdin.take() {
+        let input = input.to_vec();
+        // A command that ends without reading is judged by its status.
+        std::thread::spawn(move || stream.write_all(&input));
+    }
+    if let Some(stream) = child.stdout.take() {
+        let (events, over) = (sender.clone(), "command_stdout_limit_exceeded");
+        std::thread::spawn(move || copied(stream, kept.0, room.0, over, &events));
+        open += 1;
+    }
+    if let Some(stream) = child.stderr.take() {
+        let over = "command_stderr_limit_exceeded";
+        std::thread::spawn(move || copied(stream, kept.1, room.1, over, &sender));
+        open += 1;
+    }
+    let deadline = Instant::now() + patience.0;
+    let stopped = loop {
+        if open == 0 && exited(pid) {
+            break None;
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break Some("command_timed_out");
+        }
+        if open == 0 {
+            std::thread::sleep(left.min(POLL));
+            continue;
+        }
+        match events.recv_timeout(left.min(POLL)) {
+            Ok(Event::Closed) => open -= 1,
+            Ok(Event::Over(code)) => break Some(code),
+            Ok(Event::Unwritten) => break Some("tool_entry_unavailable"),
+            Err(_) => {}
+        }
+    };
+    if let Some(code) = stopped {
+        stop(&mut child, pid, patience.1);
+        return Err(Failure::Fixed(code));
+    }
+    let status = child.wait().map_err(|error| files::unusable(&error))?;
+    let signal = status.signal().map(|signal| -signal);
+    status
+        .code()
+        .or(signal)
+        .ok_or(Failure::Fixed("scanner_command_unobserved"))
+}
+
 /// A check that has begun: where what it prints is kept, the files of its
 /// two streams and when it began.
 struct Opened {
@@ -489,12 +579,8 @@ impl Context {
         how: &Run<'_>,
         room: (u64, u64),
     ) -> Outcome<(i32, Vec<u8>)> {
-        let (hand, handed) = mpsc::channel();
-        let kept: (Box<dyn Write + Send>, Box<dyn Write + Send>) =
-            (Box::new(Handed(hand)), Box::new(std::io::sink()));
-        let status = self.pump(argv, how, kept, room)?;
-        // Both streams were closed, so everything printed has been handed on.
-        Ok((status, handed.try_iter().flatten().collect()))
+        let mut command = self.command(argv, how)?;
+        asked(&mut command, how.input, how.within, room)
     }
 
     /// Do `work` as the check `name` and keep it as a command is kept: two
@@ -518,11 +604,24 @@ impl Context {
         outcome.map_err(|_| Failure::Command(name))
     }
 
-    /// Run the command to its end, or stop it at its deadline or when a
-    /// stream says more than its `room`. A command is over when both
-    /// streams are closed and its leader has exited, so one that leaves a
-    /// descendant holding a stream runs until the deadline. What it prints
-    /// goes to the two `kept` writers, standard output first.
+    /// The command `argv` in the fixed environment of the checks, in the
+    /// directory `how` names or at the sources' root.
+    fn command<S: AsRef<OsStr>>(&self, argv: &[S], how: &Run<'_>) -> Outcome<Command> {
+        let (program, arguments) = argv
+            .split_first()
+            .ok_or(Failure::Fixed("invalid_scanner_command"))?;
+        let fixed = self.variables.iter();
+        let mut command = Command::new(program);
+        command
+            .args(arguments)
+            .current_dir(how.directory.unwrap_or(&self.root))
+            .env_clear()
+            .envs(fixed.map(|(name, value)| (*name, value.as_os_str())))
+            .envs(how.variables.iter().copied());
+        Ok(command)
+    }
+
+    /// Run the command `argv` as [`pumped`] runs one.
     fn pump<S: AsRef<OsStr>, W: Write + Send + 'static>(
         &self,
         argv: &[S],
@@ -530,70 +629,9 @@ impl Context {
         kept: (W, W),
         room: (u64, u64),
     ) -> Outcome<i32> {
-        let (program, arguments) = argv
-            .split_first()
-            .ok_or(Failure::Fixed("invalid_scanner_command"))?;
-        let fixed = self.variables.iter();
-        let mut child = Command::new(program)
-            .args(arguments)
-            .current_dir(how.directory.unwrap_or(&self.root))
-            .env_clear()
-            .envs(fixed.map(|(name, value)| (*name, value.as_os_str())))
-            .envs(how.variables.iter().copied())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .process_group(0)
-            .spawn()
-            .map_err(|error| files::unusable(&error))?;
-        let pid = Pid::from_child(&child);
-        let (sender, events) = mpsc::channel();
-        let mut open = 0;
-        if let Some(mut stream) = child.stdin.take() {
-            let input = how.input.to_vec();
-            // A command that ends without reading is judged by its status.
-            std::thread::spawn(move || stream.write_all(&input));
-        }
-        if let Some(stream) = child.stdout.take() {
-            let (events, over) = (sender.clone(), "command_stdout_limit_exceeded");
-            std::thread::spawn(move || copied(stream, kept.0, room.0, over, &events));
-            open += 1;
-        }
-        if let Some(stream) = child.stderr.take() {
-            let over = "command_stderr_limit_exceeded";
-            std::thread::spawn(move || copied(stream, kept.1, room.1, over, &sender));
-            open += 1;
-        }
-        let deadline = Instant::now() + how.within;
-        let stopped = loop {
-            if open == 0 && exited(pid) {
-                break None;
-            }
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                break Some("command_timed_out");
-            }
-            if open == 0 {
-                std::thread::sleep(left.min(POLL));
-                continue;
-            }
-            match events.recv_timeout(left.min(POLL)) {
-                Ok(Event::Closed) => open -= 1,
-                Ok(Event::Over(code)) => break Some(code),
-                Ok(Event::Unwritten) => break Some("tool_entry_unavailable"),
-                Err(_) => {}
-            }
-        };
-        if let Some(code) = stopped {
-            stop(&mut child, pid, self.limits.grace);
-            return Err(Failure::Fixed(code));
-        }
-        let status = child.wait().map_err(|error| files::unusable(&error))?;
-        let signal = status.signal().map(|signal| -signal);
-        status
-            .code()
-            .or(signal)
-            .ok_or(Failure::Fixed("scanner_command_unobserved"))
+        let mut command = self.command(argv, how)?;
+        let patience = (how.within, self.limits.grace);
+        pumped(&mut command, how.input, patience, kept, room)
     }
 
     /// Copy every tracked and every unignored file into a new private
