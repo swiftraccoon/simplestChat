@@ -51,7 +51,7 @@ const HEAD: &str = "title = 'Reviewed source fixtures mapped to neutral paths'\n
 /// The room that must stay free beyond the projections.
 const RESERVE: u64 = 64 * 1024 * 1024;
 /// The most bytes of a source manifest.
-const MANIFEST: u64 = 4 * 1024 * 1024;
+pub(crate) const MANIFEST: u64 = 4 * 1024 * 1024;
 
 /// One file as the scanner reads it, bound to the file's own bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]

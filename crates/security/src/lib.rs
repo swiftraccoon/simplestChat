@@ -10,7 +10,8 @@
 //! registries about them and reviews the licences of what a change declares
 //! anew, `actions` reviews the actions a change pins anew, `spdx` judges a
 //! licence expression against an allowlist, `openssl` holds the pinned
-//! OpenSSL to the vendor's newest release, `fast` holds the checks of the
+//! OpenSSL to the vendor's newest release, `semgrep` scans the maintained
+//! sources with the reviewed local rules, `fast` holds the checks of the
 //! fast tier, and `rulesets` reconciles the repository's rulesets on GitHub
 //! with their policy.
 
@@ -29,6 +30,7 @@ pub mod scope;
 #[cfg(test)]
 pub(crate) mod scratch;
 pub mod secrets;
+pub mod semgrep;
 pub mod spdx;
 pub mod tools;
 

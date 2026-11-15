@@ -288,6 +288,9 @@ crates/security/src/rulesets/**
 !crates/security/src/openssl/
 crates/security/src/openssl/**
 !crates/security/src/openssl/*.rs
+!crates/security/src/semgrep/
+crates/security/src/semgrep/**
+!crates/security/src/semgrep/*.rs
 !crates/security/src/spdx/
 crates/security/src/spdx/**
 !crates/security/src/spdx/*.rs
