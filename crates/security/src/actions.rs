@@ -313,10 +313,12 @@ pub fn pins(data: &[u8]) -> Result<BTreeSet<String>> {
     Ok(walked(data)?.pins)
 }
 
-/// What the workflow `data` uses, read as [`pins`] says: the actions it
-/// pins and the local paths it names.
-fn walked(data: &[u8]) -> Result<Walk> {
-    require(data.len() as u64 <= MAX_BYTES, "actions_workflow_size")?;
+/// The stack on which a workflow is read.
+const STACK: usize = 16 * 1024 * 1024;
+
+/// The workflow `data` as its one YAML document, within the bounds that
+/// [`pins`] says.
+fn document(data: &[u8]) -> Option<Walk> {
     let options = serde_saphyr::options! {
         duplicate_keys: DuplicateKeyPolicy::LastWins,
         merge_keys: MergeKeyPolicy::Merge,
@@ -346,7 +348,26 @@ fn walked(data: &[u8]) -> Result<Walk> {
             max_alias_expansions_per_anchor: 1_024,
         },
     };
-    let walk = serde_saphyr::from_slice_with_options::<Walk>(data, options).map_err(|_| YAML)?;
+    serde_saphyr::from_slice_with_options::<Walk>(data, options).ok()
+}
+
+/// What the workflow `data` uses, read as [`pins`] says: the actions it
+/// pins and the local paths it names.
+fn walked(data: &[u8]) -> Result<Walk> {
+    require(data.len() as u64 <= MAX_BYTES, "actions_workflow_size")?;
+    // The reader descends once for every level of nesting, and in a build
+    // that is not optimised its frames are large: 64 levels need most of
+    // the stack a thread gets by default. It reads on a stack of its own,
+    // so that it does not depend on what whoever asks has left.
+    let walk = std::thread::scope(|scope| {
+        let reader = std::thread::Builder::new().stack_size(STACK);
+        reader
+            .spawn_scoped(scope, || document(data))
+            .ok()?
+            .join()
+            .ok()?
+    });
+    let walk = walk.ok_or(YAML)?;
     require(walk.nodes <= MAX_NODES, "actions_workflow_complexity")?;
     match walk.fault {
         Some(fault) => Err(fault),

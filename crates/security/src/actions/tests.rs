@@ -19,6 +19,7 @@ use crate::{
 };
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeSet,
     ffi::OsString,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
@@ -158,6 +159,30 @@ fn text(value: &Value) -> &str {
 
 fn list(value: &Value) -> &[Value] {
     value.as_array().expect("a recorded list")
+}
+
+#[test]
+fn a_workflow_nested_to_its_bound_is_read_whatever_stack_the_caller_has() {
+    // 64 levels need most of a default stack in a build that is not
+    // optimised, and a thread has less of it the more the program links.
+    let nested = |levels: usize| {
+        let mut text = String::new();
+        for level in 0..levels {
+            text.push_str(&"  ".repeat(level));
+            text.push_str("level:\n");
+        }
+        text.push_str(&"  ".repeat(levels));
+        text.push_str("uses: ./local\n");
+        text
+    };
+    let read = |levels: usize| {
+        let text = nested(levels);
+        let small = std::thread::Builder::new().stack_size(256 * 1024);
+        let reading = small.spawn(move || pins(text.as_bytes()).map_err(|fault| fault.0));
+        reading.expect("a thread").join().expect("no overflow")
+    };
+    assert_eq!(read(63), Ok(BTreeSet::new()));
+    assert_eq!(read(64), Err("actions_workflow_yaml"));
 }
 
 #[test]
