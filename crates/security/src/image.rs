@@ -3,6 +3,7 @@
 
 use std::process::ExitCode;
 
+pub mod advisories;
 pub mod archive;
 pub mod license_identity;
 pub mod notices;

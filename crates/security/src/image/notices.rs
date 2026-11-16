@@ -143,34 +143,42 @@ fn unquoted(text: &str) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-/// Whether the package address `purl` is `pkg:` and `path`, with exactly
-/// the qualifiers `expected`, of which there is always one, in any order.
-/// The address is held as it is written: a host, a fragment, a qualifier
-/// twice or without a value make it another address.
-fn addressed(purl: &str, path: &str, expected: &[(&str, String)]) -> bool {
-    let Some(rest) = purl.strip_prefix("pkg:").filter(|_| !purl.contains('#')) else {
-        return false;
-    };
+/// A package address in its parts: what stands between `pkg:` and the
+/// query, as it is written, and the qualifiers of the query in their
+/// order. The address is held as it is written: one with a fragment or
+/// without a query, or with a qualifier that lacks its sign or holds an
+/// escape that is none, has no parts. Every address that is read here
+/// has qualifiers.
+pub(super) fn parted(purl: &str) -> Option<(&str, Vec<(String, String)>)> {
+    let rest = purl.strip_prefix("pkg:").filter(|_| !purl.contains('#'))?;
     let (location, query) = rest.split_once('?').unwrap_or((rest, ""));
     let mut pairs = Vec::new();
     for field in query.split('&') {
-        let pair = field.split_once('=').and_then(|(name, value)| {
-            let spaced = |text: &str| unquoted(&text.replace('+', " "));
-            Some((spaced(name)?, spaced(value)?))
-        });
-        let Some(pair) = pair else { return false };
-        pairs.push(pair);
+        let (name, value) = field.split_once('=')?;
+        let spaced = |text: &str| unquoted(&text.replace('+', " "));
+        pairs.push((spaced(name)?, spaced(value)?));
     }
-    // As many pairs as are expected, and each expected one among them:
-    // none is there twice.
+    Some((location, pairs))
+}
+
+/// Whether `pairs` are exactly the qualifiers `expected`, of which there
+/// is always one, in any order: as many pairs as are expected, and each
+/// expected one among them, so that none is there twice.
+pub(super) fn qualified(pairs: &[(String, String)], expected: &[(&str, String)]) -> bool {
     let held = |(name, value): &(&str, String)| {
         pairs
             .iter()
             .any(|(held, said)| held == name && said == value)
     };
-    unquoted(location).as_deref() == Some(path)
-        && pairs.len() == expected.len()
-        && expected.iter().all(held)
+    pairs.len() == expected.len() && expected.iter().all(held)
+}
+
+/// Whether the package address `purl` names `path`, escapes aside, with
+/// exactly the qualifiers `expected`.
+fn addressed(purl: &str, path: &str, expected: &[(&str, String)]) -> bool {
+    parted(purl).is_some_and(|(location, pairs)| {
+        unquoted(location).as_deref() == Some(path) && qualified(&pairs, expected)
+    })
 }
 
 /// The text field `name` of a package or of its record.
