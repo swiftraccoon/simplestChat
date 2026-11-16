@@ -64,6 +64,15 @@ fn written(value: &Document, hashed: bool, text: &mut String) -> Result<()> {
     Ok(())
 }
 
+/// A value in its one spelling, as it is hashed: sorted names, nothing
+/// between its parts, ASCII only. A number in it that has no one spelling
+/// leaves it without one.
+pub(super) fn spelled(value: &Document) -> Option<String> {
+    let mut text = String::new();
+    written(value, true, &mut text).ok()?;
+    Some(text)
+}
+
 /// The SHA-256 of a value in its one spelling.
 fn hashed(value: &Document) -> Result<String> {
     let mut text = String::new();

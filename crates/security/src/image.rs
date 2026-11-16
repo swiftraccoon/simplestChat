@@ -6,8 +6,10 @@ use std::process::ExitCode;
 pub mod advisories;
 pub mod archive;
 pub mod license_identity;
+pub mod licenses;
 pub mod notices;
 pub mod policy;
+pub mod secrets;
 pub mod spans;
 
 /// Whether `text` is exactly `digits` hexadecimal digits in small letters.
