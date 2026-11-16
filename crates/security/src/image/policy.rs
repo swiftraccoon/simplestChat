@@ -216,7 +216,7 @@ fn built(text: &str) -> Option<Built> {
 /// Text of a query as the reference decodes it: a plus sign is a space,
 /// every `%` and two hexadecimal digits the byte they spell, and what is no
 /// UTF-8 a replacement character.
-fn decoded(text: &str) -> String {
+pub(super) fn decoded(text: &str) -> String {
     let text = text.replace('+', " ");
     let mut bytes = Vec::with_capacity(text.len());
     let mut rest = text.as_bytes();

@@ -7,7 +7,7 @@ use crate::{
     document::Document,
     scratch::{Scratch, base64},
 };
-use std::{io::Read, path::PathBuf};
+use std::{io::Read, os::unix::fs::PermissionsExt, path::PathBuf};
 
 const RECORDING: &[u8] = include_bytes!("recorded_notices.json");
 
@@ -136,6 +136,19 @@ pub(crate) fn built(case: &Document, base: &std::path::Path) -> PathBuf {
             let read = flate2::read::ZlibDecoder::new(&packed[..]).read_to_end(&mut data);
             read.expect("deflated bytes");
             std::fs::write(&target, data).expect("a file");
+        }
+    }
+    // A recorded mode is given last, children before what holds them.
+    for (path, entry) in case
+        .get("tree")
+        .and_then(Document::fields)
+        .expect("a tree")
+        .iter()
+        .rev()
+    {
+        if let Some(mode) = entry.get("mode").and_then(Document::whole) {
+            let mode = std::fs::Permissions::from_mode(u32::try_from(mode).expect("a mode"));
+            std::fs::set_permissions(root.join(path), mode).expect("a mode");
         }
     }
     match text(case, "rootfs") {

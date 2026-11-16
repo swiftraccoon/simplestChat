@@ -214,19 +214,30 @@ impl Document {
     /// items, ASCII only, and no line end.
     pub fn compact(&self) -> String {
         let mut text = String::new();
-        self.press(&mut text);
+        self.press(&mut text, ",", ":");
         text
     }
 
-    fn press(&self, text: &mut String) {
+    /// The document as the reference writes one by default: a comma and a
+    /// space between items, a colon and a space after a name, ASCII only,
+    /// and no line end.
+    pub fn spaced(&self) -> String {
+        let mut text = String::new();
+        self.press(&mut text, ", ", ": ");
+        text
+    }
+
+    /// Write the document with `between` between items and `after` after a
+    /// name.
+    fn press(&self, text: &mut String, between: &str, after: &str) {
         match self {
             Self::List(items) => {
                 text.push('[');
                 for (index, item) in items.iter().enumerate() {
                     if index > 0 {
-                        text.push(',');
+                        text.push_str(between);
                     }
-                    item.press(text);
+                    item.press(text, between, after);
                 }
                 text.push(']');
             }
@@ -234,11 +245,11 @@ impl Document {
                 text.push('{');
                 for (index, (name, value)) in fields.iter().enumerate() {
                     if index > 0 {
-                        text.push(',');
+                        text.push_str(between);
                     }
                     text.push_str(&quoted(name));
-                    text.push(':');
-                    value.press(text);
+                    text.push_str(after);
+                    value.press(text, between, after);
                 }
                 text.push('}');
             }

@@ -30,8 +30,8 @@ fn main() -> ExitCode {
             simplestchat_security::elf::run(rest)
         }
         #[cfg(feature = "image")]
-        (Some(_), Some([group, rest @ ..])) if group == "image" => {
-            simplestchat_security::image::run(rest)
+        (Some(root), Some([group, rest @ ..])) if group == "image" => {
+            simplestchat_security::image::run(&root, rest)
         }
         (Some(root), Some([group, rest @ ..])) if group == "native" => {
             simplestchat_security::native::run(&root, rest)

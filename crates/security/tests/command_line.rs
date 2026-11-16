@@ -649,6 +649,87 @@ fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
 
 #[cfg(feature = "image")]
 #[test]
+fn a_cache_selector_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["image", "cache", "--status"][..],
+        &["image", "cache", "--prefix", "more"],
+        &["image", "cache", "--key"],
+        &["image", "cache", "--status", "a", "b"],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = "usage: simplestchat-security image cache [--prefix | --status FILE]\n";
+        assert_eq!(text(&output.stderr), usage, "{arguments:?}");
+    }
+}
+
+/// The selector of the database cache, run with only the named variables.
+#[cfg(feature = "image")]
+fn selector(arguments: &[&str], variables: &[(&str, &str)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_simplestchat-security"));
+    command.args(arguments).env_clear();
+    for (name, value) in variables {
+        command.env(name, value);
+    }
+    command.output().expect("the executable runs")
+}
+
+#[cfg(feature = "image")]
+#[test]
+fn a_cache_prefix_is_of_the_locked_scanner_and_of_the_trust_of_the_run() {
+    let untrusted = selector(&["image", "cache", "--prefix"], &[]);
+    assert_eq!(untrusted.status.code(), Some(0));
+    let line = text(&untrusted.stdout);
+    let pin = line.strip_prefix("grype-db-v2-untrusted-");
+    let pin = pin
+        .and_then(|rest| rest.strip_suffix("-\n"))
+        .expect("a prefix");
+    let small = |byte: u8| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte);
+    assert!(pin.len() == 64 && pin.bytes().all(small), "{line}");
+    let main = [
+        ("GITHUB_REF", "refs/heads/main"),
+        ("GITHUB_EVENT_NAME", "push"),
+    ];
+    let trusted = selector(&["image", "cache", "--prefix"], &main);
+    assert_eq!(text(&trusted.stdout), format!("grype-db-v2-main-{pin}-\n"));
+    let pull = [
+        ("GITHUB_REF", "refs/heads/main"),
+        ("GITHUB_EVENT_NAME", "pull_request"),
+    ];
+    let proposed = selector(&["image", "cache", "--prefix"], &pull);
+    assert_eq!(text(&proposed.stdout), line);
+}
+
+#[cfg(feature = "image")]
+#[test]
+fn a_cache_key_is_of_the_generation_that_the_update_reported() {
+    let scratch = Scratch::new("cache");
+    let status = scratch.0.join("status.json");
+    let source = format!(
+        "https://grype.anchore.io/databases/v6/db.tar.zst?checksum=sha256%3A{}",
+        "a".repeat(64)
+    );
+    let written = format!("{{\"from\": \"{source}\"}}");
+    std::fs::write(&status, written).expect("a status");
+    let named = status.to_str().expect("a path");
+    let prefix = selector(&["image", "cache", "--prefix"], &[]);
+    let output = selector(&["image", "cache", "--status", named], &[]);
+    assert_eq!(output.status.code(), Some(0));
+    let expected = format!("{}{}\n", text(&prefix.stdout).trim_end(), "a".repeat(64));
+    assert_eq!(text(&output.stdout), expected);
+    let missing = selector(&["image", "cache", "--status", "/nowhere/status.json"], &[]);
+    assert_eq!(missing.status.code(), Some(1));
+    let refused = text(&missing.stderr);
+    assert!(
+        refused.starts_with("Image database cache failed: "),
+        "{refused}"
+    );
+    assert_eq!(text(&missing.stdout), "");
+}
+
+#[cfg(feature = "image")]
+#[test]
 fn an_image_archive_check_that_fails_says_its_code_in_one_line_and_writes_nothing() {
     let scratch = Scratch::new("image");
     let path = |name: &str| scratch.0.join(name).to_str().expect("a path").to_owned();

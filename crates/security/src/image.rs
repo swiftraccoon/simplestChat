@@ -2,11 +2,12 @@
 //! running it and without trusting a path, a link or a size that it names.
 
 use crate::{Fault, elf};
-use std::process::ExitCode;
+use std::{path::Path, process::ExitCode};
 
 pub mod advisories;
 pub mod archive;
 pub mod bindings;
+pub mod cache;
 pub mod enrich;
 pub mod license_identity;
 pub mod licenses;
@@ -56,12 +57,16 @@ pub(crate) fn stopped(stop: elf::Stop, missing: &'static str, unreadable: &'stat
     }
 }
 
-const USAGE: &str =
-    "usage: simplestchat-security image archive --archive FILE --manifest FILE --output DIR";
+const USAGE: &str = "usage: simplestchat-security image archive --archive FILE --manifest FILE \
+    --output DIR | image cache [--prefix | --status FILE]";
 
-/// Run a command of the image tier.
-pub fn run(arguments: &[String]) -> ExitCode {
+/// Run a command of the image tier for the checkout at `root`.
+pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
     let asked = match arguments.split_first() {
+        Some((command, rest)) if command == "cache" => {
+            let ambient = |name: &str| std::env::var_os(name);
+            return cache::run(root, rest, &ambient);
+        }
         Some((command, rest)) if command == "archive" => archive::asked(rest),
         _ => None,
     };

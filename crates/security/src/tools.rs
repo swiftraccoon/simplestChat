@@ -13,7 +13,7 @@ mod archive;
 mod cli;
 mod install;
 mod lock;
-mod transport;
+pub(crate) mod transport;
 
 #[cfg(test)]
 mod tests;
