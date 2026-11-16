@@ -393,7 +393,10 @@ pub fn bind_archive(
 
 /// What the engine says of the image `image_id` that was selected, once it
 /// is the one the archive in `tree` holds: the same identity and
-/// configuration, the same layers in their order, for `platform`.
+/// configuration, the same layers in their order, for `platform`. The
+/// format quotes the identity itself, which is only digits, letters and a
+/// colon: Podman answers the field to a template but cannot hand it to
+/// `json`, and Docker answers it the same either way.
 pub fn selected_image(
     sandbox: &mut Sandbox,
     image_id: &str,
@@ -402,7 +405,7 @@ pub fn selected_image(
     limits: &Limits,
 ) -> Result<Document> {
     let format = [
-        r#"{"id":{{json .Id}},"layers":{{json .RootFS.Layers}},"#,
+        r#"{"id":"{{.Id}}","layers":{{json .RootFS.Layers}},"#,
         r#""architecture":{{json .Architecture}}}"#,
     ]
     .concat();

@@ -958,7 +958,7 @@ const UNREAD_SELECTIONS: [(&str, &str); 9] = [
 
 #[test]
 fn selections_match_the_recording() {
-    let mut all = Vec::new();
+    let (mut all, mut quoted) = (Vec::new(), 0);
     for case in cases("selections") {
         let name = text(&case, "name").to_owned();
         let scratch = Scratch::new("selection");
@@ -989,13 +989,24 @@ fn selections_match_the_recording() {
             .unwrap_or_else(PoisonError::into_inner)
             .calls
             .clone();
-        assert_eq!(Some(&Document::List(calls)), case.get("calls"), "{name}");
+        // The format quotes the identity itself, where the reference asked
+        // json to: Podman answers the field but cannot hand it to json.
+        let recorded = case.get("calls").map(Document::compact).unwrap_or_default();
+        let portable = recorded.replace(
+            r#"{\"id\":{{json .Id}},\"layers\":"#,
+            r#"{\"id\":\"{{.Id}}\",\"layers\":"#,
+        );
+        quoted += usize::from(portable != recorded);
+        let expected = Document::read(portable.as_bytes()).expect("calls");
+        assert_eq!(Document::List(calls), expected, "{name}");
         all.push((name, here(came), there(&case)));
     }
     assert_eq!(
         tallied(all, &[(&UNREAD_SELECTIONS, There::Raised)]),
         [4, 6, 9, 0, 0]
     );
+    // Every selection asks the engine, in the format as it is here.
+    assert_eq!(quoted, 19);
 }
 
 /// Native evidence that the reference failed on in its interpreter's words:
