@@ -2,7 +2,7 @@
 
 use super::{
     execute,
-    plan::{Context, Operation},
+    plan::{Context, Operation, SELECTOR},
 };
 use crate::{
     command::{Command, Program},
@@ -10,12 +10,20 @@ use crate::{
 };
 use simplestchat_toolkit::tooling::{Environment, Failure, Result};
 use std::{
+    ffi::OsString,
     fs,
     os::unix::fs::{PermissionsExt, symlink},
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
 };
+
+/// The selector's command line, with `rest` after it.
+fn selector(rest: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    let mut argv: Vec<OsString> = SELECTOR.iter().map(OsString::from).collect();
+    argv.extend(rest);
+    argv
+}
 
 #[path = "native_tests.rs"]
 mod native;
@@ -95,8 +103,8 @@ impl Fake {
 }
 impl Executor for Fake {
     async fn run(&mut self, command: Command) -> Result<Vec<u8>> {
-        assert_eq!(command.program, Program::Python);
-        assert_eq!(command.timeout, Duration::from_secs(30));
+        assert_eq!(command.program, Program::Cargo);
+        assert_eq!(command.timeout, Duration::from_secs(600));
         assert_eq!(command.grace, Duration::from_secs(5));
         assert_eq!(command.capture, Some(4096));
         assert!(!command.cleanup);
@@ -125,40 +133,33 @@ impl Executor for Fake {
 fn reference_arguments_and_status_paths_are_fixed_beneath_runner_temp() {
     let fixture = Fixture::new();
     for (operation, expected) in [
-        (
-            None,
-            vec!["build/security_image_cache.py".into(), "--prefix".into()],
-        ),
-        (
-            Some(Operation::Hint),
-            vec!["build/security_image_cache.py".into()],
-        ),
+        (None, selector(["--prefix".into()])),
+        (Some(Operation::Hint), selector([])),
         (
             Some(Operation::Preparation),
-            vec![
-                "build/security_image_cache.py".into(),
+            selector([
                 "--status".into(),
                 fixture
                     .root
                     .join("runner temp/image-database-preparation/database-status.json")
                     .into_os_string(),
-            ],
+            ]),
         ),
         (
             Some(Operation::Production),
-            vec![
-                "build/security_image_cache.py".into(),
+            selector([
                 "--status".into(),
                 fixture
                     .root
                     .join("runner temp/production-security/image/database-status.json")
                     .into_os_string(),
-            ],
+            ]),
         ),
     ] {
         let command = fixture.context.reference(operation);
         assert_eq!(command.arguments, expected);
-        assert_eq!(command.program, Program::Python);
+        assert_eq!(command.program, Program::Cargo);
+        assert_eq!(command.timeout, Duration::from_secs(600));
         assert_eq!(command.capture, Some(4096));
     }
 }
@@ -287,10 +288,7 @@ async fn hint_and_both_status_operations_append_only_their_fixed_records() {
         };
         assert_eq!(fixture.bytes(), expected.as_bytes());
         assert_eq!(fake.commands.len(), 2);
-        assert_eq!(
-            fake.commands[0].arguments,
-            ["build/security_image_cache.py", "--prefix"]
-        );
+        assert_eq!(fake.commands[0].arguments, selector(["--prefix".into()]));
         assert_eq!(
             fake.commands[1].arguments,
             fixture.context.reference(Some(operation)).arguments

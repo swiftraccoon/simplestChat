@@ -6,12 +6,13 @@ use crate::{browser_suite::process::Signals, process::Native};
 fn executable(fixture: &mut Fixture, mode: &str) {
     let bin = fixture.root.join("fake commands");
     fs::create_dir(&bin).unwrap();
-    let path = bin.join("python3");
+    let path = bin.join("cargo");
     fs::write(&path, r#"#!/usr/bin/python3
 import json,os,signal,sys,time
 from pathlib import Path
 root=Path(os.environ['FIXTURE_ROOT']);args=sys.argv[1:];mode=os.environ['FIXTURE_MODE']
-assert args[0]=='build/security_image_cache.py'
+assert args[:8]==['run','--locked','-q','-p','simplestchat-security','--','image','cache']
+args=['selector',*args[8:]]
 stage='prefix' if args[1:]==['--prefix'] else 'hint' if len(args)==1 else 'status'
 with (root/'events').open('a') as out:out.write(json.dumps(args)+'\n')
 if mode==stage+'-hang':

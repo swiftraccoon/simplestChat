@@ -1,0 +1,718 @@
+{
+ "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "cases": [
+  {
+   "name": "a scan of a named export with prepared scanners",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [
+    0
+   ],
+   "installed": true,
+   "code": 0,
+   "said": "Security image: passed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": true,
+    "failure": null,
+    "checks": [
+     {
+      "name": "image-security",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "docker",
+      "--tools-directory",
+      "<base>/tools"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-security.stderr",
+    "01-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "a scan whose gate fails",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [
+    1
+   ],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "scanner_command_failed_image-security",
+    "checks": [
+     {
+      "name": "image-security",
+      "exitStatus": 1,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "docker",
+      "--tools-directory",
+      "<base>/tools"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-security.stderr",
+    "01-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "a scan with a database cache",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": true,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/tools",
+    "--image-database-cache",
+    "<base>/cache"
+   ],
+   "statuses": [
+    0
+   ],
+   "installed": true,
+   "code": 0,
+   "said": "Security image: passed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": true,
+    "failure": null,
+    "checks": [
+     {
+      "name": "image-security",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "docker",
+      "--tools-directory",
+      "<base>/tools",
+      "--database-cache",
+      "<base>/cache"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-security.stderr",
+    "01-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "a scan on podman",
+   "artifact": true,
+   "engine": "podman",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--engine",
+    "podman",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [
+    0
+   ],
+   "installed": true,
+   "code": 0,
+   "said": "Security image: passed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": true,
+    "failure": null,
+    "checks": [
+     {
+      "name": "image-security",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "podman",
+      "--tools-directory",
+      "<base>/tools"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-security.stderr",
+    "01-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "an export with docker",
+   "artifact": false,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [
+    0,
+    0
+   ],
+   "installed": true,
+   "code": 0,
+   "said": "Security image: passed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": true,
+    "failure": null,
+    "checks": [
+     {
+      "name": "image-export",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     },
+     {
+      "name": "image-security",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/build-release.py",
+      "--image-id",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--output",
+      "<base>/evidence/export"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    },
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/evidence/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "docker",
+      "--tools-directory",
+      "<base>/tools"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-export.stderr",
+    "01-image-export.stdout",
+    "02-image-security.stderr",
+    "02-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "an export that fails",
+   "artifact": false,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [
+    1
+   ],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "scanner_command_failed_image-export",
+    "checks": [
+     {
+      "name": "image-export",
+      "exitStatus": 1,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/build-release.py",
+      "--image-id",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--output",
+      "<base>/evidence/export"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [],
+   "names": [
+    "01-image-export.stderr",
+    "01-image-export.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "an export on podman",
+   "artifact": false,
+   "engine": "podman",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--engine",
+    "podman",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "canonical_release_export_requires_docker",
+    "checks": []
+   },
+   "commands": [],
+   "installs": [],
+   "names": [
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "prepared scanners that are not there",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "missing",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/missing"
+   ],
+   "statuses": [],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "invalid_prepared_image_tools",
+    "checks": []
+   },
+   "commands": [],
+   "installs": [],
+   "names": [
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "prepared scanners through a link",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "link",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/link"
+   ],
+   "statuses": [],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "invalid_prepared_image_tools",
+    "checks": []
+   },
+   "commands": [],
+   "installs": [],
+   "names": [
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "prepared scanners named from nowhere",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "relative",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "relative-tools"
+   ],
+   "statuses": [],
+   "installed": true,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "invalid_prepared_image_tools",
+    "checks": []
+   },
+   "commands": [],
+   "installs": [],
+   "names": [
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "scanners installed into the evidence",
+   "artifact": true,
+   "engine": "docker",
+   "tools": null,
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export"
+   ],
+   "statuses": [
+    0
+   ],
+   "installed": true,
+   "code": 0,
+   "said": "Security image: passed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": true,
+    "failure": null,
+    "checks": [
+     {
+      "name": "image-security",
+      "exitStatus": 0,
+      "elapsedSeconds": "<elapsed>"
+     }
+    ]
+   },
+   "commands": [
+    {
+     "argv": [
+      "<python>",
+      "build/security_image.py",
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--artifact-dir",
+      "<base>/export",
+      "--output",
+      "<base>/evidence/image",
+      "--engine",
+      "docker",
+      "--tools-directory",
+      "<base>/evidence/image-tools"
+     ],
+     "cwd": "<root>",
+     "timeout": 1800
+    }
+   ],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/evidence/image-tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "01-image-security.stderr",
+    "01-image-security.stdout",
+    "home",
+    "summary.json"
+   ]
+  },
+  {
+   "name": "an installation that fails",
+   "artifact": true,
+   "engine": "docker",
+   "tools": "prepared",
+   "cache": false,
+   "argv": [
+    "image",
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<base>/evidence",
+    "--artifact-dir",
+    "<base>/export",
+    "--image-tools",
+    "<base>/tools"
+   ],
+   "statuses": [],
+   "installed": false,
+   "code": 1,
+   "said": "Security image: failed; evidence: <base>/evidence\n",
+   "summary": {
+    "schemaVersion": 1,
+    "tier": "image",
+    "deepCheck": null,
+    "includeVendor": false,
+    "passed": false,
+    "failure": "tool_executable_digest",
+    "checks": []
+   },
+   "commands": [],
+   "installs": [
+    {
+     "names": [
+      "syft",
+      "grype",
+      "gitleaks"
+     ],
+     "directory": "<base>/tools",
+     "platform": "linux-x86_64"
+    }
+   ],
+   "names": [
+    "home",
+    "summary.json"
+   ]
+  }
+ ]
+}

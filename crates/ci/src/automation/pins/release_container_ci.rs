@@ -309,7 +309,7 @@ fn push_export_never_rebuilds_and_publication_waits_for_required_checks() {
     let image_check = deployment.step(scan);
     assert!(lacks(image_check, &["if", "continue-on-error"]));
     for text in [
-        "build/check-security.sh image \"${PRODUCTION_IMAGE}\"",
+        "cargo run --locked -q -p simplestchat-security -- image check \"${PRODUCTION_IMAGE}\"",
         "--artifact-dir \"${RUNNER_TEMP}/simplestchat-release\"",
         "--image-tools \"${RUNNER_TEMP}/release-checks/tools\"",
     ] {

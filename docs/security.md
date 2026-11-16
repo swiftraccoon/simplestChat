@@ -28,11 +28,10 @@ advisory databases. Installation and database failures fail the check.
 cargo run --locked -q -p simplestchat-security -- fast
 cargo run --locked -q -p simplestchat-security -- fast --base FULL_ANCESTOR_COMMIT_SHA
 cargo run --locked -q -p simplestchat-security -- deep
-build/check-security.sh image sha256:FULL_IMAGE_ID
+cargo run --locked -q -p simplestchat-security -- image check sha256:FULL_IMAGE_ID
 ```
 
-The image tier keeps its shell entry point. Every invocation writes its evidence
-into a new private directory, `--output DIR` or one below the ignored `results/`,
+Every invocation writes its evidence into a new private directory, `--output DIR` or one below the ignored `results/`,
 and prints where it is; `summary.json` there holds only the names of the checks,
 how they ended and how long they took.
 

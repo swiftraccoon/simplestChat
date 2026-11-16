@@ -7,7 +7,7 @@
 //! summary's text and what was left. For the summaries it replaced the
 //! tiers by one that records the given checks and ends as told.
 
-use super::{Host, NATIVE, Request, announced, deep, gate, parse, ruled, summary};
+use super::{Host, NATIVE, Request, announced, deep, gate, parse, ruled, summarized};
 use crate::{
     Fault, Result,
     context::{Context, Failure, Limits, Note, Outcome},
@@ -226,7 +226,7 @@ fn summaries_are_written_as_the_reference_wrote_them() {
             .map(note)
             .collect();
         let failure = case["failure"].as_str();
-        let written = summary(&request, failure, &checks);
+        let written = summarized(&request.kind(), failure, &checks);
         let recorded = text(&case["summary"]);
         let alike = |text: &str| serde_json::from_str::<Value>(text).expect("a summary");
         assert_eq!(alike(&written), alike(recorded), "{name}");
@@ -471,7 +471,7 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         let failure = judged.err().map(|failure| failure.to_string());
         let recorded = case["summary"]["failure"].as_str();
         assert_eq!(i64::from(failure.is_some()), case["status"], "{name}");
-        let written = summary(&request, failure.as_deref(), context.checks());
+        let written = summarized(&request.kind(), failure.as_deref(), context.checks());
         let mut written: Value = serde_json::from_str(&written).expect("a summary");
         for check in written["checks"].as_array_mut().expect("checks") {
             check

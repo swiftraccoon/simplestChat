@@ -300,7 +300,7 @@ and a successful `outcome.json` bound to the selected image ID:
 cargo run --locked -q -p simplestchat-security -- tools install \
   --tools syft grype gitleaks --platform linux-x86_64 \
   --directory /private/new-image-tools
-python3 build/security_image.py sha256:FULL_IMAGE_ID \
+cargo run --locked -q -p simplestchat-security -- image scan sha256:FULL_IMAGE_ID \
   --artifact-dir /private/canonical-release \
   --tools-directory /private/new-image-tools \
   --output /private/new-image-security

@@ -310,7 +310,7 @@ fn database_preparation_overlaps_the_image_job_without_sharing_its_engine() {
     let prepare = first(preparation, |step| step["id"] == "prepared-image-database");
     assert!(lacks(prepare, &["if"]));
     for text in [
-        "python3 build/security_image.py prepare-database",
+        "cargo run --locked -q -p simplestchat-security -- image prepare-database",
         "--tools-directory \"${RUNNER_TEMP}/image-database-preparation/tools\"",
     ] {
         assert!(run(prepare).contains(text), "{text}");

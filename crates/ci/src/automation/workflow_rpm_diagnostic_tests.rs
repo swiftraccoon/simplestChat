@@ -31,7 +31,7 @@ const ENCRYPT_COMMAND: &str = concat!(
     "  --output \"${RUNNER_TEMP}/encrypted-rpm-diagnostic\"\n",
 );
 const SCAN_COMMAND: &str = concat!(
-    "build/check-security.sh image \"${PRODUCTION_IMAGE}\" \\\n",
+    "cargo run --locked -q -p simplestchat-security -- image check \"${PRODUCTION_IMAGE}\" \\\n",
     "  --artifact-dir \"${RUNNER_TEMP}/simplestchat-release\" \\\n",
     "  --image-tools \"${RUNNER_TEMP}/release-checks/tools\" \\\n",
     "  --image-database-cache \"${RUNNER_TEMP}/image-database-cache\" \\\n",

@@ -34,7 +34,7 @@ const GIT: Duration = Duration::from_secs(15);
 /// The most bytes git may complain in.
 const GIT_COMPLAINTS: u64 = 65_536;
 /// Where the scanners' default installations are, below the checkout.
-const TOOL_CACHE: &str = ".cache/security-tools";
+pub(crate) const TOOL_CACHE: &str = ".cache/security-tools";
 
 /// What a command printed, once it ended with the status 0 within its
 /// bounds: `arguments` begin with the program.

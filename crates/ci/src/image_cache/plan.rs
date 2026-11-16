@@ -6,7 +6,25 @@ use crate::{
     runner,
 };
 use simplestchat_toolkit::tooling::{Environment, Failure, Result};
-use std::path::{Component, Path, PathBuf};
+use std::{
+    path::{Component, Path, PathBuf},
+    time::Duration,
+};
+
+/// The security gate's own selector of the database cache, built and run
+/// from this checkout.
+pub(super) const SELECTOR: [&str; 8] = [
+    "run",
+    "--locked",
+    "-q",
+    "-p",
+    "simplestchat-security",
+    "--",
+    "image",
+    "cache",
+];
+/// How long building the selector and answering may take.
+pub(super) const BUILT: Duration = Duration::from_secs(600);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Operation {
@@ -92,7 +110,8 @@ impl Context {
         }))
     }
     pub(super) fn reference(&self, operation: Option<Operation>) -> Command {
-        let mut command = Command::capture(Program::Python, &["build/security_image_cache.py"]);
+        let mut command = Command::capture(Program::Cargo, &SELECTOR);
+        command.timeout = BUILT;
         command.capture = Some(4096);
         match operation {
             None => command.arguments.push("--prefix".into()),

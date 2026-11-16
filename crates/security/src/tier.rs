@@ -69,6 +69,20 @@ impl Request {
     const fn tier(&self) -> &'static str {
         if self.deep { "deep" } else { "fast" }
     }
+
+    /// What the summary says of the tier asked for.
+    fn kind(&self) -> Kind<'static> {
+        let deep_check = if self.deep {
+            self.check.into()
+        } else {
+            Value::Null
+        };
+        Kind {
+            tier: self.tier(),
+            deep_check,
+            include_vendor: self.include_vendor,
+        }
+    }
 }
 
 /// The request for `tier`, or nothing for a command line that is none: an
@@ -518,20 +532,27 @@ fn checked(context: &mut Context, request: &Request, host: &dyn Host) -> Outcome
     Ok(())
 }
 
-/// The summary of an invocation as the reference writes it: the fields in
-/// their fixed order, every check with its fields in the order they were
+/// What a summary says of the tier it is of, besides how it ended.
+#[derive(Clone, Debug)]
+pub(crate) struct Kind<'a> {
+    /// The tier's name.
+    pub(crate) tier: &'a str,
+    /// The deep tier's own checks, or nothing.
+    pub(crate) deep_check: Value,
+    /// Whether the vendored tree was scanned as well.
+    pub(crate) include_vendor: bool,
+}
+
+/// The summary of an invocation of the tier `kind` that ended in `failure`
+/// or none, with `checks`, as the reference writes it: the fields in their
+/// fixed order, every check with its fields in the order they were
 /// recorded, two spaces a level and ASCII only.
-fn summary(request: &Request, failure: Option<&str>, checks: &[Note]) -> String {
-    let check = if request.deep {
-        request.check.into()
-    } else {
-        Value::Null
-    };
+pub(crate) fn summarized(kind: &Kind<'_>, failure: Option<&str>, checks: &[Note]) -> String {
     let fields: [(&str, Value); 6] = [
         ("schemaVersion", 1.into()),
-        ("tier", request.tier().into()),
-        ("deepCheck", check),
-        ("includeVendor", request.include_vendor.into()),
+        ("tier", kind.tier.into()),
+        ("deepCheck", kind.deep_check.clone()),
+        ("includeVendor", kind.include_vendor.into()),
         ("passed", failure.is_none().into()),
         ("failure", failure.into()),
     ];
@@ -593,8 +614,27 @@ fn fresh(results: &Path, tier: &str) -> Result<PathBuf> {
 /// from nowhere, or one below `results`. However the tier ends, the summary
 /// is written. An invocation that cannot have its evidence has no summary.
 pub fn gate(root: &Path, request: &Request, host: &dyn Host) -> Outcome<(bool, PathBuf)> {
+    let ambient = |name: &str| host.ambient(name);
+    let named = request.output.as_deref();
+    evidenced(root, &request.kind(), named, &ambient, |context| {
+        checked(context, request, host)
+    })
+}
+
+/// Do `work` as an invocation of the tier `kind` over the sources below
+/// `root`, and answer whether it passed and where its evidence is: the new
+/// private directory `named`, from `root` when it is named from nowhere, or
+/// one below `results`. However the work ends, the summary is written; an
+/// invocation that cannot have its evidence has no summary.
+pub(crate) fn evidenced(
+    root: &Path,
+    kind: &Kind<'_>,
+    named: Option<&Path>,
+    ambient: &dyn Fn(&str) -> Option<OsString>,
+    work: impl FnOnce(&mut Context) -> Outcome<()>,
+) -> Outcome<(bool, PathBuf)> {
     let unusable = |error: std::io::Error| files::unusable(&error);
-    let output = match &request.output {
+    let output = match named {
         Some(named) => {
             let named = root.join(named);
             DirBuilder::new()
@@ -603,22 +643,27 @@ pub fn gate(root: &Path, request: &Request, host: &dyn Host) -> Outcome<(bool, P
                 .map_err(unusable)?;
             named
         }
-        None => fresh(&root.join("results"), request.tier())?,
+        None => fresh(&root.join("results"), kind.tier)?,
     };
     let output = output.canonicalize().map_err(unusable)?;
-    let ambient = |name: &str| host.ambient(name);
-    let mut context = Context::new(root, &output, Limits::REVIEWED, &ambient)?;
-    let outcome = checked(&mut context, request, host);
+    let mut context = Context::new(root, &output, Limits::REVIEWED, ambient)?;
+    let outcome = work(&mut context);
     let failure = outcome.as_ref().err().map(ToString::to_string);
-    let text = summary(request, failure.as_deref(), context.checks());
+    let text = summarized(kind, failure.as_deref(), context.checks());
     files::write_private(&output.join("summary.json"), text.as_bytes(), 0o600)?;
     Ok((outcome.is_ok(), output))
 }
 
 /// The line that says how an invocation ended and where its evidence is.
 fn announced(request: &Request, passed: bool, output: &Path) -> Vec<u8> {
+    proclaimed(request.tier(), passed, output)
+}
+
+/// The line that says how an invocation of `tier` ended and where its
+/// evidence is.
+pub(crate) fn proclaimed(tier: &str, passed: bool, output: &Path) -> Vec<u8> {
     let verdict = if passed { "passed" } else { "failed" };
-    let mut line = format!("Security {}: {verdict}; evidence: ", request.tier()).into_bytes();
+    let mut line = format!("Security {tier}: {verdict}; evidence: ").into_bytes();
     line.extend_from_slice(output.as_os_str().as_bytes());
     line.push(b'\n');
     line

@@ -711,6 +711,25 @@ fn an_image_scan_or_preparation_that_is_not_asked_for_properly_is_told_the_usage
 
 #[cfg(feature = "image")]
 #[test]
+fn an_image_tier_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["image", "check"][..],
+        &["image", "check", "--output", "o"],
+        &["image", "check", "sha256:a", "sha256:b"],
+        &["image", "check", "sha256:a", "--engine", "rkt"],
+        &["image", "check", "sha256:a", "--image-tools"],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        let expected = "usage: simplestchat-security image check IMAGE [--output DIR] ";
+        assert!(usage.starts_with(expected), "{usage}");
+    }
+}
+
+#[cfg(feature = "image")]
+#[test]
 fn a_cache_selector_that_is_not_asked_for_properly_is_told_the_usage() {
     for arguments in [
         &["image", "cache", "--status"][..],

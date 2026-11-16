@@ -956,7 +956,7 @@ jobs:
         id: prepared-image-database
         timeout-minutes: 20
         run: |
-          python3 build/security_image.py prepare-database \
+          cargo run --locked -q -p simplestchat-security -- image prepare-database \
             --output "${RUNNER_TEMP}/image-database-preparation" \
             --tools-directory "${RUNNER_TEMP}/image-database-preparation/tools" \
             --database-cache "${RUNNER_TEMP}/image-database-cache"
@@ -1195,7 +1195,7 @@ jobs:
         id: scanned-image-database
         timeout-minutes: 25
         run: |
-          build/check-security.sh image "${PRODUCTION_IMAGE}" \
+          cargo run --locked -q -p simplestchat-security -- image check "${PRODUCTION_IMAGE}" \
             --artifact-dir "${RUNNER_TEMP}/simplestchat-release" \
             --image-tools "${RUNNER_TEMP}/release-checks/tools" \
             --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
