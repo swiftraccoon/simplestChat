@@ -8,12 +8,16 @@ pub mod advisories;
 pub mod archive;
 pub mod bindings;
 pub mod cache;
+pub mod diagnostic;
 pub mod enrich;
 pub mod license_identity;
 pub mod licenses;
 pub mod notices;
+pub mod outputs;
 pub mod policy;
+pub mod runner;
 pub mod runtime;
+pub mod sandbox;
 pub mod secrets;
 pub mod spans;
 

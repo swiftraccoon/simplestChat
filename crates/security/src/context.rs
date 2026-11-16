@@ -284,6 +284,41 @@ pub(crate) fn heard(
     Ok((status, printed, complained.try_iter().flatten().collect()))
 }
 
+/// Run `command` as [`ended`] runs one, and answer its exit status or why
+/// it was stopped.
+fn pumped<W: Write + Send + 'static>(
+    command: &mut Command,
+    input: &[u8],
+    patience: (Duration, Duration),
+    kept: (W, W),
+    room: (u64, u64),
+    healthy: &mut dyn FnMut() -> bool,
+) -> Outcome<i32> {
+    ended(command, input, patience, kept, room, healthy).outcome
+}
+
+/// How a command that was stopped ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stopped {
+    /// Its exit status once it was reaped; a signal's is its negative number.
+    pub status: Option<i32>,
+    /// Whether its leader was still there when its grace was over.
+    pub forced: bool,
+    /// Whether its group refused a signal.
+    pub denied: bool,
+}
+
+/// What became of a command that [`ended`] ran.
+#[derive(Debug)]
+pub struct Ended {
+    /// The number of its leader, once it was started.
+    pub pid: Option<u32>,
+    /// Its exit status, or why it was stopped.
+    pub outcome: Outcome<i32>,
+    /// How it ended when it was stopped.
+    pub stopped: Option<Stopped>,
+}
+
 /// Run `command` to its end, or stop it at its deadline or when a stream
 /// says more than its `room`. A command is over when both streams are closed
 /// and its leader has exited, so one that leaves a descendant holding a
@@ -293,21 +328,32 @@ pub(crate) fn heard(
 /// It is also stopped, as lost, when `healthy` says that what it needs is
 /// gone: that is asked while it runs, whether or not it prints, and once
 /// more when it has ended.
-fn pumped<W: Write + Send + 'static>(
+pub fn ended<W: Write + Send + 'static>(
     command: &mut Command,
     input: &[u8],
     patience: (Duration, Duration),
     kept: (W, W),
     room: (u64, u64),
     healthy: &mut dyn FnMut() -> bool,
-) -> Outcome<i32> {
-    let mut child = command
+) -> Ended {
+    let spawned = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0)
-        .spawn()
-        .map_err(|error| files::unusable(&error))?;
+        .spawn();
+    let mut child = match spawned {
+        Ok(child) => child,
+        Err(error) => {
+            let outcome = Err(files::unusable(&error).into());
+            return Ended {
+                pid: None,
+                outcome,
+                stopped: None,
+            };
+        }
+    };
+    let number = Some(child.id());
     let pid = Pid::from_child(&child);
     let (sender, events) = mpsc::channel();
     let mut open = 0;
@@ -350,15 +396,27 @@ fn pumped<W: Write + Send + 'static>(
         }
     };
     if let Some(code) = stopped {
-        stop(&mut child, pid, patience.1);
-        return Err(Failure::Fixed(code));
+        return Ended {
+            pid: number,
+            outcome: Err(Failure::Fixed(code)),
+            stopped: Some(stop(&mut child, pid, patience.1)),
+        };
     }
-    let status = child.wait().map_err(|error| files::unusable(&error))?;
+    let outcome = match child.wait() {
+        Ok(status) => answered(status).ok_or(Failure::Fixed("scanner_command_unobserved")),
+        Err(error) => Err(files::unusable(&error).into()),
+    };
+    Ended {
+        pid: number,
+        outcome,
+        stopped: None,
+    }
+}
+
+/// The exit status a command ended with; a signal's is its negative number.
+fn answered(status: std::process::ExitStatus) -> Option<i32> {
     let signal = status.signal().map(|signal| -signal);
-    status
-        .code()
-        .or(signal)
-        .ok_or(Failure::Fixed("scanner_command_unobserved"))
+    status.code().or(signal)
 }
 
 /// A check that has begun: where what it prints is kept, the files of its
@@ -444,17 +502,37 @@ fn exited(pid: Pid) -> bool {
 }
 
 /// End the group: ask it to, give the leader `grace`, kill whatever is left
-/// (a descendant may have ignored the request), then reap the leader.
-fn stop(child: &mut Child, pid: Pid, grace: Duration) {
-    let _ = kill_process_group(pid, Signal::TERM);
+/// (a descendant may have ignored the request), then reap the leader. A
+/// group that is gone has nothing left to refuse a signal; one that is
+/// still there and refuses it might outlive its command. A Mac refuses to
+/// signal a group whose members have all exited, so a refusal there is
+/// taken for that.
+fn stop(child: &mut Child, pid: Pid, grace: Duration) -> Stopped {
+    let mac = cfg!(target_os = "macos");
+    let refused = |sent: rustix::io::Result<()>| !mac && sent == Err(rustix::io::Errno::PERM);
+    let mut denied = refused(kill_process_group(pid, Signal::TERM));
     let asked = Instant::now();
     while !exited(pid) && asked.elapsed() < grace {
         std::thread::sleep(Duration::from_millis(10));
     }
-    let _ = kill_process_group(pid, Signal::KILL);
+    let forced = !exited(pid);
+    denied |= refused(kill_process_group(pid, Signal::KILL));
     let killed = Instant::now();
-    while matches!(child.try_wait(), Ok(None)) && killed.elapsed() < REAP {
-        std::thread::sleep(Duration::from_millis(10));
+    let mut status = None;
+    while killed.elapsed() < REAP {
+        match child.try_wait() {
+            Ok(Some(reaped)) => {
+                status = answered(reaped);
+                break;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => break,
+        }
+    }
+    Stopped {
+        status,
+        forced,
+        denied,
     }
 }
 

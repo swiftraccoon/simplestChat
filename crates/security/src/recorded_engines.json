@@ -1,0 +1,2298 @@
+{
+ "engines": [
+  {
+   "name": "docker through the host's socket",
+   "engine": "docker",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [
+    "/var/run/docker.sock"
+   ],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "held": [
+     "/usr/local/bin/docker",
+     "--host",
+     "unix:///var/run/docker.sock"
+    ]
+   }
+  },
+  {
+   "name": "docker through the socket of its desktop",
+   "engine": "docker",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [
+    "/home/fixture/.docker/run/docker.sock"
+   ],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "held": [
+     "/usr/local/bin/docker",
+     "--host",
+     "unix:///home/fixture/.docker/run/docker.sock"
+    ]
+   }
+  },
+  {
+   "name": "docker through the host's socket before its desktop's",
+   "engine": "docker",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [
+    "/var/run/docker.sock",
+    "/home/fixture/.docker/run/docker.sock"
+   ],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "held": [
+     "/usr/local/bin/docker",
+     "--host",
+     "unix:///var/run/docker.sock"
+    ]
+   }
+  },
+  {
+   "name": "docker without a socket",
+   "engine": "docker",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "refused": "local_docker_socket_missing"
+   }
+  },
+  {
+   "name": "docker that is not installed",
+   "engine": "docker",
+   "located": {},
+   "home": "/home/fixture",
+   "present": [
+    "/var/run/docker.sock"
+   ],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "refused": "engine_missing"
+   }
+  },
+  {
+   "name": "podman on linux",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--remote=false"
+    ]
+   }
+  },
+  {
+   "name": "podman that is not installed",
+   "engine": "podman",
+   "located": {},
+   "home": "/home/fixture",
+   "present": [],
+   "mac": false,
+   "listed": null,
+   "failing": false,
+   "asked": [],
+   "result": {
+    "refused": "engine_missing"
+   }
+  },
+  {
+   "name": "podman in its machine",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1:52123/run/user/501/podman/podman.sock",
+     "Default": true
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman in its machine beside other connections",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "remote",
+     "URI": "ssh://core@10.0.0.1/run"
+    },
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1:52123/run/user/501/podman/podman.sock",
+     "Default": true
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is missing",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "remote",
+     "URI": "ssh://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "local_podman_machine_missing"
+   }
+  },
+  {
+   "name": "podman with no connection",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "local_podman_machine_missing"
+   }
+  },
+  {
+   "name": "podman with its machine twice",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1:52123/run/user/501/podman/podman.sock",
+     "Default": true
+    },
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1:52123/run/user/501/podman/podman.sock",
+     "Default": true
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "local_podman_machine_missing"
+   }
+  },
+  {
+   "name": "podman whose connections are no list",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": {
+    "Name": "podman-machine-default"
+   },
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON array"
+   }
+  },
+  {
+   "name": "podman whose connections hold no record",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1:52123/run/user/501/podman/podman.sock",
+     "Default": true
+    },
+    5
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON object"
+   }
+  },
+  {
+   "name": "podman whose connections are no JSON",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": "[",
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "JSONDecodeError",
+    "said": "Expecting value"
+   }
+  },
+  {
+   "name": "podman whose listing fails",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": null,
+   "failing": true,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "command_failed"
+   }
+  },
+  {
+   "name": "podman whose machine has no address",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "KeyError",
+    "said": "'URI'"
+   }
+  },
+  {
+   "name": "podman whose machine's address is no text",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": 5
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Expected a JSON string"
+   }
+  },
+  {
+   "name": "podman whose machine is at localhost",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@localhost:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at localhost in capitals",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@LOCALHOST:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is in a scheme of capitals",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "SSH://core@127.0.0.1:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at the IPv6 loopback",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at the IPv6 loopback without a port",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at another IPv6 address",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::2]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at a scoped IPv6 address",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[fe80::1%en0]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at an IPv4 address in brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[127.0.0.1]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is at an unclosed bracket",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Invalid IPv6 URL"
+   }
+  },
+  {
+   "name": "podman whose machine is at a bracket that is not opened",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@::1]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Invalid IPv6 URL"
+   }
+  },
+  {
+   "name": "podman whose machine is with text before its bracket",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@x[::1]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Invalid IPv6 URL"
+   }
+  },
+  {
+   "name": "podman whose machine is with text after its bracket",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1]x/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "Invalid IPv6 URL"
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[v1.x]:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address without its version",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[v.x]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "IPvFuture address is invalid"
+   }
+  },
+  {
+   "name": "podman whose machine is at another host",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@10.0.0.1:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at a host named like the loopback",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1.example:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is through a socket",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "unix:///run/podman/podman.sock"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is of another scheme at the loopback",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "http://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is without its slashes",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh:core@127.0.0.1:22"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is without a host",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh:///run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is with a user only",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is after spaces",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "  ssh://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with a tab inside",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ss\th://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with two users",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://a@b@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with a bracket in its user",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://[x]@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is with a bracket in its user before a name",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://[x]@localhost/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "'localhost' does not appear to be an IPv4 or IPv6 address"
+   }
+  },
+  {
+   "name": "podman whose machine is with a bracket in its user before an IPv6 address",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://[x]@[::1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address in capitals",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[V1.x]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is with a query instead of a path",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1?x"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with a fragment instead of a path",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@localhost#x"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme that starts with a digit",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "1ssh://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme that starts with a digit before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "1ssh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme with a space before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "s sh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme with a plus before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "s+sh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme with a hyphen before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "s-sh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme with a dot before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "s.sh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is of a scheme with a digit before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "s2sh://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "An IPv4 address cannot be in brackets"
+   }
+  },
+  {
+   "name": "podman whose machine is of no scheme before brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "://core@[127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is after a control character",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "\u0001ssh://core@127.0.0.1/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with a line end inside",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1\n/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is with a space after it",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@127.0.0.1 "
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at the IPv6 loopback with an empty port",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1]:/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "held": [
+     "/opt/podman/bin/podman",
+     "--connection",
+     "podman-machine-default"
+    ]
+   }
+  },
+  {
+   "name": "podman whose machine is at the IPv6 loopback with a scope",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[::1%lo]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "refused": "podman_machine_not_local"
+   }
+  },
+  {
+   "name": "podman whose machine is at a scoped IPv6 address without its scope",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[fe80::1%]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "'fe80"
+   }
+  },
+  {
+   "name": "podman whose machine is at an IPv6 address with two scopes",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[fe80::1%a%b]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "'fe80"
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address without what follows its dot",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[v1.]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "IPvFuture address is invalid"
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address of no hexadecimal version",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[vg.x]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "IPvFuture address is invalid"
+   }
+  },
+  {
+   "name": "podman whose machine is at a future address without its dot",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://core@[v1x]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "IPvFuture address is invalid"
+   }
+  },
+  {
+   "name": "podman whose machine is at a bracket left open in its user",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://[x@127.0.0.1]/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "'127.0.0.1]' does not appear to be an IPv4 or IPv6 address"
+   }
+  },
+  {
+   "name": "podman whose machine is with a bracket in its user before an IPv6 address without brackets",
+   "engine": "podman",
+   "located": {
+    "docker": "/usr/local/bin/docker",
+    "podman": "/opt/podman/bin/podman"
+   },
+   "home": "/home/fixture",
+   "present": [],
+   "mac": true,
+   "listed": [
+    {
+     "Name": "podman-machine-default",
+     "URI": "ssh://[x]@::1:22/run"
+    }
+   ],
+   "failing": false,
+   "asked": [
+    {
+     "argv": [
+      "/opt/podman/bin/podman",
+      "system",
+      "connection",
+      "list",
+      "--format",
+      "json"
+     ],
+     "timeout": 30
+    }
+   ],
+   "result": {
+    "raised": "ValueError",
+    "said": "'' does not appear to be an IPv4 or IPv6 address"
+   }
+  }
+ ]
+}

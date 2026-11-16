@@ -23,6 +23,7 @@ pub mod awslc;
 pub mod context;
 pub(crate) mod document;
 pub mod elf;
+pub mod engine;
 pub mod environment;
 pub mod fast;
 pub(crate) mod files;
