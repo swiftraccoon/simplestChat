@@ -216,36 +216,20 @@ fn replayed(case: &Document) -> Came {
     came
 }
 
-/// What `case` recorded, the gate named as it is run here: this program's
-/// own `image scan`, where the reference ran its gate's file.
+/// What `case` recorded, and how many times it ran the gate: this
+/// program's own `image scan`.
 fn recorded(case: &Document) -> (Came, usize) {
-    let mut renamed = 0;
-    let commands = case
-        .get("commands")
-        .and_then(Document::items)
-        .expect("commands");
-    let commands = commands.iter().map(|command| {
-        let argv = texts(command, "argv");
-        let argv = if argv.get(1).map(String::as_str) == Some("build/security_image.py") {
-            renamed += 1;
-            let mut here = vec![
-                "<program>".to_owned(),
-                "image".to_owned(),
-                "scan".to_owned(),
-            ];
-            here.extend(argv[2..].iter().cloned());
-            here
-        } else {
-            argv
-        };
-        let mut command = command.clone();
-        command.put(
-            "argv",
-            Document::List(argv.into_iter().map(Document::from).collect()),
-        );
-        command
-    });
-    let commands = Document::List(commands.collect());
+    let commands = case.get("commands").cloned().expect("commands");
+    let scan = ["<program>", "image", "scan"].map(Document::from);
+    let gates = commands
+        .items()
+        .expect("commands")
+        .iter()
+        .filter(|command| {
+            let argv = command.get("argv").and_then(Document::items);
+            argv.is_some_and(|argv| argv.starts_with(&scan))
+        });
+    let gates = gates.count();
     let came = Came {
         code: case.get("code").and_then(Document::whole).expect("a code"),
         said: text(case, "said").to_owned(),
@@ -254,24 +238,24 @@ fn recorded(case: &Document) -> (Came, usize) {
         installs: case.get("installs").cloned().expect("installs"),
         names: texts(case, "names"),
     };
-    (came, renamed)
+    (came, gates)
 }
 
 #[test]
 fn every_recorded_tier_is_run_alike() {
-    let (mut tally, mut renamed) = ([0; 2], 0);
+    let (mut tally, mut ran) = ([0; 2], 0);
     for case in cases() {
         let name = text(&case, "name");
         let came = replayed(&case);
         let (expected, gates) = recorded(&case);
-        renamed += gates;
+        ran += gates;
         assert_eq!(came, expected, "{name}");
         tally[usize::try_from(came.code).expect("a code")] += 1;
     }
-    // Five tiers that passed and seven that failed; the six that ran the
-    // gate ran this program's own.
+    // Five tiers that passed and seven that failed; six ran this program's
+    // own gate.
     assert_eq!(tally, [5, 7]);
-    assert_eq!(renamed, 6);
+    assert_eq!(ran, 6);
 }
 
 #[test]

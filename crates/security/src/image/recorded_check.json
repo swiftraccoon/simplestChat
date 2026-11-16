@@ -41,8 +41,9 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/export",
@@ -115,8 +116,9 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/export",
@@ -191,8 +193,9 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/export",
@@ -269,8 +272,9 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/export",
@@ -359,8 +363,9 @@
     },
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/evidence/export",
@@ -634,8 +639,9 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/security_image.py",
+      "<program>",
+      "image",
+      "scan",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--artifact-dir",
       "<base>/export",

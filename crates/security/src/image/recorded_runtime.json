@@ -25984,7 +25984,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; explicit source review and exact artifact proof",
+      "tooling": "simplestchat-security image; explicit source review and exact artifact proof",
       "statements": [
        {
         "vulnerability": {
@@ -26180,7 +26180,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00.123456+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; explicit source review and exact artifact proof",
+      "tooling": "simplestchat-security image; explicit source review and exact artifact proof",
       "statements": [
        {
         "vulnerability": {
@@ -26401,7 +26401,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; explicit source review and exact artifact proof",
+      "tooling": "simplestchat-security image; explicit source review and exact artifact proof",
       "statements": [
        {
         "vulnerability": {
@@ -27337,7 +27337,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; explicit source review and exact artifact proof",
+      "tooling": "simplestchat-security image; explicit source review and exact artifact proof",
       "statements": [
        {
         "vulnerability": {
@@ -27440,7 +27440,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; no affected reviewed RPM, no VEX claim",
+      "tooling": "simplestchat-security image; no affected reviewed RPM, no VEX claim",
       "statements": []
      }
     ]
@@ -27572,7 +27572,7 @@
       "role": "Project security automation",
       "timestamp": "2026-10-18T12:00:00.000005+00:00",
       "version": 1,
-      "tooling": "build/security_runtime.py; no affected reviewed RPM, no VEX claim",
+      "tooling": "simplestchat-security image; no affected reviewed RPM, no VEX claim",
       "statements": []
      }
     ]

@@ -846,13 +846,8 @@ fn dispositions_match_the_recording() {
                 }
             }
             written.sort_by(|left, right| left.0.cmp(&right.0));
-            // The statements name this gate as what made them, where the
-            // reference named its own source file.
-            let recorded = case.get("written").expect("written").compact();
-            let recorded =
-                recorded.replace("build/security_runtime.py;", "simplestchat-security image;");
-            let recorded = Document::read(recorded.as_bytes()).expect("written");
-            assert_eq!(Document::Record(written), recorded, "{name}");
+            let recorded = case.get("written").expect("written");
+            assert_eq!(&Document::Record(written), recorded, "{name}");
             let statement = fs::read(output.join("vex.openvex.json")).ok();
             let made = outcome
                 .get("vexSha256")

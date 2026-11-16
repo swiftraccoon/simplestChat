@@ -235,3 +235,34 @@ fn every_recorded_runtime_library_is_bound_alike() {
     let tables = [(&UNREAD_RUNTIMES[..], There::Raised)];
     assert_eq!(tallied(runtimes(), &tables), [4, 35, 6, 0, 0]);
 }
+
+/// What the reference's binding made of each receipt that the native
+/// producer wrote in its own tests: three instances of OpenSSL, the
+/// external AWS-LC, and each with what the tests changed in it.
+const RECEIPTS: &[u8] = include_bytes!("recorded_receipts.json");
+
+/// The recorded `name` receipts, each as bound here and as the reference
+/// bound it.
+fn receipts(
+    name: &str,
+    bound: fn(&Document, &Document) -> crate::Result<()>,
+) -> Vec<(String, String, String)> {
+    let recording = Document::read(RECEIPTS).expect("a recording");
+    let held = recording.get(name).and_then(Document::items);
+    let held = held.unwrap_or_else(|| panic!("no receipts {name}"));
+    let receipt = |case: &Document| {
+        let native = case.get("native").expect("a native record");
+        let expected = case.get("expected").expect("a review");
+        let came = bound(native, expected).map(|()| Document::Null);
+        (text(case, "name").to_owned(), here(came), there(case))
+    };
+    held.iter().map(receipt).collect()
+}
+
+#[test]
+fn every_receipt_of_the_native_producer_is_bound_alike() {
+    let awslcs = receipts("awslcs", aws_lc_build_binding);
+    assert_eq!(tallied(awslcs, &[]), [1, 5, 0, 0, 0]);
+    let openssls = receipts("openssls", openssl_build_binding);
+    assert_eq!(tallied(openssls, &[]), [1, 8, 0, 0, 0]);
+}

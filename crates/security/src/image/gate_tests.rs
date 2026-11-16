@@ -750,25 +750,18 @@ fn judged(
     result
 }
 
-/// `value` with the statements' maker named as it is here, where the
-/// reference named its own source file, and whether it named it.
-fn retooled(value: &Document) -> (Document, bool) {
-    let (shown, here) = (value.compact(), "simplestchat-security image;");
-    let named = shown.replace("build/security_runtime.py;", here);
-    (
-        Document::read(named.as_bytes()).expect("a document"),
-        named != shown,
-    )
-}
-
-/// What `case` recorded it came to, the statements' maker named as it is
-/// here, and whether the case named it.
+/// What `case` recorded it came to, and whether a statement it published
+/// names this gate as its maker.
 fn recorded(case: &Document) -> (Came, bool) {
     let files = case.get("files").and_then(Document::fields).expect("files");
     let mut kept: Vec<(String, Document)> = files.to_vec();
     kept.sort_by_key(|(name, _)| FILES.iter().position(|file| file == name));
-    let (files, named) = retooled(&Document::Record(kept));
-    let (outcome, told) = retooled(&case.get("outcome").cloned().unwrap_or(Document::Null));
+    let files = Document::Record(kept);
+    let outcome = case.get("outcome").cloned().unwrap_or(Document::Null);
+    let maker = "simplestchat-security image;";
+    let named = [&files, &outcome]
+        .iter()
+        .any(|value| value.compact().contains(maker));
     let came = Came {
         result: there(case),
         outcome,
@@ -778,7 +771,7 @@ fn recorded(case: &Document) -> (Came, bool) {
         runs: case.get("runs").cloned().expect("the runs"),
         proved: case.get("proved").cloned().expect("what was proved"),
     };
-    (came, named || told)
+    (came, named)
 }
 
 /// The cases whose outcome names the code of the step that runs in process

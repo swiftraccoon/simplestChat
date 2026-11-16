@@ -16,12 +16,10 @@ from test_support import ROOT
 
 # isort: split
 import security_awslc as awslc
-import security_image_policy as image_policy
 import security_native as native
 import security_vendor as vendor
 import test_security_elf as elf_fixture
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value
-from security_tools import ToolError
 from test_security_vendor import tar_bytes
 
 if TYPE_CHECKING:
@@ -856,7 +854,7 @@ class NativeTests(unittest.TestCase):
                 array_value(report["static_archives"]),
             )
 
-    def test_production_openssl_instances_survive_full_producer_and_consumer(self) -> None:
+    def test_production_openssl_instances_survive_the_full_producer(self) -> None:
         """Repeated provider names retain distinct build events and bind every archive byte."""
         fixture = self.current()
         second = fixture.additional_openssl_instance()
@@ -878,7 +876,6 @@ class NativeTests(unittest.TestCase):
             self.assertTrue(
                 all(all(item[key] == value for key, value in actual.items()) for item in selected)
             )
-        image_policy.openssl_build_binding(report, object_value(fixture.native_manifest["openssl"]))
 
     def test_external_awslc_archive_parser_rejects_unsafe_members(self) -> None:
         """Even authenticated inputs must remain regular, unique, bounded release members."""
@@ -959,34 +956,6 @@ class NativeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Cargo AWS-LC bindings"):
             _ = self.produce()
 
-    def test_external_awslc_image_receipt_rejects_source_and_archive_drift(self) -> None:
-        """Image evidence binds external source, generated bindings and archive identity."""
-        fixture = self.current()
-        report = self.produce()
-        expected = object_value(fixture.native_manifest["registry_component"])
-        image_policy.aws_lc_build_binding(report, expected)
-        for mutation in (
-            "version",
-            "native_source",
-            "bindings_sha256",
-            "installer_sha256",
-            "archive",
-        ):
-            changed = copy.deepcopy(report)
-            component = object_value(changed["registry_component"])
-            if mutation in {"version", "native_source", "bindings_sha256"}:
-                component[mutation] = "invalid"
-            elif mutation == "installer_sha256":
-                object_value(component["build"])[mutation] = "0" * 64
-            else:
-                next(
-                    object_value(item)
-                    for item in array_value(changed["static_archives"])
-                    if object_value(item)["provider"] == "aws-lc-sys"
-                )["sha256"] = "0" * 64
-            with self.subTest(mutation=mutation), self.assertRaisesRegex(ToolError, "image_awslc"):
-                image_policy.aws_lc_build_binding(changed, expected)
-
     def test_every_openssl_instance_and_library_pair_is_required(self) -> None:
         """Multiple valid instances cannot conceal a missing provider, pair or changed input."""
         fixture = self.current()
@@ -1029,11 +998,11 @@ class NativeTests(unittest.TestCase):
                 selected["size"] = 1
             else:
                 selected["path"] = str(fixture.openssl / "lib/other.a")
-            with self.subTest(mutation=mutation):
-                with self.assertRaisesRegex(native.NativeError, "static link archives differ"):
-                    _ = native.openssl_build_evidence(fixture.openssl, expected, archives)
-                with self.assertRaisesRegex(ToolError, "image_openssl_archive_binding"):
-                    image_policy.openssl_build_binding(changed, expected)
+            with (
+                self.subTest(mutation=mutation),
+                self.assertRaisesRegex(native.NativeError, "static link archives differ"),
+            ):
+                _ = native.openssl_build_evidence(fixture.openssl, expected, archives)
 
     def test_same_package_host_and_target_events_remain_distinct(self) -> None:
         """Cargo emits distinct output directories when host and target instances differ."""

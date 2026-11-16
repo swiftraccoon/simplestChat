@@ -135,9 +135,9 @@ rehashes the selected archive config before issuing its predicate.
 The Fedora OpenSSL RPM remains affected by CVE-2026-84782 until its upstream
 version is fixed. The image gate preserves that observation and every Grype
 finding. It may separately classify the exact shipped server as not affected
-only after `build/security_runtime.py` proves the reviewed managed execution
-profile. This is not a package-wide exception and does not suppress other CVEs
-or findings for another package.
+only after its runtime proof (`crates/security/src/image/runtime.rs`) proves the
+reviewed managed execution profile. This is not a package-wide exception and does
+not suppress other CVEs or findings for another package.
 
 The proof binds the archive and image configuration, source revision, application
 binary, actual ELF/native evidence files and SPDX SBOM. It requires authenticated
@@ -639,12 +639,11 @@ exact-revision artifact checks and records the missing CI/attestation evidence;
 it does not create a signed image-policy verdict. See
 [release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
 
-Run the archive, ELF, policy, lifecycle and evidence-join fixtures with the
-maintained environment:
+Run the image gate's policy, lifecycle and evidence-join replays with the pinned
+toolchain, and the archive and ELF fixtures with the maintained environment:
 
 ```sh
-ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p 'test_security_image*.py' -v
+cargo test --locked -p simplestchat-security --lib -- --test-threads=1 image::
 ops/ansible/.venv/bin/python -m unittest discover \
   -s ops/ansible/tests -p test_security_archive.py -v
 ops/ansible/.venv/bin/python -m unittest discover \

@@ -115,16 +115,17 @@ bind dependency/provenance checks. The image tier scans shipped image contents
 separately, including bundled dependency bytes.
 
 Gitleaks normally excludes some filenames and content types. The shared
-`security_secret_projection.py` helper creates a neutral-name, printable-ASCII
-view of every selected file. Its fixed text prefix prevents binary magic from
-triggering the pinned scanner's content exclusions. Contiguous ASCII strings,
-tabs and line endings are preserved; other bytes become newline delimiters.
-The projection remains bounded by the original file limit plus its fixed prefix.
-Before writing projections, the gate requires enough disk space for all source
-bytes, every prefix and a 64 MiB reserve. The file-count ceiling bounds prefix
-overhead as well as total work; a budget failure rejects the entire scan.
-Gitleaks' separate size cutoff is disabled because it must not silently omit a
-file already accepted by these repository bounds.
+projection (`crates/security/src/secrets.rs`) creates a neutral-name,
+printable-ASCII view of every selected file. Its fixed text prefix prevents
+binary magic from triggering the pinned scanner's content exclusions.
+Contiguous ASCII strings, tabs and line endings are preserved; other bytes
+become newline delimiters. The projection remains bounded by the original file
+limit plus its fixed prefix. Before writing projections, the gate requires
+enough disk space for all source bytes, every prefix and a 64 MiB reserve.
+The file-count ceiling bounds prefix overhead as well as total work; a budget
+failure rejects the entire scan. Gitleaks' separate size cutoff is disabled
+because it must not silently omit a file already accepted by these repository
+bounds.
 
 Every projection records the original path, original SHA-256 and byte count,
 alongside the projected SHA-256, byte count and format. Private

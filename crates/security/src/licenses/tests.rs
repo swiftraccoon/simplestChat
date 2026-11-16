@@ -14,7 +14,7 @@ use super::{
     require_audited_locks, require_wheel_only, requirement, requirement_lines,
 };
 pub(super) use crate::scratch::content;
-use crate::{Result, policy::space, scratch::Scratch};
+use crate::{Fault, Result, policy::space, scratch::Scratch};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
@@ -219,6 +219,8 @@ fn every_recorded_graph_of_locks_is_read_alike() {
     assert_eq!(tally, Tally(13, 20, 0));
 }
 
+/// The recorded trees but those of the scanners' lock, whose installer the
+/// reference read from the tree and which is this gate's own here.
 #[test]
 fn every_recorded_tree_is_held_to_wheels_alike() {
     let recording = recorded();
@@ -241,7 +243,33 @@ fn every_recorded_tree_is_held_to_wheels_alike() {
             &mut tally,
         );
     }
-    assert_eq!(tally, Tally(9, 14, 0));
+    assert_eq!(tally, Tally(4, 8, 0));
+}
+
+/// The scanners' lock needs no option of its own, whatever else the tree
+/// holds: this gate's environment build installs it with the option, and
+/// every other lock is still held to carry it.
+#[test]
+fn the_scanners_lock_is_installed_by_the_gates_own_command() {
+    let scratch = Scratch::new("ls");
+    let root = &scratch.0;
+    let lock = root.join("security/requirements.txt");
+    std::fs::create_dir_all(lock.parent().expect("a parent")).expect("directories");
+    std::fs::write(&lock, "pip-audit==2.10.1 \\\n    --hash=sha256:00\n").expect("a lock");
+    let installer = root.join("build/install-scanners.sh");
+    std::fs::create_dir_all(installer.parent().expect("a parent")).expect("directories");
+    std::fs::write(
+        &installer,
+        "pip install --requirement security/requirements.txt\n",
+    )
+    .expect("an installer");
+    assert_eq!(require_wheel_only(root), Ok(()));
+    let other = root.join("build/python-requirements.txt");
+    std::fs::write(&other, "ruff==0.15.0 \\\n    --hash=sha256:00\n").expect("a lock");
+    assert_eq!(
+        require_wheel_only(root),
+        Err(Fault("dependency_python_wheel_only_policy"))
+    );
 }
 
 #[test]

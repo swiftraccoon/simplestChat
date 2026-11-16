@@ -164,19 +164,14 @@ fn reference_arguments_and_status_paths_are_fixed_beneath_runner_temp() {
     }
 }
 
+/// The scanner pin in the lines that `simplestchat-security image cache`
+/// printed for the runs below, under the tool lock of 2026-11-16, with
+/// `--prefix` and with `--status` naming the archive checksum `sha256:b…b`;
+/// the reference printed the same lines.
+const PRINTED_PIN: &str = "aa13b7ce2e22776df5b73a15c45fd4013655f4dd0355885cdd9774a96d4a986d";
+
 #[test]
-fn actual_python_oracle_preserves_scanner_pin_trust_and_validated_generation_framing() {
-    let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .unwrap();
-    let script = r#"
-import sys
-sys.path[:0]=[sys.argv[1]+'/build',sys.argv[1]+'/ops/ansible/files']
-import security_image_cache as reference
-print(reference.prefix())
-print(reference.key_from_status({'from':'https://grype.anchore.io/databases/v6/fixture.tar.zst?checksum=sha256%3A'+'b'*64}))
-"#;
+fn printed_selector_lines_preserve_scanner_pin_trust_and_validated_generation_framing() {
     for (reference, event, trust) in [
         ("refs/heads/main", "push", "main"),
         ("refs/heads/main", "pull_request", "untrusted"),
@@ -188,21 +183,10 @@ print(reference.key_from_status({'from':'https://grype.anchore.io/databases/v6/f
         environment.insert("GITHUB_REF".into(), reference.into());
         environment.insert("GITHUB_EVENT_NAME".into(), event.into());
         let context = Context::new(&fixture.root, environment, "Linux").unwrap();
-        let output = std::process::Command::new("python3")
-            .args(["-B", "-c", script])
-            .arg(repository)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("GITHUB_REF", reference)
-            .env("GITHUB_EVENT_NAME", event)
-            .output()
-            .unwrap();
-        assert!(output.status.success(), "Python pure oracle failed");
-        let text = std::str::from_utf8(&output.stdout).unwrap();
-        let mut lines = text.lines();
-        let prefix = context.prefix(lines.next().unwrap().as_bytes()).unwrap();
+        let printed = format!("grype-db-v2-{trust}-{PRINTED_PIN}-");
+        let prefix = context.prefix(printed.as_bytes()).unwrap();
         assert!(prefix.starts_with(&format!("grype-db-v2-{trust}-")));
-        let key = lines.next().unwrap();
+        let key = format!("{printed}{}", "b".repeat(64));
         assert_eq!(
             context
                 .selection(&prefix, key.as_bytes(), true)
@@ -217,7 +201,6 @@ print(reference.key_from_status({'from':'https://grype.anchore.io/databases/v6/f
                 .record(),
             format!("key={key}\n").as_bytes()
         );
-        assert!(lines.next().is_none());
     }
 }
 

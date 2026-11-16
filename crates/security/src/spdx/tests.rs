@@ -1,9 +1,9 @@
 //! Replays of the recorded licence expressions.
 //!
-//! `recorded_spdx.json` holds what the evaluator of
-//! `build/security_image_policy.py` answered for each expression against
-//! a list of allowed licences: allowed, refused, or the code of a fault in
-//! its form. `STRICTER` names what it allowed and is refused here.
+//! `recorded_spdx.json` holds what the reference's evaluator in Python
+//! answered for each expression against a list of allowed licences:
+//! allowed, refused, or the code of a fault in its form. `STRICTER` names
+//! what it allowed and is refused here.
 
 use super::{Allowed, DEEPEST, LONGEST, permits};
 use serde_json::{Value, json};

@@ -246,7 +246,7 @@ class VerifiedCacheTests(unittest.TestCase):
             "security/image-policy.json",
             "build/security_codeql_local.py",
             "build/security_codeql_cache.py",
-            "build/security_image.py",
+            "crates/security/src/image/gate.rs",
             "ops/ansible/files/release_public.py",
         )
         native = (
@@ -429,7 +429,6 @@ class VerifiedCacheTests(unittest.TestCase):
             "docs/testing.md",
             "ops/ansible/files/release_public.py",
             "ops/ansible/templates/public-app.env.j2",
-            "build/security_image.py",
             "build/release_deploy.py",
             ".github/workflows/ci.yml",
             "security/image-policy.json",
@@ -454,7 +453,7 @@ class VerifiedCacheTests(unittest.TestCase):
         unrelated = (
             ".github/workflows/ci.yml",
             ".github/actions/native-toolchain/action.yml",
-            "build/security_image.py",
+            "crates/security/src/image/gate.rs",
             "ops/ansible/files/release_public.py",
             "security/image-policy.json",
             "Dockerfile",

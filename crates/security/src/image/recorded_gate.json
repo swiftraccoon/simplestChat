@@ -1313,7 +1313,7 @@
      "role": "Project security automation",
      "statements": [],
      "timestamp": "2026-09-30T00:00:00+00:00",
-     "tooling": "build/security_runtime.py; no affected reviewed RPM, no VEX claim",
+     "tooling": "simplestchat-security image; no affected reviewed RPM, no VEX claim",
      "version": 1
     },
     "database-status.json": {
@@ -8686,7 +8686,7 @@
      "role": "Project security automation",
      "statements": [],
      "timestamp": "2026-09-30T00:00:00+00:00",
-     "tooling": "build/security_runtime.py; no affected reviewed RPM, no VEX claim",
+     "tooling": "simplestchat-security image; no affected reviewed RPM, no VEX claim",
      "version": 1
     },
     "database-status.json": {

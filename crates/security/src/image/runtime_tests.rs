@@ -23,19 +23,6 @@ use crate::{
 };
 
 const RECORDING: &[u8] = include_bytes!("recorded_runtime.json");
-/// What the reference named as the maker of its statements, and what makes
-/// them here.
-const TOOLING: [(&str, &str); 2] = [
-    (
-        "build/security_runtime.py; explicit source review and exact artifact proof",
-        "simplestchat-security image; explicit source review and exact artifact proof",
-    ),
-    (
-        "build/security_runtime.py; no affected reviewed RPM, no VEX claim",
-        "simplestchat-security image; no affected reviewed RPM, no VEX claim",
-    ),
-];
-
 fn recording() -> Document {
     Document::read(RECORDING).expect("a recording")
 }
@@ -52,15 +39,6 @@ fn whole(case: &Document, name: &str) -> i128 {
     case.get(name)
         .and_then(Document::whole)
         .unwrap_or_else(|| panic!("no number {name}"))
-}
-
-/// The recorded result with the statements' maker named as it is here.
-fn retooled(case: &Document) -> String {
-    let mut there = there(case);
-    for (reference, here) in TOOLING {
-        there = there.replace(reference, here);
-    }
-    there
 }
 
 fn reviews() -> Vec<(String, String, String)> {
@@ -222,7 +200,7 @@ fn applies() -> Vec<(String, String, String)> {
             &Limits::REVIEWED,
         );
         let came = came.map(|(result, document)| Document::List(vec![result, document]));
-        all.push((text(&case, "name").to_owned(), here(came), retooled(&case)));
+        all.push((text(&case, "name").to_owned(), here(came), there(&case)));
     }
     all
 }
@@ -238,7 +216,7 @@ fn absences() -> Vec<(String, String, String)> {
         let now = Moment(i64::try_from(whole(&case, "moment")).expect("a moment"));
         let came = not_required(manifest, text(&case, "imageId"), verdict, &policy, now);
         let came = came.map(|(evidence, document)| Document::List(vec![evidence, document]));
-        all.push((text(&case, "name").to_owned(), here(came), retooled(&case)));
+        all.push((text(&case, "name").to_owned(), here(came), there(&case)));
     }
     all
 }

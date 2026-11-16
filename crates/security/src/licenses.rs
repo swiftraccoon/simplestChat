@@ -313,36 +313,19 @@ pub fn allowed_licenses(snapshot: &Path) -> Result<BTreeSet<String>> {
 }
 
 /// Every Python lock that is there installs wheels alone: the option is a
-/// line of the lock, or, for the scanners' lock, of the command that
-/// installs it.
+/// line of the lock. The scanners' lock is installed only by this gate's
+/// own environment build, with the option on its command line
+/// (`environment::INSTALL`), which the environment's replay holds to the
+/// reference's.
 pub fn require_wheel_only(snapshot: &Path) -> Result<()> {
     for path in PYTHON_LOCKS {
         let target = snapshot.join(path);
-        if !target.exists() {
+        if path == SCANNERS || !target.exists() {
             continue;
         }
-        if path == SCANNERS {
-            let installer =
-                files::bounded(&snapshot.join("build/check-security.sh"), MAX_LOCK, false)?;
-            let installer = String::from_utf8(installer)
-                .map_err(|_| Fault("dependency_security_wheel_only_policy"))?;
-            let joined = installer.replace("\\\n", " ");
-            let words: Vec<&str> = joined
-                .split(space)
-                .filter(|word| !word.is_empty())
-                .collect();
-            let command = words.join(" ");
-            let wanted =
-                "--require-hashes --only-binary=:all: --requirement security/requirements.txt";
-            require(
-                command.contains(wanted),
-                "dependency_security_wheel_only_policy",
-            )?;
-        } else {
-            let lines = requirement_lines(&files::bounded(&target, MAX_LOCK, false)?)?;
-            let only = lines.iter().any(|line| line == "--only-binary=:all:");
-            require(only, "dependency_python_wheel_only_policy")?;
-        }
+        let lines = requirement_lines(&files::bounded(&target, MAX_LOCK, false)?)?;
+        let only = lines.iter().any(|line| line == "--only-binary=:all:");
+        require(only, "dependency_python_wheel_only_policy")?;
     }
     Ok(())
 }

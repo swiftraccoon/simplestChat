@@ -1,11 +1,11 @@
 //! Replays of the recorded scanner-environment builds.
 //!
-//! `recorded_environment.json` holds what `build/check-security.sh` did to
-//! its cache of environments when it was run with an interpreter that
+//! `recorded_environment.json` holds what the reference's shell entry point
+//! did to its cache of environments when it was run with an interpreter that
 //! scripts only the creation of an environment and the environment's own pip
-//! calls: whether it went on to the gate, what it asked of the interpreters,
-//! and what the cache held afterwards. The script exits with the status of
-//! the step that failed; here that step's check fails by name.
+//! calls: whether it went on to the gate (its status 0), what it asked of the
+//! interpreters, and what the cache held afterwards. The script exits with
+//! the status of the step that failed; here that step's check fails by name.
 
 use super::{ASKED, BUILT, INSTALL, INSTALLED, LOCK, OLDEST, interpreter};
 use crate::{
@@ -303,13 +303,12 @@ fn every_recorded_build_of_the_environment_is_made_alike() {
             Context::new(&project, &output, Limits::REVIEWED, &caller).expect("a context");
         let answered = interpreter(&mut context, &python3);
         let respell = |written: &str| recorded_spelling(written, &project, &base, &wanted);
-        let mut expected: Vec<&str> = case["log"]
+        let expected: Vec<&str> = case["log"]
             .as_array()
             .expect("a log")
             .iter()
             .map(text)
             .collect();
-        expected.retain(|line| !line.starts_with("python\tbuild/security_check.py"));
         let logged = std::fs::read_to_string(&log).unwrap_or_default();
         let logged = respell(&logged);
         assert_eq!(logged.lines().collect::<Vec<_>>(), expected, "{name}");

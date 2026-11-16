@@ -16,10 +16,7 @@ from test_support import ROOT
 
 # isort: split
 import ci_release_checks as checks
-import security_check
 from release_json import decode_json, integer_value, object_value
-from security_context import Context
-from security_tools import ToolError
 
 
 def task(name: str, program: str, *arguments: str, timeout: float = 3) -> checks.Task:
@@ -273,79 +270,6 @@ str(directory/"fixture"),"--node",sys.executable,"--chromium",sys.executable,
         )
         self.assertEqual(tools.timeout, 300)
         self.assertEqual(tools.grace, 5)
-
-
-class PreparedImageToolTests(unittest.TestCase):
-    """A prepared directory never substitutes for authenticated tool verification."""
-
-    def test_prepared_tools_are_reverified_before_the_same_image_scan(self) -> None:
-        """Reuse runs the existing installer validation before starting any scanner."""
-        with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary)
-            context = Context(ROOT, output)
-            tools = output / "tools"
-            tools.mkdir()
-            options = security_check.Options(
-                tier="image",
-                image="sha256:" + "a" * 64,
-                artifact_dir=output / "export",
-                image_tools=tools,
-            )
-            with (
-                patch.object(security_check, "install", return_value=tools) as install,
-                patch.object(Context, "run", return_value=(0, b"")) as run,
-            ):
-                security_check.image(context, options)
-                install.assert_called_once_with(
-                    ["syft", "grype", "gitleaks"], tools, target_platform="linux-x86_64"
-                )
-                run.assert_called_once_with(
-                    "image-security",
-                    [
-                        sys.executable,
-                        "build/security_image.py",
-                        options.image,
-                        "--artifact-dir",
-                        str(output / "export"),
-                        "--output",
-                        str(output / "image"),
-                        "--engine",
-                        "docker",
-                        "--tools-directory",
-                        str(tools),
-                    ],
-                    timeout=1800,
-                )
-            with (
-                patch.object(
-                    security_check, "install", side_effect=ToolError("tool_executable_digest")
-                ),
-                patch.object(Context, "run") as run,
-                self.assertRaisesRegex(ToolError, "tool_executable_digest"),
-            ):
-                security_check.image(context, options)
-            run.assert_not_called()
-
-    def test_missing_or_symlinked_prepared_directory_is_not_reinstalled(self) -> None:
-        """An explicit preparation failure cannot turn into an unnoticed serial fallback."""
-        with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary)
-            context = Context(ROOT, output)
-            link = output / "link"
-            link.symlink_to(output, target_is_directory=True)
-            for directory in (output / "missing", link):
-                with (
-                    self.subTest(directory=directory),
-                    patch.object(security_check, "install") as install,
-                    self.assertRaisesRegex(ToolError, "invalid_prepared_image_tools"),
-                ):
-                    security_check.image(
-                        context,
-                        security_check.Options(
-                            artifact_dir=output / "export", image_tools=directory
-                        ),
-                    )
-                install.assert_not_called()
 
 
 if __name__ == "__main__":

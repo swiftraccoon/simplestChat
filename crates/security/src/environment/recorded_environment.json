@@ -32,8 +32,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a first build",
    "outside": false,
@@ -74,8 +73,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image\t--engine\tpodman"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a first build for another tier",
    "outside": false,
@@ -111,9 +109,7 @@
      "link": "<project>/.cache/security-environments/.install.old-build"
     }
    },
-   "log": [
-    "python\tbuild/security_check.py\timage\tan-image"
-   ],
+   "log": [],
    "name": "an environment that is ready",
    "outside": false,
    "status": 0,
@@ -145,9 +141,7 @@
      "text": "73fd8089317a045b9d4e3283daffff19f493715cd1596bcbed3300b8f08e8d60\n"
     }
    },
-   "log": [
-    "python\tbuild/security_check.py\timage\tan-image"
-   ],
+   "log": [],
    "name": "an environment that is a directory and ready",
    "outside": false,
    "status": 0,
@@ -202,8 +196,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "an environment beside others",
    "outside": false,
@@ -242,8 +235,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "an interrupted build",
    "outside": false,
@@ -282,8 +274,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link to a build that is gone",
    "outside": false,
@@ -322,8 +313,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link out of the cache without a receipt",
    "outside": false,
@@ -372,8 +362,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a relative link without a receipt",
    "outside": false,
@@ -412,8 +401,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link to a staging directory of another cache",
    "outside": true,
@@ -462,8 +450,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link to another entry of the cache",
    "outside": false,
@@ -515,8 +502,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link to a directory below an old build",
    "outside": false,
@@ -558,8 +544,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a link that leaves the cache through an old build",
    "outside": false,
@@ -598,8 +583,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a directory without a receipt",
    "outside": false,
@@ -638,8 +622,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a file where the environment belongs",
    "outside": false,
@@ -710,9 +693,7 @@
      "link": "<project>/.cache/security-environments/.install.old-build"
     }
    },
-   "log": [
-    "python\tbuild/security_check.py\timage\tan-image"
-   ],
+   "log": [],
    "name": "a receipt without a line end",
    "outside": false,
    "status": 0,
@@ -747,9 +728,7 @@
      "link": "<project>/.cache/security-environments/.install.old-build"
     }
    },
-   "log": [
-    "python\tbuild/security_check.py\timage\tan-image"
-   ],
+   "log": [],
    "name": "a receipt with two line ends",
    "outside": false,
    "status": 0,
@@ -822,8 +801,7 @@
    "log": [
     "venv\t<project>/.cache/security-environments/.install.<new>",
     "python\t-m\tpip\t--isolated\tinstall\t--disable-pip-version-check\t--require-hashes\t--only-binary=:all:\t--requirement\tsecurity/requirements.txt",
-    "python\t-m\tpip\t--isolated\tcheck",
-    "python\tbuild/security_check.py\timage\tan-image"
+    "python\t-m\tpip\t--isolated\tcheck"
    ],
    "name": "a receipt that is a directory",
    "outside": false,
@@ -978,9 +956,7 @@
      "link": "<project>/.cache/security-environments/.install.old-build"
     }
    },
-   "log": [
-    "python\tbuild/security_check.py\timage\tan-image"
-   ],
+   "log": [],
    "name": "an environment that is ready although nothing could be built",
    "outside": false,
    "status": 0,
