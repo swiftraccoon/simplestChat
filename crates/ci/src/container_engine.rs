@@ -88,6 +88,9 @@ pub(crate) struct Policy {
     settlement: Duration,
     metadata_timeout: Duration,
     metadata_grace: Duration,
+    /// How long the first question to the daemon may take where the runner may
+    /// still be starting it; every other question has `metadata_timeout`.
+    startup_timeout: Option<Duration>,
 }
 impl Policy {
     pub fn smoke() -> Self {
@@ -98,6 +101,7 @@ impl Policy {
             settlement: Duration::from_secs(20),
             metadata_timeout: Duration::from_secs(30),
             metadata_grace: Duration::from_secs(5),
+            startup_timeout: None,
         }
     }
     pub fn validation() -> Self {
@@ -108,6 +112,7 @@ impl Policy {
             settlement: Duration::from_secs(20),
             metadata_timeout: Duration::from_secs(5),
             metadata_grace: Duration::from_secs(1),
+            startup_timeout: Some(Duration::from_secs(60)),
         }
     }
     /// The complete owner separately reserves its 1500-second build tail.
@@ -120,6 +125,7 @@ impl Policy {
             settlement: Duration::from_secs(20),
             metadata_timeout: Duration::from_secs(5),
             metadata_grace: Duration::from_secs(1),
+            startup_timeout: None,
         }
     }
     pub fn benchmark(recovery: bool) -> Self {
@@ -130,6 +136,7 @@ impl Policy {
             settlement: Duration::from_secs(20),
             metadata_timeout: Duration::from_secs(5),
             metadata_grace: Duration::from_secs(1),
+            startup_timeout: None,
         }
     }
     fn validate(self) -> Result<()> {
@@ -340,9 +347,11 @@ impl<'a, E: Executor, C: Clock> Core<'a, E, C> {
         } else {
             "{{.ID}}"
         };
-        let bytes = value
-            .raw(value.command(&["info", "--format", format], cleanup))
-            .await?;
+        let mut question = value.command(&["info", "--format", format], cleanup);
+        if let Some(startup) = policy.startup_timeout {
+            question.timeout = startup;
+        }
+        let bytes = value.raw(question).await?;
         let identity = if matches!(policy.scope, Scope::Benchmark) {
             let v: serde_json::Value =
                 serde_json::from_slice(&bytes).map_err(|_| policy.scope.failure())?;

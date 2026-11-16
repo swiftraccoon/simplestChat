@@ -524,6 +524,25 @@ async fn all_reference_assertions_use_literal_images_owned_containers_and_privat
     assert_eq!(Fake::arg(&app, "--security-opt"), "no-new-privileges");
 }
 
+/// The smoke's first question to the daemon keeps its metadata bound; only
+/// the configuration validator waits for a daemon that may be starting.
+#[tokio::test]
+async fn the_first_question_keeps_the_smoke_metadata_bound() {
+    let fixture = Fixture::new();
+    let mut fake = fixture.fake();
+    let mut clock = FakeClock::default();
+    let result = execute::run(&fixture.context, ENDPOINT, &mut fake, &mut clock)
+        .await
+        .unwrap();
+    result.result.unwrap();
+    let first = fake
+        .commands
+        .iter()
+        .find(|command| Fake::strings(command).iter().any(|word| word == "info"))
+        .expect("a question to the daemon");
+    assert_eq!(first.timeout, Duration::from_secs(30));
+}
+
 #[tokio::test]
 async fn every_smoke_assertion_failure_still_retires_its_owned_resources() {
     for bad in [

@@ -543,6 +543,34 @@ async fn the_full_fifteen_cli_cleanup_and_replay_allowance_fits_the_fixed_entry_
     }
 }
 
+/// The first question to the runner's daemon may wait while it starts; every
+/// later one keeps the metadata bound.
+#[tokio::test]
+async fn only_the_first_question_waits_for_a_starting_daemon() {
+    for kind in [Kind::Promtool, Kind::Caddy] {
+        let fixture = Fixture::new(kind);
+        let mut fake = fixture.fake();
+        transaction(&fixture, &mut fake, &mut FakeClock::default())
+            .await
+            .unwrap();
+        let questions: Vec<&Command> = fake
+            .commands
+            .iter()
+            .filter(|command| {
+                Fake::strings(command)
+                    .get(2)
+                    .is_some_and(|word| word == "info")
+            })
+            .collect();
+        assert!(questions.len() > 1);
+        assert_eq!(Fake::strings(&fake.commands[0])[2], "info");
+        assert_eq!(questions[0].timeout, Duration::from_secs(60));
+        for later in &questions[1..] {
+            assert_eq!(later.timeout, Duration::from_secs(5));
+        }
+    }
+}
+
 #[tokio::test]
 async fn cold_pull_uses_only_the_fixed_selector_and_unfit_commands_do_not_dispatch() {
     let fixture = Fixture::new(Kind::Promtool);
