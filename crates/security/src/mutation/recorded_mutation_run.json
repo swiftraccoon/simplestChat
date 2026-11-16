@@ -1071,11 +1071,11 @@
     "MEDIASOUP_BUILD_JOBS": "2",
     "OPENSSL_DIR": "<place>/openssl",
     "OPENSSL_STATIC": "1",
-    "PATH": "/Users/dylanhawkins/Git:<place>/tools:/usr/bin:/bin",
+    "PATH": "<parent>:<place>/tools:/usr/bin:/bin",
     "PIP_CONSTRAINT": "<place>/source/build/pip-constraints.txt",
     "PKG_CONFIG_PATH": "<place>/openssl/lib/pkgconfig",
-    "RUSTC": "/Users/dylanhawkins/Git/rustc",
-    "RUSTDOC": "/Users/dylanhawkins/Git/rustdoc"
+    "RUSTC": "<parent>/rustc",
+    "RUSTDOC": "<parent>/rustdoc"
    },
    "files": {
     "aws/lib/libcrypto-awslc.a": "x",
