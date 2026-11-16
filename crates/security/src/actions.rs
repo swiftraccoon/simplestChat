@@ -14,6 +14,7 @@
 use crate::{
     Fault, Result,
     context::{Context, Failure, Outcome, Run},
+    escaped,
     fast::Programs,
     files,
     licenses::{allowed_licenses, splitlines},
@@ -414,22 +415,6 @@ fn version(tag: &str) -> bool {
     released && build.is_none_or(labelled)
 }
 
-/// `text` as a name or a value of a query: every byte but a letter, a
-/// digit and `_.-~` is escaped, and a space is a plus sign.
-fn encoded(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || b"_.-~".contains(&byte) {
-            escaped.push(char::from(byte));
-        } else if byte == b' ' {
-            escaped.push('+');
-        } else {
-            escaped.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    escaped
-}
-
 /// Whether the file `name` of a tree is read: a YAML file of the
 /// repository's settings, or the description of an action anywhere.
 fn read(name: &str, include_vendor: bool) -> bool {
@@ -531,7 +516,7 @@ impl Asking<'_> {
     fn api(&self, path: &str, parameters: &[(&str, &str)]) -> Outcome<Value> {
         let query: Vec<String> = parameters
             .iter()
-            .map(|(name, value)| format!("{}={}", encoded(name), encoded(value)))
+            .map(|(name, value)| format!("{}={}", escaped(name, true), escaped(value, true)))
             .collect();
         let url = format!("{API}{path}?{}", query.join("&"));
         let curl = self.programs.prerequisite("curl")?;

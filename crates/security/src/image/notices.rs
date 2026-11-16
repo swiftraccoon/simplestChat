@@ -9,8 +9,9 @@
 //! enters the report.
 
 use super::{
+    canonical,
     license_identity::{measured, raw_license_identity},
-    small_hex,
+    small_hex, stopped,
 };
 use crate::{Fault, Result, digest, document::Document, elf, hexadecimal, require, secrets};
 use sha2::{Digest as _, Sha256};
@@ -110,11 +111,7 @@ fn notice_name(name: &str) -> bool {
 /// documentation. A path that is not spelled the one way it can be is
 /// refused.
 pub fn notice_path(value: &str, limits: &Limits) -> Result<bool> {
-    // Exactly two slashes may begin a path; a third is an empty step.
-    let rest = value.strip_prefix("//").or_else(|| value.strip_prefix('/'));
-    let stepped = rest.is_some_and(|rest| {
-        rest.is_empty() || rest.split('/').all(|step| !matches!(step, "" | "." | ".."))
-    });
+    let stepped = canonical(value);
     let sized = value.chars().count() <= limits.path;
     let plain = !value.contains(['\0', '\\']);
     require(stepped && sized && plain, "rpm_notice_path")?;
@@ -284,25 +281,6 @@ pub fn license_identity(package: &Document, limits: &Limits) -> Result<Document>
     ]))
 }
 
-/// Why the image's own links do not lead to a file.
-fn stopped(stop: elf::Stop) -> Fault {
-    const KNOWN: [&str; 5] = [
-        "image_path_invalid",
-        "image_path_escape",
-        "image_symlink_limit",
-        "image_file_kind",
-        "image_path_empty",
-    ];
-    match stop {
-        elf::Stop::Refused(refusal) => {
-            let known = KNOWN.iter().find(|known| **known == refusal.reason);
-            Fault(known.copied().unwrap_or("image_path_invalid"))
-        }
-        elf::Stop::Missing => Fault("rpm_notice_file_missing"),
-        elf::Stop::Unreadable => Fault("rpm_notice_file_unread"),
-    }
-}
-
 /// One notice as the image has it: what the package lists, where the
 /// image's links lead from there, and the size and digest of the file at
 /// the end, of which at most `remaining` bytes are read. A regular file
@@ -346,7 +324,8 @@ fn file_identity(
         (regular || link) && algorithm && sized && digested,
         METADATA.0,
     )?;
-    let resolved = elf::image_path(rootfs, name).map_err(stopped)?;
+    let resolved = elf::image_path(rootfs, name)
+        .map_err(|stop| stopped(stop, "rpm_notice_file_missing", "rpm_notice_file_unread"))?;
     let below = resolved
         .strip_prefix(rootfs)
         .ok()
@@ -527,4 +506,4 @@ pub fn collect(
 
 #[cfg(test)]
 #[path = "notices_tests.rs"]
-mod tests;
+pub(crate) mod tests;

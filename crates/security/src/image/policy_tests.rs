@@ -466,7 +466,7 @@ fn a_time_is_read_as_the_reference_reads_one() {
 
 /// What the reference did with the cases that come to something else here.
 #[derive(Clone, Copy)]
-enum There {
+pub(crate) enum There {
     /// It failed in its interpreter's words.
     Raised,
     /// It took them.
@@ -479,7 +479,10 @@ enum There {
 /// the code that refuses them here and what the reference did instead.
 /// Answers how many came to the same held, the same refusal, and to a
 /// refusal here where the reference raised, held and refused otherwise.
-fn tallied(all: Vec<(String, String, String)>, tables: &[(&[(&str, &str)], There)]) -> [usize; 5] {
+pub(crate) fn tallied(
+    all: Vec<(String, String, String)>,
+    tables: &[(&[(&str, &str)], There)],
+) -> [usize; 5] {
     let mut tally = [0; 5];
     for (name, here, there) in all {
         let found = tables.iter().find_map(|(table, kind)| {

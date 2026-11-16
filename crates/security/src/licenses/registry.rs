@@ -10,7 +10,7 @@ use super::Dependency;
 use crate::{
     Fault,
     context::{Context, Outcome, Run},
-    digest,
+    digest, escaped,
     fast::Programs,
     record, require,
 };
@@ -243,20 +243,6 @@ impl Evidence {
     }
 }
 
-/// `text` as one step of a path: every byte but a letter, a digit and
-/// `-._~` is escaped.
-fn step(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
-            escaped.push(char::from(byte));
-        } else {
-            escaped.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    escaped
-}
-
 /// The licence of the npm package `dependency`: the registry's document of
 /// that version names the lock's tarball and integrity, and declares the
 /// licence the lock declares.
@@ -267,7 +253,10 @@ pub fn npm_license(
 ) -> Outcome<Vec<Evidence>> {
     const IDENTITY: Fault = Fault("dependency_npm_registry_identity");
     const LICENSE: Fault = Fault("dependency_npm_license_identity");
-    let (name, version) = (step(&dependency.name), step(&dependency.version));
+    let (name, version) = (
+        escaped(&dependency.name, false),
+        escaped(&dependency.version, false),
+    );
     let url = format!("https://registry.npmjs.org/{name}/{version}");
     let content = registry.fetch(context, &url, registry.bounds.metadata)?;
     let document = record::strict(&content).map_err(|_| IDENTITY)?;

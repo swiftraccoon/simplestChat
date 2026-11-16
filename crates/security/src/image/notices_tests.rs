@@ -117,7 +117,7 @@ fn limits(case: &Document) -> Limits {
 
 /// Build the file system of a case below `base` and answer the root that
 /// the case hands to the collection.
-fn built(case: &Document, base: &std::path::Path) -> PathBuf {
+pub(crate) fn built(case: &Document, base: &std::path::Path) -> PathBuf {
     let root = base.join("root");
     std::fs::create_dir(&root).expect("a root");
     for (path, entry) in case.get("tree").and_then(Document::fields).expect("a tree") {
@@ -351,5 +351,5 @@ fn every_recorded_licence_declaration_is_identified_alike() {
 
 #[test]
 fn every_recorded_collection_comes_to_the_same() {
-    assert_eq!(tallied(collections(), &UNCOLLECTED, &[]), [33, 61, 17, 0]);
+    assert_eq!(tallied(collections(), &UNCOLLECTED, &[]), [33, 62, 17, 0]);
 }

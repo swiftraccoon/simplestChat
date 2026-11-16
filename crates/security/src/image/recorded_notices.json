@@ -8036,6 +8036,60 @@
    }
   },
   {
+   "name": "a notice that is a link to the root",
+   "packages": [
+    {
+     "name": "fixture",
+     "type": "rpm",
+     "version": "1.0-1.fc44",
+     "foundBy": "rpm-db-cataloger",
+     "metadataType": "rpm-db-entry",
+     "purl": "pkg:rpm/fedora/fixture@1.0-1.fc44?arch=x86_64&distro=fedora-44&upstream=fixture-1.0-1.fc44.src.rpm",
+     "licenses": [
+      {
+       "spdxExpression": "MIT"
+      }
+     ],
+     "metadata": {
+      "name": "fixture",
+      "version": "1.0",
+      "release": "1.fc44",
+      "sourceRpm": "fixture-1.0-1.fc44.src.rpm",
+      "epoch": null,
+      "architecture": "x86_64",
+      "files": [
+       {
+        "path": "/usr/share/licenses/fixture/COPYING",
+        "mode": 41471,
+        "size": 1,
+        "digest": {
+         "algorithm": "sha256",
+         "value": ""
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "tree": {
+    "usr/share/licenses/fixture/COPYING": {
+     "link": "/"
+    }
+   },
+   "arguments": {
+    "image_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "archive_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sbom_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "revision": "dddddddddddddddddddddddddddddddddddddddd",
+    "platform": "linux/amd64"
+   },
+   "limits": {},
+   "rootfs": "root",
+   "result": {
+    "refused": "image_path_empty"
+   }
+  },
+  {
    "name": "a notice that is a link to itself",
    "packages": [
     {

@@ -490,4 +490,4 @@ pub fn vulnerability_database_binding(value: &Document, database: &Document) -> 
 
 #[cfg(test)]
 #[path = "policy_tests.rs"]
-mod tests;
+pub(crate) mod tests;

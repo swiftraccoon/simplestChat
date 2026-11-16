@@ -89,3 +89,20 @@ pub(crate) fn digest(bytes: &[u8]) -> String {
     use sha2::Digest as _;
     hexadecimal(&sha2::Sha256::digest(bytes))
 }
+
+/// `text` as a URL carries it: every byte but a letter, a digit and `-._~`
+/// as `%` and two capital hexadecimal digits, and a space as a plus sign
+/// where `plus` says so, as the names and values of a query have it.
+pub(crate) fn escaped(text: &str, plus: bool) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-._~".contains(&byte) {
+            escaped.push(char::from(byte));
+        } else if plus && byte == b' ' {
+            escaped.push('+');
+        } else {
+            escaped.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    escaped
+}
