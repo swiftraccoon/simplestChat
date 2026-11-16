@@ -18,6 +18,7 @@ pub mod policy;
 pub mod runner;
 pub mod runtime;
 pub mod sandbox;
+pub mod scan;
 pub mod secrets;
 pub mod spans;
 
