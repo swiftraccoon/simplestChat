@@ -65,11 +65,11 @@ and [bounded parser guidance](https://github.com/rust-secure-code/cargo-auditabl
 
 ## Static executable checks
 
-`build/security_elf.py` reads ELF bytes without loading or executing the
-application or its libraries. For an already materialized image filesystem:
+The security gate's `elf` command reads ELF bytes without loading or executing
+the application or its libraries. For an already materialized image filesystem:
 
 ```sh
-python3 build/security_elf.py --rootfs /path/to/image-rootfs \
+cargo run --locked -q -p simplestchat-security -- elf --rootfs /path/to/image-rootfs \
   --platform linux/amd64 --output /path/to/new-elf-report.json
 ```
 
@@ -200,11 +200,10 @@ administrator-selected programs and altered containers require separate review.
 The ELF fixtures are inert byte arrays, never executed. They cover independent
 hardening failures, truncated and oversized tables, virtual-address bounds,
 missing and malformed Rust metadata, dependency graph failures, image-relative
-symlinks and missing libraries. Run them with the maintained Python environment:
+symlinks and missing libraries. Run them with the pinned toolchain:
 
 ```sh
-ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p test_security_elf.py -v
+cargo test --locked -p simplestchat-security --lib -- --test-threads=1 elf::
 ```
 
 A real exported image remains a required integration check before treating a
@@ -212,11 +211,12 @@ new compiler, base image or checker version as release-ready.
 
 ## Authenticated native build inputs
 
-The builder runs `security_vendor.py verify` before dependency warmup. It checks
-all reviewed upstream archives and maintained patches, rather than accepting a
-vendored directory because one familiar version string appears in it.
-`security_native.py` then consumes the final successful production Cargo JSON
-stream. It rejects test, debug and load-generator artifacts and selects the
+The builder first builds the security gate from its real sources and registry
+dependencies, which compile no vendored crate, and runs its `vendor verify`
+before dependency warmup. It checks all reviewed upstream archives and
+maintained patches, rather than accepting a vendored directory because one
+familiar version string appears in it. The gate's `native` command then consumes
+the final successful production Cargo JSON stream. It rejects test, debug and load-generator artifacts and selects the
 actual build-script outputs, including cached outputs. It does not sweep an old
 `target/` directory to guess which libraries were used.
 
@@ -639,13 +639,12 @@ exact-revision artifact checks and records the missing CI/attestation evidence;
 it does not create a signed image-policy verdict. See
 [release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
 
-Run the image gate's policy, lifecycle and evidence-join replays with the pinned
-toolchain, and the archive and ELF fixtures with the maintained environment:
+Run the image gate's archive, ELF, policy, lifecycle and evidence-join replays
+with the pinned toolchain, and the release attestation's archive fixtures with
+the maintained environment:
 
 ```sh
-cargo test --locked -p simplestchat-security --lib -- --test-threads=1 image::
+cargo test --locked -p simplestchat-security --lib -- --test-threads=1 image:: elf::
 ops/ansible/.venv/bin/python -m unittest discover \
   -s ops/ansible/tests -p test_security_archive.py -v
-ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p test_security_elf.py -v
 ```

@@ -131,9 +131,6 @@ COPY crates/lobby-seed/Cargo.toml crates/lobby-seed/Cargo.toml
 COPY crates/security/Cargo.toml crates/security/Cargo.toml
 COPY ops/Cargo.toml ops/Cargo.toml
 COPY vendor ./vendor
-COPY build/security_vendor.py ./build/
-COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py ./ops/ansible/files/
-RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /app/vendor-evidence
 
 # Cargo loads every workspace manifest, so each member gets a stub target. The
 # stubs stay in place; the load-test stage copies the real sources over them.
@@ -152,15 +149,18 @@ RUN mkdir -p src load_tests/src xtask/src crates/toolkit/src crates/ci/src crate
     && printf '' > crates/security/src/lib.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
     && printf '' > ops/src/lib.rs
-# Authenticate the exact cargo-auditable executable before either application
+# The security crate is built here from its real sources and the locked
+# registry dependencies alone: it compiles no vendored crate, so it can
+# authenticate the vendored sources before anything that does. It then
+# authenticates the exact cargo-auditable executable before either application
 # build: its dependency section must survive in the final executable for image
-# auditing. The installer is the security crate itself, built here from its
-# real sources and the locked dependencies; it downloads with this stage's curl
-# and admits only the archive the tool lock names. Its checks of a saved image
-# need the ops crate, whose sources are still stubs here, and are left out.
+# auditing. It downloads with this stage's curl and admits only the archive the
+# tool lock names. Its checks of a saved image need the ops crate, whose sources
+# are still stubs here, and are left out.
 COPY build/security-tools.lock.json ./build/
 COPY crates/security/src ./crates/security/src
 RUN cargo build --locked --release -p simplestchat-security --no-default-features --bin simplestchat-security \
+    && target/release/simplestchat-security vendor verify --cache /tmp/vendor-cache --output /app/vendor-evidence \
     && target/release/simplestchat-security tools install --tools cargo-auditable --directory /opt/security-tools
 # Warm every dependency, including the native worker, against stub sources.
 # This layer is reused until the manifest, lockfile or vendored patches change,
@@ -184,8 +184,8 @@ RUN target/release/simplestchat-security tools path cargo-auditable --directory 
     && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.1.0 23 Oct 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
-COPY build/security_native.py build/security_awslc.py build/security_elf.py build/install-openssl.sh build/install-aws-lc.sh ./build/
-RUN python3 build/security_native.py --root /app \
+COPY build/install-openssl.sh build/install-aws-lc.sh ./build/
+RUN target/release/simplestchat-security native --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
     --openssl-prefix /opt/openssl-4.1.0 --aws-lc-prefix /opt/aws-lc-5.11.0 \

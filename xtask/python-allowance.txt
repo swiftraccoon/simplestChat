@@ -1,4 +1,4 @@
-total 85593
+total 83296
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
@@ -17,7 +17,6 @@ total 85593
 599	build/release_deploy.py
 722	build/release_fetch_controller.py
 461	build/security_archive.py
-244	build/security_awslc.py
 49	build/security_codeql.py
 316	build/security_codeql_cache.py
 205	build/security_codeql_cargo.py
@@ -30,7 +29,6 @@ total 85593
 179	build/security_context.py
 584	build/security_elf.py
 215	build/security_findings.py
-1020	build/security_native.py
 185	build/security_policy.py
 27	build/security_source_scope.py
 512	build/security_tools.py
@@ -123,7 +121,6 @@ total 85593
 58	ops/ansible/tests/test_security_context.py
 524	ops/ansible/tests/test_security_elf.py
 177	ops/ansible/tests/test_security_findings.py
-1033	ops/ansible/tests/test_security_native.py
 144	ops/ansible/tests/test_security_policy.py
 419	ops/ansible/tests/test_security_tools.py
 500	ops/ansible/tests/test_security_vendor.py

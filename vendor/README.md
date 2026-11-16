@@ -41,8 +41,8 @@ cargo run --locked -q -p simplestchat-security -- vendor verify \
 
 The verifier is a command of the security gate's executable and fetches with
 the system's `curl`. The deep tier of the gate runs it as its `vendor-integrity`
-check, and the production image build runs the same checks through
-`build/security_vendor.py verify`. Both cache and evidence directories
+check, and the production image build runs it from the gate that its builder
+stage builds first. Both cache and evidence directories
 must belong to the caller and be private (`0700`). The evidence directory must
 be new. Reuse a private cache on later runs and pass `--offline` to prohibit
 network access; missing or corrupt cached bytes then fail verification. Cache
@@ -109,14 +109,14 @@ The production Fedora builder retains the final successful default-feature Cargo
 invocation with `--message-format=json`. After building, it runs:
 
 ```bash
-python3 build/security_native.py --root /app \
+target/release/simplestchat-security native --root /app \
   --vendor-report /app/vendor-evidence/report.json \
   --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
   --openssl-prefix /opt/openssl-4.1.0 --aws-lc-prefix /opt/aws-lc-5.11.0 \
   --output /app/native-components.build.json
 ```
 
-The helper rechecks the vendor receipt against current files, selects the actual
+The command rechecks the vendor receipt against current files, selects the actual
 production server artifact, and resolves static archives only from the recorded
 build-script link search paths. Missing, ambiguous, thin, unexpected or incorrectly
 located native archives fail. It verifies the AWS-LC crate checksum before

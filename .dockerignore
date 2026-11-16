@@ -15,10 +15,6 @@ build/**
 !build/install-aws-lc.sh
 !build/install-npm.mjs
 !build/security-tools.lock.json
-!build/security_vendor.py
-!build/security_native.py
-!build/security_awslc.py
-!build/security_elf.py
 !security/
 security/**
 !security/exceptions.json
@@ -116,12 +112,6 @@ ops/src/turn/**
 !ops/src/migrate/
 ops/src/migrate/**
 !ops/src/migrate/*.rs
-!ops/ansible/
-ops/ansible/**
-!ops/ansible/files/
-ops/ansible/files/**
-!ops/ansible/files/bounded_process.py
-!ops/ansible/files/release_json.py
 !vendor/
 !vendor/**
 !src/

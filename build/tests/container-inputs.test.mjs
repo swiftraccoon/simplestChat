@@ -135,8 +135,8 @@ function verifyLocalRunSources(rules = ignoreRules, recipe = dockerfile) {
 
 test('all explicit local COPY inputs are admitted by the Docker context', () => {
   verifyLocalCopySources();
-  assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!build/security_elf.py')),
-    /security_elf\.py is explicitly copied but excluded/);
+  assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!build/install-aws-lc.sh')),
+    /install-aws-lc\.sh is explicitly copied but excluded/);
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!web/scripts/mediasoup-runtime.mjs')),
     /mediasoup-runtime\.mjs is explicitly copied but excluded/);
   assert.throws(() => verifyLocalCopySources(ignoreRules.filter(rule => rule !== '!security/exceptions.json')),
@@ -284,19 +284,22 @@ test('the builder stage loads every workspace member before warming dependencies
 });
 
 test('the builder authenticates cargo-auditable with the security crate built from its real sources', () => {
-  // The stubs come first, because Cargo loads every manifest; the installer is then
-  // compiled from the checkout's own sources, never from a stub, and both
-  // application builds run the executable it installed and verified.
+  // The stubs come first, because Cargo loads every manifest; the security crate is
+  // then compiled from the checkout's own sources, never from a stub. It verifies the
+  // vendored sources before the dependency warm-up compiles any of them, both
+  // application builds run the cargo-auditable it installed and verified, and it
+  // writes the native evidence from the final build's messages.
   const builder = dockerfile.split(/\bAS builder\s*\n/i)[1]?.split(/^FROM /m)[0];
   assert.ok(builder, 'Dockerfile must retain its builder stage');
   const order = [
     /> crates\/security\/src\/lib\.rs(?=\s|$)/,
     /^COPY build\/security-tools\.lock\.json \.\/build\/$/m,
     /^COPY crates\/security\/src \.\/crates\/security\/src$/m,
-    /^RUN cargo build --locked --release -p simplestchat-security --no-default-features --bin simplestchat-security +&& target\/release\/simplestchat-security tools install --tools cargo-auditable --directory \/opt\/security-tools$/m,
+    /^RUN cargo build --locked --release -p simplestchat-security --no-default-features --bin simplestchat-security +&& target\/release\/simplestchat-security vendor verify --cache \/tmp\/vendor-cache --output \/app\/vendor-evidence +&& target\/release\/simplestchat-security tools install --tools cargo-auditable --directory \/opt\/security-tools$/m,
     /^RUN \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,
     /^COPY src \.\/src$/m,
     /^RUN target\/release\/simplestchat-security tools path cargo-auditable --directory \/opt\/security-tools +&& \/opt\/security-tools\/bin\/cargo-auditable auditable build --locked --release --bin simplestChat /m,
+    /^RUN target\/release\/simplestchat-security native --root \/app +--vendor-report \/app\/vendor-evidence\/report\.json /m,
   ].map(pattern => builder.search(pattern));
   assert.ok(order.every(position => position >= 0), `every builder step is present: ${order}`);
   assert.deepEqual(order, order.toSorted((left, right) => left - right), 'the builder steps keep their order');
@@ -304,6 +307,10 @@ test('the builder authenticates cargo-auditable with the security crate built fr
   assert.equal(builder.match(/simplestchat-security tools /g).length, 2);
   assert.ok(!dockerfile.includes('security_tools.py'), 'no stage installs through the retired installer');
   assert.equal(excluded('build/security_tools.py'), true, 'the retired installer stays outside the context');
+  for (const retired of ['build/security_vendor.py', 'build/security_elf.py']) {
+    assert.ok(!dockerfile.includes(retired.slice('build/'.length)), `no stage runs ${retired}`);
+    assert.equal(excluded(retired), true, `${retired} stays outside the context`);
+  }
   assert.equal(excluded('crates/security/src/tools/recorded_tools.json'), true);
 });
 
@@ -763,8 +770,6 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
     '!ops/src/release/attestation/verify/',
     'ops/src/release/attestation/verify/**',
     '!ops/src/release/attestation/verify/*.rs',
-    '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
-    '!ops/ansible/files/bounded_process.py', '!ops/ansible/files/release_json.py',
   ].toSorted());
   assert.match(dockerfile, /^COPY ops\/Cargo\.toml ops\/Cargo\.toml$/m);
   assert.match(dockerfile, /^COPY ops\/src \.\/ops\/src$/m);
