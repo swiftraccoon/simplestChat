@@ -156,7 +156,7 @@ fn rust_license_join(packages: &mut [Document], native: &Document, elf: &Documen
 /// Fedora rpm that `owner` names, by its name, its epoch, version, release
 /// and machine, and its source package, so that advisories of rpms reach
 /// it.
-fn static_rpm(package: &mut Document, owner: [&str; 3]) -> Result<()> {
+pub(crate) fn static_rpm(package: &mut Document, owner: [&str; 3]) -> Result<()> {
     const NEVRA: Fault = Fault("image_static_rpm_nevra");
     let [name, identity, source] = owner;
     let (epoch, nevra) = identity.split_once(':').ok_or(NEVRA)?;

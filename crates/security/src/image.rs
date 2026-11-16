@@ -19,6 +19,10 @@ pub mod licenses;
 pub mod notices;
 pub mod outputs;
 pub mod policy;
+#[cfg(test)]
+mod review_licenses_tests;
+#[cfg(test)]
+mod review_secrets_tests;
 pub mod runner;
 pub mod runtime;
 pub mod sandbox;

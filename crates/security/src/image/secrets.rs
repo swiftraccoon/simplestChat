@@ -33,7 +33,7 @@ const COORDINATES: [(&str, &str); 4] = [
 /// The fingerprint of the region that the resolved `span` names: a digest
 /// of its rule, its path, its format, its size and its digest, never of
 /// what it holds.
-fn fingerprint(span: &Document, limits: &spans::Limits) -> Result<String> {
+pub(crate) fn fingerprint(span: &Document, limits: &spans::Limits) -> Result<String> {
     let resolved = span.get("status") == Some(&"resolved".into());
     require(resolved, "image_secret_span_unresolved")?;
     // The binding has seen that the rule and the path are text.
