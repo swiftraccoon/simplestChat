@@ -23,10 +23,11 @@ path = "src/main.rs"
 [features]
 default = ["image"]
 # The checks of a saved image, which authenticate it with the release
-# verifier of the ops crate. The image build compiles this crate without
+# verifier of the ops crate and let SIGINT and SIGTERM cancel the scanners
+# instead of ending the gate. The image build compiles this crate without
 # them, before the ops sources are there, for the three commands it runs
 # inside the builder.
-image = ["dep:simplestchat-ops"]
+image = ["dep:signal-hook", "dep:simplestchat-ops"]
 
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
@@ -37,6 +38,7 @@ serde = "1.0.229"
 serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
+signal-hook = { version = "=0.4.5", default-features = false, optional = true }
 simplestchat-ops = { path = "../../ops", default-features = false, optional = true }
 tar = { version = "=0.4.46", default-features = false }
 toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }

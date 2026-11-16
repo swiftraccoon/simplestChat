@@ -8,8 +8,11 @@ pub mod advisories;
 pub mod archive;
 pub mod bindings;
 pub mod cache;
+mod cli;
 pub mod diagnostic;
 pub mod enrich;
+pub mod gate;
+pub mod host;
 pub mod license_identity;
 pub mod licenses;
 pub mod notices;
@@ -63,7 +66,8 @@ pub(crate) fn stopped(stop: elf::Stop, missing: &'static str, unreadable: &'stat
 }
 
 const USAGE: &str = "usage: simplestchat-security image archive --archive FILE --manifest FILE \
-    --output DIR | image cache [--prefix | --status FILE]";
+    --output DIR | image cache [--prefix | --status FILE] | image scan ... | image \
+    prepare-database ...";
 
 /// Run a command of the image tier for the checkout at `root`.
 pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
@@ -72,6 +76,8 @@ pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
             let ambient = |name: &str| std::env::var_os(name);
             return cache::run(root, rest, &ambient);
         }
+        Some((command, rest)) if command == "scan" => return cli::scan(root, rest),
+        Some((command, rest)) if command == "prepare-database" => return cli::prepare(root, rest),
         Some((command, rest)) if command == "archive" => archive::asked(rest),
         _ => None,
     };

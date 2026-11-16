@@ -970,8 +970,8 @@ pub fn audit(root: &Path, platform_name: &str) -> std::result::Result<Document, 
     ]))
 }
 
-/// The report of an audit, whichever way it ended.
-fn report(audited: std::result::Result<Document, Stop>) -> (Document, bool) {
+/// The report of an audit, whichever way it ended, and whether it passed.
+pub(crate) fn report(audited: std::result::Result<Document, Stop>) -> (Document, bool) {
     let refusal = match audited {
         Ok(report) => return (report, true),
         Err(Stop::Refused(refusal)) => refusal,

@@ -555,7 +555,7 @@ fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
         &["image", "archive"],
         &[
             "image",
-            "scan",
+            "extract",
             "--archive",
             "a",
             "--manifest",
@@ -644,6 +644,68 @@ fn an_image_archive_check_that_is_not_asked_for_properly_is_told_the_usage() {
             usage.starts_with("usage: simplestchat-security image archive --archive FILE "),
             "{usage}"
         );
+    }
+}
+
+#[cfg(feature = "image")]
+#[test]
+fn an_image_scan_or_preparation_that_is_not_asked_for_properly_is_told_the_usage() {
+    for arguments in [
+        &["image", "scan"][..],
+        &[
+            "image",
+            "scan",
+            "sha256:a",
+            "--output",
+            "o",
+            "--tools-directory",
+            "t",
+        ],
+        &[
+            "image",
+            "scan",
+            "sha256:a",
+            "--artifact-dir",
+            "a",
+            "--output",
+            "o",
+        ],
+        &[
+            "image",
+            "scan",
+            "--artifact-dir",
+            "a",
+            "--output",
+            "o",
+            "--tools-directory",
+            "t",
+        ],
+        &["image", "prepare-database"],
+        &[
+            "image",
+            "prepare-database",
+            "--output",
+            "o",
+            "--tools-directory",
+            "t",
+        ],
+        &[
+            "image",
+            "prepare-database",
+            "--output",
+            "o",
+            "--database-cache",
+            "c",
+        ],
+        &["image", "prepare-database", "sha256:a", "--output", "o"],
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert_eq!(text(&output.stdout), "", "{arguments:?}");
+        let usage = text(&output.stderr);
+        let expected = "usage: simplestchat-security image scan IMAGE --artifact-dir DIR ";
+        assert!(usage.starts_with(expected), "{usage}");
+        assert!(usage.contains("\n       simplestchat-security image prepare-database "));
     }
 }
 
