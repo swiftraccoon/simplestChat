@@ -24,7 +24,7 @@ const MAX_INSTANCES: usize = 20_000;
 /// The options that OpenSSL is configured with.
 const CONFIGURED: [&str; 5] = ["no-shared", "no-dso", "no-module", "no-engine", "no-tests"];
 /// What its configuration disables.
-const DISABLED: [&str; 4] = ["shared", "dso", "module", "engine"];
+pub(super) const DISABLED: [&str; 4] = ["shared", "dso", "module", "engine"];
 /// The record of that, as the build writes it.
 const DISABLED_RECORD: &[u8] = b"shared\ndso\nmodule\nengine\n";
 /// The fields of the build's record of OpenSSL.
@@ -65,11 +65,6 @@ fn held<'a>(item: &'a Document, name: &str) -> &'a Document {
 
 fn words(value: &Document) -> Result<&str> {
     value.text().ok_or(SHAPE)
-}
-
-fn names(value: &Document) -> BTreeSet<&str> {
-    let fields = value.fields().unwrap_or_default();
-    fields.iter().map(|(name, _)| name.as_str()).collect()
 }
 
 /// Whether two values are the same whatever the order of their records'
@@ -125,7 +120,7 @@ pub fn aws_lc_build_binding(native: &Document, expected: &Document) -> Result<()
         "bindgen_sha256",
         "files",
     ]);
-    let mut installed = names(build) == fields;
+    let mut installed = build.names() == fields;
     installed = installed
         && same(
             field(build, "configure_options")?,
@@ -138,7 +133,7 @@ pub fn aws_lc_build_binding(native: &Document, expected: &Document) -> Result<()
             field(system, "installer_sha256")?,
         );
     installed = installed && small_hex(words(field(build, "bindgen_sha256")?)?, 64);
-    installed = installed && names(files) == BTreeSet::from(awslc::FILES);
+    installed = installed && files.names() == BTreeSet::from(awslc::FILES);
     for (_, value) in files.fields().unwrap_or_default() {
         installed = installed && small_hex(words(value)?, 64);
     }
@@ -181,9 +176,9 @@ pub fn aws_lc_build_binding(native: &Document, expected: &Document) -> Result<()
 /// exactly the bytes that the build installed.
 pub fn openssl_build_binding(native: &Document, expected: &Document) -> Result<()> {
     let component = record(native.get("openssl"))?;
-    let mut wanted = names(expected);
+    let mut wanted = expected.names();
     wanted.insert("build");
-    let mut bound = names(component) == wanted;
+    let mut bound = component.names() == wanted;
     for (name, value) in expected.fields().unwrap_or_default() {
         bound = bound && same(field(component, name)?, value);
     }
@@ -193,7 +188,7 @@ pub fn openssl_build_binding(native: &Document, expected: &Document) -> Result<(
     let build = record(component.get("build"))?;
     let disabled = Document::List(DISABLED.map(Document::from).to_vec());
     let configuration =
-        names(build) == BTreeSet::from(BUILD) && field(build, "disabled_options")? == &disabled;
+        build.names() == BTreeSet::from(BUILD) && field(build, "disabled_options")? == &disabled;
     require(configuration, "image_openssl_configuration")?;
     let mut headers = Vec::new();
     for name in [
@@ -219,7 +214,7 @@ pub fn openssl_build_binding(native: &Document, expected: &Document) -> Result<(
         if library {
             fields.insert("library");
         }
-        let identity = names(item) == fields
+        let identity = item.names() == fields
             && canonical(path)
             && small_hex(words(field(item, "sha256")?)?, 64)
             && field(item, "size")?

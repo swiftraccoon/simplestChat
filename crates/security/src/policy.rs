@@ -128,7 +128,7 @@ impl Date {
     }
 
     /// The day `days` after 1970-01-01.
-    fn of_epoch_day(days: u64) -> Option<Self> {
+    pub(crate) fn of_epoch_day(days: u64) -> Option<Self> {
         // Days are counted from 0000-03-01 so that a leap day ends its year.
         let shifted = days.checked_add(719_468)?;
         let (era, day_of_era) = (shifted / 146_097, shifted % 146_097);

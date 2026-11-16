@@ -129,6 +129,22 @@ impl Document {
         }
     }
 
+    /// The names of a record's fields.
+    pub fn names(&self) -> std::collections::BTreeSet<&str> {
+        let fields = self.fields().unwrap_or_default();
+        fields.iter().map(|(name, _)| name.as_str()).collect()
+    }
+
+    /// Set the field `name` of a record to `value`: where it is, or last.
+    pub fn put(&mut self, name: &str, value: Self) {
+        if let Self::Record(fields) = self {
+            match fields.iter_mut().find(|(field, _)| field == name) {
+                Some((_, slot)) => *slot = value,
+                None => fields.push((name.to_owned(), value)),
+            }
+        }
+    }
+
     /// The items of a list.
     pub fn items(&self) -> Option<&[Self]> {
         match self {
@@ -192,6 +208,42 @@ impl Document {
         self.spread(0, &mut text);
         text.push('\n');
         text
+    }
+
+    /// The document as the reference writes one to bind: nothing between
+    /// items, ASCII only, and no line end.
+    pub fn compact(&self) -> String {
+        let mut text = String::new();
+        self.press(&mut text);
+        text
+    }
+
+    fn press(&self, text: &mut String) {
+        match self {
+            Self::List(items) => {
+                text.push('[');
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        text.push(',');
+                    }
+                    item.press(text);
+                }
+                text.push(']');
+            }
+            Self::Record(fields) => {
+                text.push('{');
+                for (index, (name, value)) in fields.iter().enumerate() {
+                    if index > 0 {
+                        text.push(',');
+                    }
+                    text.push_str(&quoted(name));
+                    text.push(':');
+                    value.press(text);
+                }
+                text.push('}');
+            }
+            scalar => scalar.spread(0, text),
+        }
     }
 
     fn spread(&self, depth: usize, text: &mut String) {

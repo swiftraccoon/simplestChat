@@ -44,21 +44,6 @@ fn word<'a>(item: &'a Document, name: &str) -> Option<&'a str> {
     item.get(name).and_then(Document::text)
 }
 
-fn names(value: &Document) -> BTreeSet<&str> {
-    let fields = value.fields().unwrap_or_default();
-    fields.iter().map(|(name, _)| name.as_str()).collect()
-}
-
-/// Set the field `name` of a record: where it is, or last.
-fn put(value: &mut Document, name: &str, held: Document) {
-    if let Document::Record(fields) = value {
-        match fields.iter_mut().find(|(field, _)| field == name) {
-            Some((_, slot)) => *slot = held,
-            None => fields.push((name.to_owned(), held)),
-        }
-    }
-}
-
 /// Whether `item` is the package `name` of `version`; an item that lacks
 /// either field is no record of a package.
 fn named(item: &Document, name: &str, version: &str) -> Result<bool> {
@@ -75,7 +60,7 @@ fn named(item: &Document, name: &str, version: &str) -> Result<bool> {
 fn rust_license_join(packages: &mut [Document], native: &Document, elf: &Document) -> Result<()> {
     let metadata = record(elf.get("auditable"))?;
     let declared = record(native.get("rust_dependency_metadata"))?;
-    let mut bound = names(declared) == BTreeSet::from(METADATA);
+    let mut bound = declared.names() == BTreeSet::from(METADATA);
     for (name, value) in declared.fields().unwrap_or_default() {
         bound = bound && metadata.get(name).ok_or(SHAPE)? == value;
     }
@@ -126,7 +111,7 @@ fn rust_license_join(packages: &mut [Document], native: &Document, elf: &Documen
             return Err(Fault("image_rust_license_source"));
         };
         let coverage = record(license.get("evidence"))?;
-        let covered = names(coverage) == BTreeSet::from(["compilerArtifact", "embeddedMetadata"])
+        let covered = coverage.names() == BTreeSet::from(["compilerArtifact", "embeddedMetadata"])
             && matches!(coverage.get("compilerArtifact"), Some(Document::Bool(_)))
             && coverage.get("embeddedMetadata") == Some(&Document::Bool(true));
         require(covered, "image_rust_license_coverage")?;
@@ -161,11 +146,7 @@ fn rust_license_join(packages: &mut [Document], native: &Document, elf: &Documen
                 ("locations", Document::List(Vec::new())),
             ])
         });
-        put(
-            package,
-            "licenses",
-            Document::List(joined.into_iter().collect()),
-        );
+        package.put("licenses", Document::List(joined.into_iter().collect()));
         seen.insert(identity);
     }
     require(runtime.is_subset(&seen), "image_rust_runtime_coverage")
@@ -207,10 +188,10 @@ fn static_rpm(package: &mut Document, owner: [&str; 3]) -> Result<()> {
         escaped(version_release, false),
         query.join("&")
     );
-    put(package, "type", "rpm".into());
-    put(package, "version", version_release.into());
-    put(package, "purl", purl.into());
-    put(package, "metadataType", "rpm-db-entry".into());
+    package.put("type", "rpm".into());
+    package.put("version", version_release.into());
+    package.put("purl", purl.into());
+    package.put("metadataType", "rpm-db-entry".into());
     let metadata = Document::record([
         ("name", name.into()),
         ("version", version.into()),
@@ -220,7 +201,7 @@ fn static_rpm(package: &mut Document, owner: [&str; 3]) -> Result<()> {
         ("sourceRpm", source.into()),
         ("files", Document::List(Vec::new())),
     ]);
-    put(package, "metadata", metadata);
+    package.put("metadata", metadata);
     Ok(())
 }
 
@@ -341,7 +322,7 @@ pub fn enrich_sbom(
         .any(|item| word(item, "id").is_some_and(|id| observed.contains(id)));
     require(!collides, "image_native_package_collision")?;
     packages.extend(supplemental);
-    put(&mut value, "artifacts", Document::List(packages));
+    value.put("artifacts", Document::List(packages));
     let metadata = field(&mut value, "source").and_then(|source| field(source, "metadata"));
     let Some(Document::Record(fields)) = metadata else {
         return Err(SHAPE);

@@ -160,6 +160,17 @@ fn image(config: &Json) -> Judged {
     environment_names(&names)
 }
 
+/// The image's own execution defaults in the configuration `config`, as a
+/// launcher requires them: a fixed code, or nothing for a field that is not
+/// there or a value of the wrong shape.
+pub fn image_defaults(config: &[u8]) -> Result<(), Option<&'static str>> {
+    let config = json::decode(config).map_err(|_| None)?;
+    image(&config).map_err(|refusal| match refusal {
+        Refusal::Code(code) => Some(code),
+        Refusal::Key | Refusal::Value => None,
+    })
+}
+
 /// Require one managed service to run `selected` as shipped: its user,
 /// command and isolation, no forbidden environment name, the migration
 /// switch of its role, the one read-only mount of the socket directory and
