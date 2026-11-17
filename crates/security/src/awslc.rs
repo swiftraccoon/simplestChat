@@ -197,7 +197,7 @@ fn release_files(source: &Source, data: &[u8], limits: &Limits) -> Verdict<Files
     let mut files = Files::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     archive::tar_each(&expanded, &mut |name, kind, size, body| {
-        if kind == Kind::Other {
+        if matches!(kind, Kind::Other | Kind::Link) {
             return Err(problem("AWS-LC unsupported archive member"));
         }
         let key = manifest::relative_path(name.strip_suffix('/').unwrap_or(name))?.to_owned();

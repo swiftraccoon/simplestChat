@@ -1,12 +1,12 @@
 //! The offline sandbox a suite runs in, the image it is made of, and what a
 //! build and a replay run in it.
 
-use super::{
-    FAMILIES, MODES,
+use super::{FAMILIES, MODES, hexadecimal as small_hex};
+use crate::{
+    Fault, Result,
     budget::{Budget, MAX_WORKERS},
-    hexadecimal as small_hex,
+    require,
 };
-use crate::{Fault, Result, require};
 
 /// The label that binds an image to the digest of its inputs.
 pub const INPUT_LABEL: &str = "org.simplestchat.native-security.inputs";

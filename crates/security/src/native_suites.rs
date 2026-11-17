@@ -3,7 +3,6 @@
 //! sandbox of a local engine whose image is built from exactly the inputs it
 //! binds. These are local checks only; no automated run may start them.
 
-pub mod budget;
 pub mod cli;
 pub mod compiled;
 pub mod corpus;

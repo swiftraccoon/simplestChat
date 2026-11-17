@@ -22,8 +22,11 @@ const ESCAPED: &str = "Unsafe or noncanonical path: 'pkg-1.0/caf\\xe9'";
 /// Tar archives that both refuse in other words: the reference in those of
 /// its gzip and tar libraries, and with a name that is no ASCII shown as it
 /// is. A sparse member and a header without its file are found here by the
-/// reader of the archive.
-const REWORDED_TARS: [(&str, &str); 15] = [
+/// reader of the archive; so are a pax sparse map that the reference's
+/// library failed to read as numbers, once in the member's own bytes and
+/// once after two headers for the whole archive had it read the map twice,
+/// and such a header that no member follows.
+const REWORDED_TARS: [(&str, &str); 18] = [
     ("nothing", GZIP),
     ("no gzip", GZIP),
     ("text", GZIP),
@@ -39,6 +42,15 @@ const REWORDED_TARS: [(&str, &str); 15] = [
     ("a tar cut short after a header", "Tar member size differs"),
     ("a name that is no ASCII", ESCAPED),
     ("a name that is no ASCII in the GNU format", ESCAPED),
+    (
+        "a sparse member of pax 1.0 whose map is no number",
+        "Unsupported tar member type",
+    ),
+    (
+        "two global headers before a member",
+        "Unsupported tar member type",
+    ),
+    ("a global sparse map after the members", TAR),
 ];
 
 /// Zip archives that both refuse in other words.
@@ -156,7 +168,7 @@ fn every_recorded_archive_is_read_alike() {
         let read = files(&source, &archive(case), &Bounds::REVIEWED);
         tally[2][alike(&REWORDED_SOURCES, case, &read)] += 1;
     }
-    assert_eq!(tally, [[30, 23, 15, 1], [20, 18, 9, 2], [2, 3, 2, 0]]);
+    assert_eq!(tally, [[45, 35, 18, 1], [20, 18, 9, 2], [2, 3, 2, 0]]);
 }
 
 /// The archive of the recorded case `name`.

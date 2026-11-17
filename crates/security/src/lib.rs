@@ -14,12 +14,19 @@
 //! sources with the reviewed local rules, `migrations` lints new migrations
 //! in the mode they run in, `mutation` holds the tests of the pure policy
 //! functions to every change of them, `fast` holds the checks of the fast
-//! tier, `tier` composes the tiers and reads their command line, and
+//! tier, `tier` composes the tiers and reads their command line,
 //! `rulesets` reconciles the repository's rulesets on GitHub with their
-//! policy.
+//! policy, `budget` bounds a fresh native build by what the host and its
+//! control groups allow, and `codeql` holds the CodeQL tier's own steps:
+//! the pinned analyzer, the proof of a native extraction, the Rust
+//! extractor's dependency build and the exact sources a finding is bound
+//! to.
 
 pub mod actions;
+pub(crate) mod arguments;
 pub mod awslc;
+pub mod budget;
+pub mod codeql;
 pub mod context;
 pub(crate) mod document;
 pub mod elf;
@@ -37,6 +44,7 @@ pub mod native;
 #[cfg(feature = "image")]
 pub mod native_suites;
 pub mod openssl;
+pub(crate) mod paths;
 pub mod policy;
 pub(crate) mod record;
 pub mod rulesets;

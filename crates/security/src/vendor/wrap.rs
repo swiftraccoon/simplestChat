@@ -32,11 +32,11 @@ const ALLOWED: [&str; 10] = [
 /// The values of one section, by their names.
 type Section = Vec<(String, Vec<String>)>;
 
-/// The sections of a wrap file with their values, and whether the section
-/// of defaults holds any. Nothing for a file that the reference's library
-/// refuses: a value before any section, a line that is neither, and a
-/// section or a name that is given twice.
-fn sections(text: &str) -> Option<(Vec<(String, Section)>, bool)> {
+/// The sections of a wrap file with their values, and the section of
+/// defaults. Nothing for a file that the reference's library refuses: a
+/// value before any section, a line that is neither, and a section or a
+/// name that is given twice.
+fn sections(text: &str) -> Option<(Vec<(String, Section)>, Section)> {
     let mut sections: Vec<(String, Section)> = Vec::new();
     let mut defaults: Section = Vec::new();
     // Where the values go: nowhere yet, the defaults, or a section.
@@ -104,13 +104,30 @@ fn sections(text: &str) -> Option<(Vec<(String, Section)>, bool)> {
         named = !name.is_empty();
         section.push((name, vec![value[at + 1..].trim_matches(space).to_owned()]));
     }
-    sound.then_some((sections, !defaults.is_empty()))
+    sound.then_some((sections, defaults))
+}
+
+/// The value of `name` in the section `section` of the wrap file `text`,
+/// or of the defaults where the section has none, as the reference's
+/// library answers it: its lines joined, with no white space at its end.
+/// The outer nothing is a file that library refuses, the inner one a
+/// section or a value that is not there.
+pub(crate) fn value(text: &str, section: &str, name: &str) -> Option<Option<String>> {
+    let (sections, defaults) = sections(text)?;
+    let Some((_, values)) = sections.iter().find(|(held, _)| held == section) else {
+        return Some(None);
+    };
+    let found = values
+        .iter()
+        .chain(&defaults)
+        .find(|(held, _)| held == name);
+    Some(found.map(|(_, lines)| lines.join("\n").trim_end_matches(space).to_owned()))
 }
 
 /// Hold the wrap file `text` of `wrap` to the record: one pinned file
 /// source, with what the record says of its fallback, its remote patch and
 /// its local overlay, whose files must be among `local`.
-pub(super) fn validate<'a>(
+pub(crate) fn validate<'a>(
     wrap: &Wrap,
     manifest: &Manifest,
     text: &[u8],
@@ -121,6 +138,7 @@ pub(super) fn validate<'a>(
     let text = std::str::from_utf8(text).map_err(|_| refused("Native wrap is no UTF-8 text"))?;
     let (sections, defaults) =
         sections(text).ok_or_else(|| refused("Native wrap is no configuration"))?;
+    let defaults = !defaults.is_empty();
     let pinned = sections.iter().find(|(name, _)| name == "wrap-file");
     let others = sections
         .iter()

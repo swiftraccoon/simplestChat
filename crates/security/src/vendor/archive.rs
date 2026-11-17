@@ -21,15 +21,17 @@ use std::{
 };
 
 /// What an archive has been found to hold so far.
-struct Budget {
+pub(crate) struct Budget {
     bounds: Bounds,
     seen: BTreeSet<String>,
-    files: Files,
+    /// The files admitted so far, with their bytes.
+    pub(crate) files: Files,
     size: u64,
 }
 
 impl Budget {
-    fn new(bounds: &Bounds) -> Self {
+    /// Nothing yet, within `bounds`.
+    pub(crate) fn new(bounds: &Bounds) -> Self {
         Self {
             bounds: *bounds,
             seen: BTreeSet::new(),
@@ -39,7 +41,7 @@ impl Budget {
     }
 
     /// Admit the member `name` of `size` bytes and answer its path.
-    fn reserve(&mut self, name: &str, size: u64, directory: bool) -> Verdict<String> {
+    pub(crate) fn reserve(&mut self, name: &str, size: u64, directory: bool) -> Verdict<String> {
         let name = if directory {
             name.strip_suffix('/').unwrap_or(name)
         } else {
@@ -103,7 +105,9 @@ pub(crate) enum Kind {
     Directory,
     /// A file with bytes of its own.
     File,
-    /// A link, a device, a pipe or anything else.
+    /// A symbolic link.
+    Link,
+    /// A hard link, a device, a pipe or anything else.
     Other,
 }
 
@@ -111,34 +115,114 @@ pub(crate) enum Kind {
 /// is, the bytes it says it has, and those bytes.
 pub(crate) type Visit<'a> = dyn FnMut(&str, Kind, u64, &mut dyn Read) -> Verdict<()> + 'a;
 
+/// The records of a pax header, added to `into` in their order: a key that
+/// is there already keeps its place and takes the new value, as the
+/// reference's library kept them.
+fn recorded(extensions: tar::PaxExtensions<'_>, into: &mut Vec<(String, String)>) -> Verdict<()> {
+    for extension in extensions {
+        let unreadable = || problem("Unreadable tar archive");
+        let extension = extension.map_err(|_| unreadable())?;
+        let (Ok(key), Ok(value)) = (extension.key(), extension.value()) else {
+            return Err(unreadable());
+        };
+        match into.iter_mut().find(|(held, _)| held == key) {
+            Some((_, held)) => value.clone_into(held),
+            None => into.push((key.to_owned(), value.to_owned())),
+        }
+    }
+    Ok(())
+}
+
+/// The value `records` give `key`.
+fn record<'a>(records: &'a [(String, String)], key: &str) -> Option<&'a str> {
+    let found = records.iter().find(|(held, _)| held == key);
+    found.map(|(_, value)| value.as_str())
+}
+
+/// Whether `records` say that the member they reach is a sparse file, as
+/// the reference's library read them: a map of its blocks, the size of
+/// the old form, or the version 1.0.
+fn sparse(records: &[(String, String)]) -> bool {
+    record(records, "GNU.sparse.map").is_some()
+        || record(records, "GNU.sparse.size").is_some()
+        || (record(records, "GNU.sparse.major") == Some("1")
+            && record(records, "GNU.sparse.minor") == Some("0"))
+}
+
+/// The name `records` give a member where the reference's library renamed
+/// it and this one does not: from a sparse file's name, or from a path
+/// that a header for the whole archive gave, the one of the two given last
+/// winning, a path without the slashes at its end.
+fn pax_name(records: &[(String, String)], global: &[(String, String)]) -> Option<String> {
+    let named = record(records, "GNU.sparse.name").is_some() || record(global, "path").is_some();
+    let mut names = records
+        .iter()
+        .filter_map(|(key, value)| match key.as_str() {
+            "path" => Some(value.trim_end_matches('/').to_owned()),
+            "GNU.sparse.name" => Some(value.clone()),
+            _ => None,
+        });
+    names.next_back().filter(|_| named)
+}
+
 /// Walk the members of the unpacked tar archive `expanded` in their order.
 /// A directory is named without the slashes at its end, and a header that
-/// speaks for the whole archive is passed over.
+/// speaks for the whole archive is passed over, but kept: its records
+/// reach every later member as the reference's library let them. A member
+/// that the records reaching it say is sparse is no file: the records of
+/// its own header do, over those for the whole archive, and so do the
+/// latter alone for the member right after them. A header for the whole
+/// archive that no member follows leaves the archive unreadable.
 pub(crate) fn tar_each(expanded: &[u8], visit: &mut Visit<'_>) -> Verdict<()> {
     let unreadable = || problem("Unreadable tar archive");
     if expanded.is_empty() {
         return Err(unreadable());
     }
     let mut archive = tar::Archive::new(Cursor::new(expanded));
+    let mut global: Vec<(String, String)> = Vec::new();
+    let mut after_global = false;
     for entry in archive.entries().map_err(|_| unreadable())? {
         let mut entry = entry.map_err(|_| unreadable())?;
         let kind = entry.header().entry_type();
+        let extensions = entry.pax_extensions().map_err(|_| unreadable())?;
         if kind.is_pax_global_extensions() {
+            if let Some(extensions) = extensions {
+                recorded(extensions, &mut global)?;
+            }
+            after_global = true;
             continue;
         }
+        let mut reaching = global.clone();
+        let own = extensions.is_some();
+        if let Some(extensions) = extensions {
+            recorded(extensions, &mut reaching)?;
+        }
+        let marked = (own || after_global) && sparse(&reaching);
+        after_global = false;
         let path = entry.path_bytes().into_owned();
         let name = std::str::from_utf8(&path).unwrap_or("\u{fffd}");
         let directory =
             kind.is_dir() || (entry.header().as_bytes()[156] == 0 && name.ends_with('/'));
-        let (kind, name) = if directory {
+        let renamed = pax_name(&reaching, &global);
+        let name = renamed.as_deref().unwrap_or(name);
+        let (kind, name) = if marked {
+            (Kind::Other, name)
+        } else if directory {
             (Kind::Directory, name.trim_end_matches('/'))
         } else if kind.is_file() || kind.is_contiguous() {
             (Kind::File, name)
+        } else if kind.is_symlink() {
+            (Kind::Link, name)
         } else {
             (Kind::Other, name)
         };
         let size = entry.size();
         visit(name, kind, size, &mut entry)?;
+    }
+    // The reference's library read the member a header for the whole
+    // archive speaks for, and found the archive's end instead.
+    if after_global {
+        return Err(unreadable());
     }
     Ok(())
 }
@@ -149,7 +233,7 @@ fn tar_members(data: &[u8], bounds: &Bounds) -> Verdict<Files> {
     let expanded = unpacked(data, bounds.content, budget)?;
     let mut budget = Budget::new(bounds);
     tar_each(&expanded, &mut |name, kind, size, content| {
-        if kind == Kind::Other {
+        if matches!(kind, Kind::Other | Kind::Link) {
             return Err(problem("Unsupported tar member type"));
         }
         let directory = kind == Kind::Directory;

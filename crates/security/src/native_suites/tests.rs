@@ -189,7 +189,7 @@ fn every_recorded_budget_is_reckoned_alike() {
         let cpus = u64::try_from(whole(&case, "cpus")).expect("cpus");
         let memory = u64::try_from(whole(&case, "memoryBytes")).expect("bytes");
         let requested = case.get("override").and_then(Document::text);
-        let came = super::budget::budget(cpus, memory, requested).map(|budget| {
+        let came = crate::budget::budget(cpus, memory, requested).map(|budget| {
             Document::List(vec![
                 budget.workers.into(),
                 budget.ram_mib.into(),
@@ -213,7 +213,7 @@ fn every_recorded_sandbox_is_made_alike() {
             .iter()
             .map(|number| number.whole().expect("a number"))
             .collect();
-        let budget = super::budget::Budget {
+        let budget = crate::budget::Budget {
             workers: u64::try_from(numbers[0]).expect("workers"),
             ram_mib: u64::try_from(numbers[1]).expect("memory"),
             query_ram_mib: i64::try_from(numbers[2]).expect("the queries' memory"),
@@ -547,7 +547,7 @@ fn every_recorded_control_group_is_read_alike() {
             fs::write(&membership, listed).expect("a membership");
         }
         let came =
-            super::budget::cgroup_limits(&root, &membership).map(|(mut cpus, mut memory)| {
+            crate::budget::cgroup_limits(&root, &membership).map(|(mut cpus, mut memory)| {
                 cpus.sort_unstable();
                 memory.sort_unstable();
                 let list = |values: Vec<u64>| {
@@ -1078,7 +1078,7 @@ fn repository() -> PathBuf {
 }
 
 /// What a build may use in these tests.
-const BUDGET: super::budget::Budget = super::budget::Budget {
+const BUDGET: crate::budget::Budget = crate::budget::Budget {
     workers: 2,
     ram_mib: 6144,
     query_ram_mib: 14_000,
@@ -1094,7 +1094,7 @@ fn secs(seconds: u64) -> Duration {
 }
 
 /// The budget of these tests, asked for.
-fn budgeted() -> crate::Result<super::budget::Budget> {
+fn budgeted() -> crate::Result<crate::budget::Budget> {
     Ok(BUDGET)
 }
 
@@ -1174,7 +1174,7 @@ fn hosted<T>(
     root: &Path,
     engine: &mut Sandboxed,
     architecture: crate::Result<&'static str>,
-    budget: &dyn Fn() -> crate::Result<super::budget::Budget>,
+    budget: &dyn Fn() -> crate::Result<crate::budget::Budget>,
     operation: impl FnOnce(&mut super::run::Host<'_>) -> T,
 ) -> T {
     let clock = Rc::clone(&engine.clock);
@@ -1917,7 +1917,7 @@ fn a_failing_build_step_is_the_builds_exit_status_one_and_publishes_nothing() {
         let directory = bench.scratch.0.join(format!("compiled-{index}"));
         let mut engine = bench.engine();
         engine.script.clone_from(&script);
-        let budget = super::budget::Budget { workers, ..BUDGET };
+        let budget = crate::budget::Budget { workers, ..BUDGET };
         let budget = move || Ok(budget);
         let compiled = hosted(&bench.root, &mut engine, Ok("amd64"), &budget, |host| {
             super::run::compile(host, &request("asan", Some(&directory)), &output)
@@ -3079,7 +3079,7 @@ fn a_kept_builds_directory_must_be_named_as_it_resolves() {
         (String::new(), false),
         (".".to_owned(), false),
     ] {
-        let found = super::compiled::canonical(Path::new(&path));
+        let found = crate::paths::canonical(Path::new(&path));
         assert_eq!(found, canonical, "{path}");
     }
     // A build is refused a directory named otherwise, or one that is there,
@@ -3150,7 +3150,7 @@ fn an_unsupported_machine_is_refused_where_the_reference_first_asked_it() {
 fn a_builds_budget_is_asked_as_its_sandbox_is_made() {
     let bench = Bench::new("budget");
     let refused =
-        || -> crate::Result<super::budget::Budget> { Err(Fault("codeql_insufficient_resources")) };
+        || -> crate::Result<crate::budget::Budget> { Err(Fault("codeql_insufficient_resources")) };
     let output = bench.directory("prepared");
     let mut engine = bench.engine();
     let prepared = hosted(&bench.root, &mut engine, Ok("amd64"), &refused, |host| {

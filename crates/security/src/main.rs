@@ -1,5 +1,6 @@
-//! `simplestchat-security fast|deep`, `tools install|path` and
-//! `rulesets plan|check|apply`: the security gate's command line.
+//! `simplestchat-security fast|deep`, `tools install|path`,
+//! `codeql jobs|coverage|tools|cargo-key` and `rulesets plan|check|apply`:
+//! the security gate's command line.
 
 use std::{
     path::{Path, PathBuf},
@@ -42,6 +43,9 @@ fn main() -> ExitCode {
         }
         (Some(root), Some([group, rest @ ..])) if group == "vendor" => {
             simplestchat_security::vendor::verify::run(&root, rest)
+        }
+        (Some(root), Some([group, rest @ ..])) if group == "codeql" => {
+            simplestchat_security::codeql::run(&root, rest)
         }
         (Some(root), Some([group, rest @ ..])) if group == "tools" => {
             simplestchat_security::tools::run(&root, rest)

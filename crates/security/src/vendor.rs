@@ -11,7 +11,7 @@ pub(crate) mod diff;
 pub mod manifest;
 pub mod tree;
 pub mod verify;
-mod wrap;
+pub(crate) mod wrap;
 
 /// What the verifier complains of.
 #[derive(Clone, Debug, PartialEq, Eq)]

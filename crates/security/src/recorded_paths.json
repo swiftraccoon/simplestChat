@@ -1,0 +1,177 @@
+{
+ "cases": [
+  {
+   "canonical": false,
+   "path": "<place>/a/../b",
+   "resolved": "<place>/b"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/a/b/../../c",
+   "resolved": "<place>/c"
+  },
+  {
+   "canonical": false,
+   "path": "/..",
+   "resolved": "/"
+  },
+  {
+   "canonical": false,
+   "path": "/../x",
+   "resolved": "/x"
+  },
+  {
+   "canonical": false,
+   "path": "/../..",
+   "resolved": "/"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/link/..",
+   "resolved": "<place>/real"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/link/../x",
+   "resolved": "<place>/real/x"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/link/../..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/sub/..",
+   "resolved": "<place>/real"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/missing/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/relative/..",
+   "resolved": "<place>/real"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/relative/../sub",
+   "resolved": "<place>/real/sub"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/twice/..",
+   "resolved": "<place>/real"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/twice/../sub/file",
+   "resolved": "<place>/real/sub/file"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/./sub/../sub",
+   "resolved": "<place>/real/sub"
+  },
+  {
+   "canonical": false,
+   "path": "//x/..",
+   "resolved": "/"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/loop/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": true,
+   "path": "<place>/loop/x",
+   "resolved": "<place>/loop/x"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/up/sub",
+   "resolved": "<place>/sub"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/up/real/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/dangling/..",
+   "resolved": "<place>/nowhere"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/dangling",
+   "resolved": "<place>/nowhere/deeper"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/sub/file/..",
+   "resolved": "<place>/real/sub"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/real/sub/file/../file",
+   "resolved": "<place>/real/sub/file"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/link/./file",
+   "resolved": "<place>/real/sub/file"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/a/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/a/../real/..",
+   "resolved": "<place>"
+  },
+  {
+   "canonical": false,
+   "path": "<place>/link",
+   "resolved": "<place>/real/sub"
+  },
+  {
+   "canonical": true,
+   "path": "<place>/real/sub",
+   "resolved": "<place>/real/sub"
+  }
+ ],
+ "tree": {
+  "dangling": {
+   "link": "<place>/nowhere/deeper"
+  },
+  "link": {
+   "link": "<place>/real/sub"
+  },
+  "loop": {
+   "link": "<place>/loop"
+  },
+  "real/sub/file": {
+   "text": "x"
+  },
+  "real/up": {
+   "link": ".."
+  },
+  "relative": {
+   "link": "real/sub"
+  },
+  "twice": {
+   "link": "<place>/link"
+  }
+ }
+}

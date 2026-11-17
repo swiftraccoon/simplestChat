@@ -79,7 +79,7 @@ impl Network<'_> {
 
 /// The real directory `path` of the caller's that nobody else may enter,
 /// made first when `create` says so.
-fn private_directory(path: &Path, create: bool) -> Verdict<PathBuf> {
+pub(crate) fn private_directory(path: &Path, create: bool) -> Verdict<PathBuf> {
     let shown = path.display();
     if create {
         let made = std::fs::DirBuilder::new().mode(0o700).create(path);
@@ -99,7 +99,7 @@ fn private_directory(path: &Path, create: bool) -> Verdict<PathBuf> {
 
 /// The bytes of `source`: the cache's, or fetched and kept there under
 /// their digest. Whichever they are, they have the digest of the record.
-fn source_bytes(
+pub(crate) fn source_bytes(
     source: &Source,
     cache: &Path,
     network: Option<&mut Network<'_>>,

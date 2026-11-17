@@ -1,0 +1,5883 @@
+{
+ "closures": [
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/account.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/guard.rs"
+   ],
+   "name": "the reference's closure",
+   "result": {
+    "held": {
+     "clients/account.rs": "a9c4c76a6e48e823442ad5d258740448500bf2e3b34db2c3c10cf888fa677e3e",
+     "clients/guard.rs": "36b1f8170048dd3e8884b2553902aa44b3ead9b3e20a83dbdd49917a90381c2b"
+    }
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "fn loopback_only() {}"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "fn loopback_only() {}"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/account.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/guard.rs"
+   ],
+   "name": "an uncommitted edit",
+   "result": {
+    "refused": "codeql_source_revision_mismatch"
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "fn loopback_only() {}"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "edited"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/account.rs"
+   ],
+   "name": "a linked include",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "fn loopback_only() {}"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "link": "<place>/clients/account.rs"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/account.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/guard.rs"
+   ],
+   "name": "a cycle",
+   "result": {
+    "refused": "codeql_rust_include_cycle"
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "include!(\"account.rs\");"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "include!(\"account.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs"
+   ],
+   "name": "a file including itself",
+   "result": {
+    "refused": "codeql_rust_include_cycle"
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "include!(\"main.rs\");"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "include!(\"main.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/account.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:clients/guard.rs"
+   ],
+   "name": "an escape",
+   "result": {
+    "refused": "codeql_rust_include_escape"
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "include!(\"../../escape.rs\");"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "mod account { include!(\"../clients/account.rs\"); }"
+    },
+    "clients/account.rs": {
+     "text": "include!(\"guard.rs\"); fn refresh() {}"
+    },
+    "clients/guard.rs": {
+     "text": "include!(\"../../escape.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bin/main.rs"
+   ],
+   "name": "no includes",
+   "result": {
+    "held": {}
+   },
+   "start": "bin/main.rs",
+   "tracked": {
+    "bin/main.rs": {
+     "text": "fn main() {}"
+    }
+   },
+   "tree": {
+    "bin/main.rs": {
+     "text": "fn main() {}"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:d.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs"
+   ],
+   "name": "a diamond",
+   "result": {
+    "held": {
+     "b.rs": "e6b790f24724da3a2bf35a8833052b9859518d8751828d7b27a077c00866b691",
+     "c.rs": "e6b790f24724da3a2bf35a8833052b9859518d8751828d7b27a077c00866b691",
+     "d.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+    }
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\"); include!(\"c.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"d.rs\");"
+    },
+    "c.rs": {
+     "text": "include!(\"d.rs\");"
+    },
+    "d.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\"); include!(\"c.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"d.rs\");"
+    },
+    "c.rs": {
+     "text": "include!(\"d.rs\");"
+    },
+    "d.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs"
+   ],
+   "name": "an include by two spellings",
+   "result": {
+    "held": {
+     "b.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+    }
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\"); include!(\"./b.rs\"); include!(\"x/../b.rs\");"
+    },
+    "b.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\"); include!(\"./b.rs\"); include!(\"x/../b.rs\");"
+    },
+    "b.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs"
+   ],
+   "name": "a missing include",
+   "result": {
+    "raised": "FileNotFoundError",
+    "words": "[Errno 2] No such file or directory: '<place>/b.rs'"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs"
+   ],
+   "name": "an uncommitted include",
+   "result": {
+    "refused": "codeql_source_revision_mismatch"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs"
+   ],
+   "name": "an include that is no UTF-8",
+   "result": {
+    "raised": "UnicodeDecodeError",
+    "words": "'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "base64": "/w=="
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "base64": "/w=="
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs"
+   ],
+   "name": "a source that is no UTF-8",
+   "result": {
+    "raised": "UnicodeDecodeError",
+    "words": "'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "base64": "/w=="
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "base64": "/w=="
+    }
+   }
+  },
+  {
+   "asked": [],
+   "name": "an absolute source",
+   "result": {
+    "integrity": "Unsafe or noncanonical path: '/a.rs'"
+   },
+   "start": "/a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [],
+   "name": "a missing source",
+   "result": {
+    "raised": "FileNotFoundError",
+    "words": "[Errno 2] No such file or directory: '<place>/a.rs'"
+   },
+   "start": "a.rs",
+   "tracked": {},
+   "tree": {}
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs"
+   ],
+   "name": "an include refused in its text",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(b\"x\");"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(b\"x\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs"
+   ],
+   "name": "an include through a linked directory",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"l/b.rs\");"
+    },
+    "real/b.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"l/b.rs\");"
+    },
+    "l": {
+     "link": "<place>/real"
+    },
+    "real/b.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f0.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f1.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f3.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f4.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f5.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f6.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f7.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f8.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f9.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f10.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f11.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f12.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f13.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f14.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f15.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f16.rs"
+   ],
+   "name": "an include sixteen deep",
+   "result": {
+    "held": {
+     "f1.rs": "948994006e3e081a9e391a8ced5512938e28b15c686a78d7e8d46990cdab81fc",
+     "f10.rs": "8e3547455475999d95bd0fcc7ec56fde0a9903d4918b8b159a38bb6f09840d68",
+     "f11.rs": "4e8935544f416254b9576add78e6fc85eb778db98b792c9e52d3602752b03f35",
+     "f12.rs": "3206f0685728a0aca86c74ea2dc03037b71d96c68d28abf6b9baaa9f3c8d901d",
+     "f13.rs": "56cba884e6a1c0e5f7044e4e35755c2f607f009b66c9cdeaa8cc028fb0ab742a",
+     "f14.rs": "5de4f2920ee0c6f0cfe4f08d148602d4edaf1248c2452f980898cff9d89eb9f3",
+     "f15.rs": "8db000696f05b37053ae904bcb5a610936e86557d079b1eb9e5996a6e287ecf0",
+     "f16.rs": "361e48d0308f20e32dba5fb56328baf18d72ef0ccb43b84f5c262d2a6a1fc6c8",
+     "f2.rs": "a15880166cac58c10164653c0c6434471320b5f79752315d6cb44cb83bf78096",
+     "f3.rs": "37172497d7d118fe955209f25d5a2ba783269b6288db2f340d1ce3946be69a32",
+     "f4.rs": "c31dd5d4d72f25b40b906c77e03671c45bf1bf33e1db81df3c69038f1c3ac565",
+     "f5.rs": "fe11f312c049b60107a889d1cbf6003825e93f49a03d6dca9e34a2fe8e2ff2dc",
+     "f6.rs": "90aeb5217cfbeb6c96e4901de94ebbd6c24faf315bd8366c4a288e233f11eb6f",
+     "f7.rs": "b7f545bc402c69ed8280e1c3a84dd537c2096f9718be51371875661d3f294abe",
+     "f8.rs": "ec2f1f77afbc2f41864a7d68c5acd674d52499f8213bff2e4eda128ae0101af6",
+     "f9.rs": "6d138220e063223eb596da907d1660be686cbde2a50d65877a2fd0614dc01bf9"
+    }
+   },
+   "start": "f0.rs",
+   "tracked": {
+    "f0.rs": {
+     "text": "include!(\"f1.rs\");"
+    },
+    "f1.rs": {
+     "text": "include!(\"f2.rs\");"
+    },
+    "f10.rs": {
+     "text": "include!(\"f11.rs\");"
+    },
+    "f11.rs": {
+     "text": "include!(\"f12.rs\");"
+    },
+    "f12.rs": {
+     "text": "include!(\"f13.rs\");"
+    },
+    "f13.rs": {
+     "text": "include!(\"f14.rs\");"
+    },
+    "f14.rs": {
+     "text": "include!(\"f15.rs\");"
+    },
+    "f15.rs": {
+     "text": "include!(\"f16.rs\");"
+    },
+    "f16.rs": {
+     "text": "end"
+    },
+    "f2.rs": {
+     "text": "include!(\"f3.rs\");"
+    },
+    "f3.rs": {
+     "text": "include!(\"f4.rs\");"
+    },
+    "f4.rs": {
+     "text": "include!(\"f5.rs\");"
+    },
+    "f5.rs": {
+     "text": "include!(\"f6.rs\");"
+    },
+    "f6.rs": {
+     "text": "include!(\"f7.rs\");"
+    },
+    "f7.rs": {
+     "text": "include!(\"f8.rs\");"
+    },
+    "f8.rs": {
+     "text": "include!(\"f9.rs\");"
+    },
+    "f9.rs": {
+     "text": "include!(\"f10.rs\");"
+    }
+   },
+   "tree": {
+    "f0.rs": {
+     "text": "include!(\"f1.rs\");"
+    },
+    "f1.rs": {
+     "text": "include!(\"f2.rs\");"
+    },
+    "f10.rs": {
+     "text": "include!(\"f11.rs\");"
+    },
+    "f11.rs": {
+     "text": "include!(\"f12.rs\");"
+    },
+    "f12.rs": {
+     "text": "include!(\"f13.rs\");"
+    },
+    "f13.rs": {
+     "text": "include!(\"f14.rs\");"
+    },
+    "f14.rs": {
+     "text": "include!(\"f15.rs\");"
+    },
+    "f15.rs": {
+     "text": "include!(\"f16.rs\");"
+    },
+    "f16.rs": {
+     "text": "end"
+    },
+    "f2.rs": {
+     "text": "include!(\"f3.rs\");"
+    },
+    "f3.rs": {
+     "text": "include!(\"f4.rs\");"
+    },
+    "f4.rs": {
+     "text": "include!(\"f5.rs\");"
+    },
+    "f5.rs": {
+     "text": "include!(\"f6.rs\");"
+    },
+    "f6.rs": {
+     "text": "include!(\"f7.rs\");"
+    },
+    "f7.rs": {
+     "text": "include!(\"f8.rs\");"
+    },
+    "f8.rs": {
+     "text": "include!(\"f9.rs\");"
+    },
+    "f9.rs": {
+     "text": "include!(\"f10.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f0.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f1.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f3.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f4.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f5.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f6.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f7.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f8.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f9.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f10.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f11.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f12.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f13.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f14.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f15.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f16.rs"
+   ],
+   "name": "an include seventeen deep",
+   "result": {
+    "refused": "codeql_rust_include_depth"
+   },
+   "start": "f0.rs",
+   "tracked": {
+    "f0.rs": {
+     "text": "include!(\"f1.rs\");"
+    },
+    "f1.rs": {
+     "text": "include!(\"f2.rs\");"
+    },
+    "f10.rs": {
+     "text": "include!(\"f11.rs\");"
+    },
+    "f11.rs": {
+     "text": "include!(\"f12.rs\");"
+    },
+    "f12.rs": {
+     "text": "include!(\"f13.rs\");"
+    },
+    "f13.rs": {
+     "text": "include!(\"f14.rs\");"
+    },
+    "f14.rs": {
+     "text": "include!(\"f15.rs\");"
+    },
+    "f15.rs": {
+     "text": "include!(\"f16.rs\");"
+    },
+    "f16.rs": {
+     "text": "include!(\"f17.rs\");"
+    },
+    "f17.rs": {
+     "text": "end"
+    },
+    "f2.rs": {
+     "text": "include!(\"f3.rs\");"
+    },
+    "f3.rs": {
+     "text": "include!(\"f4.rs\");"
+    },
+    "f4.rs": {
+     "text": "include!(\"f5.rs\");"
+    },
+    "f5.rs": {
+     "text": "include!(\"f6.rs\");"
+    },
+    "f6.rs": {
+     "text": "include!(\"f7.rs\");"
+    },
+    "f7.rs": {
+     "text": "include!(\"f8.rs\");"
+    },
+    "f8.rs": {
+     "text": "include!(\"f9.rs\");"
+    },
+    "f9.rs": {
+     "text": "include!(\"f10.rs\");"
+    }
+   },
+   "tree": {
+    "f0.rs": {
+     "text": "include!(\"f1.rs\");"
+    },
+    "f1.rs": {
+     "text": "include!(\"f2.rs\");"
+    },
+    "f10.rs": {
+     "text": "include!(\"f11.rs\");"
+    },
+    "f11.rs": {
+     "text": "include!(\"f12.rs\");"
+    },
+    "f12.rs": {
+     "text": "include!(\"f13.rs\");"
+    },
+    "f13.rs": {
+     "text": "include!(\"f14.rs\");"
+    },
+    "f14.rs": {
+     "text": "include!(\"f15.rs\");"
+    },
+    "f15.rs": {
+     "text": "include!(\"f16.rs\");"
+    },
+    "f16.rs": {
+     "text": "include!(\"f17.rs\");"
+    },
+    "f17.rs": {
+     "text": "end"
+    },
+    "f2.rs": {
+     "text": "include!(\"f3.rs\");"
+    },
+    "f3.rs": {
+     "text": "include!(\"f4.rs\");"
+    },
+    "f4.rs": {
+     "text": "include!(\"f5.rs\");"
+    },
+    "f5.rs": {
+     "text": "include!(\"f6.rs\");"
+    },
+    "f6.rs": {
+     "text": "include!(\"f7.rs\");"
+    },
+    "f7.rs": {
+     "text": "include!(\"f8.rs\");"
+    },
+    "f8.rs": {
+     "text": "include!(\"f9.rs\");"
+    },
+    "f9.rs": {
+     "text": "include!(\"f10.rs\");"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f62.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f61.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f60.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f59.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f58.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f57.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f56.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f55.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f54.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f53.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f52.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f51.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f50.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f49.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f48.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f47.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f46.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f45.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f44.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f43.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f42.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f41.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f40.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f39.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f38.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f37.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f36.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f35.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f34.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f33.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f32.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f31.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f30.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f29.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f28.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f27.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f26.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f25.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f24.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f23.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f22.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f21.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f20.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f19.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f18.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f17.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f16.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f15.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f14.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f13.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f12.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f11.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f10.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f9.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f8.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f7.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f6.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f5.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f4.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f3.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f1.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f0.rs"
+   ],
+   "name": "sixty-four files",
+   "result": {
+    "held": {
+     "f0.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f1.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f10.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f11.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f12.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f13.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f14.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f15.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f16.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f17.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f18.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f19.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f2.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f20.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f21.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f22.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f23.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f24.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f25.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f26.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f27.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f28.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f29.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f3.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f30.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f31.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f32.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f33.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f34.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f35.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f36.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f37.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f38.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f39.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f4.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f40.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f41.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f42.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f43.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f44.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f45.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f46.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f47.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f48.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f49.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f5.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f50.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f51.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f52.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f53.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f54.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f55.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f56.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f57.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f58.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f59.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f6.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f60.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f61.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f62.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f7.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f8.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "f9.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+    }
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"f0.rs\");include!(\"f1.rs\");include!(\"f2.rs\");include!(\"f3.rs\");include!(\"f4.rs\");include!(\"f5.rs\");include!(\"f6.rs\");include!(\"f7.rs\");include!(\"f8.rs\");include!(\"f9.rs\");include!(\"f10.rs\");include!(\"f11.rs\");include!(\"f12.rs\");include!(\"f13.rs\");include!(\"f14.rs\");include!(\"f15.rs\");include!(\"f16.rs\");include!(\"f17.rs\");include!(\"f18.rs\");include!(\"f19.rs\");include!(\"f20.rs\");include!(\"f21.rs\");include!(\"f22.rs\");include!(\"f23.rs\");include!(\"f24.rs\");include!(\"f25.rs\");include!(\"f26.rs\");include!(\"f27.rs\");include!(\"f28.rs\");include!(\"f29.rs\");include!(\"f30.rs\");include!(\"f31.rs\");include!(\"f32.rs\");include!(\"f33.rs\");include!(\"f34.rs\");include!(\"f35.rs\");include!(\"f36.rs\");include!(\"f37.rs\");include!(\"f38.rs\");include!(\"f39.rs\");include!(\"f40.rs\");include!(\"f41.rs\");include!(\"f42.rs\");include!(\"f43.rs\");include!(\"f44.rs\");include!(\"f45.rs\");include!(\"f46.rs\");include!(\"f47.rs\");include!(\"f48.rs\");include!(\"f49.rs\");include!(\"f50.rs\");include!(\"f51.rs\");include!(\"f52.rs\");include!(\"f53.rs\");include!(\"f54.rs\");include!(\"f55.rs\");include!(\"f56.rs\");include!(\"f57.rs\");include!(\"f58.rs\");include!(\"f59.rs\");include!(\"f60.rs\");include!(\"f61.rs\");include!(\"f62.rs\");"
+    },
+    "f0.rs": {
+     "text": "x"
+    },
+    "f1.rs": {
+     "text": "x"
+    },
+    "f10.rs": {
+     "text": "x"
+    },
+    "f11.rs": {
+     "text": "x"
+    },
+    "f12.rs": {
+     "text": "x"
+    },
+    "f13.rs": {
+     "text": "x"
+    },
+    "f14.rs": {
+     "text": "x"
+    },
+    "f15.rs": {
+     "text": "x"
+    },
+    "f16.rs": {
+     "text": "x"
+    },
+    "f17.rs": {
+     "text": "x"
+    },
+    "f18.rs": {
+     "text": "x"
+    },
+    "f19.rs": {
+     "text": "x"
+    },
+    "f2.rs": {
+     "text": "x"
+    },
+    "f20.rs": {
+     "text": "x"
+    },
+    "f21.rs": {
+     "text": "x"
+    },
+    "f22.rs": {
+     "text": "x"
+    },
+    "f23.rs": {
+     "text": "x"
+    },
+    "f24.rs": {
+     "text": "x"
+    },
+    "f25.rs": {
+     "text": "x"
+    },
+    "f26.rs": {
+     "text": "x"
+    },
+    "f27.rs": {
+     "text": "x"
+    },
+    "f28.rs": {
+     "text": "x"
+    },
+    "f29.rs": {
+     "text": "x"
+    },
+    "f3.rs": {
+     "text": "x"
+    },
+    "f30.rs": {
+     "text": "x"
+    },
+    "f31.rs": {
+     "text": "x"
+    },
+    "f32.rs": {
+     "text": "x"
+    },
+    "f33.rs": {
+     "text": "x"
+    },
+    "f34.rs": {
+     "text": "x"
+    },
+    "f35.rs": {
+     "text": "x"
+    },
+    "f36.rs": {
+     "text": "x"
+    },
+    "f37.rs": {
+     "text": "x"
+    },
+    "f38.rs": {
+     "text": "x"
+    },
+    "f39.rs": {
+     "text": "x"
+    },
+    "f4.rs": {
+     "text": "x"
+    },
+    "f40.rs": {
+     "text": "x"
+    },
+    "f41.rs": {
+     "text": "x"
+    },
+    "f42.rs": {
+     "text": "x"
+    },
+    "f43.rs": {
+     "text": "x"
+    },
+    "f44.rs": {
+     "text": "x"
+    },
+    "f45.rs": {
+     "text": "x"
+    },
+    "f46.rs": {
+     "text": "x"
+    },
+    "f47.rs": {
+     "text": "x"
+    },
+    "f48.rs": {
+     "text": "x"
+    },
+    "f49.rs": {
+     "text": "x"
+    },
+    "f5.rs": {
+     "text": "x"
+    },
+    "f50.rs": {
+     "text": "x"
+    },
+    "f51.rs": {
+     "text": "x"
+    },
+    "f52.rs": {
+     "text": "x"
+    },
+    "f53.rs": {
+     "text": "x"
+    },
+    "f54.rs": {
+     "text": "x"
+    },
+    "f55.rs": {
+     "text": "x"
+    },
+    "f56.rs": {
+     "text": "x"
+    },
+    "f57.rs": {
+     "text": "x"
+    },
+    "f58.rs": {
+     "text": "x"
+    },
+    "f59.rs": {
+     "text": "x"
+    },
+    "f6.rs": {
+     "text": "x"
+    },
+    "f60.rs": {
+     "text": "x"
+    },
+    "f61.rs": {
+     "text": "x"
+    },
+    "f62.rs": {
+     "text": "x"
+    },
+    "f7.rs": {
+     "text": "x"
+    },
+    "f8.rs": {
+     "text": "x"
+    },
+    "f9.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"f0.rs\");include!(\"f1.rs\");include!(\"f2.rs\");include!(\"f3.rs\");include!(\"f4.rs\");include!(\"f5.rs\");include!(\"f6.rs\");include!(\"f7.rs\");include!(\"f8.rs\");include!(\"f9.rs\");include!(\"f10.rs\");include!(\"f11.rs\");include!(\"f12.rs\");include!(\"f13.rs\");include!(\"f14.rs\");include!(\"f15.rs\");include!(\"f16.rs\");include!(\"f17.rs\");include!(\"f18.rs\");include!(\"f19.rs\");include!(\"f20.rs\");include!(\"f21.rs\");include!(\"f22.rs\");include!(\"f23.rs\");include!(\"f24.rs\");include!(\"f25.rs\");include!(\"f26.rs\");include!(\"f27.rs\");include!(\"f28.rs\");include!(\"f29.rs\");include!(\"f30.rs\");include!(\"f31.rs\");include!(\"f32.rs\");include!(\"f33.rs\");include!(\"f34.rs\");include!(\"f35.rs\");include!(\"f36.rs\");include!(\"f37.rs\");include!(\"f38.rs\");include!(\"f39.rs\");include!(\"f40.rs\");include!(\"f41.rs\");include!(\"f42.rs\");include!(\"f43.rs\");include!(\"f44.rs\");include!(\"f45.rs\");include!(\"f46.rs\");include!(\"f47.rs\");include!(\"f48.rs\");include!(\"f49.rs\");include!(\"f50.rs\");include!(\"f51.rs\");include!(\"f52.rs\");include!(\"f53.rs\");include!(\"f54.rs\");include!(\"f55.rs\");include!(\"f56.rs\");include!(\"f57.rs\");include!(\"f58.rs\");include!(\"f59.rs\");include!(\"f60.rs\");include!(\"f61.rs\");include!(\"f62.rs\");"
+    },
+    "f0.rs": {
+     "text": "x"
+    },
+    "f1.rs": {
+     "text": "x"
+    },
+    "f10.rs": {
+     "text": "x"
+    },
+    "f11.rs": {
+     "text": "x"
+    },
+    "f12.rs": {
+     "text": "x"
+    },
+    "f13.rs": {
+     "text": "x"
+    },
+    "f14.rs": {
+     "text": "x"
+    },
+    "f15.rs": {
+     "text": "x"
+    },
+    "f16.rs": {
+     "text": "x"
+    },
+    "f17.rs": {
+     "text": "x"
+    },
+    "f18.rs": {
+     "text": "x"
+    },
+    "f19.rs": {
+     "text": "x"
+    },
+    "f2.rs": {
+     "text": "x"
+    },
+    "f20.rs": {
+     "text": "x"
+    },
+    "f21.rs": {
+     "text": "x"
+    },
+    "f22.rs": {
+     "text": "x"
+    },
+    "f23.rs": {
+     "text": "x"
+    },
+    "f24.rs": {
+     "text": "x"
+    },
+    "f25.rs": {
+     "text": "x"
+    },
+    "f26.rs": {
+     "text": "x"
+    },
+    "f27.rs": {
+     "text": "x"
+    },
+    "f28.rs": {
+     "text": "x"
+    },
+    "f29.rs": {
+     "text": "x"
+    },
+    "f3.rs": {
+     "text": "x"
+    },
+    "f30.rs": {
+     "text": "x"
+    },
+    "f31.rs": {
+     "text": "x"
+    },
+    "f32.rs": {
+     "text": "x"
+    },
+    "f33.rs": {
+     "text": "x"
+    },
+    "f34.rs": {
+     "text": "x"
+    },
+    "f35.rs": {
+     "text": "x"
+    },
+    "f36.rs": {
+     "text": "x"
+    },
+    "f37.rs": {
+     "text": "x"
+    },
+    "f38.rs": {
+     "text": "x"
+    },
+    "f39.rs": {
+     "text": "x"
+    },
+    "f4.rs": {
+     "text": "x"
+    },
+    "f40.rs": {
+     "text": "x"
+    },
+    "f41.rs": {
+     "text": "x"
+    },
+    "f42.rs": {
+     "text": "x"
+    },
+    "f43.rs": {
+     "text": "x"
+    },
+    "f44.rs": {
+     "text": "x"
+    },
+    "f45.rs": {
+     "text": "x"
+    },
+    "f46.rs": {
+     "text": "x"
+    },
+    "f47.rs": {
+     "text": "x"
+    },
+    "f48.rs": {
+     "text": "x"
+    },
+    "f49.rs": {
+     "text": "x"
+    },
+    "f5.rs": {
+     "text": "x"
+    },
+    "f50.rs": {
+     "text": "x"
+    },
+    "f51.rs": {
+     "text": "x"
+    },
+    "f52.rs": {
+     "text": "x"
+    },
+    "f53.rs": {
+     "text": "x"
+    },
+    "f54.rs": {
+     "text": "x"
+    },
+    "f55.rs": {
+     "text": "x"
+    },
+    "f56.rs": {
+     "text": "x"
+    },
+    "f57.rs": {
+     "text": "x"
+    },
+    "f58.rs": {
+     "text": "x"
+    },
+    "f59.rs": {
+     "text": "x"
+    },
+    "f6.rs": {
+     "text": "x"
+    },
+    "f60.rs": {
+     "text": "x"
+    },
+    "f61.rs": {
+     "text": "x"
+    },
+    "f62.rs": {
+     "text": "x"
+    },
+    "f7.rs": {
+     "text": "x"
+    },
+    "f8.rs": {
+     "text": "x"
+    },
+    "f9.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f63.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f62.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f61.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f60.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f59.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f58.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f57.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f56.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f55.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f54.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f53.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f52.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f51.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f50.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f49.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f48.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f47.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f46.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f45.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f44.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f43.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f42.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f41.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f40.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f39.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f38.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f37.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f36.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f35.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f34.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f33.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f32.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f31.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f30.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f29.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f28.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f27.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f26.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f25.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f24.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f23.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f22.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f21.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f20.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f19.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f18.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f17.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f16.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f15.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f14.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f13.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f12.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f11.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f10.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f9.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f8.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f7.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f6.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f5.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f4.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f3.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:f1.rs"
+   ],
+   "name": "sixty-five files",
+   "result": {
+    "refused": "codeql_rust_include_limit"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"f0.rs\");include!(\"f1.rs\");include!(\"f2.rs\");include!(\"f3.rs\");include!(\"f4.rs\");include!(\"f5.rs\");include!(\"f6.rs\");include!(\"f7.rs\");include!(\"f8.rs\");include!(\"f9.rs\");include!(\"f10.rs\");include!(\"f11.rs\");include!(\"f12.rs\");include!(\"f13.rs\");include!(\"f14.rs\");include!(\"f15.rs\");include!(\"f16.rs\");include!(\"f17.rs\");include!(\"f18.rs\");include!(\"f19.rs\");include!(\"f20.rs\");include!(\"f21.rs\");include!(\"f22.rs\");include!(\"f23.rs\");include!(\"f24.rs\");include!(\"f25.rs\");include!(\"f26.rs\");include!(\"f27.rs\");include!(\"f28.rs\");include!(\"f29.rs\");include!(\"f30.rs\");include!(\"f31.rs\");include!(\"f32.rs\");include!(\"f33.rs\");include!(\"f34.rs\");include!(\"f35.rs\");include!(\"f36.rs\");include!(\"f37.rs\");include!(\"f38.rs\");include!(\"f39.rs\");include!(\"f40.rs\");include!(\"f41.rs\");include!(\"f42.rs\");include!(\"f43.rs\");include!(\"f44.rs\");include!(\"f45.rs\");include!(\"f46.rs\");include!(\"f47.rs\");include!(\"f48.rs\");include!(\"f49.rs\");include!(\"f50.rs\");include!(\"f51.rs\");include!(\"f52.rs\");include!(\"f53.rs\");include!(\"f54.rs\");include!(\"f55.rs\");include!(\"f56.rs\");include!(\"f57.rs\");include!(\"f58.rs\");include!(\"f59.rs\");include!(\"f60.rs\");include!(\"f61.rs\");include!(\"f62.rs\");include!(\"f63.rs\");"
+    },
+    "f0.rs": {
+     "text": "x"
+    },
+    "f1.rs": {
+     "text": "x"
+    },
+    "f10.rs": {
+     "text": "x"
+    },
+    "f11.rs": {
+     "text": "x"
+    },
+    "f12.rs": {
+     "text": "x"
+    },
+    "f13.rs": {
+     "text": "x"
+    },
+    "f14.rs": {
+     "text": "x"
+    },
+    "f15.rs": {
+     "text": "x"
+    },
+    "f16.rs": {
+     "text": "x"
+    },
+    "f17.rs": {
+     "text": "x"
+    },
+    "f18.rs": {
+     "text": "x"
+    },
+    "f19.rs": {
+     "text": "x"
+    },
+    "f2.rs": {
+     "text": "x"
+    },
+    "f20.rs": {
+     "text": "x"
+    },
+    "f21.rs": {
+     "text": "x"
+    },
+    "f22.rs": {
+     "text": "x"
+    },
+    "f23.rs": {
+     "text": "x"
+    },
+    "f24.rs": {
+     "text": "x"
+    },
+    "f25.rs": {
+     "text": "x"
+    },
+    "f26.rs": {
+     "text": "x"
+    },
+    "f27.rs": {
+     "text": "x"
+    },
+    "f28.rs": {
+     "text": "x"
+    },
+    "f29.rs": {
+     "text": "x"
+    },
+    "f3.rs": {
+     "text": "x"
+    },
+    "f30.rs": {
+     "text": "x"
+    },
+    "f31.rs": {
+     "text": "x"
+    },
+    "f32.rs": {
+     "text": "x"
+    },
+    "f33.rs": {
+     "text": "x"
+    },
+    "f34.rs": {
+     "text": "x"
+    },
+    "f35.rs": {
+     "text": "x"
+    },
+    "f36.rs": {
+     "text": "x"
+    },
+    "f37.rs": {
+     "text": "x"
+    },
+    "f38.rs": {
+     "text": "x"
+    },
+    "f39.rs": {
+     "text": "x"
+    },
+    "f4.rs": {
+     "text": "x"
+    },
+    "f40.rs": {
+     "text": "x"
+    },
+    "f41.rs": {
+     "text": "x"
+    },
+    "f42.rs": {
+     "text": "x"
+    },
+    "f43.rs": {
+     "text": "x"
+    },
+    "f44.rs": {
+     "text": "x"
+    },
+    "f45.rs": {
+     "text": "x"
+    },
+    "f46.rs": {
+     "text": "x"
+    },
+    "f47.rs": {
+     "text": "x"
+    },
+    "f48.rs": {
+     "text": "x"
+    },
+    "f49.rs": {
+     "text": "x"
+    },
+    "f5.rs": {
+     "text": "x"
+    },
+    "f50.rs": {
+     "text": "x"
+    },
+    "f51.rs": {
+     "text": "x"
+    },
+    "f52.rs": {
+     "text": "x"
+    },
+    "f53.rs": {
+     "text": "x"
+    },
+    "f54.rs": {
+     "text": "x"
+    },
+    "f55.rs": {
+     "text": "x"
+    },
+    "f56.rs": {
+     "text": "x"
+    },
+    "f57.rs": {
+     "text": "x"
+    },
+    "f58.rs": {
+     "text": "x"
+    },
+    "f59.rs": {
+     "text": "x"
+    },
+    "f6.rs": {
+     "text": "x"
+    },
+    "f60.rs": {
+     "text": "x"
+    },
+    "f61.rs": {
+     "text": "x"
+    },
+    "f62.rs": {
+     "text": "x"
+    },
+    "f63.rs": {
+     "text": "x"
+    },
+    "f7.rs": {
+     "text": "x"
+    },
+    "f8.rs": {
+     "text": "x"
+    },
+    "f9.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"f0.rs\");include!(\"f1.rs\");include!(\"f2.rs\");include!(\"f3.rs\");include!(\"f4.rs\");include!(\"f5.rs\");include!(\"f6.rs\");include!(\"f7.rs\");include!(\"f8.rs\");include!(\"f9.rs\");include!(\"f10.rs\");include!(\"f11.rs\");include!(\"f12.rs\");include!(\"f13.rs\");include!(\"f14.rs\");include!(\"f15.rs\");include!(\"f16.rs\");include!(\"f17.rs\");include!(\"f18.rs\");include!(\"f19.rs\");include!(\"f20.rs\");include!(\"f21.rs\");include!(\"f22.rs\");include!(\"f23.rs\");include!(\"f24.rs\");include!(\"f25.rs\");include!(\"f26.rs\");include!(\"f27.rs\");include!(\"f28.rs\");include!(\"f29.rs\");include!(\"f30.rs\");include!(\"f31.rs\");include!(\"f32.rs\");include!(\"f33.rs\");include!(\"f34.rs\");include!(\"f35.rs\");include!(\"f36.rs\");include!(\"f37.rs\");include!(\"f38.rs\");include!(\"f39.rs\");include!(\"f40.rs\");include!(\"f41.rs\");include!(\"f42.rs\");include!(\"f43.rs\");include!(\"f44.rs\");include!(\"f45.rs\");include!(\"f46.rs\");include!(\"f47.rs\");include!(\"f48.rs\");include!(\"f49.rs\");include!(\"f50.rs\");include!(\"f51.rs\");include!(\"f52.rs\");include!(\"f53.rs\");include!(\"f54.rs\");include!(\"f55.rs\");include!(\"f56.rs\");include!(\"f57.rs\");include!(\"f58.rs\");include!(\"f59.rs\");include!(\"f60.rs\");include!(\"f61.rs\");include!(\"f62.rs\");include!(\"f63.rs\");"
+    },
+    "f0.rs": {
+     "text": "x"
+    },
+    "f1.rs": {
+     "text": "x"
+    },
+    "f10.rs": {
+     "text": "x"
+    },
+    "f11.rs": {
+     "text": "x"
+    },
+    "f12.rs": {
+     "text": "x"
+    },
+    "f13.rs": {
+     "text": "x"
+    },
+    "f14.rs": {
+     "text": "x"
+    },
+    "f15.rs": {
+     "text": "x"
+    },
+    "f16.rs": {
+     "text": "x"
+    },
+    "f17.rs": {
+     "text": "x"
+    },
+    "f18.rs": {
+     "text": "x"
+    },
+    "f19.rs": {
+     "text": "x"
+    },
+    "f2.rs": {
+     "text": "x"
+    },
+    "f20.rs": {
+     "text": "x"
+    },
+    "f21.rs": {
+     "text": "x"
+    },
+    "f22.rs": {
+     "text": "x"
+    },
+    "f23.rs": {
+     "text": "x"
+    },
+    "f24.rs": {
+     "text": "x"
+    },
+    "f25.rs": {
+     "text": "x"
+    },
+    "f26.rs": {
+     "text": "x"
+    },
+    "f27.rs": {
+     "text": "x"
+    },
+    "f28.rs": {
+     "text": "x"
+    },
+    "f29.rs": {
+     "text": "x"
+    },
+    "f3.rs": {
+     "text": "x"
+    },
+    "f30.rs": {
+     "text": "x"
+    },
+    "f31.rs": {
+     "text": "x"
+    },
+    "f32.rs": {
+     "text": "x"
+    },
+    "f33.rs": {
+     "text": "x"
+    },
+    "f34.rs": {
+     "text": "x"
+    },
+    "f35.rs": {
+     "text": "x"
+    },
+    "f36.rs": {
+     "text": "x"
+    },
+    "f37.rs": {
+     "text": "x"
+    },
+    "f38.rs": {
+     "text": "x"
+    },
+    "f39.rs": {
+     "text": "x"
+    },
+    "f4.rs": {
+     "text": "x"
+    },
+    "f40.rs": {
+     "text": "x"
+    },
+    "f41.rs": {
+     "text": "x"
+    },
+    "f42.rs": {
+     "text": "x"
+    },
+    "f43.rs": {
+     "text": "x"
+    },
+    "f44.rs": {
+     "text": "x"
+    },
+    "f45.rs": {
+     "text": "x"
+    },
+    "f46.rs": {
+     "text": "x"
+    },
+    "f47.rs": {
+     "text": "x"
+    },
+    "f48.rs": {
+     "text": "x"
+    },
+    "f49.rs": {
+     "text": "x"
+    },
+    "f5.rs": {
+     "text": "x"
+    },
+    "f50.rs": {
+     "text": "x"
+    },
+    "f51.rs": {
+     "text": "x"
+    },
+    "f52.rs": {
+     "text": "x"
+    },
+    "f53.rs": {
+     "text": "x"
+    },
+    "f54.rs": {
+     "text": "x"
+    },
+    "f55.rs": {
+     "text": "x"
+    },
+    "f56.rs": {
+     "text": "x"
+    },
+    "f57.rs": {
+     "text": "x"
+    },
+    "f58.rs": {
+     "text": "x"
+    },
+    "f59.rs": {
+     "text": "x"
+    },
+    "f6.rs": {
+     "text": "x"
+    },
+    "f60.rs": {
+     "text": "x"
+    },
+    "f61.rs": {
+     "text": "x"
+    },
+    "f62.rs": {
+     "text": "x"
+    },
+    "f63.rs": {
+     "text": "x"
+    },
+    "f7.rs": {
+     "text": "x"
+    },
+    "f8.rs": {
+     "text": "x"
+    },
+    "f9.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c.rs"
+   ],
+   "name": "the most includes across files",
+   "result": {
+    "held": {
+     "b.rs": "2155a256f0ad811386f85b3b1abc4c5566347d3588d4ef8c16f38e7047ca87da",
+     "c.rs": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+    }
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");"
+    },
+    "c.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");"
+    },
+    "c.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:a.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:b.rs"
+   ],
+   "name": "one include too many across files",
+   "result": {
+    "refused": "codeql_rust_include_edges"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");"
+    },
+    "c.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "text": "include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");include!(\"b.rs\");"
+    },
+    "b.rs": {
+     "text": "include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");include!(\"c.rs\");"
+    },
+    "c.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h0.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h1.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h3.rs"
+   ],
+   "name": "sixteen mebibytes of sources",
+   "result": {
+    "held": {
+     "h1.rs": "1ecf684337cc39f2fac5f1b1f39d0d36cd04df83cbc424db9d667183edbb487e",
+     "h2.rs": "fa5a9d3de95c666091921758e067e8763064902cf6011d8ec36cc7c3786a2c8a",
+     "h3.rs": "1a8538d7170df544debaae81034d9c4acf84c39f44122b46fc05b6ef9e13c448"
+    }
+   },
+   "start": "h0.rs",
+   "tracked": {
+    "h0.rs": {
+     "first": "include!(\"h1.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h1.rs": {
+     "first": "include!(\"h2.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h2.rs": {
+     "first": "include!(\"h3.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h3.rs": {
+     "first": "//",
+     "repeat": "x",
+     "times": 4194302
+    }
+   },
+   "tree": {
+    "h0.rs": {
+     "first": "include!(\"h1.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h1.rs": {
+     "first": "include!(\"h2.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h2.rs": {
+     "first": "include!(\"h3.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h3.rs": {
+     "first": "//",
+     "repeat": "x",
+     "times": 4194302
+    }
+   }
+  },
+  {
+   "asked": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h0.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h1.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h2.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h3.rs",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:h4.rs"
+   ],
+   "name": "one byte past sixteen mebibytes",
+   "result": {
+    "refused": "codeql_rust_include_bytes"
+   },
+   "start": "h0.rs",
+   "tracked": {
+    "h0.rs": {
+     "first": "include!(\"h1.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h1.rs": {
+     "first": "include!(\"h2.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h2.rs": {
+     "first": "include!(\"h3.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h3.rs": {
+     "first": "include!(\"h4.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h4.rs": {
+     "text": "x"
+    }
+   },
+   "tree": {
+    "h0.rs": {
+     "first": "include!(\"h1.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h1.rs": {
+     "first": "include!(\"h2.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h2.rs": {
+     "first": "include!(\"h3.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h3.rs": {
+     "first": "include!(\"h4.rs\"); //",
+     "repeat": "x",
+     "times": 4194283
+    },
+    "h4.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "asked": [],
+   "name": "a source past four mebibytes",
+   "result": {
+    "refused": "tool_file_size"
+   },
+   "start": "a.rs",
+   "tracked": {
+    "a.rs": {
+     "repeat": "x",
+     "times": 4194305
+    }
+   },
+   "tree": {
+    "a.rs": {
+     "repeat": "x",
+     "times": 4194305
+    }
+   }
+  }
+ ],
+ "includes": [
+  {
+   "name": "the reference's own text",
+   "result": {
+    "held": [
+     "../clients/account.rs",
+     "other.rs"
+    ]
+   },
+   "text": "\n    /* outer /* include!(\"bad0\"); */ include!(\"bad1\"); */\n    // include!(\"bad2\");\n    let s = \"include!(\\\"bad3\\\"); /*\";\n    let raw = r###\"include!(\"bad4\"); /*\"###;\n    let bytes = br#\"include!(\"bad5\"); /*\"#;\n    let ch = '\"'; let escaped = '\\''; let byte = b'\"';\n    include /* gap */ ! ( /* gap */ \"../clients/account.rs\", /* gap */ );\n    r#include!(\"other.rs\");\n"
+  },
+  {
+   "name": "a dynamic include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));"
+  },
+  {
+   "name": "a raw string include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(r#\"guard.rs\"#);"
+  },
+  {
+   "name": "an escaped include",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"guard\\x2ers\");"
+  },
+  {
+   "name": "a bracketed include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include![\"guard.rs\"];"
+  },
+  {
+   "name": "an absolute include",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"/tmp/guard.rs\");"
+  },
+  {
+   "name": "a plain include",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "include!(\"a.rs\");"
+  },
+  {
+   "name": "a spaced include",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "include ! ( \"a.rs\" ) ;"
+  },
+  {
+   "name": "an include with a comma",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "include!(\"a.rs\",);"
+  },
+  {
+   "name": "an include with two commas",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(\"a.rs\",,);"
+  },
+  {
+   "name": "an include then a name",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "include!(\"a.rs\")x"
+  },
+  {
+   "name": "an include left open",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(\"a.rs\""
+  },
+  {
+   "name": "an include with a comma left open",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(\"a.rs\","
+  },
+  {
+   "name": "a name alone",
+   "result": {
+    "held": []
+   },
+   "text": "include"
+  },
+  {
+   "name": "a name then another",
+   "result": {
+    "held": []
+   },
+   "text": "include x"
+  },
+  {
+   "name": "a byte string include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(b\"a.rs\")"
+  },
+  {
+   "name": "a character include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!('a')"
+  },
+  {
+   "name": "an include of strings",
+   "result": {
+    "held": []
+   },
+   "text": "include_str!(\"a\")"
+  },
+  {
+   "name": "a qualified include",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "std::include!(\"a.rs\");"
+  },
+  {
+   "name": "an empty include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!()"
+  },
+  {
+   "name": "a braced include",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!{\"a.rs\"}"
+  },
+  {
+   "name": "an include opened by a bracket",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include![\"a.rs\")"
+  },
+  {
+   "name": "an include of nothing",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"\")"
+  },
+  {
+   "name": "an include of a space",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"a b\")"
+  },
+  {
+   "name": "an include of 1024 characters",
+   "result": {
+    "held": [
+     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ]
+   },
+   "text": "include!(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\")"
+  },
+  {
+   "name": "an include of 1025 characters",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\")"
+  },
+  {
+   "name": "an include of a parent",
+   "result": {
+    "held": [
+     "../a.rs"
+    ]
+   },
+   "text": "include!(\"../a.rs\")"
+  },
+  {
+   "name": "an include of a current step",
+   "result": {
+    "held": [
+     "./a"
+    ]
+   },
+   "text": "include!(\"./a\")"
+  },
+  {
+   "name": "an include with a final separator",
+   "result": {
+    "held": [
+     "a/"
+    ]
+   },
+   "text": "include!(\"a/\")"
+  },
+  {
+   "name": "an include of a tilde",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"~/a\")"
+  },
+  {
+   "name": "an include of a letter outside ASCII",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"\u00e9.rs\")"
+  },
+  {
+   "name": "an include of every allowed mark",
+   "result": {
+    "held": [
+     "A-z_0.9/x"
+    ]
+   },
+   "text": "include!(\"A-z_0.9/x\")"
+  },
+  {
+   "name": "a raw include name",
+   "result": {
+    "held": [
+     "x.rs"
+    ]
+   },
+   "text": "r#include!(\"x.rs\")"
+  },
+  {
+   "name": "an include and a comma and more",
+   "result": {
+    "refused": "codeql_rust_include_literal"
+   },
+   "text": "include!(\"a.rs\", \"b\")"
+  },
+  {
+   "name": "the most includes",
+   "repeat": "include!(\"a.rs\");",
+   "result": {
+    "held": [
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs",
+     "a.rs"
+    ]
+   },
+   "times": 256
+  },
+  {
+   "name": "one include too many",
+   "repeat": "include!(\"a.rs\");",
+   "result": {
+    "refused": "codeql_rust_include_edges"
+   },
+   "times": 257
+  },
+  {
+   "name": "an include as a value",
+   "result": {
+    "held": [
+     "v.rs"
+    ]
+   },
+   "text": "let x = include!(\"v.rs\") + 1;"
+  },
+  {
+   "name": "a mark between",
+   "result": {
+    "held": [
+     "a.rs"
+    ]
+   },
+   "text": "include!/**/(\"a.rs\")"
+  },
+  {
+   "name": "an include after a string",
+   "result": {
+    "held": [
+     "y"
+    ]
+   },
+   "text": "\"include!(\\\"x\\\")\" include!(\"y\")"
+  },
+  {
+   "name": "an include of a two-byte name",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"\u00e9\")"
+  },
+  {
+   "name": "an include with an escaped quote",
+   "result": {
+    "refused": "codeql_rust_include_path"
+   },
+   "text": "include!(\"a\\\"b\")"
+  },
+  {
+   "name": "an include of a path of marks only",
+   "result": {
+    "held": [
+     "./"
+    ]
+   },
+   "text": "include!(\"./\")"
+  }
+ ],
+ "paths": [
+  {
+   "name": "the reference's link before a parent step",
+   "relative": "link/../guard.rs",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "selected": "clients/account.rs",
+   "tree": {
+    "bin": {
+     "directory": true
+    },
+    "clients/account.rs": {
+     "text": "x"
+    },
+    "clients/link": {
+     "link": "<place>/bin"
+    }
+   }
+  },
+  {
+   "name": "a sibling",
+   "relative": "c.rs",
+   "result": {
+    "held": "a/c.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a parent",
+   "relative": "../c.rs",
+   "result": {
+    "held": "c.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "past the root",
+   "relative": "../../c.rs",
+   "result": {
+    "refused": "codeql_rust_include_escape"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "from the top",
+   "relative": "c.rs",
+   "result": {
+    "held": "c.rs"
+   },
+   "selected": "b.rs",
+   "tree": {}
+  },
+  {
+   "name": "from the top to its parent",
+   "relative": "../c.rs",
+   "result": {
+    "refused": "codeql_rust_include_escape"
+   },
+   "selected": "b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a current step",
+   "relative": "./c.rs",
+   "result": {
+    "held": "a/c.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "repeated separators",
+   "relative": "x//y.rs",
+   "result": {
+    "held": "a/x/y.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a parent alone",
+   "relative": "..",
+   "result": {
+    "refused": "codeql_rust_include_escape"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a current step alone",
+   "relative": ".",
+   "result": {
+    "held": "a"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "nothing",
+   "relative": "",
+   "result": {
+    "held": "a"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "nothing from the top",
+   "relative": "",
+   "result": {
+    "refused": "codeql_rust_include_escape"
+   },
+   "selected": "b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a step down and back",
+   "relative": "c/../d.rs",
+   "result": {
+    "held": "a/d.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a link on the way",
+   "relative": "c/d.rs",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "selected": "a/b.rs",
+   "tree": {
+    "a/c": {
+     "link": "<place>/real"
+    },
+    "real": {
+     "directory": true
+    }
+   }
+  },
+  {
+   "name": "a link left by a parent step",
+   "relative": "../a/x.rs",
+   "result": {
+    "held": "a/x.rs"
+   },
+   "selected": "a/b.rs",
+   "tree": {
+    "a/c": {
+     "link": "<place>/real"
+    },
+    "real": {
+     "directory": true
+    }
+   }
+  },
+  {
+   "name": "a link that is the file",
+   "relative": "c.rs",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "selected": "a/b.rs",
+   "tree": {
+    "a/c.rs": {
+     "link": "<place>/real.rs"
+    },
+    "real.rs": {
+     "text": "x"
+    }
+   }
+  },
+  {
+   "name": "a dangling link",
+   "relative": "c.rs",
+   "result": {
+    "refused": "codeql_source_symlink"
+   },
+   "selected": "a/b.rs",
+   "tree": {
+    "a/c.rs": {
+     "link": "<place>/nowhere"
+    }
+   }
+  },
+  {
+   "name": "a selected path with a current step",
+   "relative": "c.rs",
+   "result": {
+    "held": "a/c.rs"
+   },
+   "selected": "a/./b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a selected path with repeated separators",
+   "relative": "c",
+   "result": {
+    "held": "a/c"
+   },
+   "selected": "a//b.rs",
+   "tree": {}
+  },
+  {
+   "name": "a final separator",
+   "relative": "c/",
+   "result": {
+    "held": "a/c"
+   },
+   "selected": "a/b.rs",
+   "tree": {}
+  },
+  {
+   "name": "deep parents",
+   "relative": "../../e.rs",
+   "result": {
+    "held": "a/e.rs"
+   },
+   "selected": "a/b/c/d.rs",
+   "tree": {}
+  }
+ ],
+ "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "tokens": [
+  {
+   "name": "the reference's own text",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "s"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "literal",
+      "include!(\\\"bad3\\\"); /*"
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "raw"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "opaque",
+      ""
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "bytes"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "opaque",
+      ""
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "ch"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "other",
+      "'\"'"
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "escaped"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "other",
+      "'\\''"
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "let"
+     ],
+     [
+      "identifier",
+      "byte"
+     ],
+     [
+      "other",
+      "="
+     ],
+     [
+      "other",
+      "b'\"'"
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "include"
+     ],
+     [
+      "other",
+      "!"
+     ],
+     [
+      "other",
+      "("
+     ],
+     [
+      "literal",
+      "../clients/account.rs"
+     ],
+     [
+      "other",
+      ","
+     ],
+     [
+      "other",
+      ")"
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "identifier",
+      "r#include"
+     ],
+     [
+      "other",
+      "!"
+     ],
+     [
+      "other",
+      "("
+     ],
+     [
+      "literal",
+      "other.rs"
+     ],
+     [
+      "other",
+      ")"
+     ],
+     [
+      "other",
+      ";"
+     ]
+    ]
+   },
+   "text": "\n    /* outer /* include!(\"bad0\"); */ include!(\"bad1\"); */\n    // include!(\"bad2\");\n    let s = \"include!(\\\"bad3\\\"); /*\";\n    let raw = r###\"include!(\"bad4\"); /*\"###;\n    let bytes = br#\"include!(\"bad5\"); /*\"#;\n    let ch = '\"'; let escaped = '\\''; let byte = b'\"';\n    include /* gap */ ! ( /* gap */ \"../clients/account.rs\", /* gap */ );\n    r#include!(\"other.rs\");\n"
+  },
+  {
+   "name": "no text",
+   "result": {
+    "held": []
+   },
+   "text": ""
+  },
+  {
+   "name": "white space only",
+   "result": {
+    "held": []
+   },
+   "text": " \t\n\r\u000b\f\u001c\u001d\u00a0\u3000"
+  },
+  {
+   "name": "a name",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "abc_1"
+     ]
+    ]
+   },
+   "text": "abc_1"
+  },
+  {
+   "name": "a name of an underscore",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "_"
+     ]
+    ]
+   },
+   "text": "_"
+  },
+  {
+   "name": "a raw name",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "r#match"
+     ]
+    ]
+   },
+   "text": "r#match"
+  },
+  {
+   "name": "a raw mark of no name",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "r"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "1"
+     ]
+    ]
+   },
+   "text": "r#1"
+  },
+  {
+   "name": "a raw mark alone",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "r"
+     ],
+     [
+      "other",
+      "#"
+     ]
+    ]
+   },
+   "text": "r#"
+  },
+  {
+   "name": "a name then a mark",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "a"
+     ],
+     [
+      "other",
+      "!"
+     ],
+     [
+      "identifier",
+      "b"
+     ]
+    ]
+   },
+   "text": "a!b"
+  },
+  {
+   "name": "a name outside ASCII",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "caf"
+     ],
+     [
+      "other",
+      "\u00e9"
+     ]
+    ]
+   },
+   "text": "caf\u00e9"
+  },
+  {
+   "name": "a line comment",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "a"
+     ],
+     [
+      "identifier",
+      "c"
+     ]
+    ]
+   },
+   "text": "a // b\nc"
+  },
+  {
+   "name": "a line comment at the end",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "a"
+     ]
+    ]
+   },
+   "text": "a //"
+  },
+  {
+   "name": "a block comment",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "a"
+     ],
+     [
+      "identifier",
+      "c"
+     ]
+    ]
+   },
+   "text": "a /* b */ c"
+  },
+  {
+   "name": "nested block comments",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "a"
+     ],
+     [
+      "identifier",
+      "e"
+     ]
+    ]
+   },
+   "text": "a /* b /* c */ d */ e"
+  },
+  {
+   "name": "a comment left open",
+   "result": {
+    "refused": "codeql_rust_comment"
+   },
+   "text": "a /* b"
+  },
+  {
+   "name": "a comment nested and left open",
+   "result": {
+    "refused": "codeql_rust_comment"
+   },
+   "text": "a /* b /* c */ d"
+  },
+  {
+   "name": "a comment of a slash",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "y"
+     ]
+    ]
+   },
+   "text": "/*/ x */ y"
+  },
+  {
+   "name": "a comment of stars",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "z"
+     ]
+    ]
+   },
+   "text": "/***/z"
+  },
+  {
+   "name": "a closing outside a comment",
+   "result": {
+    "held": [
+     [
+      "other",
+      "*"
+     ],
+     [
+      "other",
+      "/"
+     ],
+     [
+      "identifier",
+      "a"
+     ]
+    ]
+   },
+   "text": "*/ a"
+  },
+  {
+   "name": "an empty comment",
+   "result": {
+    "held": []
+   },
+   "text": "/**/"
+  },
+  {
+   "name": "a comment opening at the end",
+   "result": {
+    "refused": "codeql_rust_comment"
+   },
+   "text": "a /*"
+  },
+  {
+   "name": "a plain string",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "abc"
+     ]
+    ]
+   },
+   "text": "\"abc\""
+  },
+  {
+   "name": "a string with an escaped quote",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "a\\\"b"
+     ]
+    ]
+   },
+   "text": "\"a\\\"b\""
+  },
+  {
+   "name": "a string with an escaped backslash",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "a\\\\"
+     ]
+    ]
+   },
+   "text": "\"a\\\\\""
+  },
+  {
+   "name": "a string left open",
+   "result": {
+    "refused": "codeql_rust_string"
+   },
+   "text": "\"abc"
+  },
+  {
+   "name": "a string ending in a backslash",
+   "result": {
+    "refused": "codeql_rust_string"
+   },
+   "text": "\"abc\\"
+  },
+  {
+   "name": "a string spanning lines",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "a\nb"
+     ]
+    ]
+   },
+   "text": "\"a\nb\""
+  },
+  {
+   "name": "a string with an escaped letter outside ASCII",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "a\\\u00e9b"
+     ]
+    ]
+   },
+   "text": "\"a\\\u00e9b\""
+  },
+  {
+   "name": "a string of letters outside ASCII",
+   "result": {
+    "held": [
+     [
+      "literal",
+      "\u00e9\u4e2d"
+     ]
+    ]
+   },
+   "text": "\"\u00e9\u4e2d\""
+  },
+  {
+   "name": "a byte string",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      "abc"
+     ]
+    ]
+   },
+   "text": "b\"abc\""
+  },
+  {
+   "name": "a C string",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      "abc"
+     ]
+    ]
+   },
+   "text": "c\"abc\""
+  },
+  {
+   "name": "a byte string left open",
+   "result": {
+    "refused": "codeql_rust_string"
+   },
+   "text": "b\"abc"
+  },
+  {
+   "name": "a raw string",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "r\"a\\b\""
+  },
+  {
+   "name": "a raw string of one hash",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "r#\"a\"b\"#"
+  },
+  {
+   "name": "a raw string left open",
+   "result": {
+    "refused": "codeql_rust_string"
+   },
+   "text": "r#\"abc\""
+  },
+  {
+   "name": "a raw byte string",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "br\"x\""
+  },
+  {
+   "name": "a raw C string",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "cr##\"x\"##"
+  },
+  {
+   "name": "a raw string of 255 hashes",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "r###############################################################################################################################################################################################################################################################\"x\"###############################################################################################################################################################################################################################################################"
+  },
+  {
+   "name": "a raw mark of 256 hashes",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "r"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "literal",
+      "x"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ],
+     [
+      "other",
+      "#"
+     ]
+    ]
+   },
+   "text": "r################################################################################################################################################################################################################################################################\"x\"################################################################################################################################################################################################################################################################"
+  },
+  {
+   "name": "a raw string closed early",
+   "result": {
+    "held": [
+     [
+      "opaque",
+      ""
+     ]
+    ]
+   },
+   "text": "r##\"a\"#b\"##"
+  },
+  {
+   "name": "a name before a quote",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "rb"
+     ],
+     [
+      "literal",
+      "x"
+     ]
+    ]
+   },
+   "text": "rb\"x\""
+  },
+  {
+   "name": "a character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'a'"
+     ]
+    ]
+   },
+   "text": "'a'"
+  },
+  {
+   "name": "an escaped quote character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'\\''"
+     ]
+    ]
+   },
+   "text": "'\\''"
+  },
+  {
+   "name": "an escaped backslash character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'\\\\'"
+     ]
+    ]
+   },
+   "text": "'\\\\'"
+  },
+  {
+   "name": "an escaped line end character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'\\n'"
+     ]
+    ]
+   },
+   "text": "'\\n'"
+  },
+  {
+   "name": "a byte character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "b'x'"
+     ]
+    ]
+   },
+   "text": "b'x'"
+  },
+  {
+   "name": "a quote character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'\"'"
+     ]
+    ]
+   },
+   "text": "'\"'"
+  },
+  {
+   "name": "a lifetime",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "identifier",
+      "a"
+     ]
+    ]
+   },
+   "text": "'a"
+  },
+  {
+   "name": "a lifetime with a name",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "identifier",
+      "ab"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "'ab'"
+  },
+  {
+   "name": "a unicode escape",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "\\"
+     ],
+     [
+      "identifier",
+      "u"
+     ],
+     [
+      "other",
+      "{"
+     ],
+     [
+      "other",
+      "1"
+     ],
+     [
+      "identifier",
+      "F600"
+     ],
+     [
+      "other",
+      "}"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "'\\u{1F600}'"
+  },
+  {
+   "name": "a character outside ASCII",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'\u00e9'"
+     ]
+    ]
+   },
+   "text": "'\u00e9'"
+  },
+  {
+   "name": "a character of a line end",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "'\n'"
+  },
+  {
+   "name": "an empty character",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "''"
+  },
+  {
+   "name": "three quotes",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "'''"
+  },
+  {
+   "name": "a backslash before a line end",
+   "result": {
+    "held": [
+     [
+      "other",
+      "'"
+     ],
+     [
+      "other",
+      "\\"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "'\\\n'"
+  },
+  {
+   "name": "a byte mark alone",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "b"
+     ]
+    ]
+   },
+   "text": "b"
+  },
+  {
+   "name": "a byte quote alone",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "b"
+     ],
+     [
+      "other",
+      "'"
+     ]
+    ]
+   },
+   "text": "b'"
+  },
+  {
+   "name": "marks",
+   "result": {
+    "held": [
+     [
+      "other",
+      "!"
+     ],
+     [
+      "other",
+      "("
+     ],
+     [
+      "other",
+      ")"
+     ],
+     [
+      "other",
+      ","
+     ],
+     [
+      "other",
+      ";"
+     ],
+     [
+      "other",
+      "{"
+     ],
+     [
+      "other",
+      "}"
+     ],
+     [
+      "other",
+      "["
+     ],
+     [
+      "other",
+      "]"
+     ],
+     [
+      "other",
+      "#"
+     ]
+    ]
+   },
+   "text": "!(),;{}[]#"
+  },
+  {
+   "name": "a number",
+   "result": {
+    "held": [
+     [
+      "other",
+      "1"
+     ],
+     [
+      "other",
+      "2"
+     ],
+     [
+      "other",
+      "3"
+     ],
+     [
+      "identifier",
+      "u8"
+     ]
+    ]
+   },
+   "text": "123u8"
+  },
+  {
+   "name": "a path",
+   "result": {
+    "held": [
+     [
+      "identifier",
+      "std"
+     ],
+     [
+      "other",
+      ":"
+     ],
+     [
+      "other",
+      ":"
+     ],
+     [
+      "identifier",
+      "fs"
+     ],
+     [
+      "other",
+      ":"
+     ],
+     [
+      "other",
+      ":"
+     ],
+     [
+      "identifier",
+      "read"
+     ]
+    ]
+   },
+   "text": "std::fs::read"
+  },
+  {
+   "name": "the most tokens",
+   "repeat": "a ",
+   "result": {
+    "count": 500000
+   },
+   "times": 500000
+  },
+  {
+   "name": "one token too many",
+   "repeat": "a ",
+   "result": {
+    "refused": "codeql_rust_token_limit"
+   },
+   "times": 500001
+  },
+  {
+   "name": "the most tokens with comments",
+   "repeat": "/* x */ a",
+   "result": {
+    "count": 500000
+   },
+   "times": 500000
+  },
+  {
+   "name": "strings past the most tokens",
+   "repeat": "\"x\"",
+   "result": {
+    "refused": "codeql_rust_token_limit"
+   },
+   "times": 500001
+  }
+ ]
+}

@@ -800,6 +800,15 @@ impl Context {
         pumped(&mut command, how.input, patience, kept, room, &mut || true)
     }
 
+    /// Give every later command the variable `name` with `value`, in place
+    /// of any value it had.
+    pub fn set(&mut self, name: &'static str, value: OsString) {
+        match self.variables.iter_mut().find(|(held, _)| *held == name) {
+            Some((_, held)) => *held = value,
+            None => self.variables.push((name, value)),
+        }
+    }
+
     /// Have every later command look in `directory` before anywhere else
     /// on its search path.
     pub fn prefer(&mut self, directory: &Path) {

@@ -2176,6 +2176,422 @@
      ]
     }
    }
+  },
+  {
+   "name": "a sparse member of pax 1.0",
+   "archive": {
+    "deflated": "eNoB/wAA/x+LCAAAAAAAAv/tlkFLxDAQhXPOr8gfMJ1Jt1lECp5WTyKIZxlqXKLdbklaKf56YxEtFW92ETrfZcIjkMPjzUv7sj9DDVkMVdbW5Btdib8GEnazGWdiPgHM9vv8oSNCsRUKxAnoY0chPS/WiW869eSHrg/u4ZXq3qlS4YUUzDrQmc4ub2m4dvTowjJv/JL7r8xjUczyDwatUAPnf3GMUVc39zq2FKLTB3o+hhLlTPVNUkHm51O1oYMr20l9jOtDV9LY6bXgqI7+zZUm563y/5gamFy7G03b+dol7dPQpfsff/Z/bnPL/X8KUILkZK4X/v8xDMOsk3d8gTwrABIAAPwGfeM=",
+    "bytes": 255,
+    "sha256": "8c747a25b705c4ce86d503638453b0d44ad37b0bf6c0510fa8052e0952296cf0"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a sparse member of pax 0.1",
+   "archive": {
+    "deflated": "eNoB+gAF/x+LCAAAAAAAAv/tlc1KxTAQhbPuU+QBNM1Pby8iAVfqSgRxLWMdJdy0hqSV4tMbi2gtuLN64c63mTCBmcXhzAm7p2MlZJliUwYPrhMN+21kpq6qqWaWVUq9/Xq/95WSmy3jkv0BQ+oh5vXsMHFdzx/d2A8R717AD8gtV6cFIw4DUYry7BrGS4QHjOvs+MH3n55XtV74X2pVMT6S/1dHG35xdStSgJhQtBCsPNKm0PW83Q3tvX9udsmqwpx8+4EWbZhlyHRDRLMYEBF8cq9o82jy3D4x1y4LdjPpde485t6Hlv+Q/6Y2G8p/yn+CIAhiLd4AGu1PqwAQAABanXlF",
+    "bytes": 250,
+    "sha256": "9b8392b7035f8572a2874435aec49cde3ce56919789bbc6a90e44a5e6d44b727"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a sparse member of pax 0.0",
+   "archive": {
+    "deflated": "eNoB4gAd/x+LCAAAAAAAAv/t1bEOgjAQBuDOPEVfwHJXUQZD4qaTcXE2FYshIJK2GPTpBQYlRjcxJt63tLmmvenvldlhhAJ8a2K/zFVaiJh9GjSmQdCtjecVQIaPfVtHhEnIOLAvqKxTpmnP/lNaOJ6ktauM3p5VXmkecZx5jPwH4Qt/vlb1Uqu9NsP0eJP7e+YxwKf8g0RkvKb8D05KvlhthC2VsVrY9KojOfbktF8tquMuP8WZjdCT4/7JKUmsdhG8uHBx2rZPUcR+Wtmb/93//yPzPwSa/zT/CSGEDOUG/m5sWwAQAADx6G+K",
+    "bytes": 226,
+    "sha256": "0170363d09a6274c07737c12792af7a705a069ae49924fde091f00891e52225c"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a sparse member of pax 1.0 whose map is no number",
+   "archive": {
+    "deflated": "eNoB3wAg/x+LCAAAAAAAAv/tk8sKwjAQRbPOV+QHTJP0ISIFV+pKBHEtoY4SbWtJWil+vaGKlEJ3VkRzNhkugVncOdSj3mwt6yXIPWg0COxB38t4GL7mJudM8AiRGn2AypRS2/XoPxGCLFZbagqpDdBMni465riTqtymDPuTdprLDOLifBxxyjyjE+8q0wpogkXU/qZBpkbdIBY+Ro5vo12gbW3TlDZXKdjsWehb/I+CoM9/a/u4478f+dZ/5vwfnBoz7Mz8X1RekoOqy0rDrvGdxIRP3T04HA7Hr3MHwF+eiQAOAADSI2o3",
+    "bytes": 223,
+    "sha256": "2e21b961353b7b630603fde6313c1b9ca5146d956c09e1815bbc3dc6d0096f5d"
+   },
+   "result": {
+    "raised": "ValueError",
+    "said": "invalid literal for int() with base 10: b'x'"
+   }
+  },
+  {
+   "name": "a member renamed by its sparse name",
+   "archive": {
+    "deflated": "eNoBzgAx/x+LCAAAAAAAAv/t1rEOgjAQBuDOPkVfwPaKBWIMiZtOxsXZNFANEbFpi+HxRRYIiYsBB7lvuabLDc3dX3O7LgUD7mzKTaHykqVkbNCIpGxrY1gBgrg7v++FgDAmFMgPVM4r27Qn85SXnl7y2ldWn5+qqDRNqNgsCJoHxhnfHlW91yrTdpoeH+a+m3k5nH8IRERojfM/udWa7g4n5oyyTrNS3XViepHQrgSW4j74V/3Hdv5hdTb+B+CL/A9CifmP+Y8QQmgqL7CCtnoAEAAA8g1hcw==",
+    "bytes": 206,
+    "sha256": "43052b8516b53921ebf9e036abff3ca30a02612d64b7b54724387e2927fe1d47"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/plain.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ],
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member named by a path and then a sparse name",
+   "archive": {
+    "deflated": "eNoBvgBB/x+LCAAAAAAAAv/t070KwjAQwPHMPsW9gMkl1haRgptO4uIsoY1a1FryIX18awVRoWMF9X5LwnGQIfy54GK20vXC6NxY1gu86zpRonrc23kzwJhBzT4gOK9t8zz7TyqBSvt9Wh12Q8lROJuJ24Bng9EE5ss1d5W2zvBSn8zL1kUfg2nWGPlizz/q/NmanGd99B9HUWf/qJK3/qUaRwyQ+u9dUXrYFrUP1mzaoiEFOaWoCSHk110BweribgAMAADq/mDt",
+    "bytes": 190,
+    "sha256": "032b30fb2107f4dbb1367e24beba3bf135e7472d08086b0c503619868dc44079"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member named by a sparse name and then a path",
+   "archive": {
+    "deflated": "eNoBvQBC/x+LCAAAAAAAAv/t070KwjAQwPHMPsW9gMkl1haRgptO4uIsoY1a1FryIX18awVRoWMF9X5Lwt2QIfy54GK20vXC6NxY1gu86zpRonrc23kzwJhBzT4gOK9t8zz7T6MJzJdr7iptneGlPpm0OuyGkqNwNhMXfQyGZwOVQKX9/mV3GzQrRr7Y84c6f7Ym51kf/cdR1Nk/quStf6nGEQOk/ntXlB62Re2DNZs2dkhBTilqQgj5dVfN4vB7AAwAAB9VXaU=",
+    "bytes": 189,
+    "sha256": "098a42a562bdf0312d34f6e3aadd81e977ca07bfd04e2f49ebf826fb0bdd262e"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/path.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of pax 1.1",
+   "archive": {
+    "deflated": "eNoBsABP/x+LCAAAAAAAAv/t070KwjAUhuHMXkVuwJOTEO0gBTedxMVZQo1Sf2rJj+Ty1ToIhY5xqOdZEr4lQ3hBgFhuTVpbc7COZYEfQyfiTH/v712ikprxxH4g+mDc63n2n5Tiq80OfGuct3Az57sr5aS31k23MjI67eU0lYDCu0o8zDVaqLL0P9d6uH9V9PqXWCDjSP1nVzeBH+sUorP77v95yeWCUieEkLF7Aow/y0YADAAAZyhYEg==",
+    "bytes": 176,
+    "sha256": "e0e1111d71f4949054603c13994e98c3eac9d628197057c0e15aebe8b4402fc0"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of pax major 1 alone",
+   "archive": {
+    "deflated": "eNoBqwBU/x+LCAAAAAAAAv/T09fTdwhIrPBITUxJLWKgCTCAAFy0gYGRGYINEjc0MDI0ZlCoYKADKC0uSSwCWs8wMoGRkYK7X6hecUFiUXGqXm5iVn6RrSEXwygYIaAgO13XUM9Av7goWb8sMac0VS+ZJvnfzMQET/43R8v/hgbmBgwKBqP5n+YgM69EIS2zoqS0KDUeHP8KtgqG1qMFwCgYBaNgFAx3AAB3rkPxAAwAAKQxQT0=",
+    "bytes": 171,
+    "sha256": "43c87c863d856daa45b331c6493f3cea50ff3d98b07365f44296e4196e0cc4c6"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of pax 0.1 without a map",
+   "archive": {
+    "deflated": "eNoBsQBO/x+LCAAAAAAAAv/t070OwiAUhmHmXgU3IBwI2sE0cdPJuDgbUtGgtTb8GC7fqoNJk4441PMskG9hIC/jjK92Om2MPhpHsoCPsRNgrr731y5ACkVoIj8QfdCuf578JynpertnvtPOG3bTl7uroBistu1XURA0Od31PBMMuHc1f+gmGlZn6X+h1Hj/shz0L6AEQgH7z862gZ5sCtGZw/v/aUXFElNHCKGpewK99xERAAwAAG2YUPI=",
+    "bytes": 177,
+    "sha256": "109f00ac3feb52fad5092dfb3cab72082d5dd4969716ad4b97f9274eee25af29"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of pax 01.0",
+   "archive": {
+    "deflated": "eNoBswBM/x+LCAAAAAAAAv/t070OwiAUhmHmXgU3IByw2ME0cdPJuDgbUtHUam34MVy+VgejSUcc6nkWyLcwkJdxxhcbHVdG740lScDL0Amg1Pve7wKkUIRG8gPBeW0fz5P/JKd0ud4y12nrDLvo09WWIDIpP+a67eeMoLHpmuNEMODOVvymz8GwKkn/szwf7l8WX/0LKIBQwP6Tq1tPD3X0wZrd8/9pScUcS0cIobG7A+x41+8ADAAAuC9Y6g==",
+    "bytes": 179,
+    "sha256": "5d3e24ef026783f0bc0861b817a0945e7138ae1714b4a51716e88fc3619a542a"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member of a sparse real size alone",
+   "archive": {
+    "deflated": "eNoBrQBS/x+LCAAAAAAAAv/t070KwjAQwPHMPkVewOSSlnaQgptO4uIsoZ4SLKXkQ4JPb9VBEDrGwd5vuXDLDeEvpJDrvUlbNCd0LAt4m5oAhf68n3sFWgHjif1A9MG48TybJ13xze4g/GCcR+HQdN7esdHFgpEZGK6XpRIgvWvlzXQRRZul/6osp/vX9Vf/Cuqxf6D+s7N94GebQnR4fP0/b7haUfyEEPLvHqM2AAUADAAAIXxXrA==",
+    "bytes": 173,
+    "sha256": "ac9f05f192b98944e6e7387c7a6f7533273a5c9741e89acb556b992978e46f4a"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a sparse directory",
+   "archive": {
+    "deflated": "eNoByAA3/x+LCAAAAAAAAv/t1bEKwjAQgOHMPkUeQJNLbM0gBTedxMVZQhulWGtIWunjG0VQKjoZl963XMhy08/Z42EiGHDvcm4rXdYsJ78GwSxJ7jPoTwCpnu/bvxCQKkKB/EHrG+3CejJMZd3Qfdk1rTO7i65aQzMq5iOChoFxxhcb3a2MLoyLs+ND9y/9z3r9gxRTQjvsPzop6XK9Zd5q5w07aZvBGDD/wbCP+1+cc89JvP6/3v+3t1JJuP8p9o8QQtFcAYLSR+wADgAAvahgKg==",
+    "bytes": 200,
+    "sha256": "184c3d1afbc8f6c3d9bb75d2b0326eb8c3ddc37bc8f7cfee3c1b297430cf6698"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a sparse link",
+   "archive": {
+    "deflated": "eNoBygA1/x+LCAAAAAAAAv/t1rEKwjAQBuDMPkVewOQutHYQwU0ncXGWUGMJLSUkqRSf3iiCUhAX69L7ljuy/NPPxdXVHAXI4EvpGm1bUbJfg2SRZY+ZDCeAKl77/R0R8oJxYH/Qhah9imfTZNvIz7aPnTfHi246w1cclzNGpkFIIdd73W+NPhk/TsaH3r/1Px/0HxQqxnvq/+gU8s3uIILTPhgR7NWsgNo/He55/xvb1mNlfL3/wx3TBwAZV6mZlYnUf0IIGcENyzQNtAAOAADi9l78",
+    "bytes": 202,
+    "sha256": "77c997198c916a3e09abb233eb2b13e0b1b82f8e2b6821556a65dbc1f21205df"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global sparse map before a member",
+   "archive": {
+    "deflated": "eNoBqQBW/x+LCAAAAAAAAv/t06EOwjAQgOHTPEUfANrrOqggS3CgCAZNLqMszcbStBvZ4wNBoBCIIdh95i5nTv1SSbU50LBzdHYRRoEvnyZiZt/7865RWwOigh/oU0fx8R6mKTNiuz/KFCgmJ68UCpxnZgZsGkJdLbRElWKpQkO+leUo/a/y/Iv+NS4tCOT+R+fbTlz80PXRnW7U9E4UQq+5f8YY+3d37o8vEQAMAAA0TEyQ",
+    "bytes": 169,
+    "sha256": "e1cdd8a52f7bea538cd4b3aa3f8391de833fb8287166ace65b0bc2990ac7dcaf"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global sparse size before a member",
+   "archive": {
+    "deflated": "eNoBqwBU/x+LCAAAAAAAAv/t1L0KwjAQwPGbfYq8gMldac0gBTedxMVZQo0lWErIhxSfXsVBEHSrg73fcuGWm/6RSqrVzgwba442wCjw6dNELKrX+7EnJE0gWviBHJMJ9/MwTQWJ9XYvozchWhnd1dY0AzYV/tzOSaKKoVG+M66XzSj9L8ryS//6rX/CSoNA7n90rk/i5IaUgz1cTJetqAUt+QdgjLF/dwPDlDV7AAwAADxbUhc=",
+    "bytes": 171,
+    "sha256": "6abff11b45bb90762505f6fccc5c0761ded97db587df134ce2bcb5af4655003d"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global version 1.0 before a member",
+   "archive": {
+    "deflated": "eNoBtwBI/x+LCAAAAAAAAv/t070OgjAUhuHOvYregO05BWQwJG46GRdnc4LV4A+SFgyXL8bBRMOIA5xnafMtXfpqo81yS+3a0cF5MQh46zsBkvhzf+0ImEZCncQfNKEm3z0vpslatdrsdKjIB6dvdL77DOXXWpTdClKw0akupxlqMMHnhnQ+WP/zOO7rH8Gmv/0nQgH3PziUIG3EaU9VUdbqWLR1493+QdfGqUzhgv8DY4yN3RNI4h0MAA4AAKmUWHc=",
+    "bytes": 183,
+    "sha256": "90c718103dc88e246fdbdd41808123461ecce98e45fb8de0b64771268ad603fa"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global major and a member's own minor",
+   "archive": {
+    "deflated": "eNoBxQA6/x+LCAAAAAAAAv/t1b0OgjAQwPHOPMW9gO1dQRgMiZtOxsXZNFgNfiBpwfD4YhwcDCPE2Pst13Tpcv9UKqmWW9OtrTlYJ0aBb0MTUaef8+uekDIt4CQm0PrGuP55ESatYbXZSV8b5628mfPd5RQJFgj5m/1rigV03P/U/ZdV3z9y/8GoL6cZSVTeFcrIYrT+0yQZ6r+vPfv+/+cCkPsfHUUY6ZiDD1VZNXAsu6Z1dv8w19ZCDrTgfWCMsX/3BPZVFggAEgAANaRhrg==",
+    "bytes": 197,
+    "sha256": "15ca0b0716001034a8e931a9334b676dcfdfad7142e14548fbfa8d8ea34f3109"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global sparse map reaching a later member's own header",
+   "archive": {
+    "deflated": "eNoB/gAB/x+LCAAAAAAAAv/tlzELwjAQhTP7K/IDNLmLrR2k4KaTuDhLrFGKbS1pK/XfW3EQLCIIKULuW3JkuSG89/KEFHKx0e3K6IOxzAnw5NMJgOFrftwjYASMn9gANFWtbbee+QlOeXLJc1PUcTtihG+U59MEBcjKJrLMdFqIxIn+Z0HwWf8qetM/QhgxDqR/56RFzY9pWzfW7K46awyPOc7JCXxB/EP+q1k//xXl/xAoxZfrrahKbSsjcl3GMAaSv3f5f5DudnzN/94cqaDTf0j698P/+/1PITLe0vsP2f9uZPt+97+9g+73W//r/n8h9T/qfwRBEIQr7uxKaIsAGgAA7g2Bng==",
+    "bytes": 254,
+    "sha256": "bf117cdb7c016c71ac53d2ff3e9c926f26000a35730a598cb39591b854a7fa89"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "two global headers before a member",
+   "archive": {
+    "deflated": "eNoBvQBC/x+LCAAAAAAAAv/t07EOgjAQgOHOPEVfwOtdRRgMiZtOxsXZNFgJokhaMDy+GAcGw4iDvW+55pZb+oMCtTmYfmfN2ToxC/yYmog6Gd/vPSGlWshC/EDnW+OG8yJMWsvt/gi+Mc5buJvrw2UUCRYI4P65/7H/sh76R+4/GE1VLAhQeZcrA/ls/SdxPNU/oU6/+18Jidz/7CjCSC85+FCVdSsvZd92zp6e5tZZmUla839gjLF/9wJeI/GJABIAAEiLWfQ=",
+    "bytes": 189,
+    "sha256": "a9b09aba47a95d0ea63438347837dda2f6d37f8620d3f14ce57701a88bc39b8c"
+   },
+   "result": {
+    "raised": "ValueError",
+    "said": "invalid literal for int() with base 10: b'int fixture_value = 1;'"
+   }
+  },
+  {
+   "name": "a global comment",
+   "archive": {
+    "deflated": "eNoBugBF/x+LCAAAAAAAAv/t070KwjAQwPHMPsW9gMml9mOQgqOjbyBHjDXY1pKmpY/v1yAIHSNC77dcuOWG8JdKqt2Bpr2lk/UiCnybm4gb/Xk/9xp1nguoxA8MfSD/OC+WKcnA3JrGtqEkqFwA8ubiRrsSbAm6a7XWElXvjepqcq00UfrP03S+/6T46l9jVghA7j861wY4uykM3h5HqgcLJegt17/E/l///yf9F8j9c/+MMcZiuQMb4qVFABAAACQIXZ4=",
+    "bytes": 186,
+    "sha256": "a7c3020476ed956d74f9a4a5266007c3b913dba6ee145c0dfc7a92ee4d2e53aa"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/plain.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ],
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a global sparse name renaming every member",
+   "archive": {
+    "deflated": "eNoBwQA+/x+LCAAAAAAAAv/t1bEKwjAQgOHMPkVewOSirUWk4KaTuDjLUU8t1lqSVPr4Wh0UoWNE7H3LhSwZjp8orfR8jc2ScEdWBAFPXRMgSl7n9t6ASWIhD+ILaufR3p8X/TSeysVqo1yF1pEq8UxpdToMjQLtbKavWNSksoFg/+l92VWBeamyIP1Poqi7/9Fn/wbiREjg/oPLSy/3eeNrS9tH7DKVZsa997H/iz+S/ZH+2/+f++f+GWOMhXEDbuRoKwAQAAC69mNz",
+    "bytes": 193,
+    "sha256": "6789099a21d0d175de5719c63290f4d12bd77af1d80f97012ddbe4b3256ca757"
+   },
+   "result": {
+    "refused": "Duplicate or excessive archive members"
+   }
+  },
+  {
+   "name": "a global sparse name renaming one member",
+   "archive": {
+    "deflated": "eNoBsQBO/x+LCAAAAAAAAv/t070KwjAQwPHMPkVewMtFU4tIwU0ncXGWo8ZSWkNJUunj+zUoQsc61PstF265IfxBgVrvqdtaOlkvBoEvfRPRpO/3Y69Rp4mQhfiBNkTy9/PiP82XcrM7QGjIBwuOLjZrqmKqAVXwubpS3VrIJ4KN0+dnNzWVDvJB+l8Y09//7Lt/jUkqJHL/gytdlOeyi623x2fsMpN6xb0zxtjY3QAKQwZkAAwAAC/zVfc=",
+    "bytes": 177,
+    "sha256": "d4b376eff934e4adddcceae66f03879c14dd06ae2dce096def2a7b5e58a4e6c7"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a global path renaming the next member",
+   "archive": {
+    "deflated": "eNoBqABX/x+LCAAAAAAAAv/T09fTdwhIrPBITUxJLWKgCTCAAFy0gYGxCYINEjc0MDQ3ZFBIZ6ADKC0uSSwCWs8wMoGRhUJBYkmGbUF2uq6hnoF+cVGyflliTmmqXjIXwygY9gA53gtyEjPz9JJpkv/NTExw538jc7T8b2hgas6gYDCa/2kOMvNKFNIyK0pKi1LjwflewVbB0Ho064+CUTAKRsFwBwAlsvNFAAwAAF3RREo=",
+    "bytes": 168,
+    "sha256": "de968e9ffd36a1e51eb9d41bda8ea6ac5e49e904a80c8739a3b16eb4ab606a7c"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a global path and a member's own path",
+   "archive": {
+    "deflated": "eNoBwgA9/x+LCAAAAAAAAv/t1b0OgjAQwPHOPkVfwPauVjAxJI6OvoFpoCLRAClFeXy/Bg2GscbA/ZZrunS4/FMhhdzsTLe1JrOOBQEvQxNgod/nxz0Cxsh4zn6gbbxx9+fZNKkVr40/JvUpn6MA2bhUXsy5tSKdMTJ64i/6V/3+FQLjHfUfvv/ou//qWlL9E/G598ZXzmYiDdF/pPVw/yru9Y9qqRkH6j+4ovT8UHS+dXb//Pd5wnFN8RNCyNjdAO/BtVsAEAAAJjdkhg==",
+    "bytes": 194,
+    "sha256": "ff27b457b1b653d9b33f407257c79a1cd04d908e643dfcb803b1be7c35bb194b"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/own.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a global sparse map after the members",
+   "archive": {
+    "deflated": "eNoBrwBQ/x+LCAAAAAAAAv/t070KwjAQwPHMPkUeQJNLqO0gBTedxMVZjhpLsZaQD+njG12Ugpt1sPdb7rjlpr+91AslQHpXSdti04mKfRskeZY9ZzKcALp47Y+7UrAsGAf2A9EHdOk9m6amC/zc9CE6c7xhGw0vuVrNGJkGIYVc77HfGjwZN86PD92/9Z8P+gdVaMZr6n90WvPN7iC8ReeNuKItYQ6UPyGE/L07A5GJcgAMAAB5PlCJ",
+    "bytes": 175,
+    "sha256": "27fc81a1df0f4e233f4f02485eebd8805599998ecf12d5597994aca4f44a5352"
+   },
+   "result": {
+    "raised": "ReadError",
+    "said": "end of file header"
+   }
+  },
+  {
+   "name": "a global path with a final slash",
+   "archive": {
+    "deflated": "eNoBqQBW/x+LCAAAAAAAAv/T09fTdwhIrPBITUxJLWKgCTCAAFy0gYGxKYINEjc0MDQ3YlBIZ6ADKC0uSSwCWs8wMoGRpUJBYkmGbUF2uq6hnoF+cVGyflliTmmqXrI+F8MoGO4AOd4LchIz8/SSaZL/zUxMcOd/I3O0/G9oYGrOoGAwmv9pDjLzShTSMitKSotS48H5XsFWwdB6NOePglEwCkbBcAcAZm2nfgAMAADUjUUj",
+    "bytes": 169,
+    "sha256": "3f3cbddb960367f684bc62c0434f1395449ded63d19df89f71af2e3f19e2920c"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a member's own major over a global one",
+   "archive": {
+    "deflated": "eNoBzAAz/x+LCAAAAAAAAv/t1bsOwiAUgGFmnoIXEA5I28E0cdPJuDgbUrGpl9pAa/r41jiY1HRETXu+BXIWFn7ggovl1rRraw7WkSDgZWgFUPF7/5xLkIkiLCdf0PjauO54Mk1KsdVmx31lnLf8ak43lypK0ETwf+g/0v3+ldSEtdj/T/qXtDctym4K+CqMUHXOZ5KD8C4ThmfB+o+1Huq/qz35/P8jwgD7D05SoGqOaU9VUdbsWLR14+z+bi6NZSmTC7wPCCE0dg8JitQnABIAALD1Y+E=",
+    "bytes": 204,
+    "sha256": "9d0690dfb906826436d5655ca7c63709b4ceeea0ce743cd1040de9f7281f9431"
+   },
+   "result": {
+    "refused": "Unsupported tar member type"
+   }
+  },
+  {
+   "name": "a global major over a member's own one",
+   "archive": {
+    "deflated": "eNoBxAA7/x+LCAAAAAAAAv/t1L0KwjAUhuHMvYrcgCcnsT+DFNx0EhdnCTVKtNaStNLLt+IgVHSrSnueJeFbMr0BAWK+1s3S6J1xrBf48O5EjMLn/b5LlMmU8QP7gtpX2rXPs3FSii9WG/Cldt7AWR8vLpVBZ7VFu2LAyODAP/Sv4tf+FfX/q/4VlT4a5ekwkYDCu0yUubYFZL30H4fhh/6TTv8So4RxpP57Z4uK721T1c5srzqvDU+5nNEHQAghQ3cDMW3LuwAQAABJZmR7",
+    "bytes": 196,
+    "sha256": "42c42b4bfc5c644c1696512835f9979cbbee616202bc271e8669fbf80e42041c"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/plain.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
+  },
+  {
+   "name": "a global path and sparse name and a member's own path",
+   "archive": {
+    "deflated": "eNoB2gAl/x+LCAAAAAAAAv/t1U0LgjAYwPGd+xT7Au1NUySEbnWKLp1j6TLJVLZZfvzEIMrwaFQ+v8vGeGCH8WeEErrYyHqlZKw0GgS761sZZ+5j355zxj0f4QR9QGWs1M31aJxEgEtpj2F5SqacMGp0RJOs2MuMRBMnwMv1lphSaqNILs/qZe4is0o1Ywj8LPIF/TNHdPsXnCFcQ//D9++9919cc6h6JJ7f3dhCq5hEQ/TvuW5//8Lv9M/FzEWYQf+DS3OLD2ltK6127X+OQ8znED8AAPy7Gwhp3AYAEAAAqrVsYA==",
+    "bytes": 218,
+    "sha256": "2261a9007977af3424ab0c15a632a658ea30d683a722fd7156911ab4988e210d"
+   },
+   "result": {
+    "files": {
+     "pkg-1.0/src/value.c": [
+      23,
+      "8906ce218bb04200ce636bac1cfd3a64ffcf270cc6d27c91769c2be793023732"
+     ]
+    }
+   }
   }
  ],
  "zips": [

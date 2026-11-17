@@ -9,10 +9,7 @@
 
 use super::{
     MIB,
-    budget::{Budget, budget},
-    compiled::{
-        ELF_HEADER_BYTES, MAX_BINARY, binary_identity, canonical, compiled_receipt, machine,
-    },
+    compiled::{ELF_HEADER_BYTES, MAX_BINARY, binary_identity, compiled_receipt, machine},
     corpus::{Case, UNIT_FIXTURES, corpus},
     engine::{ASKED, Engine, checked_image, cleanup, words},
     hexadecimal,
@@ -23,7 +20,14 @@ use super::{
         worker_environment,
     },
 };
-use crate::{Fault, Result, digest, document::Document, require};
+use crate::{
+    Fault, Result,
+    budget::{Budget, budget},
+    digest,
+    document::Document,
+    paths::canonical,
+    require,
+};
 use std::{
     fs,
     io::{Read, Write},
