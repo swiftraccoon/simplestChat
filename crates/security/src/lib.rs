@@ -34,6 +34,8 @@ pub mod licenses;
 pub mod migrations;
 pub mod mutation;
 pub mod native;
+#[cfg(feature = "image")]
+pub mod native_suites;
 pub mod openssl;
 pub mod policy;
 pub(crate) mod record;

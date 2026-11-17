@@ -21,15 +21,15 @@ Select the vendor suite explicitly through the shared dispatcher:
 cargo run --locked -q -p simplestchat-security -- deep --deep-check native --include-vendor
 ```
 
-The host runner requires Python 3.12 or newer and a local Docker or
-Podman engine; it uses only the Python standard library and maintained helpers.
-These component commands diagnose an individual native stage:
+The host runner is the security gate's own `native-suites` command and needs a
+local Docker or Podman engine. These component commands diagnose an individual
+native stage:
 
 ```sh
-python3 build/native_security.py verify
-python3 build/native_security.py prepare --engine docker \
+cargo run --locked -q -p simplestchat-security -- native-suites verify
+cargo run --locked -q -p simplestchat-security -- native-suites prepare --engine docker \
   --output /absolute/private/native-prepare
-python3 build/native_security.py run --engine docker \
+cargo run --locked -q -p simplestchat-security -- native-suites run --engine docker \
   --image sha256:THE_FULL_IMAGE_ID_FROM_PREPARE \
   --mode asan --output /absolute/private/native-asan
 ```
@@ -50,8 +50,12 @@ unrelated container.
 
 `security/native/toolchain.json` pins official LLVM 23.1.2 Linux x86-64 and
 AArch64 archives by byte count and SHA-256. One bundle supplies Clang,
-compiler-rt/libFuzzer and the matching symbolizer. Preparation checks the archive
-before extracting the selected compiler/runtime files. The official Zstandard
+compiler-rt/libFuzzer and the matching symbolizer. Preparation passes the pin for
+the host's architecture to the image build as the build arguments `LLVM_URL`,
+`LLVM_SHA256`, `LLVM_BYTES` and `LLVM_DIRECTORY`; the recipe requires all four,
+fetches the archive over HTTPS only and in at most its pinned bytes, and checks
+its exact size and SHA-256 before extracting the selected compiler/runtime
+files. The official Zstandard
 archive requires a 1 GiB decoding window, which preparation explicitly allows.
 [LLVM release](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.2).
 
@@ -63,10 +67,10 @@ have no network and use `--wrap-mode=nodownload`. Compiler and FlatBuffers
 generator parallelism respects CPU affinity, cgroup quotas and available memory,
 with at most four jobs.
 
-The image's input label binds the maintained worker sources, runner, process
-helper, Dockerfile, OpenSSL installer, Python locks/constraints, toolchain pins
-and corpus. A stale builder fails before execution. Source copying follows the
-worker build's allowlist and excludes generated bindings, downloaded build
+The image's input label binds the maintained worker sources, Dockerfile,
+OpenSSL installer, Python locks/constraints, toolchain pins and corpus. A stale
+builder fails before execution. Source copying follows the worker build's
+allowlist and excludes generated bindings, downloaded build
 trees and arbitrary checkout contents.
 
 Preparation also records the resolved image ID. System RPM dependencies resolve
@@ -96,6 +100,15 @@ reserving 2 GiB per compiler plus 1 GiB for other processes (9 GiB for four jobs
 It has no additional swap allowance and a 256-process limit. Engine log storage is
 disabled; the owner captures independently bounded streams.
 
+Nothing of this repository's own code runs in the image. The host creates the
+sandbox with `/usr/bin/sleep 2100` as its only process, which is also the image's
+own entry point, and issues every step inside it with `exec`, as a fixed command
+by absolute path: it reads the image's environment, copies the worker's sources
+to the tmpfs, writes the reviewed fixtures and inputs, runs each build phase and
+test with only the prepared environment, and reads the built program's identity
+with `stat`, `head` and `sha256sum`. The recipe refuses to build an image in which
+one of those programs, or a GNU option the host gives it, does not work.
+
 The `/work` tmpfs explicitly permits execution because Meson runs compiler
 sanity-check executables there before building and running the native tests.
 Leaving this implicit makes Docker's non-executable tmpfs default fail setup
@@ -116,29 +129,29 @@ runner uses container physical-memory limits instead of an incompatible
 Cleanup checks the exact run label, full container ID and fresh image identity;
 it never deletes by a name prefix. The owned container keeps its private tmpfs
 alive during bounded compilation, transfer and execution; its finite idle
-lifetime removes it even if the outer client disappears. Each worker subprocess
-also retains its own deadline. An uncertain cleanup is a failure, not a passing
-receipt.
+lifetime removes it even if the outer client disappears. Each step the host
+issues in it also has its own deadline. An uncertain cleanup is a failure, not a
+passing receipt.
 
 ## Compiled artifacts
 
 The optional local runner can reuse a prepared image and separate instrumented
 executables. A compiled artifact contains only a regular ELF binary (at most
 512 MiB) and a
-receipt marked `built`. Its exact key binds source, tools, flags, corpus, file
-modes, native architecture, trust namespace, selected mode and prepared image ID.
-No prefix restore is permitted. Both the controller and the offline sandbox
-check binary identity before execution. Changed, incomplete or oversized
+receipt marked `built`. The receipt binds the image's input digest (sources,
+tools, recipe and corpus), native architecture, selected mode and prepared image
+ID. The host checks binary identity on the host and again inside the offline
+sandbox before execution. Changed, incomplete or oversized
 artifacts fail validation; they never become successful test receipts.
 
 To separate compilation from full runtime locally:
 
 ```sh
-python3 build/native_security.py compile --engine docker \
+cargo run --locked -q -p simplestchat-security -- native-suites compile --engine docker \
   --image sha256:THE_FULL_IMAGE_ID_FROM_PREPARE --mode asan \
   --compiled-directory /absolute/private/asan-built \
   --output /absolute/private/asan-compile
-python3 build/native_security.py run --engine docker \
+cargo run --locked -q -p simplestchat-security -- native-suites run --engine docker \
   --image sha256:THE_FULL_IMAGE_ID_FROM_PREPARE --mode asan \
   --compiled-directory /absolute/private/asan-built \
   --output /absolute/private/asan-execution
@@ -193,9 +206,9 @@ initialization-order options are unsupported on macOS.
 Preparation writes `image.id`, bounded logs and `report.json`. Runs write
 `ownership.json` before container creation, separate bounded native logs, and a
 final report identifying the selected mode, completed cases/families, elapsed
-time, image/input hashes and cleanup conclusion. Missing results or requested
-cases fail even when the container exits zero. Failed receipts never count as
-completed security coverage.
+time, image/input hashes and cleanup conclusion. The host runs every requested
+case itself, and a run passes only once each of them has. Failed receipts never
+count as completed security coverage.
 
 Local evidence retains the two bounded native diagnostic streams, including on
 failure. These streams come from the offline container:
@@ -203,9 +216,13 @@ it receives only the reviewed public source, tools and synthetic corpus, with no
 host mounts, credentials or network. They can include compiler source excerpts
 and sanitizer diagnostics. Keep them with the private local evidence; they are
 not automatically uploaded by CI. A failed
-host receipt also records the container exit status.
+host receipt also records the failed phase as exit status 1
+(`native_build_failed_exit_1` or `native_failed_exit_1`), and the failed step's
+own code ends that phase's error stream.
 
-`ops/ansible/tests/test_native_security.py` verifies corpus, immutable-image,
-environment, sandbox, timeout, exclusive-output and ownership guards offline.
-These tests prove orchestration behavior only. Real Linux sanitizer and corpus
-runs are required before reporting native validation.
+`crates/security/src/native_suites/tests.rs` verifies corpus, immutable-image,
+environment, sandbox, timeout, exclusive-output and ownership guards offline
+against a scripted engine, and holds the recipe to the build arguments and
+sandbox programs the host relies on. These tests prove orchestration behavior
+only. Real Linux sanitizer and corpus runs are required before reporting native
+validation.

@@ -308,6 +308,9 @@ crates/security/src/native/**
 !crates/security/src/image/
 crates/security/src/image/**
 !crates/security/src/image/*.rs
+!crates/security/src/native_suites/
+crates/security/src/native_suites/**
+!crates/security/src/native_suites/*.rs
 !crates/ci/
 crates/ci/**
 !crates/ci/Cargo.toml

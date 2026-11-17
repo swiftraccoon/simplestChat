@@ -1,0 +1,1073 @@
+{
+ "binaries": [
+  {
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "an amd64 executable",
+   "result": {
+    "held": [
+     64,
+     "175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6"
+    ]
+   }
+  },
+  {
+   "hex": "7f454c460201000000000000000000000000b7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "aarch64",
+   "name": "an arm64 executable",
+   "result": {
+    "held": [
+     64,
+     "6c86bf9edbe9ca8986850357a936a45855a98b64425cd8f864a896fcd6bacc88"
+    ]
+   }
+  },
+  {
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "aarch64",
+   "name": "an amd64 executable on arm64",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "hex": "7f454c460201000000000000000000000000b7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "an arm64 executable on amd64",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "hex": "7f454c4602010000000000000000000000003e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "an executable of one more byte",
+   "result": {
+    "held": [
+     65,
+     "feb6b7ea1f5f66a836ac5a72ab0a332dea1cbeb6933b4ed63c2a0684b3fa434f"
+    ]
+   }
+  },
+  {
+   "hex": "7f454c4602010000000000000000000000003e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "a header one byte short",
+   "result": {
+    "refused": "compiled_binary_size"
+   }
+  },
+  {
+   "hex": "",
+   "machine": "x86_64",
+   "name": "an empty file",
+   "result": {
+    "refused": "compiled_binary_size"
+   }
+  },
+  {
+   "hex": "7f454c4601010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "a 32-bit executable",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "hex": "7f454c4602020000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "machine": "x86_64",
+   "name": "a big-endian executable",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "hex": "696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964",
+   "machine": "x86_64",
+   "name": "no executable",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "link": true,
+   "machine": "x86_64",
+   "name": "a link",
+   "result": {
+    "raised": "OSError"
+   }
+  },
+  {
+   "directory": true,
+   "machine": "x86_64",
+   "name": "a directory",
+   "result": {
+    "raised": "IsADirectoryError"
+   }
+  }
+ ],
+ "cgroups": [
+  {
+   "files": {
+    "cpu.max": "200000 100000",
+    "memory.max": "4294967296"
+   },
+   "membership": "0::/\n",
+   "name": "a unified limit",
+   "result": {
+    "held": [
+     [
+      2
+     ],
+     [
+      4294967296
+     ]
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "max 100000",
+    "memory.max": "max"
+   },
+   "membership": "0::/\n",
+   "name": "an unlimited unified group",
+   "result": {
+    "held": [
+     [],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "max 100000",
+    "user.slice/app/cpu.max": "150000 100000",
+    "user.slice/memory.max": "3221225472"
+   },
+   "membership": "0::/user.slice/app\n",
+   "name": "a nested unified group",
+   "result": {
+    "held": [
+     [
+      1
+     ],
+     [
+      3221225472
+     ]
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu,cpuacct/cpu.cfs_period_us": "100000",
+    "cpu,cpuacct/cpu.cfs_quota_us": "300000",
+    "memory/memory.limit_in_bytes": "2147483648"
+   },
+   "membership": "4:memory:/\n3:cpu,cpuacct:/\n",
+   "name": "version one controllers",
+   "result": {
+    "held": [
+     [
+      3
+     ],
+     [
+      2147483648
+     ]
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu/cpu.cfs_quota_us": "100000"
+   },
+   "membership": "3:cpu:/\n",
+   "name": "a quota without its period",
+   "result": {
+    "refused": "codeql_cpu_period"
+   }
+  },
+  {
+   "files": {
+    "cpu/cpu.cfs_period_us": "100000",
+    "cpu/cpu.cfs_quota_us": "-1"
+   },
+   "membership": "3:cpu:/\n",
+   "name": "an unbounded version one quota",
+   "result": {
+    "held": [
+     [],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "100000 100000"
+   },
+   "membership": "0::/../outside\n",
+   "name": "a group outside the namespace",
+   "result": {
+    "held": [
+     [
+      1
+     ],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "100000 100000"
+   },
+   "membership": "0:/\n",
+   "name": "a membership of two fields",
+   "result": {
+    "refused": "codeql_cgroup_membership"
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "0 100000"
+   },
+   "membership": "0::/\n",
+   "name": "a zero quota",
+   "result": {
+    "refused": "codeql_cpu_quota"
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "50000 100000"
+   },
+   "membership": "0::/\n",
+   "name": "a quota smaller than its period",
+   "result": {
+    "held": [
+     [
+      1
+     ],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "memory.max": "0"
+   },
+   "membership": "0::/\n",
+   "name": "a zero memory limit",
+   "result": {
+    "refused": "codeql_memory_limit"
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "100000"
+   },
+   "membership": "0::/\n",
+   "name": "a quota of one word",
+   "result": {
+    "raised": "ValueError"
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "x 100000"
+   },
+   "membership": "0::/\n",
+   "name": "a quota that is no number",
+   "result": {
+    "raised": "ValueError"
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "200000 100000"
+   },
+   "membership": null,
+   "name": "no membership",
+   "result": {
+    "held": [
+     [
+      2
+     ],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "pids/cpu.max": "100000 100000"
+   },
+   "membership": "5:pids:/\n",
+   "name": "a controller of another name",
+   "result": {
+    "held": [
+     [],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "memory.max": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+   },
+   "membership": "0::/\n",
+   "name": "an oversized limit file",
+   "result": {
+    "refused": "codeql_resource_metadata_size"
+   }
+  },
+  {
+   "files": {
+    "memory.max": "4294967296                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     "
+   },
+   "membership": "0::/\n",
+   "name": "a limit file of the most bytes",
+   "result": {
+    "held": [
+     [],
+     [
+      4294967296
+     ]
+    ]
+   }
+  },
+  {
+   "files": {
+    "memory.max": "4294967296                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      "
+   },
+   "membership": "0::/\n",
+   "name": "a limit file one byte past its most",
+   "result": {
+    "refused": "codeql_resource_metadata_size"
+   }
+  },
+  {
+   "files": {
+    "../outside/cpu.max": "100000 100000"
+   },
+   "membership": "0::/../outside\n",
+   "name": "a group outside the namespace with a limit there",
+   "result": {
+    "held": [
+     [],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpuacct,cpu/cpu.cfs_period_us": "100000",
+    "cpuacct,cpu/cpu.cfs_quota_us": "200000"
+   },
+   "membership": "3:cpuacct,cpu:/\n",
+   "name": "version one controllers joined the other way",
+   "result": {
+    "held": [
+     [
+      2
+     ],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "../cpu.max": "100000 100000",
+    "cpu.max": "200000 100000"
+   },
+   "membership": "0::/\n",
+   "name": "a limit above the root",
+   "result": {
+    "held": [
+     [
+      2
+     ],
+     []
+    ]
+   }
+  },
+  {
+   "files": {
+    "cpu.max": "100000 0"
+   },
+   "membership": "0::/\n",
+   "name": "a quota of a zero period",
+   "result": {
+    "refused": "codeql_cpu_quota"
+   }
+  },
+  {
+   "files": {
+    "cpu/cpu.cfs_period_us": "100000",
+    "cpu/cpu.cfs_quota_us": "150000"
+   },
+   "membership": "3:cpu:/\n",
+   "name": "a version one quota of one and a half processors",
+   "result": {
+    "held": [
+     [
+      1
+     ],
+     []
+    ]
+   }
+  }
+ ],
+ "cleanups": [
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    [
+     "engine",
+     "rm",
+     "--force",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "an owned container",
+   "result": {
+    "held": null
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ]
+   ],
+   "info": null,
+   "listing": "",
+   "name": "no container",
+   "result": {
+    "held": null
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\neeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+   "name": "two containers",
+   "result": {
+    "refused": "unexpected_owned_containers"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbb\n",
+   "name": "a container of a short identity",
+   "result": {
+    "refused": "container_identity"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "a container of another image",
+   "result": {
+    "refused": "container_ownership_changed"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "short",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "a container of another identity",
+   "result": {
+    "refused": "container_ownership_changed"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {}
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "a container without the run's label",
+   "result": {
+    "refused": "container_ownership_changed"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "ffffffffffffffffffffffffffffffff"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "a container of another run",
+   "result": {
+    "refused": "container_ownership_changed"
+   }
+  },
+  {
+   "calls": [
+    [
+     "engine",
+     "ps",
+     "--all",
+     "--no-trunc",
+     "--filter",
+     "label=org.simplestchat.native-security.run=cccccccccccccccccccccccccccccccc",
+     "--format",
+     "{{.ID}}"
+    ],
+    [
+     "engine",
+     "inspect",
+     "--format",
+     "{{json .}}",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    [
+     "engine",
+     "rm",
+     "--force",
+     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
+   ],
+   "info": {
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.run": "cccccccccccccccccccccccccccccccc"
+     }
+    },
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Image": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "listing": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n",
+   "name": "a container of an image named without its algorithm",
+   "result": {
+    "held": null
+   }
+  }
+ ],
+ "images": [
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "the image",
+   "result": {
+    "held": [
+     "Architecture",
+     "Config",
+     "Id",
+     "Os"
+    ]
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image named without its algorithm",
+   "result": {
+    "held": [
+     "Architecture",
+     "Config",
+     "Id",
+     "Os"
+    ]
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "Os": "linux"
+   },
+   "name": "another image",
+   "result": {
+    "refused": "image_identity_mismatch"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image of other inputs",
+   "result": {
+    "refused": "image_inputs_mismatch"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {}
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image without labels",
+   "result": {
+    "refused": "image_inputs_mismatch"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "windows"
+   },
+   "name": "an image of another system",
+   "result": {
+    "refused": "native_linux_required"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "arm64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image of arm64",
+   "result": {
+    "refused": "native_image_architecture_mismatch"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": null,
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image of no architecture",
+   "result": {
+    "refused": "native_image_architecture_mismatch"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image without a configuration",
+   "result": {
+    "raised": "KeyError"
+   }
+  },
+  {
+   "image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "info": {
+    "Architecture": "amd64",
+    "Config": {
+     "Labels": {
+      "org.simplestchat.native-security.inputs": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+     }
+    },
+    "Id": "sha256:aaaaaaaaaaaa",
+    "Os": "linux"
+   },
+   "name": "an image whose identity is short",
+   "result": {
+    "refused": "invalid_engine_image_id"
+   }
+  },
+  {
+   "asked": 0,
+   "image": "builder:latest",
+   "info": null,
+   "name": "a selection of builder:latest",
+   "result": {
+    "refused": "immutable_image_required"
+   }
+  },
+  {
+   "asked": 0,
+   "image": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "info": null,
+   "name": "a selection of sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "result": {
+    "refused": "immutable_image_required"
+   }
+  }
+ ],
+ "receipts": [
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "the receipt",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "held": {
+     "architecture": "amd64",
+     "binaryBytes": 64,
+     "binarySha256": "175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6",
+     "imageId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "inputsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+     "mode": "asan",
+     "schemaVersion": 1,
+     "status": "built",
+     "worker": {
+      "mode": "asan",
+      "status": "built"
+     }
+    }
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another mode ubsan",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"ubsan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another imageId sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another inputsSha256 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another architecture arm64",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"arm64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another status passed",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"passed\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another binaryBytes 65",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 65, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_binary_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another binarySha256 0000000000000000000000000000000000000000000000000000000000000000",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_binary_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another schemaVersion 2",
+   "receipt": "{\"schemaVersion\": 2, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt of another schemaVersion True",
+   "receipt": "{\"schemaVersion\": true, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "held": {
+     "architecture": "amd64",
+     "binaryBytes": 64,
+     "binarySha256": "175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6",
+     "imageId": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "inputsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+     "mode": "asan",
+     "schemaVersion": true,
+     "status": "built",
+     "worker": {
+      "mode": "asan",
+      "status": "built"
+     }
+    }
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt with one more field",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}, \"extra\": 1}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt without its worker",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\"}",
+   "result": {
+    "refused": "compiled_receipt_mismatch"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964696e76616c6964",
+   "name": "a receipt of other bytes",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_binary_architecture"
+   }
+  },
+  {
+   "extra": "extra",
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt beside another file",
+   "receipt": "{\"schemaVersion\": 1, \"status\": \"built\", \"mode\": \"asan\", \"imageId\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"inputsSha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"architecture\": \"amd64\", \"binaryBytes\": 64, \"binarySha256\": \"175f7c04d8aba899227b47bb38b83e24dff845172c703589e27b398b6d4989f6\", \"worker\": {\"status\": \"built\", \"mode\": \"asan\"}}",
+   "result": {
+    "refused": "compiled_files"
+   }
+  },
+  {
+   "extra": null,
+   "hex": "7f454c4602010000000000000000000000003e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "name": "a receipt that is no JSON",
+   "receipt": "{",
+   "result": {
+    "raised": "JSONDecodeError"
+   }
+  }
+ ]
+}

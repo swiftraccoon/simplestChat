@@ -118,6 +118,10 @@ impl Host for Bare {
     fn vendor(&self, _: &Path, _: &Path, _: &Path) -> std::result::Result<(), String> {
         Err("the vendored tree was asked for".to_owned())
     }
+
+    fn program(&self) -> Result<PathBuf> {
+        Err(Fault("the_program_was_asked_for"))
+    }
 }
 
 /// The request of a recorded command line, with the evidence at `output`.
@@ -254,10 +258,12 @@ fn summaries_are_written_as_the_reference_wrote_them() {
 
 /// A host of the deep tier's own checks: an environment, a vendored tree
 /// that is as recorded or not as the case says, a mutation tool that is
-/// installed or not as the case says, and a mutation check that ends as
-/// the case says. What it is asked is kept.
+/// installed or not as the case says, a mutation check that ends as the
+/// case says, and the case's script as the gate's own program. What it is
+/// asked is kept.
 struct Deep<'a> {
     variables: Vec<(&'static str, OsString)>,
+    program: PathBuf,
     install: Option<&'static str>,
     verified: bool,
     vendored: RefCell<Vec<Value>>,
@@ -368,15 +374,20 @@ impl Host for Deep<'_> {
             Err("a tree is not as recorded".to_owned())
         }
     }
+
+    fn program(&self) -> Result<PathBuf> {
+        Ok(self.program.clone())
+    }
 }
 
 /// The case whose vendor check the reference's gate stopped.
 const STOPPED: &str = "a vendored tree whose check is stopped";
 
-/// The interpreter of a case and nothing else.
-struct Interpreter(PathBuf);
+/// Programs of which the deep tier's own checks ask none: the native
+/// suites are the gate's own program's.
+struct Unequipped;
 
-impl Programs for Interpreter {
+impl Programs for Unequipped {
     fn program(&self, _: &'static str) -> Outcome<PathBuf> {
         Err(Failure::Fixed("a_scanner_was_asked_for"))
     }
@@ -386,7 +397,7 @@ impl Programs for Interpreter {
     }
 
     fn python(&self) -> Outcome<PathBuf> {
-        Ok(self.0.clone())
+        Err(Failure::Fixed("the_interpreter_was_asked_for"))
     }
 }
 
@@ -430,13 +441,13 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
             .create(&target)
             .expect("the evidence");
         let spelled = place.display().to_string();
-        let (python, log) = (place.join("python"), place.join("log"));
-        // The mutation check is no command of this gate's interpreter.
+        let (program, log) = (place.join("program"), place.join("log"));
+        // The mutation check is no command of this gate's program.
         let script = text(&case["script"])
             .replace("<log>", &log.display().to_string())
             .replace("<the mutation command>", "none");
-        std::fs::write(&python, script).expect("an interpreter");
-        std::fs::set_permissions(&python, Permissions::from_mode(0o755)).expect("a mode");
+        std::fs::write(&program, script).expect("a program");
+        std::fs::set_permissions(&program, Permissions::from_mode(0o755)).expect("a mode");
         let arguments = case["arguments"].as_array().expect("arguments").iter();
         let arguments: Vec<String> = arguments
             .map(|word| text(word).replace("<place>", &spelled))
@@ -452,6 +463,7 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         let install = case["install"].as_str();
         let host = Deep {
             variables,
+            program,
             install: install.map(|code| &*Box::leak(code.to_owned().into_boxed_str())),
             verified: case["statuses"]["vendor"] == 0,
             vendored: RefCell::default(),
@@ -464,10 +476,9 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         let ambient = |name: &str| host.ambient(name);
         let mut context =
             Context::new(&root, &target, Limits::REVIEWED, &ambient).expect("a context");
-        let programs = Interpreter(python);
         let judged = ruled(&request, &host)
             .map_err(Failure::from)
-            .and_then(|()| deep(&mut context, &request, &host, &programs, Path::new("git")));
+            .and_then(|()| deep(&mut context, &request, &host, &Unequipped, Path::new("git")));
         let failure = judged.err().map(|failure| failure.to_string());
         let recorded = case["summary"]["failure"].as_str();
         assert_eq!(i64::from(failure.is_some()), case["status"], "{name}");
@@ -535,6 +546,14 @@ fn the_deep_tier_runs_its_own_checks_as_the_reference_ran_them() {
         }
     }
     assert_eq!(tally, (5, 22, 5, 1));
+}
+
+#[test]
+fn the_native_suites_are_this_machines_own_program() {
+    let ambient = |_: &str| None;
+    let machine = super::Machine::new(Path::new("/nowhere"), &ambient);
+    let own = std::env::current_exe().expect("this program");
+    assert_eq!(machine.program(), Ok(own));
 }
 
 #[test]

@@ -1,0 +1,736 @@
+{
+ "context": {
+  "build/install-openssl.sh": "0o700",
+  "build/native-security.Dockerfile": "0o600",
+  "build/pip-constraints.txt": "0o600",
+  "security/native/corpus.json": "0o600",
+  "security/native/corpus/codecs/descriptor-zero.hex": "0o600",
+  "security/native/corpus/codecs/opus-silence.hex": "0o600",
+  "security/native/corpus/dtls/alert-close.hex": "0o600",
+  "security/native/corpus/dtls/handshake-empty.hex": "0o600",
+  "security/native/corpus/rtcp/receiver-empty.hex": "0o600",
+  "security/native/corpus/rtcp/sender-empty.hex": "0o600",
+  "security/native/corpus/rtp/audio-minimal.hex": "0o600",
+  "security/native/corpus/rtp/header-short.hex": "0o600",
+  "security/native/corpus/rtp/unit-packet1.hex": "0o600",
+  "security/native/corpus/rtp/unit-packet2.hex": "0o600",
+  "security/native/corpus/rtp/unit-packet3.hex": "0o600",
+  "security/native/corpus/sctp/common-header.hex": "0o600",
+  "security/native/corpus/sctp/init-header.hex": "0o600",
+  "security/native/corpus/stun/binding-empty.hex": "0o600",
+  "security/native/corpus/stun/header-short.hex": "0o600",
+  "security/native/corpus/utils/ascending-bytes.hex": "0o600",
+  "security/native/corpus/utils/ascii-token.hex": "0o600",
+  "security/native/toolchain.json": "0o600",
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": "0o600",
+  "vendor/mediasoup-sys-0.19.0/build.rs": "0o600",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fbs/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/include/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/include/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/meson.build": "0o600",
+  "vendor/mediasoup-sys-0.19.0/meson_options.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/scripts/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/scripts/run.sh": "0o700",
+  "vendor/mediasoup-sys-0.19.0/src/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/src/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap": "0o600",
+  "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap": "0o600",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/tasks.py": "0o600",
+  "vendor/mediasoup-sys-0.19.0/test/include/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/test/src/a.txt": "0o600",
+  "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt": "0o600"
+ },
+ "digest": "02ab831110fa4857e78302eeee3984f4361be3c5827db410614345d3150c294c",
+ "files": [
+  "build/install-openssl.sh",
+  "build/native-security.Dockerfile",
+  "build/pip-constraints.txt",
+  "security/native/corpus/codecs/descriptor-zero.hex",
+  "security/native/corpus/codecs/opus-silence.hex",
+  "security/native/corpus/dtls/alert-close.hex",
+  "security/native/corpus/dtls/handshake-empty.hex",
+  "security/native/corpus/rtcp/receiver-empty.hex",
+  "security/native/corpus/rtcp/sender-empty.hex",
+  "security/native/corpus/rtp/audio-minimal.hex",
+  "security/native/corpus/rtp/header-short.hex",
+  "security/native/corpus/rtp/unit-packet1.hex",
+  "security/native/corpus/rtp/unit-packet2.hex",
+  "security/native/corpus/rtp/unit-packet3.hex",
+  "security/native/corpus/sctp/common-header.hex",
+  "security/native/corpus/sctp/init-header.hex",
+  "security/native/corpus/stun/binding-empty.hex",
+  "security/native/corpus/stun/header-short.hex",
+  "security/native/corpus/utils/ascending-bytes.hex",
+  "security/native/corpus/utils/ascii-token.hex",
+  "security/native/corpus.json",
+  "security/native/toolchain.json",
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+  "vendor/mediasoup-sys-0.19.0/build.rs",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/meson.build",
+  "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+  "vendor/mediasoup-sys-0.19.0/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+  "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/tasks.py",
+  "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+ ],
+ "reference": [
+  "build/install-openssl.sh",
+  "build/native-security.Dockerfile",
+  "<reference:1>",
+  "build/pip-constraints.txt",
+  "<reference:2>",
+  "<reference:3>",
+  "<reference:4>",
+  "<reference:5>",
+  "<reference:6>",
+  "security/native/corpus/codecs/descriptor-zero.hex",
+  "security/native/corpus/codecs/opus-silence.hex",
+  "security/native/corpus/dtls/alert-close.hex",
+  "security/native/corpus/dtls/handshake-empty.hex",
+  "security/native/corpus/rtcp/receiver-empty.hex",
+  "security/native/corpus/rtcp/sender-empty.hex",
+  "security/native/corpus/rtp/audio-minimal.hex",
+  "security/native/corpus/rtp/header-short.hex",
+  "security/native/corpus/rtp/unit-packet1.hex",
+  "security/native/corpus/rtp/unit-packet2.hex",
+  "security/native/corpus/rtp/unit-packet3.hex",
+  "security/native/corpus/sctp/common-header.hex",
+  "security/native/corpus/sctp/init-header.hex",
+  "security/native/corpus/stun/binding-empty.hex",
+  "security/native/corpus/stun/header-short.hex",
+  "security/native/corpus/utils/ascending-bytes.hex",
+  "security/native/corpus/utils/ascii-token.hex",
+  "security/native/corpus.json",
+  "security/native/toolchain.json",
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+  "vendor/mediasoup-sys-0.19.0/build.rs",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/meson.build",
+  "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+  "vendor/mediasoup-sys-0.19.0/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+  "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/tasks.py",
+  "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+  "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+  "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+  "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+ ],
+ "refusals": [
+  {
+   "name": "a missing source",
+   "result": {
+    "refused": "missing_native_source"
+   }
+  },
+  {
+   "name": "a source that is a link",
+   "result": {
+    "refused": "native_source_symlink"
+   }
+  },
+  {
+   "name": "a source directory that is a link",
+   "result": {
+    "refused": "missing_native_source"
+   }
+  },
+  {
+   "name": "a source that is a pipe",
+   "result": {
+    "refused": "native_source_not_regular"
+   }
+  },
+  {
+   "name": "a link inside a generated tree",
+   "result": {
+    "held": [
+     "build/install-openssl.sh",
+     "build/native-security.Dockerfile",
+     "build/pip-constraints.txt",
+     "security/native/corpus/codecs/descriptor-zero.hex",
+     "security/native/corpus/codecs/opus-silence.hex",
+     "security/native/corpus/dtls/alert-close.hex",
+     "security/native/corpus/dtls/handshake-empty.hex",
+     "security/native/corpus/rtcp/receiver-empty.hex",
+     "security/native/corpus/rtcp/sender-empty.hex",
+     "security/native/corpus/rtp/audio-minimal.hex",
+     "security/native/corpus/rtp/header-short.hex",
+     "security/native/corpus/rtp/unit-packet1.hex",
+     "security/native/corpus/rtp/unit-packet2.hex",
+     "security/native/corpus/rtp/unit-packet3.hex",
+     "security/native/corpus/sctp/common-header.hex",
+     "security/native/corpus/sctp/init-header.hex",
+     "security/native/corpus/stun/binding-empty.hex",
+     "security/native/corpus/stun/header-short.hex",
+     "security/native/corpus/utils/ascending-bytes.hex",
+     "security/native/corpus/utils/ascii-token.hex",
+     "security/native/corpus.json",
+     "security/native/toolchain.json",
+     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+     "vendor/mediasoup-sys-0.19.0/build.rs",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/meson.build",
+     "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+     "vendor/mediasoup-sys-0.19.0/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/tasks.py",
+     "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+    ]
+   }
+  },
+  {
+   "name": "a source file that is a directory",
+   "result": {
+    "held": [
+     "build/install-openssl.sh",
+     "build/native-security.Dockerfile",
+     "build/pip-constraints.txt",
+     "security/native/corpus/codecs/descriptor-zero.hex",
+     "security/native/corpus/codecs/opus-silence.hex",
+     "security/native/corpus/dtls/alert-close.hex",
+     "security/native/corpus/dtls/handshake-empty.hex",
+     "security/native/corpus/rtcp/receiver-empty.hex",
+     "security/native/corpus/rtcp/sender-empty.hex",
+     "security/native/corpus/rtp/audio-minimal.hex",
+     "security/native/corpus/rtp/header-short.hex",
+     "security/native/corpus/rtp/unit-packet1.hex",
+     "security/native/corpus/rtp/unit-packet2.hex",
+     "security/native/corpus/rtp/unit-packet3.hex",
+     "security/native/corpus/sctp/common-header.hex",
+     "security/native/corpus/sctp/init-header.hex",
+     "security/native/corpus/stun/binding-empty.hex",
+     "security/native/corpus/stun/header-short.hex",
+     "security/native/corpus/utils/ascending-bytes.hex",
+     "security/native/corpus/utils/ascii-token.hex",
+     "security/native/corpus.json",
+     "security/native/toolchain.json",
+     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+     "vendor/mediasoup-sys-0.19.0/build.rs",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/meson.build",
+     "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+     "vendor/mediasoup-sys-0.19.0/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+    ]
+   }
+  },
+  {
+   "name": "a named source that is a pipe",
+   "result": {
+    "refused": "native_source_not_regular"
+   }
+  },
+  {
+   "name": "a generated part that is a link",
+   "result": {
+    "held": [
+     "build/install-openssl.sh",
+     "build/native-security.Dockerfile",
+     "build/pip-constraints.txt",
+     "security/native/corpus/codecs/descriptor-zero.hex",
+     "security/native/corpus/codecs/opus-silence.hex",
+     "security/native/corpus/dtls/alert-close.hex",
+     "security/native/corpus/dtls/handshake-empty.hex",
+     "security/native/corpus/rtcp/receiver-empty.hex",
+     "security/native/corpus/rtcp/sender-empty.hex",
+     "security/native/corpus/rtp/audio-minimal.hex",
+     "security/native/corpus/rtp/header-short.hex",
+     "security/native/corpus/rtp/unit-packet1.hex",
+     "security/native/corpus/rtp/unit-packet2.hex",
+     "security/native/corpus/rtp/unit-packet3.hex",
+     "security/native/corpus/sctp/common-header.hex",
+     "security/native/corpus/sctp/init-header.hex",
+     "security/native/corpus/stun/binding-empty.hex",
+     "security/native/corpus/stun/header-short.hex",
+     "security/native/corpus/utils/ascending-bytes.hex",
+     "security/native/corpus/utils/ascii-token.hex",
+     "security/native/corpus.json",
+     "security/native/toolchain.json",
+     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+     "vendor/mediasoup-sys-0.19.0/build.rs",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/meson.build",
+     "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+     "vendor/mediasoup-sys-0.19.0/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/tasks.py",
+     "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+    ]
+   }
+  },
+  {
+   "name": "a sibling of a generated part",
+   "result": {
+    "held": [
+     "build/install-openssl.sh",
+     "build/native-security.Dockerfile",
+     "build/pip-constraints.txt",
+     "security/native/corpus/codecs/descriptor-zero.hex",
+     "security/native/corpus/codecs/opus-silence.hex",
+     "security/native/corpus/dtls/alert-close.hex",
+     "security/native/corpus/dtls/handshake-empty.hex",
+     "security/native/corpus/rtcp/receiver-empty.hex",
+     "security/native/corpus/rtcp/sender-empty.hex",
+     "security/native/corpus/rtp/audio-minimal.hex",
+     "security/native/corpus/rtp/header-short.hex",
+     "security/native/corpus/rtp/unit-packet1.hex",
+     "security/native/corpus/rtp/unit-packet2.hex",
+     "security/native/corpus/rtp/unit-packet3.hex",
+     "security/native/corpus/sctp/common-header.hex",
+     "security/native/corpus/sctp/init-header.hex",
+     "security/native/corpus/stun/binding-empty.hex",
+     "security/native/corpus/stun/header-short.hex",
+     "security/native/corpus/utils/ascending-bytes.hex",
+     "security/native/corpus/utils/ascii-token.hex",
+     "security/native/corpus.json",
+     "security/native/toolchain.json",
+     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+     "vendor/mediasoup-sys-0.19.0/build.rs",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt",
+     "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/include/FBSextra.h",
+     "vendor/mediasoup-sys-0.19.0/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/meson.build",
+     "vendor/mediasoup-sys-0.19.0/meson_options.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/a.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/scripts/run.sh",
+     "vendor/mediasoup-sys-0.19.0/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/src/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt",
+     "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/tasks.py",
+     "vendor/mediasoup-sys-0.19.0/test/include/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/a.txt",
+     "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt"
+    ]
+   }
+  },
+  {
+   "count": 19945,
+   "name": "one more source than the most",
+   "result": {
+    "refused": "native_source_count"
+   }
+  }
+ ],
+ "tree": {
+  "<reference:1>": {
+   "mode": "0o644",
+   "text": "recipe <reference:1>\n"
+  },
+  "<reference:2>": {
+   "mode": "0o644",
+   "text": "recipe <reference:2>\n"
+  },
+  "<reference:3>": {
+   "mode": "0o644",
+   "text": "recipe <reference:3>\n"
+  },
+  "<reference:4>": {
+   "mode": "0o644",
+   "text": "recipe <reference:4>\n"
+  },
+  "<reference:5>": {
+   "mode": "0o644",
+   "text": "recipe <reference:5>\n"
+  },
+  "<reference:6>": {
+   "mode": "0o644",
+   "text": "recipe <reference:6>\n"
+  },
+  "build/install-openssl.sh": {
+   "mode": "0o755",
+   "text": "recipe build/install-openssl.sh\n"
+  },
+  "build/native-security.Dockerfile": {
+   "mode": "0o644",
+   "text": "recipe build/native-security.Dockerfile\n"
+  },
+  "build/pip-constraints.txt": {
+   "mode": "0o644",
+   "text": "recipe build/pip-constraints.txt\n"
+  },
+  "security/native/corpus.json": {
+   "mode": "0o644",
+   "text": "{\n  \"schemaVersion\": 1,\n  \"description\": \"Original synthetic format fixtures for finite local native parser replay. No captured user traffic or known exploit inputs. Each family runs independently.\",\n  \"cases\": [\n    {\n      \"id\": \"stun-binding-empty\",\n      \"family\": \"stun\",\n      \"path\": \"corpus/stun/binding-empty.hex\",\n      \"sha256\": \"e9edc0c9df1431ebcdc91bc0b9ee98b90fc3e68a8f706f6cb05ae44648935e91\",\n      \"bytes\": 20,\n      \"provenance\": \"RFC 8489 section 5, synthetic Binding request header with no attributes.\"\n    },\n    {\n      \"id\": \"stun-header-short\",\n      \"family\": \"stun\",\n      \"path\": \"corpus/stun/header-short.hex\",\n      \"sha256\": \"bf5e8ffa51a9e748985800c1d3d7f1a2a6ae7435136593ca8d9637e3f87c699c\",\n      \"bytes\": 4,\n      \"provenance\": \"Synthetic incomplete header rejection; no exploit or captured traffic.\"\n    },\n    {\n      \"id\": \"dtls-handshake-empty\",\n      \"family\": \"dtls\",\n      \"path\": \"corpus/dtls/handshake-empty.hex\",\n      \"sha256\": \"d5f49713c935a348e0ad02220652ad96c9f553003519183e5d3e36a463fe1787\",\n      \"bytes\": 13,\n      \"provenance\": \"RFC 6347 section 4.1, synthetic DTLS record with empty handshake body.\"\n    },\n    {\n      \"id\": \"dtls-alert-close\",\n      \"family\": \"dtls\",\n      \"path\": \"corpus/dtls/alert-close.hex\",\n      \"sha256\": \"e083202581a86d5fd2bb227e592854b23f5189b73f7a98d084c346cfef445ed9\",\n      \"bytes\": 15,\n      \"provenance\": \"Synthetic warning close_notify record; no authenticated peer or captured key material.\"\n    },\n    {\n      \"id\": \"sctp-common-header\",\n      \"family\": \"sctp\",\n      \"path\": \"corpus/sctp/common-header.hex\",\n      \"sha256\": \"021097515f056bfd37a0c4736201ca69f0518cdbc3417e8e2fd46db2b6577e9d\",\n      \"bytes\": 12,\n      \"provenance\": \"RFC 9260 section 3.1, synthetic common header with no chunks.\"\n    },\n    {\n      \"id\": \"sctp-init-header\",\n      \"family\": \"sctp\",\n      \"path\": \"corpus/sctp/init-header.hex\",\n      \"sha256\": \"c6402e0317a6d08d8bbd008e5eed6ef12e72d8c864d7b8b64def315749e1538f\",\n      \"bytes\": 32,\n      \"provenance\": \"RFC 9260 section 3.3.2, synthetic INIT fields and zero checksum.\"\n    },\n    {\n      \"id\": \"rtp-audio-minimal\",\n      \"family\": \"rtp\",\n      \"path\": \"corpus/rtp/audio-minimal.hex\",\n      \"sha256\": \"d06ae8cb1e489562201949735a2c08139d658b808fa448aba3cbb8aef942f0eb\",\n      \"bytes\": 15,\n      \"provenance\": \"RFC 3550 section 5.1, synthetic RTP audio header and small Opus payload.\"\n    },\n    {\n      \"id\": \"rtp-header-short\",\n      \"family\": \"rtp\",\n      \"path\": \"corpus/rtp/header-short.hex\",\n      \"sha256\": \"e040fa3c848fcd882180c9953d4fda7c8e232239dfd72dec603b3269a23cb08a\",\n      \"bytes\": 4,\n      \"provenance\": \"Synthetic incomplete RTP header rejection.\"\n    },\n    {\n      \"id\": \"rtcp-receiver-empty\",\n      \"family\": \"rtcp\",\n      \"path\": \"corpus/rtcp/receiver-empty.hex\",\n      \"sha256\": \"40f7f5c8da154df0afaf50aa6b86702e60af67c09fbd7c544c88922cca3162c2\",\n      \"bytes\": 8,\n      \"provenance\": \"RFC 3550 section 6.4.2, synthetic receiver report with zero report blocks.\"\n    },\n    {\n      \"id\": \"rtcp-sender-empty\",\n      \"family\": \"rtcp\",\n      \"path\": \"corpus/rtcp/sender-empty.hex\",\n      \"sha256\": \"37a7588b75b18816dda79e250be357d313e98aebf7eb2b0932c16825102b732a\",\n      \"bytes\": 28,\n      \"provenance\": \"RFC 3550 section 6.4.1, synthetic sender report with zero report blocks.\"\n    },\n    {\n      \"id\": \"codecs-opus-silence\",\n      \"family\": \"codecs\",\n      \"path\": \"corpus/codecs/opus-silence.hex\",\n      \"sha256\": \"e472bbfc3250acf87bfacdc4b112e39e9c7d863b6e8806baca718f57d17a5bb6\",\n      \"bytes\": 3,\n      \"provenance\": \"Synthetic common Opus silence packet; each existing codec parser may accept or reject its own interpretation.\"\n    },\n    {\n      \"id\": \"codecs-descriptor-zero\",\n      \"family\": \"codecs\",\n      \"path\": \"corpus/codecs/descriptor-zero.hex\",\n      \"sha256\": \"df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119\",\n      \"bytes\": 4,\n      \"provenance\": \"Synthetic zero descriptor boundary across existing codec parsers.\"\n    },\n    {\n      \"id\": \"utils-ascending-bytes\",\n      \"family\": \"utils\",\n      \"path\": \"corpus/utils/ascending-bytes.hex\",\n      \"sha256\": \"be45cb2605bf36bebde684841a28f0fd43c69850a3dce5fedba69928ee3a8991\",\n      \"bytes\": 16,\n      \"provenance\": \"Original synthetic bounded integer and byte utility fixture.\"\n    },\n    {\n      \"id\": \"utils-ascii-token\",\n      \"family\": \"utils\",\n      \"path\": \"corpus/utils/ascii-token.hex\",\n      \"sha256\": \"9f3dca2d0148268b0a2756b379263f35c1d3069c3b218a7293080f7cd1448c95\",\n      \"bytes\": 11,\n      \"provenance\": \"Original synthetic ASCII test-canary value, never a credential.\"\n    },\n    {\n      \"id\": \"rtp-unit-packet1\",\n      \"family\": \"rtp\",\n      \"path\": \"corpus/rtp/unit-packet1.hex\",\n      \"sha256\": \"6b18db5b86ed63ff821ac3596dead67acecc9d7ae20123f72b7f46e19814c7ab\",\n      \"bytes\": 53,\n      \"provenance\": \"Original synthetic replacement for missing packet1.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media.\"\n    },\n    {\n      \"id\": \"rtp-unit-packet2\",\n      \"family\": \"rtp\",\n      \"path\": \"corpus/rtp/unit-packet2.hex\",\n      \"sha256\": \"89a9fd28e7a7dba7b3601f77aa6c2cc4c8d2ef3d93e7b823c92c8a478145bbfb\",\n      \"bytes\": 239,\n      \"provenance\": \"Original synthetic replacement for missing packet2.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media.\"\n    },\n    {\n      \"id\": \"rtp-unit-packet3\",\n      \"family\": \"rtp\",\n      \"path\": \"corpus/rtp/unit-packet3.hex\",\n      \"sha256\": \"001a4543ae3112011db98f3637c766213cfa64501f29deb120a387e1c278e602\",\n      \"bytes\": 101,\n      \"provenance\": \"Original synthetic replacement for missing packet3.raw, matching the unchanged header, extension, payload-size and padding assertions in worker/test/src/RTC/RTP/TestPacket.cpp. Payload bytes are zero, not captured media.\"\n    }\n  ]\n}\n"
+  },
+  "security/native/corpus/codecs/descriptor-zero.hex": {
+   "mode": "0o644",
+   "text": "00000000\n"
+  },
+  "security/native/corpus/codecs/opus-silence.hex": {
+   "mode": "0o644",
+   "text": "f8fffe\n"
+  },
+  "security/native/corpus/dtls/alert-close.hex": {
+   "mode": "0o644",
+   "text": "15fefd000000000000000000020100\n"
+  },
+  "security/native/corpus/dtls/handshake-empty.hex": {
+   "mode": "0o644",
+   "text": "16fefd00000000000000000000\n"
+  },
+  "security/native/corpus/rtcp/receiver-empty.hex": {
+   "mode": "0o644",
+   "text": "80c9000101020304\n"
+  },
+  "security/native/corpus/rtcp/sender-empty.hex": {
+   "mode": "0o644",
+   "text": "80c80006010203040000000000000000000003c00000000100000003\n"
+  },
+  "security/native/corpus/rtp/audio-minimal.hex": {
+   "mode": "0o644",
+   "text": "806f0001000003c001020304f8fffe\n"
+  },
+  "security/native/corpus/rtp/header-short.hex": {
+   "mode": "0o644",
+   "text": "806f0001\n"
+  },
+  "security/native/corpus/rtp/unit-packet1.hex": {
+   "mode": "0o644",
+   "text": "906f5c4162f547da9f7108e2bede000110000000000000000000000000000000000000000000000000000000000000000000000000\n"
+  },
+  "security/native/corpus/rtp/unit-packet2.hex": {
+   "mode": "0o644",
+   "text": "a0646f3e0a456588c5abdf5a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000095\n"
+  },
+  "security/native/corpus/rtp/unit-packet3.hex": {
+   "mode": "0o644",
+   "text": "906f4b9a3377723d0e0dfad2bede000210002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\n"
+  },
+  "security/native/corpus/sctp/common-header.hex": {
+   "mode": "0o644",
+   "text": "138813890000000000000000\n"
+  },
+  "security/native/corpus/sctp/init-header.hex": {
+   "mode": "0o644",
+   "text": "1388138900000000000000000100001401020304000010000001000100000001\n"
+  },
+  "security/native/corpus/stun/binding-empty.hex": {
+   "mode": "0o644",
+   "text": "000100002112a4420102030405060708090a0b0c\n"
+  },
+  "security/native/corpus/stun/header-short.hex": {
+   "mode": "0o644",
+   "text": "00010000\n"
+  },
+  "security/native/corpus/utils/ascending-bytes.hex": {
+   "mode": "0o644",
+   "text": "000102030405060708090a0b0c0d0e0f\n"
+  },
+  "security/native/corpus/utils/ascii-token.hex": {
+   "mode": "0o644",
+   "text": "746573742d63616e617279\n"
+  },
+  "security/native/toolchain.json": {
+   "mode": "0o644",
+   "text": "recipe security/native/toolchain.json\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/Cargo.toml": {
+   "mode": "0o644",
+   "text": "file Cargo.toml\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/build.rs": {
+   "mode": "0o644",
+   "text": "file build.rs\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/a.txt": {
+   "mode": "0o644",
+   "text": "a of deps/libwebrtc\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/deps/libwebrtc/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of deps/libwebrtc\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fbs/a.txt": {
+   "mode": "0o644",
+   "text": "a of fbs\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fbs/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of fbs\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/a.txt": {
+   "mode": "0o644",
+   "text": "a of fuzzer/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fuzzer/include/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of fuzzer/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/a.txt": {
+   "mode": "0o644",
+   "text": "a of fuzzer/src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/fuzzer/src/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of fuzzer/src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/include/FBS/generated.h": {
+   "mode": "0o644",
+   "text": "generated\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/include/a.txt": {
+   "mode": "0o644",
+   "text": "a of include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/include/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/meson.build": {
+   "mode": "0o644",
+   "text": "file meson.build\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/meson_options.txt": {
+   "mode": "0o644",
+   "text": "file meson_options.txt\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/mocks/include/a.txt": {
+   "mode": "0o644",
+   "text": "a of mocks/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/mocks/include/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of mocks/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/mocks/src/a.txt": {
+   "mode": "0o644",
+   "text": "a of mocks/src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/mocks/src/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of mocks/src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/python-invoke-requirements.txt": {
+   "mode": "0o644",
+   "text": "file python-invoke-requirements.txt\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt": {
+   "mode": "0o644",
+   "text": "file python-tools-requirements.txt\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/scripts/a.txt": {
+   "mode": "0o644",
+   "text": "a of scripts\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/scripts/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of scripts\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/scripts/node_modules/x.js": {
+   "mode": "0o644",
+   "text": "module\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/scripts/run.sh": {
+   "mode": "0o755",
+   "text": "#!/bin/sh\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/src/a.txt": {
+   "mode": "0o644",
+   "text": "a of src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/src/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/abseil.wrap": {
+   "mode": "0o644",
+   "text": "[abseil.wrap]\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap": {
+   "mode": "0o644",
+   "text": "[libuv.wrap]\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/notes.txt": {
+   "mode": "0o644",
+   "text": "[notes.txt]\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/a.txt": {
+   "mode": "0o644",
+   "text": "a of subprojects/packagefiles\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of subprojects/packagefiles\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/tasks.py": {
+   "mode": "0o644",
+   "text": "file tasks.py\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/test/include/a.txt": {
+   "mode": "0o644",
+   "text": "a of test/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/test/include/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of test/include\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/test/src/a.txt": {
+   "mode": "0o644",
+   "text": "a of test/src\n"
+  },
+  "vendor/mediasoup-sys-0.19.0/test/src/nested/b.txt": {
+   "mode": "0o644",
+   "text": "b of test/src\n"
+  }
+ }
+}

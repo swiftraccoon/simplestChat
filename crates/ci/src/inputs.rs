@@ -100,8 +100,6 @@ pub(super) const NATIVE_FILES: &[&str] = &[
     "build/ci_verified.py",
     "build/install-openssl.sh",
     "build/native-security.Dockerfile",
-    "build/native_security.py",
-    "build/native_security_cache.py",
     "build/pip-constraints.txt",
     "build/security_codeql_resources.py",
     "build/security_context.py",

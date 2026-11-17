@@ -16,7 +16,6 @@ from test_support import ROOT, obj, objects, string, yaml_value
 
 # isort: split
 import ci_verified as cache
-import native_security
 from security_tools import ToolError
 
 
@@ -42,7 +41,7 @@ class VerifiedCacheTests(unittest.TestCase):
             "docs/example.md",
             "vendor/worker.cpp",
             "xtask/src/check.rs",
-            "build/native_security.py",
+            "build/native-security.Dockerfile",
             "security/exceptions.json",
             "security/native/toolchain.json",
             ".github/workflows/ci.yml",
@@ -216,7 +215,7 @@ class VerifiedCacheTests(unittest.TestCase):
             _ = path.write_text("changed\n")
             self.assertNotEqual(cache.cache_key(self.root, "native-asan"), key)
             _ = path.write_text("original\n")
-        self.git("update-index", "--chmod=+x", "build/native_security.py")
+        self.git("update-index", "--chmod=+x", "build/native-security.Dockerfile")
         self.assertNotEqual(cache.cache_key(self.root, "native-asan"), key)
         (self.root / "vendor/worker.cpp").unlink()
         with self.assertRaisesRegex(ToolError, "ci_cache_source_missing"):
@@ -224,8 +223,6 @@ class VerifiedCacheTests(unittest.TestCase):
 
     def test_native_keys_cover_all_real_build_inputs_without_unrelated_rust_or_docs(self) -> None:
         """Every actual native build input stays bound as unrelated application work changes."""
-        for source in native_security.source_files(ROOT):
-            self.assertTrue(cache.native_security_input(str(source.relative_to(ROOT))))
         originals = {
             scope: cache.cache_key(self.root, scope) for scope in ("native-asan", "codeql-native")
         }
@@ -236,7 +233,7 @@ class VerifiedCacheTests(unittest.TestCase):
             self.assertEqual(cache.cache_key(self.root, scope), key)
         self.assertNotEqual(cache.cache_key(self.root, "codeql-rust"), rust)
 
-    def test_native_security_binds_each_helper_and_ignores_unrelated_review_changes(self) -> None:
+    def test_native_suites_bind_each_helper_and_ignore_unrelated_review_changes(self) -> None:
         """Reviewing another analyzer must not rerun unchanged sanitizer and replay suites."""
         unrelated = (
             *cache.CODEQL_POLICY_DATA,
@@ -276,19 +273,14 @@ class VerifiedCacheTests(unittest.TestCase):
                 self.assertNotEqual(cache.cache_key(self.root, scope), original, name)
             _ = path.write_text("original\n")
 
-    def test_native_security_closure_covers_all_local_python_imports(self) -> None:
+    def test_native_closure_covers_all_local_python_imports(self) -> None:
         """New transitive imports cannot silently bypass native success invalidation."""
         modules = {
             path.stem: path
             for directory in (ROOT / "build", ROOT / "ops/ansible/files")
             for path in directory.glob("*.py")
         }
-        pending = [
-            "native_security",
-            "native_security_cache",
-            "security_vendor",
-            "ci_verified",
-        ]
+        pending = ["security_vendor", "ci_verified"]
         visited: set[str] = set()
         while pending:
             name = pending.pop()
@@ -936,7 +928,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 self.assertEqual(effective["PKG_CONFIG_PATH"], canonical)
 
     def test_native_success_receipts_do_not_enable_automated_vendor_scans(self) -> None:
-        """Optional native cache helpers remain available without any required scan job."""
+        """Cached native success receipts enable no hosted vendor scan job."""
         jobs = obj(
             yaml_value(
                 (ROOT / ".github/workflows/security.yml").read_text(), scalars_as_strings=True
@@ -945,8 +937,6 @@ class VerifiedWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("native-security", jobs)
         self.assertNotIn("security-deep", jobs)
-        for helper in ("build/native_security.py", "build/native_security_cache.py"):
-            self.assertTrue(cache.native_security_input(helper), helper)
 
     def test_audits_helpers_and_browser_suites_are_not_replaced_by_cached_success(self) -> None:
         """Cached Rust work cannot suppress UI or advisory checks."""

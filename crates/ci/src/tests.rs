@@ -40,7 +40,7 @@ impl Fixture {
             "docs/example.md",
             "vendor/worker.cpp",
             "xtask/src/check.rs",
-            "build/native_security.py",
+            "build/native-security.Dockerfile",
             "security/exceptions.json",
             "security/native/toolchain.json",
             ".github/workflows/security.yml",
@@ -289,7 +289,11 @@ fn input_closures_and_index_modes_preserve_oracle_decisions() {
         );
     }
     let original = assert_key_parity(&fixture, Scope::NativeAsan);
-    fixture.git(&["update-index", "--chmod=+x", "build/native_security.py"]);
+    fixture.git(&[
+        "update-index",
+        "--chmod=+x",
+        "build/native-security.Dockerfile",
+    ]);
     assert_ne!(assert_key_parity(&fixture, Scope::NativeAsan), original);
     fs::remove_file(fixture.context.root.join("vendor/worker.cpp")).unwrap();
     assert!(

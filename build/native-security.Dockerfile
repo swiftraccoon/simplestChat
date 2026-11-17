@@ -6,68 +6,74 @@ RUN dnf install -y --setopt=install_weak_deps=False \
     make perl pkgconf-pkg-config python3 python3-pip tar xz zstd libxml2 zlib libzstd \
     && dnf clean all
 FROM native-base AS llvm-toolchain
-COPY security/native/toolchain.json /opt/check/security/native/toolchain.json
 # A bounded, checksum-authenticated upstream LLVM archive supplies clang,
 # compiler-rt, libFuzzer and a matching symbolizer. No PATH compiler fallback.
-RUN python3 - <<'PY'
-import hashlib
-import json
-import platform
-import fnmatch
-import subprocess
-import urllib.request
-from pathlib import Path
-pin = json.loads(Path('/opt/check/security/native/toolchain.json').read_text())
-asset = pin['platforms']['linux-' + platform.machine()]
-archive = Path('/tmp/llvm.tar.zst')
-digest = hashlib.sha256()
-size = 0
-with urllib.request.urlopen(asset['url'], timeout=60) as source, archive.open('xb') as out:
-    while chunk := source.read(1024 * 1024):
-        size += len(chunk)
-        if size > asset['bytes']:
-            raise SystemExit('LLVM archive exceeds pinned size')
-        digest.update(chunk)
-        out.write(chunk)
-if size != asset['bytes'] or digest.hexdigest() != asset['sha256']:
-    raise SystemExit('LLVM archive does not match pinned bytes')
-PY
-RUN python3 - <<'PY'
-import fnmatch
-import json
-import platform
-import subprocess
-from pathlib import Path
-pin = json.loads(Path('/opt/check/security/native/toolchain.json').read_text())
-asset = pin['platforms']['linux-' + platform.machine()]
-archive = Path('/tmp/llvm.tar.zst')
-Path('/opt/llvm').mkdir()
-tar = ['tar', '--use-compress-program=zstd --long=30']
-listing = subprocess.run([*tar, '-tf', str(archive)], check=True, capture_output=True, timeout=180).stdout
-if len(listing) > 8 * 1024 * 1024:
-    raise SystemExit('LLVM archive member listing exceeds budget')
-prefix = asset['directory'] + '/'
-members = []
-for name in listing.decode('utf-8').splitlines():
-    if not name.startswith(prefix) or '..' in Path(name).parts:
-        raise SystemExit('Unexpected LLVM archive member layout')
-    relative = name.removeprefix(prefix)
-    if (relative.startswith('lib/clang/') or
-        relative in ('bin/clang', 'bin/clang++', 'bin/clang-23', 'bin/llvm-symbolizer',
-                     'bin/llvm-ar', 'bin/llvm-ranlib', 'LICENSE.TXT') or
-        fnmatch.fnmatchcase(relative, 'lib/libLLVM*.so*') or
-        fnmatch.fnmatchcase(relative, 'lib/libclang-cpp*.so*')):
-        members.append(name)
-Path('/tmp/llvm-members.txt').write_text('\n'.join(members) + '\n')
-subprocess.run([*tar, '-xf', str(archive), '-C', '/opt/llvm', '--strip-components=1', '--no-recursion', '--files-from=/tmp/llvm-members.txt'], check=True, timeout=300)
-archive.unlink()
-for tool in ('clang', 'clang++', 'llvm-symbolizer'):
-    print(tool, Path('/opt/llvm/bin/' + tool).resolve(), flush=True)
-    subprocess.run(['/opt/llvm/bin/' + tool, '--version'], check=True, timeout=10)
-PY
+# The host passes the archive that toolchain.json pins for its architecture.
+ARG LLVM_URL
+ARG LLVM_SHA256
+ARG LLVM_BYTES
+ARG LLVM_DIRECTORY
+RUN /bin/sh -eu <<'SH'
+: "${LLVM_URL:?}" "${LLVM_SHA256:?}" "${LLVM_BYTES:?}" "${LLVM_DIRECTORY:?}"
+set -C
+status=0
+curl --fail --location --proto '=https' --proto-redir '=https' --silent --show-error \
+  --connect-timeout 60 --speed-limit 1 --speed-time 60 --max-filesize "$LLVM_BYTES" \
+  -- "$LLVM_URL" > /tmp/llvm.tar.zst || status=$?
+# curl refuses a declared size over the limit with 63; one that only shows
+# while it arrives ends the transfer at the limit, with 63 or 56 by version.
+if [ "$status" -ne 0 ]; then
+  if [ "$status" -eq 63 ] || [ "$(stat --format=%s /tmp/llvm.tar.zst)" -ge "$LLVM_BYTES" ]; then
+    echo 'LLVM archive exceeds pinned size' >&2
+  fi
+  exit 1
+fi
+[ "$(stat --format=%s /tmp/llvm.tar.zst)" = "$LLVM_BYTES" ] || {
+  echo 'LLVM archive does not match pinned bytes' >&2
+  exit 1
+}
+case "$LLVM_SHA256" in
+  *[!0-9a-f]*) echo 'LLVM archive does not match pinned bytes' >&2; exit 1 ;;
+esac
+printf '%s  %s\n' "$LLVM_SHA256" /tmp/llvm.tar.zst | sha256sum --check --strict --status || {
+  echo 'LLVM archive does not match pinned bytes' >&2
+  exit 1
+}
+SH
+RUN /bin/sh -eu <<'SH'
+: "${LLVM_DIRECTORY:?}"
+mkdir /opt/llvm
+timeout 180 tar --use-compress-program='zstd --long=30' -tf /tmp/llvm.tar.zst \
+  > /tmp/llvm-listing.txt
+if [ "$(stat --format=%s /tmp/llvm-listing.txt)" -gt 8388608 ]; then
+  echo 'LLVM archive member listing exceeds budget' >&2
+  exit 1
+fi
+prefix="$LLVM_DIRECTORY/"
+while IFS= read -r name || [ -n "$name" ]; do
+  case "$name" in
+    "$prefix"*) ;;
+    *) echo 'Unexpected LLVM archive member layout' >&2; exit 1 ;;
+  esac
+  case "/$name/" in
+    */../*) echo 'Unexpected LLVM archive member layout' >&2; exit 1 ;;
+  esac
+  case "${name#"$prefix"}" in
+    lib/clang/* | LICENSE.TXT | lib/libLLVM*.so* | lib/libclang-cpp*.so*) printf '%s\n' "$name" ;;
+    bin/clang | bin/clang++ | bin/clang-23 | bin/llvm-symbolizer | bin/llvm-ar | bin/llvm-ranlib)
+      printf '%s\n' "$name" ;;
+  esac
+done < /tmp/llvm-listing.txt > /tmp/llvm-members.txt
+timeout 300 tar --use-compress-program='zstd --long=30' -xf /tmp/llvm.tar.zst -C /opt/llvm \
+  --strip-components=1 --no-recursion --files-from=/tmp/llvm-members.txt
+rm /tmp/llvm.tar.zst /tmp/llvm-listing.txt
+for tool in clang clang++ llvm-symbolizer; do
+  printf '%s %s\n' "$tool" "$(realpath -m "/opt/llvm/bin/$tool")"
+  timeout 10 "/opt/llvm/bin/$tool" --version
+done
+SH
 FROM native-base
 COPY --from=llvm-toolchain /opt/llvm /opt/llvm
-COPY security/native/toolchain.json /opt/check/security/native/toolchain.json
 COPY build/install-openssl.sh /opt/check/build/install-openssl.sh
 RUN /opt/check/build/install-openssl.sh /opt/openssl-4.1.0
 ENV PATH=/opt/llvm/bin:/usr/bin:/bin \
@@ -94,9 +100,45 @@ RUN python3 -m pip install --no-user --target /opt/native-tools/pip_invoke \
 # receipt describes the resolved builder, not a promise that RPM repositories freeze.
 RUN rpm -qa --qf '%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE} %{ARCH}\n' \
     | sort > /opt/check/builder-rpms.txt
-COPY build/native_security.py build/security_codeql_resources.py build/security_tools.py build/security_source_scope.py /opt/check/build/
-COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py /opt/check/ops/ansible/files/
-COPY security/native /opt/check/security/native
 RUN chmod -R a+rX /opt/check /opt/worker
+# Nothing of the repository's own runs here: the host issues every step in
+# the sandbox, by these absolute paths and with the GNU options it gives them,
+# and the image is refused unless each of them works. The image has no user
+# of its own, so this runs as the user the recipe builds with.
+RUN /bin/sh -eu <<'SH'
+for program in /usr/bin/sleep /bin/sh /usr/bin/cat /usr/bin/env /usr/bin/stat /usr/bin/head \
+    /usr/bin/sha256sum /usr/bin/cp /usr/bin/mkdir /usr/bin/chmod; do
+  [ -x "$program" ] || {
+    echo "Missing sandbox program $program" >&2
+    exit 1
+  }
+done
+rpms=/opt/check/builder-rpms.txt
+case "$(/usr/bin/stat '--format=%f %s %.9Y' "$rpms")" in
+  ?*' '[0-9]*' '[0-9]*.[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+  *) echo 'Sandbox stat lacks the host format' >&2; exit 1 ;;
+esac
+[ "$(/usr/bin/stat --format=%s "$rpms")" -gt 0 ]
+[ "$(/usr/bin/head --bytes=1 "$rpms" | wc -c)" -eq 1 ]
+/usr/bin/sha256sum "$rpms" > /dev/null
+/usr/bin/env -0 > /dev/null
+/usr/bin/env -i CHECKED=1 /usr/bin/sleep 0
+work=/tmp/sandbox-programs
+/usr/bin/mkdir "$work"
+/usr/bin/mkdir -p "$work/tree/nested"
+echo written | /bin/sh -c 'umask 077 && set -C && exec /usr/bin/cat > "$1"' sh \
+  "$work/tree/nested/file"
+if echo again | /bin/sh -c 'umask 077 && set -C && exec /usr/bin/cat > "$1"' sh \
+    "$work/tree/nested/file" 2> /dev/null; then
+  echo 'Sandbox shell writes over a file' >&2
+  exit 1
+fi
+/usr/bin/chmod 700 "$work/tree/nested/file"
+/usr/bin/cp -R --preserve=mode,timestamps "$work/tree" "$work/copy"
+[ "$(/usr/bin/stat '--format=%f %s %.9Y' "$work/tree/nested/file")" = \
+  "$(/usr/bin/stat '--format=%f %s %.9Y' "$work/copy/nested/file")" ]
+rm -r "$work"
+SH
 WORKDIR /work
-ENTRYPOINT ["/usr/bin/python3", "/opt/check/build/native_security.py", "_worker"]
+ENTRYPOINT ["/usr/bin/sleep"]
+CMD ["2100"]

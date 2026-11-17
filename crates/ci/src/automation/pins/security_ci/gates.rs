@@ -494,11 +494,7 @@ fn vendor_security_suites_are_explicit_local_only() {
     );
     for job in ["security-fast", "security-mutation"] {
         for step in steps(&security, job) {
-            for forbidden in [
-                "native_security.py",
-                "--include-vendor",
-                "--deep-check native",
-            ] {
+            for forbidden in ["native-suites", "--include-vendor", "--deep-check native"] {
                 assert!(!script(step).contains(forbidden), "{job}: {forbidden}");
             }
         }

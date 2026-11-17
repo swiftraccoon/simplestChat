@@ -751,7 +751,7 @@ def fuzzer(ctx):
 @task
 def fuzzer_run_all(ctx):
     """Reject the upstream unbounded task and its absent external corpora."""
-    raise RuntimeError("Use build/native_security.py with reviewed corpus and finite limits")
+    raise RuntimeError("Use simplestchat-security native-suites with reviewed corpus and finite limits")
 
 
 # The upstream container Dockerfiles are absent from this crate snapshot. Keep

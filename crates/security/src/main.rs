@@ -33,6 +33,10 @@ fn main() -> ExitCode {
         (Some(root), Some([group, rest @ ..])) if group == "image" => {
             simplestchat_security::image::run(&root, rest)
         }
+        #[cfg(feature = "image")]
+        (Some(root), Some([group, rest @ ..])) if group == "native-suites" => {
+            simplestchat_security::native_suites::cli::run(&root, rest)
+        }
         (Some(root), Some([group, rest @ ..])) if group == "native" => {
             simplestchat_security::native::run(&root, rest)
         }

@@ -311,7 +311,7 @@
         {
           "path": "tasks.py",
           "upstream_sha256": "0e04e3bfe07be3d5e84ef73b7bb40376dfbf32ece51004452b24b33535d4269d",
-          "vendored_sha256": "ed0bc429e4df6315668234bb549cc2a9e599051f0233aa2dfaee3261b67bc1aa"
+          "vendored_sha256": "d4b7a137445a3ac23f9194b919e31601cd6e4855eb57a83a3a2d9c54e9079f1f"
         },
         {
           "path": "test/src/RTC/TestDtlsTransport.cpp",

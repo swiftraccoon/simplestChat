@@ -23,7 +23,8 @@ path = "src/main.rs"
 [features]
 default = ["image"]
 # The checks of a saved image, which authenticate it with the release
-# verifier of the ops crate and let SIGINT and SIGTERM cancel the scanners
+# verifier of the ops crate, and the native suites, which select their local
+# engine as those checks do; both let SIGINT and SIGTERM cancel what they run
 # instead of ending the gate. The image build compiles this crate without
 # them, before the ops sources are there, for the three commands it runs
 # inside the builder.

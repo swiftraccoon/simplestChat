@@ -1583,7 +1583,7 @@
    ],
    "name": "the mutation check alone, which fails",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -1663,7 +1663,7 @@
    ],
    "name": "the mutation check alone, which passes",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 0 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 0 ;;\nesac\nexit 97\n",
    "status": 0,
    "statuses": {
     "asan": 0,
@@ -1741,7 +1741,7 @@
    ],
    "name": "everything without the vendored tree",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -1790,7 +1790,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -1798,7 +1798,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -1810,7 +1810,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -1822,7 +1822,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -1874,7 +1874,7 @@
    ],
    "name": "everything with the vendored tree",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -1943,7 +1943,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "podman",
@@ -1951,7 +1951,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -1963,7 +1963,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -1975,7 +1975,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -2027,7 +2027,7 @@
    ],
    "name": "everything with the vendored tree and another engine",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2092,7 +2092,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2100,7 +2100,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -2112,7 +2112,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -2124,7 +2124,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -2155,7 +2155,7 @@
    ],
    "name": "the native suites alone",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 0,
    "statuses": {
     "asan": 0,
@@ -2218,7 +2218,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "podman",
@@ -2226,7 +2226,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -2238,7 +2238,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -2250,7 +2250,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "podman",
@@ -2281,7 +2281,7 @@
    ],
    "name": "the native suites alone with another engine",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 0,
    "statuses": {
     "asan": 0,
@@ -2374,7 +2374,7 @@
    ],
    "name": "the mutation check with the vendored tree",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2432,7 +2432,7 @@
    ],
    "name": "a vendored tree that is not as recorded",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 1 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 1 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2487,7 +2487,7 @@
    ],
    "name": "a vendored tree whose check is stopped",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 143 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 143 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2532,7 +2532,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2553,7 +2553,7 @@
    ],
    "name": "a preparation that fails",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 2 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 2 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2602,7 +2602,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2621,7 +2621,7 @@
    ],
    "name": "a preparation that reports nothing",
    "report": null,
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    :\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    :\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2670,7 +2670,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2691,7 +2691,7 @@
    ],
    "name": "a preparation that reports no document",
    "report": "{",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2740,7 +2740,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2761,7 +2761,7 @@
    ],
    "name": "a preparation that reports a list",
    "report": "[]",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '[]' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '[]' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2810,7 +2810,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2831,7 +2831,7 @@
    ],
    "name": "a preparation that reports no image",
    "report": "{}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2880,7 +2880,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2901,7 +2901,7 @@
    ],
    "name": "a preparation that reports an image that is no text",
    "report": "{\"imageId\": 7}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": 7}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": 7}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -2950,7 +2950,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -2971,7 +2971,7 @@
    ],
    "name": "a preparation that reports an image without a name",
    "report": "{\"imageId\": \"\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3020,7 +3020,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3041,7 +3041,7 @@
    ],
    "name": "a preparation that reports a very long image",
    "report": "{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3090,7 +3090,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3098,7 +3098,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3110,7 +3110,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3122,7 +3122,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3153,7 +3153,7 @@
    ],
    "name": "a preparation that reports the longest image",
    "report": "{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 0,
    "statuses": {
     "asan": 0,
@@ -3214,7 +3214,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3222,7 +3222,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3234,7 +3234,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3246,7 +3246,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3277,7 +3277,7 @@
    ],
    "name": "a preparation that reports more than the image",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\", \"more\": [1]}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\", \"more\": [1]}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\", \"more\": [1]}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 0,
    "statuses": {
     "asan": 0,
@@ -3338,7 +3338,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3346,7 +3346,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3373,7 +3373,7 @@
    ],
    "name": "an address sanitizer suite that fails",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 1 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 1 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 1,
@@ -3426,7 +3426,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3434,7 +3434,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3446,7 +3446,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3475,7 +3475,7 @@
    ],
    "name": "an undefined behaviour suite that fails",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 1 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 1 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3532,7 +3532,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3540,7 +3540,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3552,7 +3552,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3564,7 +3564,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3595,7 +3595,7 @@
    ],
    "name": "a replay suite that fails",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 1 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 1 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3656,7 +3656,7 @@
      "<place>/evidence/gate/vendor"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "prepare",
      "--engine",
      "docker",
@@ -3664,7 +3664,7 @@
      "<place>/evidence/gate/native-preparation"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3676,7 +3676,7 @@
      "<place>/evidence/gate/native-asan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3688,7 +3688,7 @@
      "<place>/evidence/gate/native-ubsan"
     ],
     [
-     "build/native_security.py",
+     "native-suites",
      "run",
      "--engine",
      "docker",
@@ -3719,7 +3719,7 @@
    ],
    "name": "a replay suite that fails before the mutation check",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 3 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 3 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3798,7 +3798,7 @@
    ],
    "name": "a mutation tool that cannot be installed",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3876,7 +3876,7 @@
    ],
    "name": "a mutation tool for a named platform",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -3943,7 +3943,7 @@
    ],
    "name": "a static OpenSSL that is not there",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4019,7 +4019,7 @@
    ],
    "name": "a static OpenSSL named by the environment",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4101,7 +4101,7 @@
    ],
    "name": "a static OpenSSL named twice",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4168,7 +4168,7 @@
    ],
    "name": "a static OpenSSL named by the environment that is not there",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4242,7 +4242,7 @@
    ],
    "name": "a static OpenSSL at its usual place",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4322,7 +4322,7 @@
    ],
    "name": "a static OpenSSL named through a link",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,
@@ -4402,7 +4402,7 @@
    ],
    "name": "a static OpenSSL named through a link by the environment",
    "report": "{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}",
-   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  build/native_security.py:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  build/native_security.py:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
+   "script": "#!/bin/sh\nprintf '%s\\n' \"$(printf '%s\\0' \"$@\" | od -An -v -tx1 | tr -d ' \\n')\" >> '<log>'\ncase \"$1:$2\" in\n  build/security_vendor.py:verify) exit 0 ;;\n  native-suites:prepare)\n    mkdir -p \"$6\" && printf '%s' '{\"imageId\": \"sha256:abababababababababababababababababababababababababababababababab\"}' > \"$6/report.json\"\n    exit 0 ;;\n  native-suites:run)\n    case \"$8\" in\n      asan) exit 0 ;;\n      ubsan) exit 0 ;;\n      replay) exit 0 ;;\n    esac ;;\n  <the mutation command>:--tools-directory) exit 1 ;;\nesac\nexit 97\n",
    "status": 1,
    "statuses": {
     "asan": 0,

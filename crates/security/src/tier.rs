@@ -165,6 +165,10 @@ pub trait Host {
     /// kept in `cache` and the evidence in the new directory `output`, and
     /// answer what is wrong with it.
     fn vendor(&self, root: &Path, cache: &Path, output: &Path) -> std::result::Result<(), String>;
+
+    /// This gate's own program, whose `native-suites` command runs the
+    /// native suites.
+    fn program(&self) -> Result<PathBuf>;
 }
 
 /// This machine: the lock and the scanner cache of the checkout, the
@@ -244,6 +248,10 @@ impl Host for Machine<'_> {
             bounds: vendor::Bounds::REVIEWED,
         });
         verified.map_err(|vendor::Problem(complaint)| complaint)
+    }
+
+    fn program(&self) -> Result<PathBuf> {
+        std::env::current_exe().map_err(|_| Fault("security_program_unlocated"))
     }
 }
 
@@ -377,23 +385,23 @@ fn fast(
     Ok(())
 }
 
-/// Build and run the finite native suites in the offline sandbox that the
-/// preparation reports.
-fn native(context: &mut Context, python: &Path, engine: &str) -> Outcome<()> {
+/// Build and run the finite native suites with this gate's own `program`,
+/// in the offline sandbox that the preparation reports.
+fn native(context: &mut Context, program: &Path, engine: &str) -> Outcome<()> {
     let slow = Run {
         within: NATIVE,
         ..Run::default()
     };
     let preparation = context.output().join("native-preparation");
     let arguments = [
-        OsStr::new("build/native_security.py"),
+        OsStr::new("native-suites"),
         OsStr::new("prepare"),
         OsStr::new("--engine"),
         OsStr::new(engine),
         OsStr::new("--output"),
         preparation.as_os_str(),
     ];
-    context.run("native-prepare", &command(python, &arguments), &slow)?;
+    context.run("native-prepare", &command(program, &arguments), &slow)?;
     let report = preparation.join("report.json");
     let report = record::document(&files::bounded(&report, context.limits().report, false)?)?;
     require(report.is_object(), "scanner_report_object")?;
@@ -401,7 +409,7 @@ fn native(context: &mut Context, python: &Path, engine: &str) -> Outcome<()> {
     for (name, mode) in SUITES {
         let output = context.output().join(name);
         let arguments = [
-            OsStr::new("build/native_security.py"),
+            OsStr::new("native-suites"),
             OsStr::new("run"),
             OsStr::new("--engine"),
             OsStr::new(engine),
@@ -412,7 +420,7 @@ fn native(context: &mut Context, python: &Path, engine: &str) -> Outcome<()> {
             OsStr::new("--output"),
             output.as_os_str(),
         ];
-        context.run(name, &command(python, &arguments), &slow)?;
+        context.run(name, &command(program, &arguments), &slow)?;
     }
     Ok(())
 }
@@ -489,7 +497,7 @@ fn deep(
     };
     context.step("vendor-integrity", verified, |_| said.take())?;
     if request.include_vendor && request.check != "mutation" {
-        native(context, &programs.python()?, request.engine)?;
+        native(context, &host.program()?, request.engine)?;
     }
     if request.check != "native" {
         mutated(context, request, host, programs, git)?;
