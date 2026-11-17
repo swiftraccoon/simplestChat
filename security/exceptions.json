@@ -173,6 +173,16 @@
     },
     {
       "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2026-0543",
+      "scope": "chrono@0.4.45",
+      "owner": "swiftraccoon",
+      "rationale": "Unmaintained date and time library; the advisory reports no vulnerability.",
+      "reachability": "Reviewed full dependency graph at b1736f4: a direct dependency of the server, the load generator and the ci, release and ops crates for timestamps, and required by sqlx-core 0.9.0 and sqlx-postgres 0.9.0 through the sqlx chrono feature, so it is linked into shipped binaries; the advisory is informational, names no patched release and affects every version; exact version only, replacement by a maintained time library to be decided on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
       "fingerprint": "RUSTSEC-2026-0097",
       "scope": "rand@0.7.3",
       "owner": "swiftraccoon",
