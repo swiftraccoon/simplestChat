@@ -203,7 +203,7 @@ pub fn detect(requested: Option<&str>) -> Result<Budget> {
 #[cfg(target_os = "linux")]
 fn physical_memory() -> Result<u64> {
     let info = rustix::system::sysinfo();
-    Ok(u64::from(info.totalram).saturating_mul(u64::from(info.mem_unit)))
+    Ok(info.totalram.saturating_mul(u64::from(info.mem_unit)))
 }
 
 /// The memory of this machine, in bytes, as `sysctl` says it.
