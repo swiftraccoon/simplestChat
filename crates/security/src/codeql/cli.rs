@@ -1,5 +1,5 @@
-//! `simplestchat-security codeql jobs|coverage|tools|cargo-key`: the
-//! CodeQL tier's leaf commands, each answering as its reference did.
+//! `simplestchat-security codeql jobs|coverage|tools|cargo-key|triage`:
+//! the CodeQL tier's commands, each answering as its reference did.
 
 use super::{cargo, coverage, tools};
 use crate::{
@@ -21,7 +21,9 @@ pub const USAGE: &str = concat!(
     "       simplestchat-security codeql tools --output DIR [--codeql PATH]",
     " [--language LANGUAGE]\n",
     "       simplestchat-security codeql cargo-key --source-root DIR",
-    " [--publication-check DIR]",
+    " [--publication-check DIR]\n",
+    "       simplestchat-security codeql triage health|sarif|plan|check|apply",
+    " --output DIR --revision SHA ...",
 );
 /// The options of `tools`.
 const TOOLS: [&str; 3] = ["--codeql", "--language", "--output"];
@@ -204,8 +206,14 @@ pub fn command(root: &Path, arguments: &[String], around: &mut Around<'_>) -> u8
     cargo::command(root, &request, &host, around.out, around.err)
 }
 
-/// Run the command line `arguments` against the checkout `root`.
+/// Run the command line `arguments` against the checkout `root`; `triage`
+/// reaches GitHub, its clock and the caller's environment on its own.
 pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
+    if let Some((group, rest)) = arguments.split_first()
+        && group == "triage"
+    {
+        return super::triage::run(root, rest);
+    }
     let variable = |name: &str| std::env::var_os(name);
     let search = variable("PATH");
     let name = rustix::system::uname();
