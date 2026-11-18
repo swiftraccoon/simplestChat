@@ -1,83 +1,49 @@
 use super::*;
-use crate::test_support::Fixture;
+use crate::test_support::{Fixture, Recorded, Recording, tally};
 use serde_json::{Value, json};
-use std::io::Write;
-use std::process::{Command, Stdio};
 
 fn fixture() -> Value {
     json!({"schemaVersion":1,"revision":"a".repeat(40),"platform":"linux/amd64",
         "archiveSha256":"b".repeat(64),"imageTag":format!("simplestchat-release/production:{}","a".repeat(40)),
         "migrations":{"1":"c".repeat(96)},"createdAt":"2026-10-21T01:02:03Z"})
 }
-fn oracle(cases: &[String]) {
+/// The retained validator's answers to every document these tests build, test by test in the
+/// order each asked, each bound to the SHA-256 of the document's bytes
+/// (`recorded_manifest.json`).
+const RECORDED: &str = include_str!("recorded_manifest.json");
+const TYPES: &str = "recorded_python_answers_check_types_field_order_migrations_and_dates";
+const DIGITS: &str = "every_unicode_decimal_set_and_timestamp_position_matches_python";
+const ENCODINGS: &str = "byte_encoding_detection_matches_python_and_keeps_original_bytes";
+fn recorded_cases(test: &str) -> Recorded {
+    Recording::new(RECORDED, &[TYPES, DIGITS, ENCODINGS]).cases(test)
+}
+fn oracle(recorded: &mut Recorded, cases: &[String], counted: &mut BTreeMap<String, usize>) {
     oracle_bytes(
+        recorded,
         &cases
             .iter()
             .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>(),
+        counted,
     );
 }
-fn oracle_bytes(cases: &[Vec<u8>]) {
-    let script = r#"
-import json,pathlib,sys,tempfile
-sys.path.insert(0,sys.argv[1]+'/ops/ansible/files')
-import release_artifact as p
-mapping={
-'Release manifest must be a bounded regular file':'manifest_input_refused',
-'Invalid artifact JSON':'invalid_json','Unsupported release manifest fields':'release_manifest_fields',
-'Unsupported release schema':'release_schema','Release revision must be a full Git commit ID':'release_revision',
-'Only linux/amd64 releases are supported':'release_platform','Invalid archive SHA256':'archive_digest',
-'Release tag does not match its revision':'release_tag',
-'Release migrations must be a nonempty bounded map':'release_migrations',
-'Migration versions must be canonical positive decimal integers':'migration_version',
-'Invalid migration SHA384':'migration_digest',
-'Release timestamp must be UTC with second precision':'release_timestamp_shape',
-'Invalid release timestamp':'release_timestamp'}
-results=[]
-with tempfile.TemporaryDirectory(prefix='ops-manifest-oracle-') as directory:
- path=pathlib.Path(directory)/'release.json'
- for source in json.load(sys.stdin):
-  path.write_bytes(bytes(source))
-  try:results.append({'ok':True,'value':p.validate_manifest(path)})
-  except p.ArtifactError as error:
-   text=str(error)
-   results.append({'ok':False,'error':'ambiguous_json' if text.startswith('Duplicate JSON key:') else mapping[text]})
-json.dump(results,sys.stdout)
-"#;
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let mut child = Command::new("python3")
-        .args(["-I", "-c", script])
-        .arg(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(cases).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    eprintln!("checked {} actual Python manifest cases", cases.len());
-    for (index, (source, expected)) in cases.iter().zip(expected).enumerate() {
+/// Holds `Manifest::decode` to the recorded answer for each case in order, counting the
+/// outcomes: `accepted`, or the code of the refusal.
+fn oracle_bytes(recorded: &mut Recorded, cases: &[Vec<u8>], counted: &mut BTreeMap<String, usize>) {
+    for (index, source) in cases.iter().enumerate() {
+        let expected = recorded.answer(source);
         let actual = match Manifest::decode(source) {
             Ok(value) => json!({"ok":true,"value":value.fields()}),
             Err(error) => json!({"ok":false,"error":error.code()}),
         };
         assert_eq!(actual, expected, "case{index}: {source:?}");
+        let outcome = actual["error"].as_str().unwrap_or("accepted").to_string();
+        *counted.entry(outcome).or_insert(0) += 1;
     }
 }
 
 #[test]
-fn actual_python_oracle_checks_types_field_order_migrations_and_dates() {
+fn recorded_python_answers_check_types_field_order_migrations_and_dates() {
     let mut cases = vec![fixture().to_string()];
     for key in KEYS {
         let mut missing = fixture();
@@ -146,6 +112,29 @@ fn actual_python_oracle_checks_types_field_order_migrations_and_dates() {
             cases.push(input.to_string());
         }
     }
+    // A Unicode digit after a day's 3 and after an hour's 2, a lowercase final z, another
+    // character at each dash, at the T (and a lowercase t) and at each colon, and the production
+    // tag of another revision.
+    let zero = char::from_u32(0x1d7ce).unwrap();
+    for (key, value) in [
+        ("createdAt", format!("2026-10-3{zero}T01:02:03Z")),
+        ("createdAt", format!("2026-10-21T2{zero}:02:03Z")),
+        ("createdAt", "2026-10-21T01:02:03z".to_string()),
+        ("createdAt", "2026x10-21T01:02:03Z".to_string()),
+        ("createdAt", "2026-10x21T01:02:03Z".to_string()),
+        ("createdAt", "2026-10-21x01:02:03Z".to_string()),
+        ("createdAt", "2026-10-21t01:02:03Z".to_string()),
+        ("createdAt", "2026-10-21T01x02:03Z".to_string()),
+        ("createdAt", "2026-10-21T01:02x03Z".to_string()),
+        (
+            "imageTag",
+            format!("simplestchat-release/production:{}", "b".repeat(40)),
+        ),
+    ] {
+        let mut input = fixture();
+        input[key] = json!(value);
+        cases.push(input.to_string());
+    }
     let valid = fixture().to_string();
     for token in [
         "NaN",
@@ -188,7 +177,29 @@ fn actual_python_oracle_checks_types_field_order_migrations_and_dates() {
     // The first bad migration follows source order, not lexical key sorting.
     let bad = valid.replace("\"1\":", "\"2\":false,\"01\":");
     cases.push(bad);
-    oracle(&cases);
+    let mut recorded = recorded_cases(TYPES);
+    let mut counted = BTreeMap::new();
+    oracle(&mut recorded, &cases, &mut counted);
+    assert_eq!(recorded.finish(), 110);
+    // The recorder's tally: documents accepted, then refusals per code.
+    let expected = [
+        ("accepted", 6),
+        ("ambiguous_json", 2),
+        ("archive_digest", 8),
+        ("invalid_json", 10),
+        ("manifest_input_refused", 1),
+        ("migration_digest", 3),
+        ("migration_version", 4),
+        ("release_manifest_fields", 12),
+        ("release_migrations", 7),
+        ("release_platform", 6),
+        ("release_revision", 9),
+        ("release_schema", 15),
+        ("release_tag", 7),
+        ("release_timestamp", 5),
+        ("release_timestamp_shape", 15),
+    ];
+    assert_eq!(counted, tally(&expected));
 }
 
 #[test]
@@ -220,7 +231,13 @@ fn every_unicode_decimal_set_and_timestamp_position_matches_python() {
             start += 10;
         }
     }
-    oracle(&cases);
+    let mut recorded = recorded_cases(DIGITS);
+    let mut counted = BTreeMap::new();
+    oracle(&mut recorded, &cases, &mut counted);
+    assert_eq!(recorded.finish(), 836);
+    // The recorder's tally: timestamps accepted and refused.
+    let expected = [("accepted", 386), ("release_timestamp", 450)];
+    assert_eq!(counted, tally(&expected));
 }
 
 #[test]
@@ -322,7 +339,9 @@ fn byte_encoding_detection_matches_python_and_keeps_original_bytes() {
         paired.extend_from_slice(&unit.to_le_bytes());
     }
     cases.push(paired);
-    oracle_bytes(&cases);
+    let mut recorded = recorded_cases(ENCODINGS);
+    let mut counted = BTreeMap::new();
+    oracle_bytes(&mut recorded, &cases, &mut counted);
     for bytes in &cases {
         let manifest = Manifest::decode(bytes).unwrap();
         assert_eq!(manifest.as_json(), bytes);
@@ -343,7 +362,11 @@ fn byte_encoding_detection_matches_python_and_keeps_original_bytes() {
         vec![0, 0, 0xfe, 0xff, 0, 0x11, 0, 0],
         vec![0xef, 0xbb, 0xbf],
     ];
-    oracle_bytes(&malformed);
+    oracle_bytes(&mut recorded, &malformed, &mut counted);
+    assert_eq!(recorded.finish(), 16);
+    // The recorder's tally over both calls: 11 encodings accepted, 5 malformed refused.
+    let expected = [("accepted", 11), ("invalid_json", 5)];
+    assert_eq!(counted, tally(&expected));
     for bytes in malformed {
         assert_eq!(Manifest::decode(&bytes).unwrap_err(), Error::Json);
     }

@@ -1,11 +1,10 @@
-//! Owned inert tar/JSON fixtures and the maintained Python implementation oracle.
+//! Owned inert tar/JSON fixtures, held to the recorded answers of the retained Python reader.
 
 use super::*;
-use crate::test_support::Fixture;
+use crate::test_support::{Fixture, Recording, sha256_hex, tally};
 use serde_json::{Value, json};
 use std::fs;
-use std::io::{Cursor, Write};
-use std::process::{Command, Stdio};
+use std::io::Cursor;
 
 const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TAG: &str = "simplestchat-release/production:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -138,98 +137,117 @@ fn oci(
     files
 }
 
-fn oracle(cases: &[Vec<u8>]) {
+/// The retained archive reader's answers to every archive these tests build
+/// (`recorded_archive.json`). Each is bound to the SHA-256 of the request its comparison script
+/// read, as `oracle` serializes it, with the archive's temporary path written as `sha256:` and
+/// the digest of the archive's bytes.
+const RECORDED: &str = include_str!("recorded_archive.json");
+/// The recorder's printed tallies, test by test: archives accepted, then refusals per code.
+const TALLIES: [(&str, &[(&str, usize)]); 6] = [
+    (
+        "canonical_member_paths_types_collisions_and_supported_extensions_match_python",
+        &[
+            ("accepted", 8),
+            ("archive_member_noncanonical", 7),
+            ("archive_member_path", 2),
+            ("archive_member_type_or_duplicate", 10),
+        ],
+    ),
+    (
+        "docker_policy_and_failure_order_match_the_recorded_python_reader",
+        &[
+            ("accepted", 7),
+            ("ambiguous_json", 1),
+            ("archive_command", 7),
+            ("archive_image_count", 5),
+            ("archive_layer_member", 1),
+            ("archive_layers", 2),
+            ("archive_member_noncanonical", 2),
+            ("archive_member_path", 2),
+            ("archive_metadata_missing_or_oversized", 2),
+            ("archive_platform", 4),
+            ("archive_repositories", 6),
+            ("archive_revision", 3),
+            ("archive_tag", 4),
+            ("archive_user", 6),
+            ("invalid_json", 2),
+        ],
+    ),
+    (
+        "full_one_mib_metadata_limit_and_original_encoding_are_enforced",
+        &[
+            ("accepted", 5),
+            ("archive_metadata_missing_or_oversized", 1),
+        ],
+    ),
+    (
+        "oci_descriptor_traversal_types_falsey_urls_and_error_order_match_python",
+        &[
+            ("accepted", 25),
+            ("ambiguous_json", 1),
+            ("archive_metadata_missing_or_oversized", 2),
+            ("invalid_json", 2),
+            ("oci_annotation_missing", 2),
+            ("oci_annotation_tag", 3),
+            ("oci_annotations", 3),
+            ("oci_config_mismatch", 2),
+            ("oci_descriptor_digest", 9),
+            ("oci_descriptor_size", 9),
+            ("oci_descriptor_urls", 6),
+            ("oci_image_manifest", 6),
+            ("oci_index", 5),
+            ("oci_index_count", 6),
+            ("oci_index_depth", 2),
+            ("oci_layers_mismatch", 4),
+            ("oci_layout", 4),
+            ("oci_metadata_digest", 1),
+        ],
+    ),
+    (
+        "strict_descriptor_numbers_and_ordered_multiple_layers_match_python",
+        &[
+            ("accepted", 1),
+            ("oci_descriptor_size", 3),
+            ("oci_layers_mismatch", 1),
+        ],
+    ),
+    (
+        "truncated_or_unreadable_tar_never_becomes_an_archive_identity",
+        &[
+            ("archive_metadata_missing_or_oversized", 1),
+            ("archive_unreadable", 3),
+        ],
+    ),
+];
+
+/// Holds `verify_archive` to the recorded answer for each of `test`'s archives, in order.
+fn oracle(test: &str, cases: &[Vec<u8>]) {
+    let tests = TALLIES.map(|(name, _)| name);
+    let mut recorded = Recording::new(RECORDED, &tests).cases(test);
     let root = Fixture::new();
-    let mut requests = Vec::new();
-    let mut actual = Vec::new();
+    let mut counted = std::collections::BTreeMap::new();
     for (number, bytes) in cases.iter().enumerate() {
         let path = root.0.join(format!("image-{number}.tar"));
         fs::write(&path, bytes).unwrap();
         let manifest = manifest(bytes);
-        requests.push(json!({"path":path,"manifest":manifest.fields()}));
-        actual.push(match verify_archive(&path, &manifest) {
+        let request = json!({"path":format!("sha256:{}", sha256_hex(bytes)),
+            "manifest":manifest.fields()});
+        let expected = recorded.answer(&serde_json::to_vec(&request).unwrap());
+        let actual = match verify_archive(&path, &manifest) {
             Ok(_) => json!({"ok":true}),
             Err(error) => json!({"ok":false,"error":error.code()}),
-        });
+        };
+        assert_eq!(actual, expected, "{test}: oracle case {number}");
+        let outcome = actual["error"].as_str().unwrap_or("accepted").to_string();
+        *counted.entry(outcome).or_insert(0) += 1;
     }
-    let script = r#"
-import json,pathlib,sys
-sys.path.insert(0,sys.argv[1]+'/ops/ansible/files')
-import release_artifact as p
-errors={
-'Image archive must be a bounded regular file':'archive_input_refused',
-'Image archive SHA256 does not match release manifest':'archive_digest_mismatch',
-'Cannot read Docker image archive':'archive_unreadable',
-'Invalid Docker archive member path':'archive_member_path',
-'Noncanonical Docker archive member path':'archive_member_noncanonical',
-'Duplicate or nonregular Docker archive member':'archive_member_type_or_duplicate',
-'Too many Docker archive members':'archive_member_count',
-'Missing or oversized Docker image metadata':'archive_metadata_missing_or_oversized',
-'Unreadable Docker image metadata':'archive_unreadable',
-'Invalid artifact JSON':'invalid_json',
-'Archive must contain exactly one Docker image':'archive_image_count',
-'Archive must contain exactly the declared release tag':'archive_tag',
-'Docker image has no layers':'archive_layers',
-'Docker image layer is missing or nonregular':'archive_layer_member',
-'Unsupported OCI image layout':'oci_layout',
-'Invalid OCI index':'oci_index',
-'OCI index must reference exactly one image':'oci_index_count',
-'Invalid OCI annotations':'oci_annotations',
-'OCI index tag does not match release':'oci_annotation_tag',
-'OCI index has no declared release tag':'oci_annotation_missing',
-'Invalid OCI descriptor digest':'oci_descriptor_digest',
-'OCI descriptor size or member mismatch':'oci_descriptor_size',
-'External OCI descriptor URLs are unsupported':'oci_descriptor_urls',
-'OCI metadata digest mismatch':'oci_metadata_digest',
-'Unsupported OCI image manifest':'oci_image_manifest',
-'Docker and OCI image configurations disagree':'oci_config_mismatch',
-'Docker and OCI image layers disagree':'oci_layers_mismatch',
-'OCI image index nesting is too deep':'oci_index_depth',
-'Legacy Docker repository tags do not match release':'archive_repositories',
-'Docker image platform does not match linux/amd64':'archive_platform',
-'Docker image must run as 10001:10001':'archive_user',
-'Docker image revision label does not match':'archive_revision',
-'Docker image must start only the production server':'archive_command'}
-output=[]
-for request in json.load(sys.stdin):
- try:
-  p.verify_archive(pathlib.Path(request['path']),request['manifest']);output.append({'ok':True})
- except p.ArtifactError as error:
-  text=str(error)
-  code='ambiguous_json' if text.startswith('Duplicate JSON key:') else errors[text]
-  output.append({'ok':False,'error':code})
-json.dump(output,sys.stdout)
-"#;
-    let mut child = Command::new("python3")
-        .args(["-I", "-c", script])
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&requests).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(expected.len(), actual.len());
-    for (number, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
-        assert_eq!(actual, expected, "oracle case {number}");
-    }
-    eprintln!("checked {} actual Python archive cases", cases.len());
+    assert_eq!(recorded.finish(), cases.len());
+    let (_, counts) = TALLIES.iter().find(|(name, _)| *name == test).unwrap();
+    assert_eq!(counted, tally(counts), "{test}");
 }
 
 #[test]
-fn docker_policy_and_failure_order_match_the_actual_python_reader() {
+fn docker_policy_and_failure_order_match_the_recorded_python_reader() {
     let mut cases = vec![tar(&docker(config()))];
     for (key, values) in [
         ("os", vec![json!("freebsd"), Value::Null]),
@@ -334,6 +352,7 @@ fn docker_policy_and_failure_order_match_the_actual_python_reader() {
         json!([]),
         json!({"wrong":{REVISION:"ignored"}}),
         json!({"simplestchat-release/production":{REVISION:"ignored","extra":"ignored"}}),
+        json!({"simplestchat-release/production":{REVISION:"ignored"},"other":{REVISION:"x"}}),
     ] {
         let mut files = docker(config());
         files.push(entry("repositories", repositories.to_string()));
@@ -359,7 +378,10 @@ fn docker_policy_and_failure_order_match_the_actual_python_reader() {
     let mut files = docker(cfg);
     files.push(entry("repositories", b"{}"));
     cases.push(tar(&files));
-    oracle(&cases);
+    oracle(
+        "docker_policy_and_failure_order_match_the_recorded_python_reader",
+        &cases,
+    );
 }
 
 #[test]
@@ -422,6 +444,7 @@ fn oci_descriptor_traversal_types_falsey_urls_and_error_order_match_python() {
                 json!("sha256:wrong"),
                 json!(format!("sha256:{}", "A".repeat(64))),
                 json!(format!("sha256:{}", "b".repeat(64))),
+                json!(format!("sha256:{}", "b".repeat(65))),
             ],
         ),
         (
@@ -559,7 +582,10 @@ fn oci_descriptor_traversal_types_falsey_urls_and_error_order_match_python() {
     replace_value(&mut files, "manifest.json", image);
     files.push(entry("layer.tar", b"inert"));
     cases.push(tar(&files));
-    oracle(&cases);
+    oracle(
+        "oci_descriptor_traversal_types_falsey_urls_and_error_order_match_python",
+        &cases,
+    );
 }
 
 #[test]
@@ -672,7 +698,10 @@ fn canonical_member_paths_types_collisions_and_supported_extensions_match_python
         ]),
     );
     cases.push(tar(&files));
-    oracle(&cases);
+    oracle(
+        "canonical_member_paths_types_collisions_and_supported_extensions_match_python",
+        &cases,
+    );
 }
 
 #[test]
@@ -869,7 +898,10 @@ fn truncated_or_unreadable_tar_never_becomes_an_archive_identity() {
     cases.push(bytes);
     let bytes = tar(&docker(config()));
     cases.push(bytes[..bytes.len() - 1200].to_vec());
-    oracle(&cases);
+    oracle(
+        "truncated_or_unreadable_tar_never_becomes_an_archive_identity",
+        &cases,
+    );
     let root = Fixture::new();
     let path = root.0.join("truncated.tar");
     let mut header = tar::Header::new_gnu();
@@ -912,7 +944,10 @@ fn full_one_mib_metadata_limit_and_original_encoding_are_enforced() {
     let mut cfg = config();
     cfg["config"].as_object_mut().unwrap().remove("Entrypoint");
     cases.push(tar(&docker(cfg)));
-    oracle(&cases);
+    oracle(
+        "full_one_mib_metadata_limit_and_original_encoding_are_enforced",
+        &cases,
+    );
 }
 
 #[test]
@@ -980,7 +1015,10 @@ fn strict_descriptor_numbers_and_ordered_multiple_layers_match_python() {
     image[0]["Layers"].as_array_mut().unwrap().reverse();
     replace_value(&mut files, "manifest.json", image);
     cases.push(tar(&files));
-    oracle(&cases);
+    oracle(
+        "strict_descriptor_numbers_and_ordered_multiple_layers_match_python",
+        &cases,
+    );
 }
 
 #[test]

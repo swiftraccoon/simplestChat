@@ -264,6 +264,10 @@ pub(super) fn sources() -> BTreeSet<String> {
         "ops/tests/release_maintain_cli.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile",
         "ops/src/release/attestation/maintain_prerequisite/guest/recorded_materials.json",
+        "ops/src/release/archive/recorded_archive.json",
+        "ops/src/release/recorded_assets.json",
+        "ops/src/release/recorded_capture.json",
+        "ops/src/release/recorded_manifest.json",
     ] {
         names.insert(name.into());
     }

@@ -1,0 +1,1307 @@
+{
+ "comment": "The retained archive reader's answer to every archive the comparison tests of archive/tests.rs build, as their comparison script coded it. Recorded by running the comparison script archive/tests.rs embedded at revision c2ecf315, unchanged and with its interpreter flags, under the interpreter and with the reference modules named here by import name and source SHA-256; each case is bound to the SHA-256 of the request the script read, as the test serialized it, with the archive's temporary path written as sha256: and the digest of the archive's bytes. Two recordings over one dump of the cases and one over a second dump were byte for byte the same.",
+ "flags": [
+  "-I"
+ ],
+ "interpreter": "CPython 3.14.10 unicodedata 16.0.0",
+ "reference": {
+  "release_artifact": "d6219ad2f6db7c45a8b4e5728437e1c6ef8aff58d3936c059fd52eea7aef1511",
+  "release_json": "0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97"
+ },
+ "tests": {
+  "canonical_member_paths_types_collisions_and_supported_extensions_match_python": {
+   "cases": [
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "a9448fb890cc0c6b8f0552733a186ca3a874022a6544766aa777f3199cbc1331"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "4f607dc182b1da0bd095b70ee04ca711967cc567c376f16a730c04f762dae943"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "0b01e311e1670943ba5c348393622bc5ffc4344c2a71bd834491eeba884aaa10"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "00d128b71c652ca635eda6668d84c456fadc7150776c4c782352a05e3295d550"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "dab0428d7ce3f0c14926eeb32243444af276a2d2fab19248391eb7bc643c6fac"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "d25a138021fae970c017faa72f795045c4b2c1e86e2e79770fdbf3634d3736f9"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "983ef2f5137585ae9017b433fc90a2e52da6edfa52e4eba2b79b6c67d61c6197"
+    },
+    {
+     "answer": {
+      "error": "archive_member_path",
+      "ok": false
+     },
+     "input": "856973134c0ef1ba5035970f9f3ae08d193d05ef0f97f8c4823521d4990c9b11"
+    },
+    {
+     "answer": {
+      "error": "archive_member_path",
+      "ok": false
+     },
+     "input": "7eab8df43cc332334fe16c9058097254803dfdb0031a6b4f005423ec143855c2"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "4db90a7c38a5c7392ff6ca887ff203bc4d75e07396f260b0d4aeeed0ad0201ac"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "644e9060eaaa0f9d7568211edb434a31cac02811e07b840cc81d96651263870b"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "a0e01e0a5e4630785a961efc1eb7917edf694fd8ee7e720de3518f86d7bc3f88"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "81471d74b4c9f4ea78aa31bc62b6e791a59446c32086cd458515900b256094bd"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "aa0d3a538da744bd705de49aaf69624ec0fccafe6bc43ef16b2c29f63664e45b"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "aa1f0784b22e7c9160eab4b9b135da26e7fc9b29138c75141951ca0f75473d17"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "9f69e82ef631b0c683a8be0c5ef79a20e2cba7b25b3ae974c931aae62956d1aa"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "800a1e8cab3951ee93994f069cd3806cbbb2d5d0576b57bae0c3104a62527c63"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "8a15fee1dff3e03cea5f56193eea85b16e9a2acf69afe1d996c4b316ee0f27aa"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "b491ef3daf3721825c0d63c42f97fc4816c72aec1cf98dcfa4e831f4d20d1ce5"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "1c390bf79ee4dace96690dd42f82bae6a91212c3fac708dbceaf7e297727667e"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "b9590199764c90ded3e1bd2beeb7c7fa7d9bae8e1538028f5230c70e6aea052c"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "be1bb44a6c33741f192ec8f60826dff762de711da8b9d95d1d187a2e23fb22b9"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "4b2ec70067d011d32af90a844a4bbeefa50d9d5f7a583a4f8138abf0631ce2df"
+    },
+    {
+     "answer": {
+      "error": "archive_member_type_or_duplicate",
+      "ok": false
+     },
+     "input": "2e7c229280de3181617a188fb9d1d2c70c3be278c19ab79cfb03125e6bbdae78"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "5d78fc9279ece1816a9dd7257643463366fd713798be35a9215b89a3a77f8e68"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "cb70e0057228072585f8060e45e8337c4cac1795760108c3b824bc6cac2e5a48"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "26ccd682d3baa7e5691d6c39c3f93fd89c46e912e20cc8209e09f1a8dc831bdf"
+    }
+   ]
+  },
+  "docker_policy_and_failure_order_match_the_recorded_python_reader": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "477d5ce6818aa91fe8ba1a7cf7a1cf608c43d8e4b4751c0908d489330e5dbaf4"
+    },
+    {
+     "answer": {
+      "error": "archive_platform",
+      "ok": false
+     },
+     "input": "f24a22e6a5ee4301bf574b8e00ffbb8925fd524dd6084f28409bb0d85a1331c8"
+    },
+    {
+     "answer": {
+      "error": "archive_platform",
+      "ok": false
+     },
+     "input": "ced52a577c0b2f6df25e076e25ac0314d68c30b6746067f5a82f4f02bf75d440"
+    },
+    {
+     "answer": {
+      "error": "archive_platform",
+      "ok": false
+     },
+     "input": "0c23c13653938c3cdd1819e8d2ab5c1fe99ac1061a9df30e1633a3223342cb2f"
+    },
+    {
+     "answer": {
+      "error": "archive_platform",
+      "ok": false
+     },
+     "input": "261587e856f05250cb705b670fcca119f96da5bfb482fed7daf19404ae98e27b"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "d9ebe3a4b5fc5163be29a4f8733c9569bf18236cbe1bc3360110ee77d1baaf60"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "c0d7c256d035ccef73020c884e1e4fb5f1e887aa51aa73cebfd7bb02667e9343"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "31481c8c504caeafb5df2f45c18ee100ca0075fb4aefb0f83fa364d870d6e3c5"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "eefff0f7abf934e1cee447e0d49ce62fa2635b508ddbecf96ba0ccedb8025ed8"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "566468352f32bc7ed6f5fa0ba43a90ba7f8689ba7441bdcb1784ae9bc52e2365"
+    },
+    {
+     "answer": {
+      "error": "archive_user",
+      "ok": false
+     },
+     "input": "c0ad3f1756a41048c74a274da989fc845b7adae21554cb9785db6247f82ca4cc"
+    },
+    {
+     "answer": {
+      "error": "archive_revision",
+      "ok": false
+     },
+     "input": "08169e1267be13b8790d850e7374ab1cc7f5bd33323d96c38ac7d3f872175aa4"
+    },
+    {
+     "answer": {
+      "error": "archive_revision",
+      "ok": false
+     },
+     "input": "9e2680a09ce674961a968f039f6cf4627b446758d74b6c15094c90753d0f35c8"
+    },
+    {
+     "answer": {
+      "error": "archive_revision",
+      "ok": false
+     },
+     "input": "2dc01e74b30d9dfbde4d815c211af6c6212a0f3ef132c63a3af7d04ee2903f74"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "b4e8c69b2254e6333da317a5f08a223a97ddb8a409ccfb3298865a9ddfafe2df"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "167f6bf03e5472bd5fb939f229b1afbe5085660572a6dcf273d36a832b15463e"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "9dfa9f362c0dc5263797e9e3f62ebaa2f8444bad8e4d9c73c0dcd88fa14abb2d"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "38fca9a67525338701563550481dc762f98182f60aa1a92d13cb58200ed75739"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "477d5ce6818aa91fe8ba1a7cf7a1cf608c43d8e4b4751c0908d489330e5dbaf4"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "afc65cae5d56a951b3aeb69f31c52d2ce172855b79b6d10a9406d2a05d4017d1"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "03d1055d99ebca6112c4ca0ad50c1df0e943a18d06ccfd7cb57399db09a0ee8b"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "d5ea1d3ac3a4be913dfa10940d0881469009958f4fea6968a5fec1beba9c6fd1"
+    },
+    {
+     "answer": {
+      "error": "archive_command",
+      "ok": false
+     },
+     "input": "3b4548a6e7f2dcbc5bbe6af6abbe4e7066cd870b98e0fb9963ea8a34960af85c"
+    },
+    {
+     "answer": {
+      "error": "archive_image_count",
+      "ok": false
+     },
+     "input": "6ad775132b1c35a9c5193015dbe565c047455e387c57104923f491062a68b09e"
+    },
+    {
+     "answer": {
+      "error": "archive_image_count",
+      "ok": false
+     },
+     "input": "c8fc58d923b0b6096b3e7e55e15e07f453d72d4a33e636e57e681f64e493c8d6"
+    },
+    {
+     "answer": {
+      "error": "archive_image_count",
+      "ok": false
+     },
+     "input": "dafe753769cbef8390d5161671238a7ae5bc8655bb559c8722f61129ba825c38"
+    },
+    {
+     "answer": {
+      "error": "archive_image_count",
+      "ok": false
+     },
+     "input": "f5255d693f7b73eb06c2e7e47168550f1d7c47877359bf97450615e73797d968"
+    },
+    {
+     "answer": {
+      "error": "archive_image_count",
+      "ok": false
+     },
+     "input": "74728303fd858cc7b2c56636707c665acf1d2ce344979e9399004424b295dead"
+    },
+    {
+     "answer": {
+      "error": "archive_tag",
+      "ok": false
+     },
+     "input": "9c6423c8492231b80b0f69e7f1fedb4de004855dec35034df3e561ea1a6ee5da"
+    },
+    {
+     "answer": {
+      "error": "archive_tag",
+      "ok": false
+     },
+     "input": "4e9477ce0139183dee3706dfca11f1ee0ce70bcf08cc0031e894cda4902527f6"
+    },
+    {
+     "answer": {
+      "error": "archive_tag",
+      "ok": false
+     },
+     "input": "ea9142e98968672bfa9080f7c0772f22b19b928f2a886c717c04a5bf208afdef"
+    },
+    {
+     "answer": {
+      "error": "archive_tag",
+      "ok": false
+     },
+     "input": "1641292d3125eac188dc740ac4b2dec8f0e2921fd77be6699899e43027241d1a"
+    },
+    {
+     "answer": {
+      "error": "archive_layers",
+      "ok": false
+     },
+     "input": "e9eddd5f98662a8a2fb033c4b392db4732e5a5890bc8b98f12194c83df07ac23"
+    },
+    {
+     "answer": {
+      "error": "archive_layers",
+      "ok": false
+     },
+     "input": "75cbb4ac935813fec0aebf30d954a6f211b68fd2b41a213b398ca552c0bdb823"
+    },
+    {
+     "answer": {
+      "error": "archive_layer_member",
+      "ok": false
+     },
+     "input": "bf5c44bf8ca21cc27d515d8f20c187ff8f49428d12d199727ab854f0a6b316e0"
+    },
+    {
+     "answer": {
+      "error": "archive_member_path",
+      "ok": false
+     },
+     "input": "5555bf06084439057358b5e749d99066d6f96ece46fd772df46ec3ce4c18bd05"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "16927ccfc6beebd1c7274893b089871ac423cb9226da502ef36cb7c896d3435d"
+    },
+    {
+     "answer": {
+      "error": "archive_member_path",
+      "ok": false
+     },
+     "input": "17931732b7f05eca369e8e856bbca3041b2837f20d7e1d385d3b320039608cd0"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "9f1be85bedd1246b3109e3c9dcde3316ff6017bedfb7f31eb8dca7f47774513c"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "4d27d2294c705b0a056508258b9b44ae36a97d40c970aacdfd7636f5fb08ddc3"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "7b0fa0ac7e59ae942bac25d6d43d78349c75d10008309fd24fcb3035f98c5dec"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "7b3555b2293feb5e817c682fc5572613abf1b7c801d371765ef6a11229f04a4e"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "3d840c9fa0c41784abb6125fa34f0f9c552568293f55fcb9cb1d95855080d498"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "578726a285b6eed8aff45800456984ecd6051834fb2ce3f1f746181c2fcd19f3"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "91aa0550fe4fe049c8a0b0b2f0748d34e93311874012de70956b357c51d6dd7f"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "20af726fc7e1b697c39692df17bfc609f30e098e1994d9019b01348ece0e4a18"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "2d6b282fc17197d614b72a7553be905cb0b5c1b668058689ff9b49b724409375"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "0dff3c850adb064624b4a2c9afd8697c13b46a363f813ab0cec92adcbc154e9e"
+    },
+    {
+     "answer": {
+      "error": "ambiguous_json",
+      "ok": false
+     },
+     "input": "6c72ebd4be5ca681f710b63041eaef5abb283eb8d7eab1381084d7de135e45e8"
+    },
+    {
+     "answer": {
+      "error": "invalid_json",
+      "ok": false
+     },
+     "input": "5451ab929c242088a736454d4a5fe8bd61a9082a4722b9530737ce91e05d869f"
+    },
+    {
+     "answer": {
+      "error": "invalid_json",
+      "ok": false
+     },
+     "input": "35ee9e09c0ab2b498e4ad567da97e7db5cd2b120e4d30e8bf3ccc32470e670ab"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "0bf4dddb57f32075454f740d8391fbcd1a398dacedf784d3954c9d347d1b93da"
+    },
+    {
+     "answer": {
+      "error": "archive_member_noncanonical",
+      "ok": false
+     },
+     "input": "75440d2e8c9bdf705513b932559f4732ca53dbe9b552e5fb1475a26d7ebfe52c"
+    },
+    {
+     "answer": {
+      "error": "archive_repositories",
+      "ok": false
+     },
+     "input": "88eb357a4254a60614571183b358f089173d2b09b0dfb9aa2719d565413bcc69"
+    }
+   ]
+  },
+  "full_one_mib_metadata_limit_and_original_encoding_are_enforced": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "a008a17a79e599733c4e2bb5d3e4321b786220bc61a67b2876f36c015a1b26bc"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "53babd754d0dc1e7b5185d693bd6c14820b0ba3b819a165973336f895daa71ee"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "28e8835c25356ad3eefcca5ce5f46e1644508b1eec3d47e55217d43fd5807b25"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "a7f3a9284e13ac12c8b9d2aa8523a65e642aa06337e6cd8f4c202a3f27e06bab"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "5d1a67b2aa64e2caf49cfaa9f2fff57a9ab612e1f2981a8ec51b7a9c0c867214"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "b1bdfff70b0c46b0a2baa91054bfcf47e0b1a3060ca36e9fbd7879015f379950"
+    }
+   ]
+  },
+  "oci_descriptor_traversal_types_falsey_urls_and_error_order_match_python": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "b50e3b49dae49b13ef074d1520359e081c337345166526820abc97be39524186"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "25ade6266ebeb983ec2a1f177b3497fda5dc65dc1c3023d632677520e35bc80d"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "d4f989b5663ff7140da15fc8a2702ab774533ae92a9d4337e4f825864fbc76ff"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "8f10db3800b00a7a1a33c35854b70fcb413262a2dd1ad1719657243db6eb2136"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "91afd66caed50955cb1d3abaf8cc198e1f218b3eb995b1dc180f5513a267c461"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "4fffe003a38764261484de7f575e5f0f274431d2119138cc4c317ad4dc085e76"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "06f0570137e8acfe6072912fe4c20cf1dcb3f91e054e49fe7171baf486e369f0"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "714ae7c302ae416d1d244e4a8ef178cbd7c8834df59368a8d0bcb36631d5c1f2"
+    },
+    {
+     "answer": {
+      "error": "oci_index_depth",
+      "ok": false
+     },
+     "input": "0764f2b874589b7e260d30ff2da05d9a222ea258e0e39afc923e7ec0bb16cc42"
+    },
+    {
+     "answer": {
+      "error": "oci_index_depth",
+      "ok": false
+     },
+     "input": "07739730190485a023516ceacceaf462868ccdec8f0f71ad58fa9b58b900eb73"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "b50e3b49dae49b13ef074d1520359e081c337345166526820abc97be39524186"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "97fc3730f8125603a834c3312c2be2aeb94d8838abd0aa778fe085c9303d8238"
+    },
+    {
+     "answer": {
+      "error": "oci_index",
+      "ok": false
+     },
+     "input": "c03fc1a619eef66fa3e2bdf46a7670fccaf91caf802d44cbe0c7fd85c292f2da"
+    },
+    {
+     "answer": {
+      "error": "oci_index",
+      "ok": false
+     },
+     "input": "c46174c5c26d978b83ae87246c2f5999a855dbc590e949ca4c43c3a595903740"
+    },
+    {
+     "answer": {
+      "error": "oci_index",
+      "ok": false
+     },
+     "input": "902e01e1a7da84b9831a1ece99c9d574471d75808c17d4d2ccb423ebc8877109"
+    },
+    {
+     "answer": {
+      "error": "oci_index",
+      "ok": false
+     },
+     "input": "4231c907822b695154409dad3699e9bf8861c98cd69f19b5fb82ff91cf2df1c2"
+    },
+    {
+     "answer": {
+      "error": "oci_index",
+      "ok": false
+     },
+     "input": "ce37240e1a9359588b84826e82db5c4611ac6869fb160615fc996e8ba456b58f"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "73b132cdebb0ac061c946075dab0de3bfec7032d82b62bc55a35e78794c554e5"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "416e4dbfbf5f61fd9f181c36db52113af51a018d6c22d06ac531a5f27dccb2a7"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "540d880d3b50036c4d1d1333a27e8c61b5610080dd84a03473b03fd5148b9837"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "00e36eb785ed14c6508cf7937962c7194d773b693b2b28c8c19dd1d5ff81fdd1"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "e85d4314bdfb8fdfb208a96076c1146a11229d146ce5383990226b9756fe118c"
+    },
+    {
+     "answer": {
+      "error": "oci_annotations",
+      "ok": false
+     },
+     "input": "4ec06a514a09d69370a87891fe95bcba0efb076c06f16f9528c597890bf4479f"
+    },
+    {
+     "answer": {
+      "error": "oci_annotation_missing",
+      "ok": false
+     },
+     "input": "d42f82c2964eb8b8989d08ab6d3ed09107b835bda2cad6644518d72257cf1f9d"
+    },
+    {
+     "answer": {
+      "error": "oci_annotations",
+      "ok": false
+     },
+     "input": "6b716fa398a16e7057cf427818b1a97e1e8a70afd23d58a261b09a981f6de30e"
+    },
+    {
+     "answer": {
+      "error": "oci_annotations",
+      "ok": false
+     },
+     "input": "05d12beece61ce14640537d5c3e2380dbd8f033841bf4bdbc37315f936a4a3ce"
+    },
+    {
+     "answer": {
+      "error": "oci_annotation_missing",
+      "ok": false
+     },
+     "input": "08c568410a6fdc1409b88b3ff27b31e6135e1fb209c82056ac2bd65adb3fdf21"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "16e64cdd860ee7a85985a478e11ba460322e9cfd70ffad23061e33a6a64be244"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "2857c58ed86d72a3980d4c6c277dbaf35f8e71de37addd7cdd1437f505170a6e"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "d558c322dbb96df714e3dc27b5b29c3add3dc714e8d370741eb8e0d8b8832e60"
+    },
+    {
+     "answer": {
+      "error": "oci_annotation_tag",
+      "ok": false
+     },
+     "input": "035f44db3fe90b11e88f3aa53ec56d0d5966db30cf074614b344f27af43e44cb"
+    },
+    {
+     "answer": {
+      "error": "oci_annotation_tag",
+      "ok": false
+     },
+     "input": "797f8824b983e7500ea37ad89998ff47bc9faa73fafc4f1bdb9eca95ec7d96b3"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "7cc40344920fc0eb070009fc5e13ebe381221c523e1117aab258336794f2bac9"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "8cb94fa0ccf41730db8cca7a29d88eaabb5761673cb7b91c6a58723466e16e29"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "7a0864d743cd635151b6807376e1270aff41c74e756834c79b6f80c855d7f494"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "44a4fc475a0c18c4453c5e24e53f48ba89cb7eee303dba3adcfaf130c5ac3e14"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "0bc5970f1761ca79952d6f4031ed2a50b43e0b67488efcfc84ed7e5626f34e29"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "37d78b1c590b2ea211f8e277892fe17075101dfba8fb7655987952802af10a75"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "91868853db15a9d08e31a135411f50d2697d38c127efcf28db52bc3b3eae408d"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "131e7ccdc40c84be7f9b19d7bbf69c0dd557211f37e6e1e1f8a2b1b3f11d8802"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "64fed97ded46697a0b3dba8a9d2c3992aca6159d543ed20c1d2edc4a66d9eb64"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "d4acde6c488309d97fae43cc8a271bda1b68fec01e6d463d5fadbf59e6fe7c99"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "9b97b238e7eb9f7ddbcb26fd0fada83e14f893ee731043b65f6a5106f1366af0"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "3159ef2f27f73e00bc011629ac4821c377f4574171bc222aaac966ac377dba89"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "d6a4201fb41ed70909136ad801f60ae5666f75b4c5dff6a379749440575b3363"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "e2496fb2be0608e3b6dcf92df47f091bf193735bf925ef098dbbca78586ac09d"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "cfb73460430e3d9885430779c8f1f29c8b013e3eb6bac04e186ad975afc46566"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "3ad9459e41c344f4aaf9c06dd1efd38d2b08571cce27b9821b8e0f4ba5e72352"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "eff0ad00f6cc89815a663ff2542cd9f57398e359d724425051585b0ece49bd15"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "60d42f956bf9ff1628e6851e7162bb2901ff41e967437fba2e329131eecb4c4b"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "9ef3e53cab6bbe9768c30987cf8db1fbcf6e00693c31cd4bf209822aa80b4eef"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "ca17e4682a891ff0b0b9d36825af510c913e1e35e0da3b73c04241636c2999a3"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "e6da914c7d46cff1a9b85b4f6dfa0e27e2bfc41878248d83321ce6d0a991c715"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "1fbc4d2109d49e5fb09e4d3eeee9dd6e9efe1ee7f90f78debbeecb114bb5abf6"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "05690b08428c5b7f5f3587d22cd4d31606b14efe5df53aa50d9104e3ecd26906"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "0738a2baaf59d7c25dd0ffc67c3eec2bac3714885f4a846e7e9296a09322039f"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "5d73dd804613fae6c8f01ef21fcaee3dc97731eeffceb3c47db037578b04d787"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "2be35fc617c8624d9a6721af7adae2a12df7264984f657aa9d87184b978f4fc6"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "45025bf6b4e912de1034cb66dc6b0138bed36fe409f08ddab6e1a3cad64c112e"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "8c64e03dad535b621ead0980f9082f538fc4baaf90ed430a06507564de6023b0"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "caf856a2d1615b3a64e52183e5ca842cbcb0a5348784f6c797edafd2a68e9728"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "99307b2ee52c7043f337a1f1b9fc3bc83bc3dfa378d3dc12e613c5633d1d0114"
+    },
+    {
+     "answer": {
+      "error": "oci_index_count",
+      "ok": false
+     },
+     "input": "2f0db48e7c48652b6a8db98e9982d485a96ebabe6da7f2f7e000676789e235a7"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "6f52843826226c6c2569fa53cf4ecf983a508d5b11ee25aeb6e69f3115648c28"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "2fc0088e5ca0762df7ae8887293b5c1604522232697864c3cf9127e4527be130"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "a654f95e0e4988e447ac2bed240c561f235b06f8ddc3958a3c203d84b2203e35"
+    },
+    {
+     "answer": {
+      "error": "oci_image_manifest",
+      "ok": false
+     },
+     "input": "fdfa26852d8cfc0f035782861a15a86a255e8fafd229762191be322fe7d56a84"
+    },
+    {
+     "answer": {
+      "error": "oci_config_mismatch",
+      "ok": false
+     },
+     "input": "f4f3d92288bf2f4898182923b656b1ff1c4015636c48e08a69912866ebf4ff92"
+    },
+    {
+     "answer": {
+      "error": "oci_config_mismatch",
+      "ok": false
+     },
+     "input": "cf98087ee979b5c31283de7c6cdea31051e440d7ff6cd7f1b6b5458a6be24449"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "5fa380086649be25e7e134d72ffb89dcf7a06635ea31331594819e95ec334a07"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "efa266ecd801701f782a7e35fe85f9ad6821cc1482374a23766d41835c5a1c59"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "a3460249df6ed72a7dd1876d3633abf48ca8355b6d5928937eecd80a032f38b6"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_urls",
+      "ok": false
+     },
+     "input": "96ef134e018cc17aecf814ee1bb734cd138748231fc796e43e58fa3b24832897"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "ec8a26c19a928e3c79de1f5a5bc9f5d037b4101a8ad406460c5aa70f12e0cd57"
+    },
+    {
+     "answer": {
+      "error": "oci_layers_mismatch",
+      "ok": false
+     },
+     "input": "0274fc500cb70acd2ed9e7aaeabe20c998e8cf3c1461d1de0813ef874677da3a"
+    },
+    {
+     "answer": {
+      "error": "oci_layers_mismatch",
+      "ok": false
+     },
+     "input": "11facc9936ed9755f135173079d665fc17ce3461ad98c9d2ee8640748680f7eb"
+    },
+    {
+     "answer": {
+      "error": "oci_layers_mismatch",
+      "ok": false
+     },
+     "input": "f644c1db61802c58ee8e10a86e3742198cafec2e209c4834d438649269a0c7f7"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "c309bc190889934ac45c9348e36ca6a8adf01a6d9a178159cc6c58442d3b7e42"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_digest",
+      "ok": false
+     },
+     "input": "73935d885382aaff981de093b76e28e6fea95cdc849006b7d70cb7bd8d9a7f4c"
+    },
+    {
+     "answer": {
+      "error": "oci_layout",
+      "ok": false
+     },
+     "input": "606a945cd2ffc03dea1ac7488b468c76c1b7cbeea88443df2b263b35899736c9"
+    },
+    {
+     "answer": {
+      "error": "oci_layout",
+      "ok": false
+     },
+     "input": "923de65c71696634a3c5772ddc8badc86cd6c69094bc0d43f50acd5246fb31b1"
+    },
+    {
+     "answer": {
+      "error": "oci_layout",
+      "ok": false
+     },
+     "input": "be6408fc7e2c508eb17a4c39e18958003307432d3aff7074d86adbdf5dce3033"
+    },
+    {
+     "answer": {
+      "error": "oci_layout",
+      "ok": false
+     },
+     "input": "6aac614ff5316ee142d071f15cef00348d6e8efad852e2f1d7d6fe3187f01fd6"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "4ff2e43b57a9242879299cf6be88f578c8b894330710a71cd43f5e0aa33e2dec"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "b298c67ed6dd9faddc30cd258d9aaa2a41f0a8d643a625ac6e3a34c7f3130151"
+    },
+    {
+     "answer": {
+      "error": "invalid_json",
+      "ok": false
+     },
+     "input": "3b69ba2d60b4011ab2b9cc3e8789e05d9e7c5c2b6bcc099bc1b9e83501e30a95"
+    },
+    {
+     "answer": {
+      "error": "ambiguous_json",
+      "ok": false
+     },
+     "input": "7d333ad1408d35106c8e886140249c1a228c7004352cf90178923cb4a9bcaa7f"
+    },
+    {
+     "answer": {
+      "error": "invalid_json",
+      "ok": false
+     },
+     "input": "2c0bba989d6f96033bb0c70436b369e42f847d474b2c93126825ecdf625ad4d4"
+    },
+    {
+     "answer": {
+      "error": "oci_metadata_digest",
+      "ok": false
+     },
+     "input": "fc8dcea1244270d85cabbf5c0c50f10e0fc330c0ded2d7b10dbc4dd43d72eb1a"
+    },
+    {
+     "answer": {
+      "error": "oci_annotation_tag",
+      "ok": false
+     },
+     "input": "1d3c3e3c4deffe00d5b71aa0f90a0d68b05042de775b73f28a75a19103df4547"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "6211e859a0c4c84231623732ac8f522cce8717688e7ad3d251cc3e569a918a1f"
+    },
+    {
+     "answer": {
+      "error": "oci_layers_mismatch",
+      "ok": false
+     },
+     "input": "963dbc45b34ab42020c7014ccdd58ab29be213cb5c5154e0495ed5c8bf6670c9"
+    }
+   ]
+  },
+  "strict_descriptor_numbers_and_ordered_multiple_layers_match_python": {
+   "cases": [
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "1a4032c1281f0988f132f875af18b07d86f0a907cba1ec35dd023dba26418551"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "c4ca23007e4373fff09dcd8476999513600285ecf9e549d1971d66509d5a4996"
+    },
+    {
+     "answer": {
+      "error": "oci_descriptor_size",
+      "ok": false
+     },
+     "input": "80d0d819ebe711c434dcd8a33143979eea094c6bf079c43161a4e5bba61b923d"
+    },
+    {
+     "answer": {
+      "ok": true
+     },
+     "input": "03dda6c07fa0a89ee7c2636baa4b7dcc76042b3395599e0f66aeed5cc19c18dc"
+    },
+    {
+     "answer": {
+      "error": "oci_layers_mismatch",
+      "ok": false
+     },
+     "input": "a7e21795424672294042515286cb10136fa27e904b4c759f11be6cc1aa595d87"
+    }
+   ]
+  },
+  "truncated_or_unreadable_tar_never_becomes_an_archive_identity": {
+   "cases": [
+    {
+     "answer": {
+      "error": "archive_unreadable",
+      "ok": false
+     },
+     "input": "607341628fd32d1aa5180d4d6007106c3f1b38d3d28ee1bd46d737af8d994946"
+    },
+    {
+     "answer": {
+      "error": "archive_metadata_missing_or_oversized",
+      "ok": false
+     },
+     "input": "eb4a1398136dcb5c6f10d285895eb44fdb38a141d9694bd1dbf33ae83ecc0fb0"
+    },
+    {
+     "answer": {
+      "error": "archive_unreadable",
+      "ok": false
+     },
+     "input": "452bf90bbc639a721fc3a101dda6a41c4589cfd4edbfb15a9310ea835c6e8ae6"
+    },
+    {
+     "answer": {
+      "error": "archive_unreadable",
+      "ok": false
+     },
+     "input": "92562af23ba20834c1771d5cb79e501ab2ba457b57c162954d29cf288752173d"
+    }
+   ]
+  }
+ }
+}

@@ -1,7 +1,7 @@
 //! Inert ELF metadata and owned filesystem fixtures; candidates are never run.
 
 use super::*;
-use crate::test_support::Fixture;
+use crate::test_support::{Fixture, Recording, tally};
 use std::{fs, os::unix::fs::symlink};
 
 use super::fixture::*;
@@ -374,88 +374,76 @@ fn relevant_tables_are_bounded_at_the_exact_limit_before_reader_allocation() {
     }
 }
 
+/// The facts the retained ELF parser gave for each overlap fixture, as its comparison script
+/// derived them, each bound to the SHA-256 of the fixture's bytes (`recorded_elf.json`).
+const RECORDED_ELF: &str = include_str!("recorded_elf.json");
+/// The recorder's tally: the fixtures for which each fact held, and every needed entry.
+const ELF_TALLY: [(&str, usize); 6] = [
+    ("bindNow", 49),
+    ("neededCount", 32),
+    ("noInterpreter", 34),
+    ("noNeeded", 34),
+    ("noTextRelocations", 33),
+    ("pieFlag", 32),
+];
+
+/// A dynamic fixture with `entries` and the section-name table the reference server parser
+/// also requires, which is unrelated to the inspector's linkage facts.
+fn overlap(interpreter: bool, needed: bool, entries: &[(u64, u64)]) -> Vec<u8> {
+    let mut bytes = fixture(true, interpreter, needed);
+    u64_at(&mut bytes, 40, 2560);
+    u16_at(&mut bytes, 58, 64);
+    u16_at(&mut bytes, 60, 1);
+    u32_at(&mut bytes, 2560 + 4, 3);
+    u64_at(&mut bytes, 2560 + 24, 2048);
+    u64_at(&mut bytes, 2560 + 32, 1);
+    dynamic(&mut bytes, entries);
+    bytes
+}
+
 #[test]
-fn dynamic_overlap_matches_actual_python_parser_without_reusing_glibc_policy() {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let directory = Fixture::new();
-    let mut paths = Vec::new();
-    let mut expected = Vec::new();
+fn dynamic_overlap_matches_the_recorded_python_parser_without_reusing_glibc_policy() {
+    const TEST: &str =
+        "dynamic_overlap_matches_the_recorded_python_parser_without_reusing_glibc_policy";
+    let strings = (5, BASE + STRINGS as u64);
+    let size = (10, b"\0PRIVATE-SENTINEL-loader.so\0".len() as u64);
+    let mut cases = Vec::new();
     for interpreter in [false, true] {
         for needed in [false, true] {
             for flags in [0, 4, 8, 12] {
                 for flags1 in [0, 1, 0x08000000, 0x08000001] {
-                    let mut bytes = fixture(true, interpreter, needed);
-                    // The reference server parser also requires a section-name
-                    // table. It is unrelated to the inspector's linkage facts.
-                    u64_at(&mut bytes, 40, 2560);
-                    u16_at(&mut bytes, 58, 64);
-                    u16_at(&mut bytes, 60, 1);
-                    u32_at(&mut bytes, 2560 + 4, 3);
-                    u64_at(&mut bytes, 2560 + 24, 2048);
-                    u64_at(&mut bytes, 2560 + 32, 1);
-                    let mut entries = vec![
-                        (5, BASE + STRINGS as u64),
-                        (10, b"\0PRIVATE-SENTINEL-loader.so\0".len() as u64),
-                        (30, flags),
-                        (0x6ffffffb, flags1),
-                    ];
+                    let mut entries = vec![strings, size, (30, flags), (0x6ffffffb, flags1)];
                     if needed {
                         entries.push((1, 1));
                     }
                     entries.push((0, 0));
-                    dynamic(&mut bytes, &entries);
-                    let path = directory.0.join(format!("{}.elf", paths.len()));
-                    fs::write(&path, &bytes).unwrap();
-                    expected.push(inspect(&path).unwrap());
-                    paths.push(path);
+                    cases.push(overlap(interpreter, needed, &entries));
                 }
             }
         }
     }
-    let source = r#"
-import json,pathlib,sys
-sys.path.insert(0,sys.argv[1]);import security_elf as p
-results=[]
-for path in json.load(sys.stdin):
- value=p.parse(pathlib.Path(path).read_bytes(),'linux/amd64')
- flags=value.dynamic.get(p.DT_FLAGS,[0])[0]
- flags1=value.dynamic.get(p.DT_FLAGS_1,[0])[0]
- results.append({'noInterpreter':value.interpreter is None,'neededCount':len(value.needed),
- 'noNeeded':not value.needed,'pieFlag':bool(flags1&p.DF_1_PIE),
- 'bindNow':p.DT_BIND_NOW in value.dynamic or bool(flags&p.DF_BIND_NOW or flags1&p.DF_1_NOW),
- 'noTextRelocations':p.DT_TEXTREL not in value.dynamic and not bool(flags&p.DF_TEXTREL)})
-json.dump(results,sys.stdout)
-"#;
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
-    let mut child = Command::new("python3")
-        .args(["-B", "-c", source])
-        .arg(root.join("build"))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&paths).unwrap())
-        .unwrap();
-    let result = child.wait_with_output().unwrap();
-    assert!(
-        result.status.success(),
-        "{}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    let values: Vec<serde_json::Value> = serde_json::from_slice(&result.stdout).unwrap();
-    assert_eq!(values.len(), 64);
-    for (expected, fields) in expected.iter().zip(values) {
-        let actual = serde_json::to_value(expected).unwrap();
+    // A DT_BIND_NOW and a DT_TEXTREL tag, each without flag words: the facts the tags decide.
+    for tag in [24, 22] {
+        cases.push(overlap(false, false, &[strings, size, (tag, 0), (0, 0)]));
+    }
+    let directory = Fixture::new();
+    let mut recorded = Recording::new(RECORDED_ELF, &[TEST]).cases(TEST);
+    let mut counted = std::collections::BTreeMap::new();
+    for (number, bytes) in cases.iter().enumerate() {
+        let path = directory.0.join(format!("{number}.elf"));
+        fs::write(&path, bytes).unwrap();
+        let actual = serde_json::to_value(inspect(&path).unwrap()).unwrap();
+        let fields = recorded.answer(bytes);
+        assert_eq!(fields.as_object().unwrap().len(), ELF_TALLY.len());
         for (field, value) in fields.as_object().unwrap() {
-            assert_eq!(&actual[field], value, "{field}");
+            assert_eq!(&actual[field], value, "fixture {number}: {field}");
+            let count = counted.entry(field.clone()).or_insert(0);
+            match &actual[field] {
+                serde_json::Value::Bool(held) => *count += usize::from(*held),
+                value => *count += usize::try_from(value.as_u64().unwrap()).unwrap(),
+            }
         }
     }
+    assert_eq!(recorded.finish(), 66);
+    assert_eq!(counted, tally(&ELF_TALLY));
 }

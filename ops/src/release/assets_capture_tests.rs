@@ -1,16 +1,11 @@
-//! Inert tar fixtures and the actual unchanged Python reader. No engine,
-//! application, network socket or extracted tar path is used.
+//! Inert tar fixtures, held to the recorded answers of the retained Python reader. No
+//! engine, application, network socket or extracted tar path is used.
 
 use super::*;
-use crate::test_support::Fixture;
+use crate::test_support::{Fixture, Recording};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{
-    fs,
-    io::{Cursor, Write},
-    os::unix::fs::symlink,
-    process::{Command, Stdio},
-};
+use std::{fs, io::Cursor, os::unix::fs::symlink};
 
 const NAME: &str = "media-previous123.js";
 const CONTENT: &[u8] = b"export const previous = true;";
@@ -256,40 +251,18 @@ fn truncated_headers_payloads_and_linked_inputs_never_become_captures() {
     assert!(read(&real).is_err());
 }
 
-const PYTHON: &str = r#"
-import hashlib,json,pathlib,sys
-sys.dont_write_bytecode=True
-sys.path.insert(0,sys.argv[1])
-def denied(event,args):
- if event in ('subprocess.Popen','os.system','socket.connect','socket.bind'):
-  raise AssertionError('forbidden operation')
-sys.addaudithook(denied)
-import release_assets as assets
-rows=[]
-for path in json.load(sys.stdin):
- try:
-  capture=assets.read_capture(pathlib.Path(path))
-  rows.append({'passed':True,'files':[{'name':name,'bytes':len(value),
-   'sha256':hashlib.sha256(value).hexdigest()} for name,value in capture.items()]})
- except (OSError,ValueError):rows.append({'passed':False})
-print(json.dumps(rows))
-"#;
+/// The retained capture reader's answer to every tar the next test builds, as its comparison
+/// script projected it, each bound to the SHA-256 of the tar (`recorded_capture.json`).
+const RECORDED: &str = include_str!("recorded_capture.json");
+/// The one case on which this reader is narrower than the retained one: an old-style directory
+/// alias of type NUL, which the reference reads as the `assets` root and this reader refuses as
+/// outside its supported profile. Named and counted here, not waived.
+const NARROWER: [usize; 1] = [36];
 
 #[test]
-fn actual_unchanged_python_reader_matches_payload_order_hashes_and_supported_refusals() {
-    let reference = Path::new(env!("CARGO_MANIFEST_DIR")).join("ansible/files");
-    for (name, expected) in [
-        (
-            "release_assets.py",
-            "314c91956f13e72a867ac624c8027bf9c5fff740e953255dd5fbf2d87b6e72f2",
-        ),
-        (
-            "release_json.py",
-            "0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97",
-        ),
-    ] {
-        assert_eq!(digest(&fs::read(reference.join(name)).unwrap()), expected);
-    }
+fn payload_order_hashes_and_supported_refusals_match_the_recorded_python_reader() {
+    const TEST: &str =
+        "payload_order_hashes_and_supported_refusals_match_the_recorded_python_reader";
     let mut cases = Vec::new();
     for root in [None, Some("assets"), Some("assets/"), Some("assets///")] {
         for kind in [b'0', 0, b'7'] {
@@ -334,41 +307,35 @@ fn actual_unchanged_python_reader_matches_payload_order_hashes_and_supported_ref
     name.push(0);
     cases.push(archive(&[entry("././@LongLink", b'L', &name), asset()]));
     cases.push(archive(&[entry("pax", b'x', &pax("path", &long)), asset()]));
+    // A regular member named as the root, and an old-style directory alias of type NUL.
+    cases.push(archive(&[entry("assets", b'0', CONTENT), asset()]));
+    cases.push(archive(&[entry("assets/", 0, b""), asset()]));
     let fixture = Fixture::new();
-    let mut paths = Vec::new();
-    let mut actual = Vec::new();
+    let mut recorded = Recording::new(RECORDED, &[TEST]).cases(TEST);
+    let (mut passed, mut refused, mut files, mut narrower) = (0, 0, 0, 0);
     for (number, bytes) in cases.iter().enumerate() {
         let path = fixture.0.join(format!("capture{number}.tar"));
         fs::write(&path, bytes).unwrap();
-        actual
-            .push(read(&path).map_or_else(|_| json!({"passed":false}), |value| projection(&value)));
-        paths.push(path);
+        let actual =
+            read(&path).map_or_else(|_| json!({"passed":false}), |value| projection(&value));
+        let expected = recorded.answer(bytes);
+        if NARROWER.contains(&number) {
+            assert_eq!(expected["passed"], true, "reference case {number}");
+            assert_eq!(actual, json!({"passed":false}), "reference case {number}");
+            narrower += 1;
+        } else {
+            assert_eq!(actual, expected, "reference case {number}");
+        }
+        match expected["files"].as_array() {
+            Some(names) => {
+                passed += 1;
+                files += names.len();
+            }
+            None => refused += 1,
+        }
     }
-    let mut child = Command::new("python3")
-        .args(["-I", "-B", "-c", PYTHON])
-        .arg(reference)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&paths).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.stderr.is_empty());
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(expected.len() >= 35);
-    assert_eq!(actual.len(), expected.len());
-    for (number, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-        assert_eq!(*actual, expected, "reference case {number}");
-    }
+    assert_eq!(recorded.finish(), 37);
+    assert_eq!(narrower, NARROWER.len());
+    // The recorder's tally of the reference's answers: captures read, refused, files read.
+    assert_eq!((passed, refused, files), (15, 22, 27));
 }

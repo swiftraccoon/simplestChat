@@ -1,89 +1,20 @@
-//! The retained Python helper is the reference; subprocess tests use only
+//! The retained Python helper's recorded answers are the reference; the tests use only
 //! synthetic identity and owned files. No installed helper or host check runs.
 
 use super::{
     tests::{FixtureHost, write},
     *,
 };
+use crate::test_support::{Recording, tally};
 use serde_json::{Value, json};
 use std::{
     fs,
-    io::Write,
     os::unix::fs::{PermissionsExt, symlink},
-    process::{Command, Stdio},
 };
 
-const ORACLE: &str = r#"
-import contextlib,importlib.util,json,os,pathlib,platform,stat,sys,tempfile,types
-from unittest.mock import patch
-spec=importlib.util.spec_from_file_location('owned_preflight',sys.argv[1])
-p=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)
-original_lstat=pathlib.Path.lstat
-def denied(event,args):
- if event in ('subprocess.Popen','os.system','socket.connect','socket.bind'):
-  raise AssertionError('forbidden runtime operation')
-sys.addaudithook(denied)
-output=[]
-for case in json.load(sys.stdin):
- with tempfile.TemporaryDirectory(prefix='ops-preflight-oracle-') as rawroot:
-  outer=pathlib.Path(rawroot).resolve();root=outer/'host';root.mkdir();root.chmod(0o755)
-  for name,mode in [('etc',0o755),('srv',0o755),('usr',0o755),('usr/lib',0o755),
-    ('usr/local',0o755),('usr/local/libexec',0o755),
-    ('usr/local/libexec/simplestchat-public',0o755),('etc/simplestchat-public',0o700),
-    ('srv/simplestchat-public',0o700),('srv/simplestchat-public/releases',0o700)]:
-   path=root/name;path.mkdir();path.chmod(mode)
-  def write(name,data,mode):
-   path=root/name;path.write_bytes(data);path.chmod(mode)
-  write('etc/os-release',case.get('release','ID=debian\nVERSION_ID=13\n').encode(),0o644)
-  write('etc/simplestchat-public/images.json',b'PRIVATE_NOT_JSON\xff\n',0o600)
-  for name in p.BASE_HELPERS|p.FETCH_HELPERS|p.FORCE_HELPERS:
-   write('usr/local/libexec/simplestchat-public/'+name,b'PRIVATE_INSTALLED_HELPER_CONTENT\n',0o644)
-  change=case.get('change');name=case.get('path');path=root/name if name is not None else None
-  if change=='mode':path.chmod(case['mode'])
-  if change=='size':path.write_bytes(b'x'*case['size'])
-  if change=='missing':path.unlink() if path.is_file() else path.rmdir()
-  if change=='digest':path.write_bytes(b'CHANGED_INSTALLED_HELPER_CONTENT\n')
-  if change=='link':
-   retained=path.with_name(path.name+'.retained');path.rename(retained);path.symlink_to(retained)
-  if change=='oslink':
-   (root/'etc/os-release').rename(root/'usr/lib/os-release')
-   (root/'etc/os-release').symlink_to('../usr/lib/os-release')
-  if change=='fallback':(root/'etc/os-release').rename(root/'usr/lib/os-release')
-  external=set(root.parents)
-  def metadata(path):
-   if path in external:
-    return types.SimpleNamespace(st_uid=0,st_gid=0,st_mode=stat.S_IFDIR|0o755,st_size=0)
-   value=original_lstat(path)
-   uid,gid=case.get('owner',[0,0]) if change=='owner' and path==root/name else (0,0)
-   return types.SimpleNamespace(st_uid=uid,st_gid=gid,st_mode=value.st_mode,st_size=value.st_size)
-  def snapshot():
-   return [(str(x.relative_to(root)),original_lstat(x).st_mode,original_lstat(x).st_ino,
-     original_lstat(x).st_size,original_lstat(x).st_mtime_ns,original_lstat(x).st_ctime_ns,
-     x.read_bytes() if x.is_file() and not x.is_symlink() else None)
-     for x in [root,*sorted(root.rglob('*'))]]
-  before=snapshot()
-  with contextlib.ExitStack() as stack:
-   for key,value in [('CONFIG',root/'etc/simplestchat-public'),
-    ('ROOT',root/'srv/simplestchat-public'),
-    ('HELPERS',root/'usr/local/libexec/simplestchat-public')]:
-    stack.enter_context(patch.object(p,key,value))
-   stack.enter_context(patch.object(os,'geteuid',return_value=case.get('euid',0)))
-   stack.enter_context(patch.object(platform,'system',return_value=case.get('system','Linux')))
-   stack.enter_context(patch.object(platform,'machine',return_value=case.get('machine','x86_64')))
-   stack.enter_context(patch.object(platform,'_os_release_candidates',
-     (str(root/'etc/os-release'),str(root/'usr/lib/os-release'))))
-   stack.enter_context(patch.object(platform,'_os_release_cache',None))
-   run_id='01010101010141018101010101010101'
-   stack.enter_context(patch.object(p.uuid,'uuid4',lambda:types.SimpleNamespace(hex=run_id)))
-   stack.enter_context(patch.object(pathlib.Path,'lstat',metadata))
-   try:result=p.check(json.loads(case['request']));record={'receipt':result}
-   except p.PreflightError as error:record={'failure':str(error)}
-   except (OSError,ValueError):record={'failure':'preflight_unavailable'}
-  assert snapshot()==before
-  assert not any(x.name=='__pycache__' for x in root.rglob('*'))
-  output.append(record)
-print(json.dumps(output))
-"#;
+/// The retained helper's receipt or failure for every case `cases` builds, each bound to the
+/// SHA-256 of the case as this test serializes it (`recorded_preflight.json`).
+const RECORDED: &str = include_str!("recorded_preflight.json");
 
 fn cases() -> Vec<Value> {
     let host = FixtureHost::new();
@@ -122,6 +53,7 @@ fn cases() -> Vec<Value> {
                 json!("ID='debian'\rVERSION_ID=\"13.1\"\r\n"),
                 json!("ID=ubuntu\nID=debian\nVERSION_ID=13..suffix\n"),
                 json!("ID=debian \nVERSION_ID=13\n"),
+                json!("ID='debian\"\nVERSION_ID=13\n"),
             ],
         ),
     ] {
@@ -242,34 +174,32 @@ fn rust(case: &Value) -> Value {
 }
 
 #[test]
-fn actual_python_reference_matches_complete_host_contract_and_public_failures() {
+fn recorded_python_reference_matches_complete_host_contract_and_public_failures() {
+    const TEST: &str =
+        "recorded_python_reference_matches_complete_host_contract_and_public_failures";
     let cases = cases();
-    let source =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ansible/files/release_preflight.py");
-    let mut child = Command::new("python3")
-        .args(["-I", "-B", "-c", ORACLE])
-        .arg(source)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&cases).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.stderr.is_empty());
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(cases.len() >= 65);
-    for (index, (case, expected)) in cases.iter().zip(expected).enumerate() {
-        assert_eq!(rust(case), expected, "case {index}");
+    let mut recorded = Recording::new(RECORDED, &[TEST]).cases(TEST);
+    let mut counted = std::collections::BTreeMap::new();
+    for (index, case) in cases.iter().enumerate() {
+        let expected = recorded.answer(&serde_json::to_vec(case).unwrap());
+        let actual = rust(case);
+        assert_eq!(actual, expected, "case {index}");
+        let outcome = actual["failure"].as_str().unwrap_or("receipt").to_string();
+        *counted.entry(outcome).or_insert(0) += 1;
     }
+    assert_eq!(recorded.finish(), 68);
+    // The recorder's tally: receipts, then failures per code.
+    let expected = [
+        ("helper_digest_mismatch", 1),
+        ("invalid_helper_digest", 5),
+        ("invalid_helper_set", 4),
+        ("invalid_release_file_size", 4),
+        ("preflight_unavailable", 1),
+        ("receipt", 9),
+        ("root_required", 1),
+        ("unsafe_release_path", 36),
+        ("unsupported_distribution", 5),
+        ("unsupported_platform", 2),
+    ];
+    assert_eq!(counted, tally(&expected));
 }

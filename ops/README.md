@@ -51,13 +51,13 @@ keys at every depth, nonfinite numbers and unknown manifest fields. JSON is
 limited to 128 nested containers and 100,000 values, with at most 2 MiB of decoded
 UTF-8. Unpaired surrogates are refused. These are explicit bounded-decoder limits,
 not a claim to accept every value Python can represent. Calendar checks use the
-locked Unicode 16 decimal-digit data, matching the pinned Python oracle; original
-timestamp text remains unchanged.
+locked Unicode 16 decimal-digit data, matching the Python validator's recorded
+answers; original timestamp text remains unchanged.
 
-Rust manifest parity tests require CPython 3.14.8 and its Unicode 16 database.
-The CI Rust test job selects that interpreter before input fingerprints, cache
-reuse and builds. This pins the test oracle's Unicode behavior; the operational
-Python helpers retain their Python 3.12 support.
+The manifest parity tests replay `src/release/recorded_manifest.json`, the answers
+CPython 3.14.10 and its Unicode 16 database gave for every document the tests
+build, each bound to the SHA-256 of the document's bytes. They start no
+interpreter. The operational Python helpers retain their Python 3.12 support.
 
 | Module | Responsibility |
 | --- | --- |
@@ -369,7 +369,9 @@ must still serialize releases. The existing locked rustix 1.1.6 `process`,
 `system` and `rand` APIs supply effective UID, uname and Linux getrandom without
 unsafe first-party code or external commands; no new package or version is
 introduced. Tests use actual owned files with synthetic ownership/identity and
-the retained Python oracle, never the actual host's protected release paths.
+the retained Python helper's answers recorded in
+`src/release/recorded_preflight.json`, never the actual host's protected release
+paths.
 
 ## Browser asset filesystem transactions
 
@@ -475,9 +477,14 @@ owners and transient File probes, not that hidden cursor descriptor.
 This is a synchronous local filesystem command, with no signal cancellation,
 hard OS/filesystem/output wall-clock bound, crash durability receipt or runtime
 proof. A changed index/version may already be visible when a later fsync, close
-or output failure returns nonzero. The unchanged Python filesystem oracle and
-owned lock/tar/fault fixtures test this source-level contract; no real managed
-host paths, browser, container, database or network workload are used.
+or output failure returns nonzero. The answers of the unchanged Python store,
+capture reader and browser command, recorded in `src/release/recorded_assets.json`
+and `recorded_capture.json`, and owned lock/tar/fault fixtures test this
+source-level contract; no real managed host paths, browser, container, database
+or network workload are used. The recording holds what the Python command did
+while another process held the workload lock. It cannot show the two
+implementations excluding each other at run time; the tests hold the lock's path,
+mode and exclusive flock on this side only.
 
 ## Local executable inspection
 
@@ -520,8 +527,9 @@ virtual metadata mappings are refused. Dynamic-table address/offset identities
 must agree within one complete file-backed LOAD mapping; partial overlaps and
 zero-fill shadow mappings are refused too. Sections, relocation correctness and
 machine instructions are not validated. Python's existing glibc server policy
-remains unchanged; inert overlap fixtures compare its parser facts, while new
-static forms have explicit local fixture assertions.
+remains unchanged; inert overlap fixtures compare its parser facts, recorded in
+`src/recorded_elf.json`, while new static forms have explicit local fixture
+assertions.
 
 The mapping domain explicitly uses Linux x86-64 4 KiB base pages. LOAD file and
 virtual offsets must be congruent modulo 4 KiB, and every nonempty LOAD's rounded
@@ -1244,9 +1252,11 @@ path or attestation claim. Failure returns exit 1 and exactly
 `{"passed":false,"failure":"invalid_release_archive"}`; invalid arguments return
 exit 2. The library retains original config bytes for a later private operation;
 its debug output contains their length only. Tiny owned archive/CLI fixtures
-compare the actual Python validator and test bounds, supported extensions,
-explicit refusals, ordering, mutation and close failures. These checks start no
-engine and do not prove deployment, image execution or ABI compatibility.
+compare against the Python validator's answers recorded in
+`src/release/archive/recorded_archive.json` and test bounds, supported
+extensions, explicit refusals, ordering, mutation and close failures. These
+checks start no engine or interpreter and do not prove deployment, image
+execution or ABI compatibility.
 
 ## Generator image archive identity
 

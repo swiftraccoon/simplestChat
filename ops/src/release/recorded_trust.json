@@ -1,0 +1,4780 @@
+{
+ "comment": "The retained trust, receiver, controller and preflight validators' answer to every case the comparison tests of trust_tests.rs build, as their comparison script recorded it. Recorded by running the comparison script trust_tests.rs embedded at revision c2ecf315, unchanged and with its interpreter flags, under the interpreter and with the reference modules named here by import name and source SHA-256; each test's selection and envelope arguments and each case are bound to the SHA-256 of their text as the test serialized it. Two recordings over one dump of the cases and one over a second dump were byte for byte the same.",
+ "flags": [
+  "-I"
+ ],
+ "interpreter": "CPython 3.14.10 unicodedata 16.0.0",
+ "reference": {
+  "release_artifact": "d6219ad2f6db7c45a8b4e5728437e1c6ef8aff58d3936c059fd52eea7aef1511",
+  "release_fetch_controller": "dc8810c9feb84f53824ba35238c8a53125a93302c96a3be8cc063b6fc09b5370",
+  "release_fetch_receiver": "a82d3fc33c62cc9a71093c763bf4b50e33f6a6ad9d64d9872b11221811b476d9",
+  "release_json": "0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97",
+  "release_preflight": "6000dd02850b9345f926cd8cd37e1129043f89d389afdd4db79865d8a63cf1ca",
+  "release_trust": "c350ca34b26f25c3d5e27fd5d22a267677fae5d426297263b7885f93cb2a4745"
+ },
+ "tests": {
+  "envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "owner/repo",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "ea8cd7a255b48df53c223f1cc9844b58b731d5e9980d4e499aa5f93bce769812"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "885a61a489f2764c88ede7c6e3966fd5f7e44044826a5083e477fd73e465c3c3"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "6ada40010d2a38524049c6b382e57e7e4500c2f17f06bfd3933946eb56f65c9d"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "cbde8c4481331ded98278d000919ac168497cdf4382d3d240fb43b32afa015e1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "78cd30d99038149ed32d1d4497a9ca32f9964ff07d2df475817e2cfbf862f4bc"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "2b7993b58b9b66548926c929a48a30f1a7a429be64853174b558a1fb00d0ce3e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "3a82f22dbbec43ce1c8ce3eee6e0803883b5f9e851cdc395ea2f01262d4b715e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "70f8ee74becb1bd665145d27d5a49f71a304515159c888fb4c92512f97cc01c3"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "7a9eb0540f90235e5b25edc3bcad3ce2c718392a6d3b1588b60d518b7a5aabc4"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "5fb1101f07a686eb9de865a6fdccd063d66cbb0067120b9005ee27b356ba19f8"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "61c8a65dfa33108c99f36d0f5790b327e9dbb6d998354e4a986f620205420613"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "90618092d7647144535d64ea62d15902737183381e07d7a03abebc3c559a5363"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "46af1b5a18d857dc8ddcd31454a1c76f42a402d73a7a0889346a6dca403a8cd9"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "e0f1a8b840fbc2675ebc96ca32a73da8dccde64d7e916acf841c83bf5cc817cc"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "c6f5b11d6434714f6b25084605517f2598606cedbd4abb76be8acda1eea1a5c5"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a90b6248ec647354313d90116a571dae74be16f300d2f6d3b61506d99001a468"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "32f21edb28f1207f754a7b172a57c8a348d80a1e17dee3b9a607a9f7bd43b520"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "81280c81d4d7ef57a211034e47dc7b812d04f30761ae264bfdb954c2609514c7"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "f1186e85c46aa7ead5cc26b199ceeec9793e79c17bac6408ad125598b2a47911"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "84d2ec88b4a62e8d0f6c7ca5895e91a2b43c1e652d25e73154d4d692d1c31b17"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "ff0d33b4fb76b2f552e15ad9601d38594a6496de475a79da675ed66476420c52"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "7a31a9fb6b2b8c4b45b58264f8abca45fa88933225dd56730d850d607143ec09"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "978fe45c182e76cf691aaaaf9b16426a028dfb0974131878ebc6b756318bd5bc"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "7ef358cecd9f30e0e1a161187425a9af051d2e002689c34302dc3518bb7464f4"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "6ab0456856f1af5f9314ca7088e842756711009fad1382fd71382352cddce0a4"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "2e36f67522c5bdad086db064b985fcbeb5e16b74dad27feaca41f77cf74d31cd"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "31eca670b98c311f7fe420bae75a8f7fe3a3db839bc89c0f16accc5d11a4dca4"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "88d18a08f27fef97c2534f7fb964684a323eec7212aae3945e0729616bd25dff"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "21321dacbf2f428418f73ebad01b0f5f90e85fe820c3fcd43fd045249bf242c8"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "ff7a893ada1842d546530f3df82c1f220e3b106d2cb6117ba8fd961f50752392"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "0e0910ce5ec8354ed9972947a1d05152b6c61f1bd86b04a313e4c7ba64ed0b7d"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "b12208591093e1e78a3b3b6a5ef5352940fd3c82e7e381d71f5b0baddfd8f0cc"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "76d0a626d0f419c569735d36b419a7eaabc8040fb012d3557576cc9eeaf5b4f6"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "8cc58c76634e0d9a5f286ebe84b5675ae38dbf21db9bbe8ea2c7067f5e7a9abe"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "61161da00e099190878f0ef5e24a22c9db9f849aa45de412fe42d45445bacfc1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "63e426feb2dff9a10f692ce72b6026c29be0a05adde18c02d19aa45082e3e0b6"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "ce6a1cae8237a50d6625484a22c0a2bfd84bf043d0c19bf94c586c797da0149d"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "1d840d5718617421c58e4b98e7507799bff516d08b80aabcb8510c8f174e5934"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "293c2c2f1724467378a1e4fd17fc8afb30d25a5f2653860d24a2f8c79eb22ebd"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "8c703a624f8f1bb5903224b74328cafe1cffb3eefd389353a32a4c2441e997ba"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "bda1b1a847a046cba3b841c58e9ed02a3c4cdd9e84d8a06adeb3432228355bc7"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "9ccf1b06efbdc43f75a24f80b8a951ee4d585a7e9a601f8edee2b0079afe44e1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "684aa9db07daef915fd36816a919df51e576f40dfe9d5042bf3675ea6db5b034"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "3a5928aed3c0c0e3d29eb21a2882a43aab899a60e7bd90e3f8cee57e8f9593b0"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "40c2165fe8ad5d5e75eeb314f0f96c5c5639ddf007bbfa5738639aa85bac6daa"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a6615d4fbc6e604c79c10c24d85f73a4717bd9d03e170e4b8685d1ad8cda88f6"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "38bbf1c47a3bc1e5b8d5ff4be8f45b45c05c07911bc3959b110618a9040893ce"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "458008d59c7763e28a3c2e74383f8e4011a8b63444a5d6f9152b665ed4534019"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "28139004587c0455fb38abd210f7e61e010065cd0f3ba6bb547036eb000c26f8"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "4b6676741e8ed6910fe11746fde3033d1981b47e318299c54cdd7785b752757b"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "d11314621e78cae63f1a850f8389669c9ea0f2ab5bd5b59ea37a2900928c557f"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "8e760a6d5c7b413029b14e3736fb09e4e91ecb5ce67bcf7147b9467800cfb1a0"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "c59ceb95b9dd7433458e8bd42a8051bf2560ddab0f5e742d42da9b1e63f148f1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "1198d8a629d89d74000aee8e644c111dcb65d5fb0cabea16f3c0b01c6ba2c11d"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "88f7417cd8a27b7b1cd2485a13f1184c2847d1c4f20fa96ea610a88f5aae45f9"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "f3fc412c424b05e2bb08491e1a5a82fe27920b4aed1a5d6c9a0df3a7c27b4f74"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "afa64ca4632df6a0c4f8132d147a15dc40530a079d5a53cca67d72c840442b1b"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "128fd9ee32a2aea8f42f40b2df16a7f283be8cc0f5f1d920fad9cff4880d1b68"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "3057dcaca32c610e200a7eca440ae37c37574e60984acb44be11b183e453f641"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "951b7215a832e684e4d5657cf0f014e5d74f329f6c4f17a85e134d41d52bf831"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "ee1eda2688be511d41d36ab3b9a97dda48b91b5efa015ed33fd2cc0f318acd53"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "1fc3c58ce4b2c827a581f635c78b05a5c2a47db706cc55e0850f0736cf09ec3e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "c93604cd36dd5179e89eecfe7c5a64951f3de6dbb3c84ca4731114788801ecb2"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "4f803750e8cc852a6e2138557957742773a183bca217cd930eda351d72b38cd7"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "e126b3644913a803292d22c647c086c41737b489d14ef26d50c373a035e367ef"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "5d05c81178c42c7738ca1eb268fad72e4ccf8adc7418a9cce66e978b8bab4443"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "16da998d5daf3e1c5467894fe87e4b4fde4041960b698ff40ec9b52cd853b315"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "729cf66b35479cb4fc0fcb759eb3ee015ba1d92c50ca90cc40625f96814da921"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "88869a670d8898c7c3ac295dc1de291e9e52dacb7c5806ad30b9617992bc6bba"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "cdbc24c6d7761154eeabc27246d3a59107915b32d1e8d275917d4a264d920d2e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "6f7000f4e4c5a677a01f8afdc9907f130ef358db64bd84a6fc0147fd969aa9c2"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "1b54c5111ccbe40e0bf011366ca317a5ded3f44db68a27f6b2be0b2e5c27690f"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "37decec967455890c409966c7d8bc7d27a227a2ff2b861bcc4a5dca3a04518aa"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "5a7b0570366a18c750be556ee75c9916bff3d1a3156ab49fc8bc7f61bf0d8494"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "591693742c558c0527924ea1331114592a6227cdd08da0f80ae639b383d47fea"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a5bb34a5aca4316d23b6e3f997b01f2001ca14e65f86d6c8a44c65894f75d45e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "82d732ff3925b03e123a151b8c9a165cbf72c93db92b610d558c7759ff0eb5eb"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "323a10d5a0f56bbaf63e1a7ee6a41851a76a814603ad653d2f985d503f6349bb"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "f88570cc50bfb0ab45522c834974f210670dcc70a4394bd6a8cc3bfe55b4342c"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a96a35ca084eda76b2c7a2b28808a87b990582e0d938717b997865a55f21b012"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "e09138fdaa14a00f761f68ce46a956d7999759e214d6f2e27adb82643c1d7592"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "15d433801e2e9c0f28c5fc5e31119a0d104f4b72294e51dfa3a1734166d70ce3"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a2409b61c334855b788adb629d01c89e011ea628fca962ddc196a47b67cc2693"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "7288059a322cd36f288cdd84e6be008984df001b8e4c4d8137252162bae346ca"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "97e58fc21d7c8be13f6080e909bc09f2ee900748f0077e10d95f0d61f5ad2a38"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "5790e0c340439685920f47b19b2ac2ea5638108bc12601a3da909805a044f659"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "451e83e378428c691c8deb3bc01abbf3cf907f0f3d570f84caaa74814d06e0e0"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "453dc85c48b7a109ba989ae44d7b77b59169be02998ea4052eb94b7943399d83"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "a895966c8915b4236a139efbd42aef0c5145fe7e64ea470387f6433ac6cf1e29"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "d5fef88a257ba35ec7f1700b91d0bcc614e5bd114a644f040d919dcfcbec5ada"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "e94a171a7d049ea27981c06eb43df8b523e7ff74b5d490ec6a0510dbdebd193d"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "7c73b218f7ed1635d185b0d5ecc8a550ac2b528a3040f39b107752adce373bd2"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "fc8eab6eb50e699f96377e482afb0006886b0bc64435267cd7438e130ccff7eb"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "b209b7bfe59ebd64e5c963b1e8baa2311541c93f0e23089670d06236a1682d47"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "f95f3a353cd2913397d3ce6ea93a6c82c6ddb0c0e02785905e326e61feac86e1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "87d6b9f0268f2e617c3b29e000ac45ceeb9a5ae5851f3845290a0fc404b095ed"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "b6985b8cb1316dfa7a71018dc7093264bf5fc2fbc4e7fd8cf6b1862a083c523e"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "53df8d5f6db05e8553eb5b16f30b1b303f8641b61c96417393ff50e304ad19f1"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 9223372036854775807,
+       "artifactZipBytes": 100,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "owner/repo",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "4e95158554815360c4195bd8e3fde3ed2ae87ffe2d46250c8c965bb039b7f4d9"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "f5276a41777092b8ce7db3e4d4cf538133aef6607fd0ed43ca7e9379b8944dec"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "dd54905c9c9c9427f0c6029c7d267ac9d2387f759d7d209e678c44ca5c8bbced"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 123,
+       "artifactZipBytes": 2147483648,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "owner/repo",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "3eda68d68d9fdc6a9ecc756bbf265b607a06a9d8ab63c7553c903982203fb0a4"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "37b9aaa8b4807bbed24b30083f62a58d520d26901a0512728a75f26862ac551f"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "44002637442fcf44f9209f3f0ca7bc589488f7e9d20c6d950590cb6123ef5544"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "56f43c4e3ff7bae884e86bdf2be82fb437861c5d8233b6c376b3120d6b03c497"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "c0fc21ffe975156a5e1a23b1a4de6329024e26a481e2394efa7f5982c74bc446"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "owner/re.po",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "owner/re.po",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "158035e0db72163a57daa95cd650615621ef55fe043d4283323f437e97f7d765"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "9f618b7b3ee793c7f8068597391a9b2e99beaa0539b7dfd7928af380f75ac5fc"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "3a0c143b51b9e5aff7f7b7c90404facf14b45530af8248efd000bcf69547e6f7"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "ecca70c33ebfa397206b18712b9092bea35af74bc133179e0151f3b6905edec1"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "1b6a2fd6e9204f29ad8bac16393a151384bc6160a013ac48d0d2907238186a5b"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "attestation": {
+        "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predicate": {
+         "event": "push",
+         "fileDigests": {
+          "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+         },
+         "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "platform": "linux/amd64",
+         "ref": "refs/heads/main",
+         "repository": "owner/repo",
+         "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "runAttempt": 1,
+         "runId": 789,
+         "schemaVersion": 1,
+         "securityPassed": true,
+         "workflow": ".github/workflows/ci.yml"
+        },
+        "verificationSha256": {
+         "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+       },
+       "buildRunId": 789,
+       "ciRunId": 789,
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "schemaVersion": 1,
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "9fd840a947db2713242eca98b317ef04c4b72096924c5fe392a8c769fd3a72a1"
+    },
+    {
+     "answer": {
+      "error": "invalid_request",
+      "ok": false
+     },
+     "input": "8b11deaad27ec5e9cbfa46eedd0bd55f1eb30768e28727374c1c88a90daedb26"
+    },
+    {
+     "answer": {
+      "error": "invalid_envelope",
+      "ok": false
+     },
+     "input": "0e26126d9d6441f4697da88a0f96de7e53a7540529d91c11225b07487c362c6c"
+    },
+    {
+     "answer": {
+      "error": "ambiguous_json",
+      "ok": false
+     },
+     "input": "9450a989d10a8e229a9125e3b5775a211479bda31a53e6e889f5b5089b770625"
+    }
+   ],
+   "envelope": "f370732e0e29bfb2de4407c66c60c923a4d8234c5acebd60655de1ac3cd06606",
+   "selection": "95ca6df549f60e82b999ba0666f92cf5ef3fc45f5d29b901b1bc61705ed3c5a0"
+  },
+  "helper_requests_and_finished_claims_preserve_the_operational_policy": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "bounded_process.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "browser_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "reboot-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "reboot_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_artifact.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_json.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runtime_profile.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+     },
+     "input": "2bb4da4990b20632d9094256569c4a92fb27097ca0bf054e57a65152a9349f2d"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "4e0a1b6b8fc33a570bf4976ba8eb373dd032ba77f7f0458425c1c26fd94ac33a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "7d8dcc6fd12b04b67a22fa30edbeb7aa133d9c3e1ba966c7312712bffa9b2073"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "1a093e03e3bd24416d62451705a35533a22c44620c3244b0676f380b533ee6b6"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "0428e45ac411d04dba9b6f28666dec55a373c1d7e59cc8292baca0f98841342f"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "3cdd4816ee9ad65ac3d12a45f2514642aea5ca07324416633da100454016ecc7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "dc03a30b2d53035274f3d94a0a7a9b17cfd6b9604dacbeddd05da750ad2b2f65"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4fee43e661579c47686befde39506f9a8ef87b8aa4a0d10d6d2e0e63fc749b53"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "417abd8f8b7840e1284337ea36c10906a75c155650b0d37cbb1b2339fabb57c2"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "46541336a8a7c6e88b06a3b2973444e76011929888a81ee945cc91197888585a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "ae6d52b4cf85a79816b8cc5af7539a9b8319bb6e53554dd729b5dbe6d8b59776"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "c05e639c40fcdcb3827297042980eed1a72940cfc4288213bf5f319997fedc5d"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "bb8fa2ce6839cee9b30a3e4dd9e4a2e2b911ea1d1e938fd2d91eaba4ae555261"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4db563a29d501a9d0e70366aa0d22ddc4b6cac2bcb875527a0393e82b3fc0ca9"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "687cc7231125d21efd18d02ced21ab54495ec187905cf162ebacbe709ee8cdbc"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4dcb714e366a027eda93925b67ebbd1e8c0120300a2162b584b280098a61952a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "51542355fe9333a767d8613a84c2b115a8b1d462eea42ea8fe215cc5190a54f7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "00e6cfcba586c249f4fcbae333fa2af607cf253a5c126067b0124886b41ffb64"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "1203f4ea8c453e7ec38079b9d93506ed00c32713cfb75986e5af125aeb80ad7a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "82020321ceccba84e168c16a0876cf3995c52c1966aafacf52a3bc5c177dacd3"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "fded2285a69f14237c09a3cf09e7fa5317a78319108567378008470e61e8137d"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "a3364486eba6595fa9e806349e0b99ad6f8d68ee0aea1d782d0fa8441723456c"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "0eb4a6dd4f4cf9280df6955b842e979be9e5bc3a48d2f170663e95b9fc9becf2"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "0ec5392629cd763a000aa8314fa00217d19958b101f2e6cba483579bca229707"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "51b87b4ee7927e92401b20f2e5a634f4b1fcea6b3da51df730af53d4e77457bc"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6a15fefaa74a7ea6d31cd6201f4ca5a12187b401eb341db042f2e1f0a6008065"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "3d90362ec548feabb6c18e92b7d71319523a76a6e8797633ec20f61db1debf83"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "7f75380f7db1c421da1b4f902ad4895e951c6bc3213c186321976f948199d631"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "9df708459497133ec551380ce266be87bff106a56eba42df53af34e2a49ff8d9"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "53252cb9496e2f7a28c2bf352285b4a65a00859d0f6f6ffd0b5b1446df1babe9"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "440bfb11aea0e1ba58d9c8abd5987eb460654f36fa17b375a259d17ed0bc46bf"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "93a5ba57e1ac58dab4f18f9dfd509202494a2c563d116030bab58e71ae074f9f"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "0f73bc01bacba878ac951f88c2f9895e385edb3d8584ef3e53e81557c2593884"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "cad59547268b1fc26f9ddf67971304f602764656f319e0cb18c1ad530581e2bd"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4dbe9a41a1d7fe7a1b2f67dd0e32c41a5eb5406b143eff121d9aa9863e41c6b7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "1dd30e08dfa34aad63c77c29dcb0ff2a2677d33dd7ceb3aeae9ab452964d7a40"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "bd4965f56af540cbe997dbeb046b776c6357d5465878b577c27cc9e57fdde859"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "9beebcb5eb009c7f6ad90626cf801e5f6e7ab1a295063a72680099437f0e69c1"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "f53f6f6bf8e9c3933583f5a940dcfbfba3e7bdd959cafc0619bc587be0169f8b"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6e40d5cc17d25fd5d23dbae0aa86f02f0a6dfa3517514ddfd23158c02e178dce"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "89e0c2c2d9ad4c35b3ba743b222d1a2a258b64557ad4952b125b0dd696cdab59"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "a516d0693ce7c106ddacdda79b8cf903557e57c4b2e4f66f0b52e9f527564334"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4ab29f5139df359957b6fc1ce1518f3206fe0aaf07a42f363af0bfe2ffa3fd41"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "e20c95686ea4b88351a471ebe7f95a958cfc481642d4d64797019ed6833b2d69"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "5880989203c34d24d37bbeb4e52ce833304170764969645a44ef8b375fbce02b"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "c16dd0772e508f2d2d136edef91b32bcbdd4c2e786ccd2d1657fbe197d4c4c3a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "a626a14923a8cfaa61ae46ec8e602adae00e25e2cddbe36de3291476e07866e0"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "627d77bfd7fbfaca43478915236a387e310afe382461b2865ec60acedda7dcda"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "99b1ea755233729ebea7e48a73f482aa06018b485ad07311f25305864cbc8578"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6f230225050a2e3b8dcaba131fb6b5a871a68719cb6c5649754d02158915836a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "120e568a4cafee957870a9751a655810bea6532e2703e0458b5973b6cfa198bb"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "cd2b01edc2ec2b58a78c999528b561f1b98df260ad11326bdefcc03badab13d8"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "825e5e6f647374254b61567c5be81bea0696a5061e52e9d7640e961a2f5beb57"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "089f1e10ed98e5934d7b20be71d5c8595665403d114a7330b85290600d1609a3"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "b8ef37b90c11f439ab9b31cc861500eaf0ac2ad07ee7048707457de438ff7aad"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "edb2b48ea554e469e5dede0c411f9e8aec93efac1c5e49f9f44bfcebae0b3c90"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "176b775fa4526b628cdb33d0827d30daede3fcaf5011359829d223590787189e"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "e87a1a0f4bec919cc7da2ef76f05edee6cbaedbab0a438ada12183521e05b5e2"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "c59a0cf9c6dd3afcff1f98815de4e5032bc0e4ca7f4d2143613532438dd700e6"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "188096900faabc0d142ff3fc079d42614ef6fb36f61b5b220623a8a8c5a66329"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4c1ae6d03d72ed508e97a7a1defc9a2d5079e24c33c0b821a6be4b8902485e5f"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "1fd5f8d241933170662036e0573e1c27a360b2f5c0b5beeead2d444c97bbaca7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "d977c7806015cc1143925190f6913865d32bc89f80763cb5ba33793860f4f521"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "e3dbc4df2db2d07afd11687fe558079cd44173c033c649ba50b6aa0b6b769eb0"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "78bf73759404f2a60cd7d8ce4bce7fc1ece6fafc742d613097c57c6184a73118"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6dff489aa778a0b85fd372d1a76fba8f67cb2439e46e1b4b2c3f995d00cb3a5c"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "54e93b94dd5e05cc46709ec6f3c0d2cfdca8c63fa7df27f64b5b8e37ef79cbbe"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6848eca6f9fbedbc71c26c67c72072035f8414a42529a92e2cf520a17344e020"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "e3a49b3d3ce0f5c9534c186487089c996477e7318ebe58a6190b44145f198c71"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "a50519e1a3579de0c8aa7b2a610fced7b7d402e5d1efd8730a18fbeb402588b2"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "0d86e6d3f503a326f3993da8057079be4fd50a748cd3c142be0fc186b0f9af2a"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "1e030f9a40fd9f59efd2197ebb94af74b22c742a3cc8956983422053f0452b07"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "2c7ec0468b4c163c200df7a464e8b815fd5df31fc398f1c44bc7796c7e9b3ef5"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "703a3436b4b90f6a33335dc9335273a04e78252c64b4ee0b153be59a07ba16a7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "9f6937e674fc83c7a854666c41553f51e5454511de65c346244e0b204af387ed"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "27eb20d3975a31783969fb5fc93f93a50d3e31fd4e3649cce1d674eb1ee2721e"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "20eb7037c362722589c359964c53d95c684c24e0f21b6d57d153cb41a96df722"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "8b11df91c4d1d02449a672e6d86751f4b8492a277d8b97f852c11884a00ce1c0"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "8b4fd9fd034137745ba43e72d6e532656431cb4fc0338fbc997a8f043f45de4e"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "f5d3e32efbcf4b99cd075343b21999fa67b30a20076e1f48b9a42201c4647494"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "f24a166f774af317522b8fb6e081a58149070eaf76d2242e5f03e2fc265e5af1"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "e612b41572691c90a8bd7a2307e95fea5d34a1af9384c2ed60d867571abf97c0"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "8a9e5b9c22f53522c51fcd52934fa84a3944c6c7701f43ac4eb241ad0966fe1f"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "f6fd1a419af2089fd1dbd085b716247f8c847c2faed054a4e32328bfe8eda032"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "8ba72aa1de21fe7e6765f9cebf8e4c64151c2792174e55fa1d1f6bb6a253fd8e"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "ee87f74b28e47cb5346c3df1aeb6da1d1d3cd8b11bedfb73c424a3342662e4bd"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "7684b4b81b5b4a5498edfbd16a7df4a11c24955d5f103dda778ffd9f0d7d30e2"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "6e0ea99a651ab2bc808a6a6ce737ae4be636d4c919cfb498ea162a326cfbda34"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "b72a079ad41b88341eb27e1a8ca6354f45c6923976023217cb787ef0fca243b7"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "f4b2d4a34e51994827a0f7d7d44583056e99ab83b4ddf65bff84281dd6c10548"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_digest",
+      "ok": false
+     },
+     "input": "4bf8cc139971497f9569746247a25121231c0760078864008a18e3813d3a27f6"
+    },
+    {
+     "answer": {
+      "error": "invalid_helper_set",
+      "ok": false
+     },
+     "input": "5431cfc8452d5ba758f96b0a1185792cf8030cfb186ac9c22c39a9ae7749f823"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {}
+     },
+     "input": "5c9605dc6ff1e08b0a50b4fa9217c007ff8813ed5b1b3daace322f682e035283"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "bounded_process.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "browser_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "fetch-release.py": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "reboot-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "reboot_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_artifact.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_fetch_receiver.py": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "release_json.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_trust.py": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "runtime_profile.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+     },
+     "input": "fd4297cfa9ad19ae3fde0c7276b6acbedae20711e62ae2d66a4904cfd4b97f27"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "bounded_process.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "browser_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "force_release.py": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "reboot-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "reboot_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release-public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_artifact.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_assets.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_json.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "release_public.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runtime_profile.py": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+     },
+     "input": "de041887e6d15c2bc6f88a5896f425fae72cba2266039d9f53a5b778e5f77e8c"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "finalized": true,
+       "schemaVersion": 1
+      }
+     },
+     "input": "a53ee4d7eb7f786f022b1673bbd2f4a01ee1df2a79cec556f5741e63e84661c7"
+    },
+    {
+     "answer": {
+      "error": "unfinished_operation",
+      "ok": false
+     },
+     "input": "06daeca421155d290e1c389628984ff39a10b25458e7fdbe239b3704868cf453"
+    },
+    {
+     "answer": {
+      "error": "unfinished_operation",
+      "ok": false
+     },
+     "input": "feb2b438ee7828e703609d6fde53675349c79f60691a88fc924a36c86499be43"
+    },
+    {
+     "answer": {
+      "error": "unfinished_operation",
+      "ok": false
+     },
+     "input": "a699a6ada292b01000731e83b30a0a9fa10f4a96a1351547a33bc74864e67e9f"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "finalized": true,
+       "schemaVersion": 1
+      }
+     },
+     "input": "5c322aeee081cb16000e35954243a85f91c5d6385b9fee93af13f175d9fce50e"
+    },
+    {
+     "answer": {
+      "error": "unfinished_operation",
+      "ok": false
+     },
+     "input": "37f26d6156da4c3268f01ab2fe5518c72d81cde00908a91f08242522271f7cb8"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "prepared": false,
+       "runId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "schemaVersion": 1
+      }
+     },
+     "input": "edf96668ed24a3a584e60a64e7843a13d9a181e9e3c6ca139a85d2c00fdcbbf0"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "prepared": true,
+       "runId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "schemaVersion": 1
+      }
+     },
+     "input": "7f9a01ffb0b44f4bee89fb748ec4d4a793932ac911eceac08f4d174a660aa6bd"
+    }
+   ],
+   "envelope": "f370732e0e29bfb2de4407c66c60c923a4d8234c5acebd60655de1ac3cd06606",
+   "selection": "95ca6df549f60e82b999ba0666f92cf5ef3fc45f5d29b901b1bc61705ed3c5a0"
+  },
+  "predicates_and_proofs_match_selected_source_shapes_and_exact_hash_sets": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "event": "push",
+       "fileDigests": {
+        "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+       },
+       "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "platform": "linux/amd64",
+       "ref": "refs/heads/main",
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "runId": 789,
+       "schemaVersion": 1,
+       "securityPassed": true,
+       "workflow": ".github/workflows/ci.yml"
+      }
+     },
+     "input": "722d40d512fe4cbf53b3106f9deb21b76843407c1f8318888ff13b7f54445a53"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "aff5f48ae34f2a74bb46c1806161ac67b0e9709aae9c64902390050576377947"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "6a3412d6fe2b469ebec15ea4d4f2d3577bd1906f0744d64ffca562f6b906d8a1"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "e88dd533bbdae8f2beba18eadb6f790c574642e36050159726d2fd7bc95d440e"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "9ebb3319a3e7a85d41092a3e174e17c3fc8d4ea55fc9eb90b0682baac4f02586"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "2c119b7b4793caf85046aef2cc67816f5b198e1aaeac8833ab193e0e4a938571"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "cbece4b2615cbd0ca2724c8a8bc09b0e41f9964677d012597371acf8dcb76c21"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "feb445f25b9ab0effde103a33e3b54043eeb1b87baf6089973f9762054845fed"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "0b5c98c4ffdc77415e7c193003dad19666be7efa4a61bcd98eb8c2ad1e98190b"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "8710c3862954f09531af1883c27c2939ee6c65745a9c3d549877ea29a8b2329a"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "4496e2cc94454a3190bd3e9a433607faa26e0e8c6a1135e3e1348edcda9f1f5e"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "f6df86c5c8410e26be1de5e8c9c5e7c3d3f13ed1c556732a01b3f2ac53549386"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "0375d813fe55b33fd8b79592c3c3055d6113148f820492fdcd7e4090091fd987"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "658dec8fc7bc88074904dc8ac863a451e0afa300cde607930f9792b9cbc945ad"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "5ca16dc852d3817004a7d7ab97f1d5dcc04ccff2961d2a0751886c51bbde6a6a"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "fc49d0ab65a92efbbca61bb353eacf91d2defc3ab3ec4014bf94d35c16d07041"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "82f993c27bcf0aea83fdcb6b7c4d8ffd68ac7eab6b27fb5b8928998559b7ace6"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "20155b74d5e7c6dab45a8f028b5fbc593d6bea123be73b3ced894990c91079a0"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "cc4c2f98a8d40b8b2b80d639beee779380f01d74a1c1ce540f972928b641927a"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "7feb370e6dd05efd41ae7cbc741d8c35da82c52dfd44872df376e7b95c855695"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "b3c5ac1d28c006b0cb2ae2fbfba9566461aab0ae4d90efe6c7a653b762248a27"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "4bdfb5648b6f6c4077c030527758ae572ad8b5ff9504e4a063c238d78849729c"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "657a1e61d20f3503f633a0c9bbcc9de8e72f904aa0b9d1a58028521ce2233354"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "933e9d0abc61d9765ce90c52e798cfa30ca80d44b88d34729e2bbeea09fbd829"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "c653c2550ff00968fe7654ac3e079a717ac5d41902d7d4e789030b70b4c79b0e"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "432d4657aa18b8d6a02a396435fc52ab8c259c398cece512909763af5fedb629"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "c3e9579757c9131db5e77eb62b85a9c4d48ecb13587829666fa05dec188af0dc"
+    },
+    {
+     "answer": {
+      "error": "attestation_image_identity",
+      "ok": false
+     },
+     "input": "591941d0967738a6532715a182128e4f359f71d060a255f8f3d19016a5e50688"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "b36838ea67f4b9604b80c29d0427659ddd7e718848eef10eafa7246048eb5189"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "1ed49efee74f0a2be57d17950d1304562f2f83885eb7d9212bc9d678de7380ee"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "48754740b84431211f2da0a824ebb73a80a1b083d687aaadb77edf02cd494c36"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "8c2d4278b98c4b82ff89af5d6ba25f81908f35b28b85329f6af47cdcc83f2288"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "a694bd387634d0e477496ecb1fbd7ffea22704ea6c0ab89a03448f1a51583da9"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "4bd0344828ba0a7043a1c4563158bdef9e4fc7a4abb251eecea4b5a04bf72ab8"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "87e494384f3324441b87447aefe816ee1f14587e3f0a140b8e3e693176b54bb4"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "e9691a7994ec2f92a2790d1a3c84cb6b63e8da3dbe69e835f144ab8be0fc07a0"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "8f9562c8d0923fb146918401b4d66fdab2f03efae587242e629152f642964896"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "8a86754a25dac2239d698b69cb68df0065a10379ca3387ed8c8927f05e14fe95"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "efb55829dcea977e3a779d9f306515ce74c8bd4644589d85e9bcf6cf5b142e3f"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "5f51ed30b85f2b0435123b04716ac01f00cc6bed3d223b4d53bf11193f08edda"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "797352ce0a15b21e0da3246fe9128efd69248f3f957dc3f825d969c69bb8af14"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "6e5a0102057bafc41576d9ca6ae7726aa7929d59e2e3be2afd2716394c6f3daf"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "e2d0b2dd1fd887178f9c0488cdea056cf63543cbf41dd6779a69f94c6bb44a22"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "e1aa85872ec17bc58144f22735c4d3ed0dfddcd60c8e49f7db43ad0480f4519a"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "4cba18cf87244cb588a2c26571be2df153f330b8ce657080f30a5b5baad1b331"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "5d857fa76a31fc2b0bb923c062a9c91f7dfae296a629d0c77267c2d100776ab8"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "e9cee7645d9b004ed2ee70c33b342775905af71f5481171e74c301c538f04150"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "b827a98fd86b5f3ee352560bfcec21f261ca1e778990983101fb2dbfa4b60d99"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "de3a7fd9e6133457d9c31f0c1e060d645eeadbe5b5e168826630404ad625e17e"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "080838157b767c60eec61ab369d58a9885d344e898cfb92fac1bacd527cb114d"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "7e20f5e2e27eef6d45296a18d09674d7feb29e212ad9df678a99f86cd5a3c000"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "4dc4a942c4765d4a8873bc9a3d195afce3116816987323bf71c94ce8cb0a3150"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "433cbd4f4a4225541577be98b5b5e705d8a43bf18fd75c248e0efec7ee8ece04"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "c8f3abffc66621cf906250ddde54dfdb0835592cc963b1bf9c4ce38328b5d0dc"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "87573bc819c6c7d72ca1b223c345dfad300793e6a1784326059df28f64d06333"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "650403b5f5877ecbff28c8d2a683c8389558cf5dd422a2c0f2e6e704d8dab06f"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "29f754bb899c41ae8ca244f543463a91fbe4e345f1266013a6c1151f59a9adca"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "3687710b2ce880c8e561013837b8c4065de79c0613f2f689ac984cf3f400baa0"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "6d316ae997fd3ce6faf91be79599f60b94a13ccfa342b9f9a0faaffb29ff6bae"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "957c4412b0bad8a23175cbd591faecdd2e3f6c4543125c152f79a8f07290b682"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "f0c03ee4358faab6e408254fcf5241da3b76c5528a47a89f15d10cc445407cff"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "8e27f020e931f7f85ad3acb78111923739918a6f28164d74c486bb1c9d1df03c"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "44a83ba06ec9f1bbe9e0f3eae19bd1265eda5841840b2c689ecf41481c89a70a"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "c3429140995c6127cfb516cf68e7c27f735539a6e2bf506e673ce541e63233c0"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "8f5bbb51c71653ecd32536851f975538670a3d36b2495e181fc78f57e66924ad"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "8b6ac9b5c3f0436fedc955128b85d54467bc5b75cd0c3bf1d8973696df591145"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "98e49c17dac4d94acbd396f7f5ed9c906d70096fc3f89effe31e9cd65a2dd9ff"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "b3f8a365a78a97003b7b0b9d10fc66f86f997a39f1020eaeb17688c5fbef14f4"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "245e6ed64bbfa28d7ed738454910424ca313c3afa470d9ea2b83f0ac9855b4a2"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "07d192316bfaa78158bcb1c4fc3c4c17ba903497e6ee9f2688471c926e40af5b"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "83ff54026cca0f6fa077ab88684a507199359ed7c217dfb3684cf16fc5ac4439"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "5cf1c27c575e4775b9690a84e9464bdba1e4483141456909e24e5ce288f267bd"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "872d7e3f250a8d63e024d74b758da6ce5e3bfc517c9321959c2bb23bc6c02d3f"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "7b1043f8197b8b974cb129414fe9bed21ee039a21e8f121fb5d491d87f9bc070"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "dd955c618ba6fdbc4cc6a3ca9b5f77158f292d423fd44d6240e6ef27e5fb495a"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "1a38ff02cc438ead5d726821fe3fdcfa153b677682721d39a83832bccecff9c4"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "5eed15dad38b547a357515b65c18b3593095fc3f42dfa383667670622d2bc03a"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "cf7bcc66a16ae8d069565cbf0cbf038cc02cbef6d2d397ab984a8b16605c872f"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "5ae1f5e8a0e094e4f08a5f343e094d88eba1d50906bb79ca915a3f892ced5973"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "7d6c8d8e0ebe970aa4ae2858bf20a60d201f564523175ac6518b08d6324135f8"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "3bc0c887af253ba6f3db765f412d1bbc8e7eaa4952a7a5fa0bb1d9ea950e6088"
+    },
+    {
+     "answer": {
+      "error": "attestation_source_identity",
+      "ok": false
+     },
+     "input": "3ee4c2e3b411ff60f8f2469b3de11e8696a919bc2801cc58d0994487a2f6624d"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "43d8553c23a2bada3fa8ee1e9cf237a695a7965b73e830eeb702c604fcd72a25"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "6fca6eed76d17d55e7144a30555ebab4edbe8a667e426e13174a614c67c38c7a"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "8cda3e6a98e2dc28f88f2057cf61f3dba2016f3c43dc530913d40d0082b96681"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "c089fa0a7eb01f453c6a91bb5502ef0c61a0d5ced93428138b4528b23e425227"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "15ab0a7919ec87a2a3c33aa90b7e854859554d1576a960c8abfcab817769f87c"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "0da0f6bdd4abadb1a82bf7de97466bdc76a03ca2d0e306e2756817a54598f6f4"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "414de04f944c9322b1af786477fc5afb6901218372e992c2c58a500fef25e90d"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "7de189a5a4ed00f5864bbfd7d014f267d6d02ad53a51ab14e33a130eb2407b16"
+    },
+    {
+     "answer": {
+      "error": "attestation_schema",
+      "ok": false
+     },
+     "input": "0bbbad17762b995a66bf42c1aa76a21a8921340e9e9850001ce5eef020707509"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "9a99108da462f3449b1f5f05f6595a1d3b70ad20d2e195bcf054f0b5ce480e7a"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "af73265864d549527d18208de8101f8535051fbf4ea0e833c7389ffbfa408e30"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "event": "push",
+       "fileDigests": {
+        "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+       },
+       "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "platform": "linux/amd64",
+       "ref": "refs/heads/main",
+       "repository": "owner/repo",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "runAttempt": 1,
+       "runId": 789,
+       "schemaVersion": 1,
+       "securityPassed": true,
+       "workflow": ".github/workflows/ci.yml"
+      }
+     },
+     "input": "722d40d512fe4cbf53b3106f9deb21b76843407c1f8318888ff13b7f54445a53"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "66b7b7d4cf0a03e757ad2a59eb6669017c86199e4e4c9fc56e19b88131f2e658"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "bc65d658c64c14c77c931d0c98c394172149f16b418d6ce4293c9211feda76e4"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "fe63992ef3862459265f7df4c209fe5a13dca7593d29fb66661771dd0e793644"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "7062fe0a8babf62365f94adc365f3c0b3e1749af6fec581744f744e6ac937055"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "dcd774e52c82c5ea34c0c73496b8abed9294b9c3b6b4801fe5cdb59e6c2cecfb"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "efc3c41f2df9d6207dc6e5dff96defe4bc819df1d89029d6f39e83df6f0de9f9"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "f35a8b0485e8873c9bb287f1aa3739a5840b3c138d2e459a2deb6f558f538c2d"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "bf09baba3874b187ef6c5871e02ce036eb7d93105452d18f7aca5d8e8e52f314"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "41b78cf1aeb6c61da764aaae9c6d1c4c79a2862f7d1029506d758a19e7e9e71e"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "98b675238bd81c043453b8bad4203c5317b30d6337974f8c77c31909ed637b08"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "b703086773277a89753c010e047af6f59f6a053196acb8888d94ee756f216af6"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "728aba253f9b7adbe6dc962ab0a0b4813d1b8f1e68f45cf20e75f4554b2436c6"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "f31dc958113ea7c18ba7581a351794b2894e99f2579a42c97bfe2d6e03e1d9cb"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "cb2e07f91610aa0ce65813894ee2c675097343d9339a4d46aac6f2e5dab8abfc"
+    },
+    {
+     "answer": {
+      "error": "attestation_release_policy",
+      "ok": false
+     },
+     "input": "d68f6ce314f5bd8585fee31289ae94fb50ec26432e09762dd22614eac34cc15b"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "4e0247da768b176037c65b3305c5f705857310d76fcb2344c4c08249c093886e"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+       "predicate": {
+        "event": "push",
+        "fileDigests": {
+         "image-security.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "image.tar": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "outcome.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "release.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "runtime-proof.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "sbom.spdx.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "source.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+         "vex.openvex.json": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "imageId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "platform": "linux/amd64",
+        "ref": "refs/heads/main",
+        "repository": "owner/repo",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "runAttempt": 1,
+        "runId": 789,
+        "schemaVersion": 1,
+        "securityPassed": true,
+        "workflow": ".github/workflows/ci.yml"
+       },
+       "verificationSha256": {
+        "image.tar": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "runtime-proof.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sbom.spdx.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "vex.openvex.json": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+       }
+      }
+     },
+     "input": "0c47f0dafb52a7bb05a9e526d92dc4efbda86b6e18b1412d1e22af3fa9eda027"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_shape",
+      "ok": false
+     },
+     "input": "8343abf6e7df7f1cdc63bb1c5b80ebdfe989397410eff1b2416433ad6c077d7d"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "85bdc7fc300ae8039e80ce30cc2e3c31523d908a849e7974265830d21b940a5f"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "913b42f712b18661c7c7b71f90fd4e990a5c471aa8b67bcb80b15b37c2110315"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "3b860e98ceb12f358353d928486da7b5187bb56f4e01885c2576a26b1235986e"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "874340420244e1c533f6eeeb6f911ef60e943c61bd9b91ec4aa6991c803fcc0e"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "71e5d51bb7bd89554814063f80934146dfe90058d9ba4377858385d9ab17fe00"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "f52110f4e989a6494545ebe76d498685c82dc4c1a56fe243a1e083dae23ec126"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "5933a3c0aac47ade6804ea2106c121f7b7a0241a0f2bb98725f3425c7669528d"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "889686806c2630a59e11b12dfdbce3c8cd08c9085654a480db24722ab671e968"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_shape",
+      "ok": false
+     },
+     "input": "99dcbd2d2f7b56e2c5cf6c4dc68b9c4ccb769c3f2ba68d31beb1e89ff196f27c"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "3fa91bdf5d7ad9147a19ca11cfd03d27f7d19f1994ee21e36dcdccfdf19697f5"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "7916abc44a31e5a178a252acddffeb4ff0b2c2cb0d0d28a63db2fc1cd75924cc"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "cd6d298a80280cf0d3fd5b9554e298596fa5f030666182753985151e9276cccb"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "a712347aa692e08e859221db1537c34a6aa9755b3624fb5a346c9883d7a7d4d1"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "cb77c4579aab2ba916db5b85101d653addff10ee39ed9aa08db56bb32975a5d3"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "1180cd7fa2f98f913328a23a3631f16d3af164823861687ce5105ea558724846"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "9a16491bc2e8ebc94a010a77ee8a9d391c3412a4c89483a6ef9b9bdd15ee8dfe"
+    },
+    {
+     "answer": {
+      "error": "attestation_predicate_shape",
+      "ok": false
+     },
+     "input": "e13980cbc58f19268f4841291f06ff6b4a606bbf371d7d21998835f268dd5dbb"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_shape",
+      "ok": false
+     },
+     "input": "aced682515632eb96a1f478d30ff963d690f17eb24eba6000c47145409c6dad1"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "3afb12426bccc4427a174d8b350b88bfca968fa3a5c14d3afe5cec85f7c5952a"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "3b9d5de2009d0f9dbb1710bbda9696d4efae5270d1393dfd305f148349c46210"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "2cdae9d9d5c0a4eb2d534cf3ece19451e01aab059bc867af84d7cc85ac8e3ef4"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "44987c56275ce669e32907687f986ff7157a56557cd52e80ddaf789eff3fa891"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "5968fab37068fe8cd5e6ad698c848f8bd7a2442b47e49d1097291f8c53713d5e"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "d5ad63d749d3e26d0a3db76af2e769144e1b4ee41161042437a4c82e3eac4f05"
+    },
+    {
+     "answer": {
+      "error": "expected_object",
+      "ok": false
+     },
+     "input": "3296c945ce3f3ce078cbae43720080077c18e322bea30fd8d03d194237f59abe"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "93dffbc970b1837167954fb2bcc0e62e9a2be662c79f49956263b0259974a5d9"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_shape",
+      "ok": false
+     },
+     "input": "8d3f37b31e4c9682203112486a3910886eb33334c392a7d7e6cef79b3956e59b"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "a450c39a7f4d5fdb20d4ba6766bbe602ba59f505b4b9c84aef7ce02dc5e1da33"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "f344bcad1b3551504452e61488174ccb85178fb516198b975ee4244c95e25fa4"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "f826cd6420896592a5053ed7fa18ad793b4427c9f229de11a4f0463c9292198d"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "d766dce3c5d32a4547e280f32822c827379ca24b3e627cdfbab775698dcd21ff"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "86eef7d1cec2a8f958aace7e97d0b2a93d4d36095542193f8c0b9383c79188a8"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "02a36b1d5ffc43407a6cf67b869af948e8111d021e5e338aa667b0983a48e5da"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "194e3030024456ed88aa5467e8a93a253bbc6f8a0b3ce47d1b06ed0de0ec75f6"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "88e18f557485ce9dc3ed3075098f85c47d1a6e313c1c86793b8c4e84a7e8a958"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "7782782127bedb9fc733e806d523e5724bbd5c50f3c37b629151aa5d6a71505d"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "3fb0f006316a71d41d2edcfe1f573b019ef675025248ae30d0ddda7c131c4b4a"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "46d54fd93333ef8e34f3094146994565a1b75160d8bc4a3deaecf43bddef63e3"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "03a3c28bcc0f23a017216b12e40d97c9d4f1e1243730a879b017d01ab3340f37"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "1c0f8993da759ca6cd6363d6f3c6a063be42e7655159ff266ef73ba608c3d30e"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "277ac00f8edc181485c2976c3899ef231e92ec48147576ad4209f4ce2cbd1b47"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "1ce91c31efc11d57c583c754292affc5a59bde5cf3537140ebf3cce206fb233d"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "4e487d42152c78f882ffcc31ac6383ab951e80af13d62d7e612705c822b91906"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "49b24fba29760aad55d722eefdde37632e9776de62cbf75e1bcd4d5a063d4574"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "60350bf41af8f280fca850545043511b16dd777974106d9e33cd5368c370b64a"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "44744cc84c6f28f1c6fe5cca4cac218b82a7bc27540a295760d314d486b9a610"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "912432bed1f88e133db5b4ccafe51ecc01362ec4a59f12e28ecddb1bf87d31bd"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "9e97341d595c02910ffd7eb0275019f392660edd291112ff824774d58496d462"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "e590e9fa65eea1656ed01b1f8beac52ecc7c80f1514c1300d3befcadd49f74ed"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "ba4feb87661d908f740c4069fff1abc4cf755d1ffd51e55ebdccccd0248d5b11"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "97188bcaa7e2a5214400733b070182c5589355b93474b2a520f57d14393e0972"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "e88ac51083c4c940010990869164fb0fa26235f0ef8f1eb72e7ec8f77df1b904"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "0355839ef20ed3c809fe3419b76cf86d9a277adb80551e50637db92cc297c534"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "14788698984437e0e33f4be83ffd6d2e998a58ec3f66627b3ea96e0ead424bcd"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "b927be76d24b61fb7ba4c3005336aef48471da32c01d4645fc9f351814690459"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "0078e1b74bc7e45b470237c4794e94a92aae6c578c8d2341d93e955ea9efcc59"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "915eed6a2dd475eb6a42b9ac9d400bbf06392f741f61e581cd516d81781fb785"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "a4ad53cf9b53967854dda6818dff5da4761cd9f55ed81c86f894531121097909"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "216dff5f3884ada341f7e8077ec6d92ab55605e271f1c7a110dec72b4fcb220f"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "cd50d3f652d1c5177b227d9e6211a3af0f54217330d224bca497d40abbb85a9a"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "4deed9e9c7263944d9265be7330d3eb6f8d4881347dcdadb99b3d8c0c0103520"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "74d3a15a982ab03e0b5c59f5de5a218950266bfedfe52b2297968802f5d2e62d"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "9f3d7d428205f6d9cd9e67f733c478fc7768ac064b29e76acd508a7af90ebca9"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "330e51763f027b05e1fa4b0fe5ab4e66384ea76b7c8f6ecdd42cef1dc26f5e24"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "320ee79cf32d152c2d98b3001fc4aeedc983714514483fdff178f7c4de3ceacf"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "70f8d4e934a5512f95a5c0795c5260abfff3c57654d948401aa794d56f492a7b"
+    },
+    {
+     "answer": {
+      "error": "attestation_file_digests",
+      "ok": false
+     },
+     "input": "afa55b3c7531eacc1cf8187ba281b48322373a308e0e27c2508956073eccc170"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "d0e5a665f5f42daa6b3fb906c0a25874a773d703bff1649b35f9728b9ee9644b"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "8f9526db826701d155a7dccf23eef58dab6a4dfaeac07d8763f3e512bb320264"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "ce9bd10d5b9e94a0f60356c21bdbd21722f3b0944175c5ae6e5a9af79f77d734"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "4aec4cab7aeef81ce89b78c14f758c7d456b07dabcc4f7f60733d50eea772999"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "34618860267ba940accd305d534c16e8faa9967155bc4fa13eb94c989f04f955"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "bd787b0b22aa6e9c5f6e0113d92f00c1e98f6bad036aaf93a04d349c5e5136e6"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "abfb4279870bf7e60a35e6aeae091f4c3c35016fe6cd294df1cd66288ed31e80"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "95b403d85562cfee4cbd82b976a29520db91c8bef4b72a25cd68a18294c9ea9e"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "3a017e8b45d2d5717bb6e650078e4546197b01d415e44bb2e9c0c478f012a298"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "de1633c06d71b838e2ceeb37b772f07f1f5ef6b0f964ac518518f551a6604088"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "ea73a70b5dc3c694d121806ebb1bef3c6bf6f8341ca28deac511948cad847b78"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "176a4ba2a3a851be0960f5d97fa2764852638c4d14cf1376844c042231f9eef7"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "73311dae180d1dd5f945969bae0aee6ceda48c36bc65addbb06fae663e2afdc5"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "4cb46fda48d8d1a3dca73d312c6e544d2a6e09ceaa042b2145fdc3dd80b2a0ec"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "a1cb2d8ffefc26c6bb4ada675e3ff23c12834a7ffed47708676ebcbc6d6072bd"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "6e69a9390f944e61a4481aad6fc18b903455f03b64a4feffc4bd603afed45775"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "e9f4ab314e05d71743535c7f2e2d47041774efb7d3ff5ef140359dff749a29ae"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "6796736bc75c1889e676ab4a1036e4b441aa4602752b0306ebb40fc0ada82303"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "df6aed5f705fd9fcaf15c969e1565a1858fcba764100fd375a25b32971eba618"
+    },
+    {
+     "answer": {
+      "error": "attestation_proof_digests",
+      "ok": false
+     },
+     "input": "d3d4751bb1173e5aac155b0a973b356ab66f448b1947d505eb2e528066008e35"
+    }
+   ],
+   "envelope": "f370732e0e29bfb2de4407c66c60c923a4d8234c5acebd60655de1ac3cd06606",
+   "selection": "95ca6df549f60e82b999ba0666f92cf5ef3fc45f5d29b901b1bc61705ed3c5a0"
+  },
+  "receipt_consistency_and_redaction_match_the_recorded_controller_projection": {
+   "cases": [
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "6dcbcaf3d9092ceb094b74c7faa6044ad1bf33c06000a207a8b03ec8a45a2c80"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "06d7b417e456f60027fc7b5c9435ee34239e523dc169d55fdd3713ac13181bc0"
+    },
+    {
+     "answer": {
+      "error": "receiver_success_inconsistent",
+      "ok": false
+     },
+     "input": "64079d3b13f02c676c337628f45957ef0594dcc5d4d1b096408a64f2b4e0a322"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "ad77b1ed6af9a146073e7b8a5460870159f397dc0f078dc482e7e10cc176f700"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "65c4dd054b98a9d0630b7dc6dcd8a37d2d107b460f31a05008f3c4c2c8a1b4ac"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "27d36c78b1a73d3da46b5085eafad6aab2c3a35e5520bd3dd95e5a1baedbaa0f"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "e9fbae838a42bd16312b8c654cb81bd88715e977354ecb23bf79db1e98639530"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "de6de98116dbeafa5815e96f354fe2539924bf77a125459d1b25f9ef285a0ba4"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "83813eae9db9d4ae8b18f8ed7b13926b0554142f832c698efe46b37412e744db"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "743f39c4dc2eb073c550d2e864ed9c4d6b05138e3ab529e789f0bc341c8c7dbe"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "4fdaea99095d638f317219aeda00ae31c3f4620fbb28712b8ae96bdf8b3a40f7"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "e138dae0551c168e3a6c334d7b87e23b3d5d6ebdfe68dbeb8408a5db4714d978"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "a12146c3dcaffd4d0e4fb31922f70cd5371c9dff80a85e43d769121c19973f5e"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "9286648e928bc0986b01052fe66ee6e62205b169e672bd44df0a9259bb832e48"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "6252500f5d104d88d699f198f13eda0a6fe742e349e9c934a9d185e745fbc729"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "ee86b7b02add3ccf6d40d2936c79cbfd30ec50cf674d42613e5d29fa91104069"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "68b35b7a6ab8227479dc9e05724f6a943d1947e2571c6cd1e99d04345ff07125"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "532927ddba8ed332f98a3b46d29bc4ba99a339c1cdfa152927242cfd5896db6c"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "abf3f6699726f89b8555f8de695361e306f4e725a48c956f7ad2eb7251aae85d"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "9d5329f19bf55315e08a481575301a5286334128fa718bcb043ef6b6a6483f71"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "d7a52a7b3eeaaaed0499397c54eb3ff455cbe01b33c5bccc821a1f32063ce1c5"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "b3be9ac14abb38143703dde29a96608026480fac2119ea8729ab167bb7fbb0ec"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "7357addb3d6f269e6c9d138e78e46074b7e6bbbb90387fe804f8774c62a06405"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "3b86964f376bb9d76c333f950626e8453d966fad9a997bb03bdb0874f6c61e0e"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "139563ca8cebc2ea4348b0f80fcd950d9f288adea6f235c9ec1cffd4a0135475"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "06c87977f14b4158db95155ba4870d0ba5c41d22f350c8d0a73153e03d4339ef"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "baf62eec77dc7fb4795f385ec3cc636bce584bb6ff71d4d656aef2650e5481ff"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "c31946a8b934dabacc070d4604ba966bc771c74a9242b1e82c7c197caa79d10a"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "ec32879395513b440f6662015b6a4b2aa6d3d2aa405c75da09dbfff8c303cfc7"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "4b0430c9503dd5f747568c1753cee739ab10abf9a44a21ec9c85bb4df284f014"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "24a4ecbe92a66f6ac907b0e9fe1f4884f03bfad0f34d2704655916ec0cfb3dbb"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "f403e858c9bd52b7164740ab7b00f82b35bb05313543f3e5bcc2ce505251de4c"
+    },
+    {
+     "answer": {
+      "error": "receiver_success_inconsistent",
+      "ok": false
+     },
+     "input": "31b99731f660f60c84ecebce53f6aa7b1c4e4c496e40f5eb483ed13a56e5348b"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "1380a8ad15b2f94e6840afcfcd02f41a7483b44df607e10b5a1cb0f392ba794d"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "359ca043c7fb16904f0896bfea605f8db7dab7fee54cccf40e49a32dd4559cba"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "b5db8527a65eff7dc4bcecf615dc0206444074f9ef99e2987f04c61ef1114b5a"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "61bcc7cdef821f347f5395a9ed989a48c47dfbcdd0d68d532a5c5a33120496c1"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "390607756f617c9d878187440b2b9720a9ddb05b0411cdebcbfb785fa4e7f20e"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "a679d981376ba60f564c9ec19a3c3dfaa83333480003b1a0dfe6759d4027bb4e"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "f0ddd05bd0d32ff81fa159505877063a6310205fcd8f8e31bb97288f9c88ef71"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "89b6a1cc06c4c1c3e43272c7d4012480d2d52cbc3922aed876a8550d4ca8d7fa"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 0,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "0afac52f0f0a43b00eb9aa40ae284a03579449f7b3d3cf88050cc241d87230e6"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.0,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "4035936e4b07de6af1c0fd71e03c676d0dd5fbd8cc10273131bedfc24103efd9"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "6476a33493bcbcbd7294dcbec18b764d0b0665ce0337d83456f186de9ca66896"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "cf9020e576d737b9a6d5894ed5a47fe679a810aee378594386989b8866a7ea0f"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "42aac1a9ef24469dc1727d57007d4242092f005c85b2a2ca2fb1277997a640c3"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "2fdafcc8d4daf8851aa73eb3165bdba23975972f8435a7d677e6a895016d9d0a"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "8b1a16d78f0a54b5633cdd394fdbfeafaaddcc52c54a529aad2f3316e99e99fc"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "e6af6d746171a22adda38bc0291114ddc7f94236ee2950421b9b2b4fd0584aea"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "132ffccdfce7588c072bd6bd5ce7b66ac7b7dbf1aca15f79d385108b75468c50"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "76cda2c5f38c0b18fddd2042d3168e6592638b5c00887da7676570299c2cfc7f"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "33520e308f3112151f81667d9c779dcec15fbe5ebf842805ec304340992dfed6"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "a14a9b4097bd2848e492c4fada6e303ba70489b67e25e71e1cbf85df1cbbfe0a"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "6cd34e2cbe5c9396db95b0bead077b94deeaaa2263da9efdd4a46561cfd14d84"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "791a1ffbd7a8c6f5c494be1457ee161e2cc4bcc877a240c207caa4bde7765373"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "40ce8f69a1b4017e521d6b02f4a83715fb48883697002d27dee40fcaa4d800b6"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "6dcbcaf3d9092ceb094b74c7faa6044ad1bf33c06000a207a8b03ec8a45a2c80"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "324cce32a251e1d3eceaf20b1ce72c697695fe17798d5c0af43dfc006f5c0ea2"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "0f40a455a0667773fcd858a7b98c9b2adf7190e9aa8aa75b053965a48cf8d7ea"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "e8ca79375d8019e484eb91e78b5006e92740f51a9ec664995bf710661382a733"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "985774ff596a35cfb053c2bd8e8dc3f665b4ec283590d5890dc001d95341754a"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "09bc320f367e5332d240fe7506251934fa5f859fed40e3c479dacfe5bd1796ea"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "0fc75682b3ba94860f8ea830b73657aa933b61ff380ef6431c31d26b904e6684"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_invalid",
+      "ok": false
+     },
+     "input": "1aa328a79ccf2f19af5b14839cb37b01d53b041f6dd267b3de80128e9ba7d03a"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "0952c4bf63e1b8e8140cbfcd57b021638d739b02f902288f0058241dc95a2fbd"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "6dd9519a9c6afad234efcedce976f7b2599f9d545d1de02be2a3c353744f7d86"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "6dcbcaf3d9092ceb094b74c7faa6044ad1bf33c06000a207a8b03ec8a45a2c80"
+    },
+    {
+     "answer": {
+      "error": "receiver_success_inconsistent",
+      "ok": false
+     },
+     "input": "64f1f84fb5c8853eed6d9395df646685ffa69f351b663b929f0a35fc74bdab85"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "eea08f6c83481c104842a232c6edae77f426be541bc754e518534935320469ab"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "13ade0785716f82fd9f2f6cd85cdc54418a9d714423c7bebe93943ddc5592bef"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "f06e179e954f2e9f8663f977cb3e276f55b9740ac5390c06572895c7ef6df70f"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "9660b5c393b20ef4aa1235b85dbe2650b1dce4cccee97ad088bde000929193fe"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "cd35eb51c22283a1f8d759440a38aac0870ce7270104d72ec1cbf3fb4b91c4bf"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "a7829371648715703277a23fab209a6991ac8e970dd4a6ebf312bb928bd7d2f9"
+    },
+    {
+     "answer": {
+      "error": "receiver_success_inconsistent",
+      "ok": false
+     },
+     "input": "113e5149d8aef284e7f939adfa64f202a6708ca0468d0683a6b640dbf680464d"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "d9e6ac16efe163bb8265b84b266ecb4256b8bf35b405b0a893f2fd4dba88ce0e"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "d63a8f2ce3452efcfc96d80d74e8febacecc696ac8f23cc220288cd62b84772c"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "e5fb1144dc71f3885ed56c1b654b32f3dab8066577adf8739665e535f1bd73f3"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "f0bee7a9a6cf02a1e033f7b2f7ee113d9696598dfdae586f6174ca90311595df"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "a8f7dbdbfd42e46ca37578a7e5b43261ccf84cb4b5a0026720cc226d302c5748"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "0f95ac114fbb68653c90ae9ac0b20658c773212d663757da96ae34f91ffe2af4"
+    },
+    {
+     "answer": {
+      "error": "receiver_digest_invalid",
+      "ok": false
+     },
+     "input": "37cfb152bfbfbbd2dafe0eb91d7755cdb44c40fb4d774d0046699a321487c1f3"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "556e5edcda7d570924a154d6f4d8d96921a80be2f322421979758d229db6c55e"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "72fa3bbf7bf518498b5dc988ea834a2098a9066b8c42d6f5172a68d523226efc"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "6dcbcaf3d9092ceb094b74c7faa6044ad1bf33c06000a207a8b03ec8a45a2c80"
+    },
+    {
+     "answer": {
+      "error": "receiver_failure_inconsistent",
+      "ok": false
+     },
+     "input": "05de7c05ed2c440b2f3e4fc05f90d253d5b10f6ad2e83d7d3159b351d5c9a08b"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "482a5b65d82aefd415fa818667feedb47471574d1985fb77287f317a4c749141"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "032f1d78196e0e8302a25166772a6cf10eb57f98a90e0ffd01c1d7bf7ab51456"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "26a0fb13cbe30c7d1b2bf188205cdeb229186bd93c52f063919d8301f6705f29"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "539b465a3fd962c0ddd623f6b7c635a65271bd193f7788aaaf83beffd4495923"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "a758f73f021f42095f0bca293dd15564e1bb3f711a86b09ca6919ed5030a3d8a"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "75d18474626ac1ad1d5e9c06df4497cb274a0c661e2037d3e0d9339d8e26fd3e"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "497baa4418e328eecbfce15831bb37d6a09b5b89706ebffdcb9c9408546e4972"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "08f87f64cbd963dd4a1413ce9633c0108fab94cff1431ef2ba030bf4bf676052"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "662047238fc88aa85c38f1f89388fb46134b3c0ac0b9eb17079ade6c1d6889e6"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "76020a44aded74d6743bd5d09f0c15ad7da22f74bdd40d2df44120b108972d8d"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "a13d7cabe987b7c115e19c222f34bbf067aeeb97fcc1ae37934abf2d72d7a0a8"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "44ccfd96cbfa09a90630f1b4a8b3e92b49db9e8a0c330bcce3e548b570aeeef4"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "b0d385508090feeb686bb7e71bc5cc1bfa4854cbf4e91d43d550c5b64f8c2f6d"
+    },
+    {
+     "answer": {
+      "error": "receiver_phase_invalid",
+      "ok": false
+     },
+     "input": "43de731854a95bd88aea819ec723a1dfc644114038b884909057a4a5db90e213"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "ccff04864897ecf0ece101fa9ff0a6d3e40fc13ccb7e4609e392f5c734aaec24"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "8788a23de7fbbaf175ef5d89b52d34db942583db6376efd2be3ad508b4374827"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "2e52f7327fda33b451036175be1b66966990ba6fff6de5926872867634eab4ab"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "c3224daa13a5851e0e98c1647367b3ce9d52fb401dd8228541d9b311700c6ece"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "8320e5b2f5d67fe02e503906b15253d965a1214ec27065f98e08d487c751155e"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "c9626fd5fcbf1200470fb754f30ff7ced96840e37ddd2e667643873943671da8"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "a5405023bfa95252686c756603c16f485e26e50a7de79720d8caafe768b80499"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "a6a4373a1e3c8647b3c34a4a85cebb5cf47ceff86b75a540c4246abf40a35683"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "d4f03fcaaff26da8d4a2d7b9319f3a49182906e0c4ae7a6fb7fa1e6770bad73d"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "2a441f999c47cb97f5bb6f42146a9b50181347778531b9bf1c2d4d4b376ff591"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "07a3de87c7f4f1aa77ed3a26e326d5136ea585e56eef0ab629aa184483e6d992"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "4e1b6171f1d7363c2879018c6aaa2f247dbae9fff7c2b4a3c2be2e31c8d12e50"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "c1259038670dea64af9db7be9f9769eb9c929f4a3454bb6cbf81c777988a3abd"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "9f48404c3786f0ecc102f2688911104606598c465f403546ef3c0cd143ba7e6b"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "06d1de3fdfad6e9a8b1b841ea64985fb471b884131144b922390daa279a24b9b"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "4bddb98b170cacf3862e16ef6eaacee4946b3394716a373ed4b7d92a9cbde09b"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "92c45bb5bb4ea2e29be97515f513d9856d2083cfdca4db70fd180ebcc0474179"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "5ebe478ece36599e2dd36999322572a4cb36a93b2662c861db7d2e2e3a7daa7e"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "a15615461bb804d094b61ebd5756c30083501521084efffcba45beadc6765d4c"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "17706046f7fd327e69f9987ebc7d95fedcfd664996dcb9629c20a963d1aca0f4"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "6dcbcaf3d9092ceb094b74c7faa6044ad1bf33c06000a207a8b03ec8a45a2c80"
+    },
+    {
+     "answer": {
+      "error": "receiver_success_inconsistent",
+      "ok": false
+     },
+     "input": "220a14079b236e88ce45c55c26c548472f886c96b2e76498ccc346d74eb0e43c"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "621831baf720faa7a2f11f04d8a6c7e10e8d947326f618da9b05284caa174e3b"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "2c0a68421ea4a551b8f71890fe5bc33effa037c3425a782a4296ef1bf6826d29"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "4b09de075501b415d1737dc1fa9ba346b4c84163d03ea9ff7d5bd18fa941b174"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "76071fef229dbb2ef68f7583beb5d6358fc365f5b80a331a6525456e1b4c8d05"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "3d83f75783527f37e2741d4e678ae32f0b4626261f37193ee0adff822b30b8cc"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "7f6bf8213e19fc8c1e1b74e175a3fdc276d3799fdab80957ebf57f2df461d5ec"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "5003b18e7f2732fd70e07f8fad6398ef5143ba27aa107e9f29906620e03c1e18"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "5e3316adb58bcf8558cadee81b31e48119270f0f9ce4f3af1b52c383836cc967"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "8de754f96eb0c5b6d4d17b9d03237f4fec3db6a3ab184056200eb6e609bfbd30"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "d389a9bfd3acf68a2e4f9d38b72699f110fc7c46c159a20f8a959c5cf19a5b62"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "b9b11e6ad288067a1e22d428a08bedfa5309201bab24413eca6ebfb796283bd6"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "a9a49e5422b2609d4c0cc221d0956899e13a74ffade9bc9d9abd25e7fdddd36f"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "a0e3ca73055f61949365b9a85b35298851a5b9350534a39aa30a3803048b92af"
+    },
+    {
+     "answer": {
+      "error": "receiver_receipt_invalid",
+      "ok": false
+     },
+     "input": "f0704fa461ed01983f02cdf4019804962f01798ad0aab3b4955e2bafd9e07688"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "579f31a42d275b87da17bee7f699b9436f83025746412442bc3a8b6962374754"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "27ca02c3ef23dfe746a6d26bf38a41304088a9238e26be8ad77f21e2af3c0920"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "56295cd8d3ff03aa36de993ecc4dd64760040234784e96c8b6af3c9ab44f3a44"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "3f435dfe063174c99702ccd09ee417e9560208284696a7a9032c1f59946adb09"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "fed6e8244e0d402fbbf2e201b36468b452d28cbe9e68ff0bf45dae871bcfee11"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "ab090f582820350007b341576f30fe7ef78ff4bea74e61abaf8d8b3146b185d6"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "bbfade902244936685668ad14f1ef96266035dd88d0f34db499160e1ad6927ce"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "1c16d7bff25d1a2b26cbadfcdaaa0746f3dc90b7383842b66c0dcd4e595b17e7"
+    },
+    {
+     "answer": {
+      "error": "receiver_identity_mismatch",
+      "ok": false
+     },
+     "input": "fe96205d78d039229a78852aef0c27edb382ef5929fad50db5514165e5abb183"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "f12962e4d31b290f29dd2e61094d5d97d887a86691c108e3b446ab810f6a5170"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": -0.0,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "5a258113bb5667af616664766a2d0c4f047815a22c2802a9eafd5e9c89525cbe"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 330,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "9938f365191f6711824cf47703bba30bcc826548203b4d8c8b0e83b4facd64a4"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 100,
+       "elapsedSeconds": 330.0,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": null,
+       "finalized": true,
+       "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "passed": true,
+       "phase": "complete",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": true,
+       "status": "complete",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "44e8c578ac08c9a38e0c986f8b692f85dd62c77c33cfb36641ef0731522f67a3"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "0b766adbc32d4a9ba14fb702a4cb6fe5d8cbd5dbba093cb4851e7b690353b6a3"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "2868b82af9749e3bb1b93d26880efe5cba254f5d09a8478a34d10c7c77a867e1"
+    },
+    {
+     "answer": {
+      "error": "receiver_timing_invalid",
+      "ok": false
+     },
+     "input": "f0ddd05bd0d32ff81fa159505877063a6310205fcd8f8e31bb97288f9c88ef71"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "b303a859647817680184a07aec6dbf342be861de8c8c3d33cfd4df07a9448b49"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "b4c4bb97163a306c718aa2933c48ceb40f53d1f57098d36c621c0f50b7c5ec4e"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "567e52e407b798102ec123eb3a9bd4da586efb51e1071cfa11316148b54d2426"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "0041f5baaf84cf98dc0885e28fff51b625a742facaaa0f0e5ad8433c1c804e13"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "efa6f7d956f9cf4e84528dc360783ad3d9745861790006aae2cde0c31b4de66b"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": null,
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 0,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": "download_size_mismatch",
+       "finalized": false,
+       "manifestSha256": null,
+       "passed": false,
+       "phase": "failed",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": false,
+       "status": "failed",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "2cc6fd5fd75e597c925585c16d2111c336bc4120b392fc44df703d6983b45ceb"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "e2c44b7de3a8f566ced98ae7472e2ac0f8105cd48571a6ec057245c287a50e09"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "746e890b7b3be49c52961e3c178a1d7027d69d65959d8c491c33459fa0da4663"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "2f0358489c7da0196c70ecbf4e02b9fd5e0c8c74c178fcd6db35f20859504ec2"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "e11a023799cf425cb6f1d38f36db1a0723173a28d8bb05fba716905ead518eaf"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": null,
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 0,
+       "elapsedSeconds": 1.25,
+       "evidence": null,
+       "failureClass": "download_size_mismatch",
+       "finalized": false,
+       "manifestSha256": null,
+       "passed": false,
+       "phase": "preflight",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": false,
+       "status": "failed",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "98e7370d040779dd6bb6d7d3b1312e1f7c346061ae55be48f9ed76e7a6dba74a"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "e4a961be4dc2792f79e204649f6c2f4376e29d62a0558e62267cc4869988938e"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "c24e4fb149fcb47fd7c5c2316a6d743a5f7bf9b93d75aa1c396761387d513431"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "16fb85f48b3229f100fe7a405eb642bd3dff1d74c5ca7b9908261ca1363cad90"
+    },
+    {
+     "answer": {
+      "error": "receiver_evidence_invalid",
+      "ok": false
+     },
+     "input": "b67f6211cef96f6d3d11e2442be3777a87a0a686ddb64e76e45ce33c3449f711"
+    },
+    {
+     "answer": {
+      "ok": true,
+      "value": {
+       "archiveSha256": null,
+       "artifactId": 123,
+       "artifactZipBytes": 100,
+       "downloadedBytes": 0,
+       "elapsedSeconds": 1.25,
+       "evidence": "/srv/simplestchat-public/releases/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/download.fixture",
+       "failureClass": "download_size_mismatch",
+       "finalized": false,
+       "manifestSha256": null,
+       "passed": false,
+       "phase": "preflight",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schemaVersion": 1,
+       "settled": false,
+       "status": "failed",
+       "zipSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+     },
+     "input": "a647ccd9c24366bf92d82bde304e587fcc4c1e5d07180c75d713e1864087ffee"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "c86ab090c1c5aa96be0887c93907973739314aa4dab2ea658938d300b53476c5"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "8df378a7295ef8ab8711ee10f1f2b7879292604f5e7d53e34051dff87c162da3"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "9c821c9cf4b125280e16fbafe8ad000b17bf2182eec64af2721b30f0447e0ac4"
+    },
+    {
+     "answer": {
+      "error": "receiver_byte_count_invalid",
+      "ok": false
+     },
+     "input": "c4f43d7296b0823b4f4ab2958c1a3da69d9e84f85703fc9dc739a885faffbdbb"
+    }
+   ],
+   "envelope": "f370732e0e29bfb2de4407c66c60c923a4d8234c5acebd60655de1ac3cd06606",
+   "selection": "95ca6df549f60e82b999ba0666f92cf5ef3fc45f5d29b901b1bc61705ed3c5a0"
+  }
+ }
+}

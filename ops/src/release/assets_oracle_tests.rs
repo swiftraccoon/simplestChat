@@ -1,156 +1,206 @@
-//! The actual unchanged Python module executes against a second owned tree.
-//! Only filesystem semantics are compared; no installed runtime is invoked.
+//! The retained Python store and its browser command, replayed from `recorded_assets.json`
+//! against this store in a second owned tree. Only filesystem semantics are compared; no
+//! installed runtime or interpreter is invoked.
 use super::{
     tests::{Fixture, capture, mode, revision},
     *,
 };
+use crate::test_support::{Recording, tally};
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeMap,
     fs,
-    os::unix::fs::{MetadataExt, symlink},
+    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
     path::Path,
-    process::Command,
 };
 
-const PYTHON: &str = r#"
-import hashlib,json,os,pathlib,stat,sys
-source=pathlib.Path(sys.argv[1]);request=json.loads(sys.argv[2])
-for name,digest in request['sources'].items():
- assert hashlib.sha256((source/name).read_bytes()).hexdigest()==digest
-sys.path.insert(0,str(source));import release_assets as a
-root=pathlib.Path(request['root']);owner=os.geteuid()
-def tree():
- out=[];inodes={}
- if not root.exists():return out
- for path in [root]+sorted(root.rglob('*')):
-  m=path.lstat();key=(m.st_dev,m.st_ino)
-  kind='directory' if stat.S_ISDIR(m.st_mode) else 'link' if stat.S_ISLNK(m.st_mode) else 'file'
-  data=os.readlink(path) if kind=='link' else path.read_bytes().hex() if kind=='file' else ''
-  if key not in inodes:inodes[key]=len(inodes)
-  out.append(['' if path==root else str(path.relative_to(root)),kind,data,stat.S_IMODE(m.st_mode),m.st_nlink,inodes[key]])
- return out
-rows=[]
-for op in request['operations']:
- try:
-  if op['action']=='initialize':result=a.initialize(root,owner=owner)
-  elif op['action']=='publish':
-   captures={rev:{name:bytes.fromhex(data) for name,data in files} for rev,files in op['captures']}
-   result=a.publish(root,captures,op['now'],owner=owner)
-  elif op['action']=='prune':result=a.prune(root,op['now'],owner=owner)
-  elif op['action']=='select':result=a.select_version(root,op['revision'],owner=owner)
-  elif op['action']=='mode':(root/op['path']).chmod(op['mode']);result=None
-  elif op['action']=='version-link':
-   path=root/'public/app-version.json';path.unlink();os.link(root/op['path'],path);result=None
-  elif op['action']=='schema':
-   index=root/'index.json';old=index.read_bytes();end=old.index(b',')
-   new=b'{"schemaVersion":'+op['value'].encode()+old[end:]
-   new=new.replace(b'"createdAt":0',b'"createdAt":'+op.get('created','0').encode())
-   before='union-'+hashlib.sha256(old).hexdigest();after='union-'+hashlib.sha256(new).hexdigest()
-   (root/before).rename(root/after);(root/'public/assets').unlink();(root/'public/assets').symlink_to('../'+after)
-   index.write_bytes(new);result=None
-  else:raise AssertionError('unknown fixture operation')
-  rows.append({'passed':True,'result':result,'tree':tree()})
- except (OSError,ValueError) as error:
-  rows.append({'passed':False,'tree':tree()})
-print(json.dumps(rows,separators=(',',':')))
-"#;
-fn sources() -> Value {
-    json!({
-        "release_assets.py":"314c91956f13e72a867ac624c8027bf9c5fff740e953255dd5fbf2d87b6e72f2",
-        "release_json.py":"0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97",
-        "browser_assets.py":"6fd40b970008481a27660e3a5389ce942adab98cf093143055fa27ddbf72e12d",
-        "release_public.py":"07cb668c0c7dedde1d4bcc94bb20ee98a6e16b5127e05a93b32701b547e2c20e",
-    })
+/// What the retained store and browser command did in each state these tests put them in:
+/// exit status, output and the tree left for the command, each operation's result and tree
+/// for the store. `comment` in the recording says how it was made.
+const RECORDED: &str = include_str!("recorded_assets.json");
+const COMMAND: &str = "browser_command_receipts_and_trees_match_the_recorded_python_command";
+const JOURNALS: &str =
+    "journal_text_gates_refuse_bom_and_wide_encodings_for_both_journals_as_recorded";
+const STORE: &str = "store_matches_the_recorded_python_lifecycle_and_hardlink_graph";
+fn recording() -> Recording {
+    Recording::new(RECORDED, &[COMMAND, JOURNALS, STORE])
 }
-const BROWSER: &str = r#"
-import hashlib,json,os,pathlib,sys
-source=pathlib.Path(sys.argv[1]);request=json.loads(sys.argv[2])
-for name,digest in request['sources'].items():
- assert hashlib.sha256((source/name).read_bytes()).hexdigest()==digest
-sys.path.insert(0,str(source));import browser_assets as b;import release_public as p
-fixture=pathlib.Path(request['root']);owner=os.geteuid()
-p.ROOT=fixture/'srv/simplestchat-public';p.CONFIG=fixture/'etc/simplestchat-public';p.WORK=fixture/'run/simplestchat-bench'
-p.ROOT_UID=owner;b.ROOT=p.ROOT;b.ROOT_UID=owner;b.time.time=lambda:100
-sys.argv=['browser_assets',request['action']]
-raise SystemExit(b.main())
-"#;
-fn browser(fixture: &Fixture, action: &str) -> std::process::Output {
-    Command::new("python3")
-        .args(["-c", BROWSER])
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("ansible/files"))
-        .arg(json!({"root":fixture.path,"action":action,"sources":sources()}).to_string())
-        .output()
-        .unwrap()
+/// The receipt the browser command prints when another process holds the workload lock.
+const BUSY: &str = "{\"passed\":true,\"busy\":true,\"changed\":false}\n";
+
+/// A tree without the two facts its filesystem decides rather than the store: a link's mode
+/// and a directory's link count. Linux reports every link as 0777 and counts a directory's
+/// subdirectories; macOS, where the recording was made, applies the umask to links and counts
+/// every entry. The paths, kinds, bytes, other modes and the hard-link graph remain.
+fn portable(tree: &Value) -> Value {
+    let mut rows = tree.as_array().unwrap().clone();
+    for row in &mut rows {
+        match row[1].as_str().unwrap() {
+            "link" => row[3] = Value::Null,
+            "directory" => row[4] = Value::Null,
+            _ => {}
+        }
+    }
+    Value::Array(rows)
 }
-#[test]
-fn actual_python_browser_command_uses_the_same_flock_and_receipts() {
-    let fixture = Fixture::new();
-    let held = fixture.guard();
-    let output = browser(&fixture, "initialize");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+/// Writes the recorded store tree `rows` at `root`: directories, file bytes, links and hard
+/// links, then every recorded file and directory mode, deepest first.
+fn materialize(rows: &Value, root: &Path) {
+    let mut first = BTreeMap::new();
+    let mut modes = vec![];
+    for row in rows.as_array().unwrap() {
+        let name = row[0].as_str().unwrap();
+        let path = if name.is_empty() {
+            root.to_path_buf()
+        } else {
+            root.join(name)
+        };
+        let data = row[2].as_str().unwrap();
+        match row[1].as_str().unwrap() {
+            "directory" => fs::create_dir(&path).unwrap(),
+            "link" => symlink(data, &path).unwrap(),
+            _ => match first.get(&row[5].as_u64().unwrap()) {
+                Some(original) => fs::hard_link(original, &path).unwrap(),
+                None => {
+                    let bytes = (0..data.len())
+                        .step_by(2)
+                        .map(|index| u8::from_str_radix(&data[index..index + 2], 16).unwrap())
+                        .collect::<Vec<_>>();
+                    fs::write(&path, bytes).unwrap();
+                    first.insert(row[5].as_u64().unwrap(), path.clone());
+                }
+            },
+        }
+        if row[1] != "link" {
+            modes.push((path, row[3].as_u64().unwrap()));
+        }
+    }
+    for (path, value) in modes.into_iter().rev() {
+        fs::set_permissions(path, fs::Permissions::from_mode(value as u32)).unwrap();
+    }
+}
+/// The recorded step `step` of the command test, after checking that the fixture it was given
+/// is the one this test has reached (`given`, the whole fixture tree).
+fn step<'a>(
+    steps: &'a [Value],
+    step: usize,
+    fixture: &Fixture,
+    state: &str,
+    action: &str,
+) -> &'a Value {
+    let recorded = &steps[step];
+    assert_eq!(
+        (recorded["state"].as_str(), recorded["action"].as_str()),
+        (Some(state), Some(action))
     );
     assert_eq!(
-        output.stdout,
-        b"{\"passed\":true,\"busy\":true,\"changed\":false}\n"
+        portable(&recorded["given"]),
+        portable(&tree(&fixture.path)),
+        "step {step}"
     );
+    assert_eq!(recorded["stderr"], "", "step {step}");
+    recorded
+}
+/// That this store reads the tree the recorded command left as it reads its own: written into
+/// a fresh fixture, it opens with no generation and is left as it was.
+fn readable(recorded: &Value) {
+    let copy = Fixture::new();
+    materialize(&recorded["tree"], &copy.root());
+    assert_eq!(portable(&tree(&copy.root())), portable(&recorded["tree"]));
+    let mut guard = copy.guard();
+    assert_eq!(
+        Store::open(&mut guard)
+            .unwrap()
+            .inspect()
+            .unwrap()
+            .generations,
+        0
+    );
+    guard.finish().unwrap();
+    assert_eq!(portable(&tree(&copy.root())), portable(&recorded["tree"]));
+}
+/// The recorded command found another process holding the workload lock: it reported busy
+/// and wrote nothing. This store, in the same state, is refused as busy and writes nothing;
+/// its guard holds an exclusive flock on the 0600 `run/simplestchat-bench/workload.lock`, which
+/// the recorded command contends for. Then, once released, the command initialized, found the
+/// store initialized, and pruned; each receipt and tree is this store's, and this store reads
+/// each tree the command left. A prune of a fresh fixture leaves this store's tree.
+///
+/// The recording cannot show what the live comparison showed: that this implementation and
+/// the Python command exclude each other on one lock file at run time. The lock's path, mode
+/// and operation are held on this side here and in `assets_host_tests.rs`.
+#[test]
+fn browser_command_receipts_and_trees_match_the_recorded_python_command() {
+    let recording = recording();
+    let steps = recording.test(COMMAND)["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 5);
+    let fixture = Fixture::new();
+    let held = fixture.guard();
+    let recorded = step(steps, 0, &fixture, "held", "initialize");
+    let lock = fixture.path.join("run/simplestchat-bench/workload.lock");
+    assert_eq!(fs::symlink_metadata(&lock).unwrap().mode() & 0o7777, 0o600);
+    let probe = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&lock)
+        .unwrap();
+    assert_eq!(
+        rustix::fs::flock(&probe, rustix::fs::FlockOperation::NonBlockingLockExclusive),
+        Err(rustix::io::Errno::WOULDBLOCK)
+    );
+    drop(probe);
+    let busy = match fixture.hook(None) {
+        Ok(_) => panic!("a second guard acquired the held lock"),
+        Err(failure) => failure,
+    };
+    assert!(busy.busy());
+    assert_eq!(
+        (recorded["status"].as_i64(), recorded["stdout"].as_str()),
+        (Some(0), Some(BUSY))
+    );
+    assert_eq!(recorded["tree"], json!([]));
     assert!(!fixture.root().exists());
     held.finish().unwrap();
-    for (action, expected) in [
-        (
-            "initialize",
-            b"{\"passed\":true,\"changed\":true}\n".as_slice(),
-        ),
-        ("initialize", b"{\"passed\":true,\"changed\":false}\n"),
-        ("prune", b"{\"passed\":true}\n"),
-    ] {
-        let output = browser(&fixture, action);
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(output.stdout, expected);
-        assert!(output.stderr.is_empty());
+    for (index, action) in [(1, "initialize"), (2, "initialize"), (3, "prune")] {
+        let recorded = step(steps, index, &fixture, "released", action);
         let mut guard = fixture.guard();
-        assert_eq!(
-            Store::open(&mut guard)
-                .unwrap()
-                .inspect()
-                .unwrap()
-                .generations,
-            0
-        );
+        let mut store = Store::open(&mut guard).unwrap();
+        let changed = store.initialize().unwrap();
+        let receipt = if action == "prune" {
+            store.prune_at(100).unwrap();
+            "{\"passed\":true}\n".to_string()
+        } else {
+            format!("{{\"passed\":true,\"changed\":{changed}}}\n")
+        };
+        assert_eq!(store.inspect().unwrap().generations, 0);
         guard.finish().unwrap();
+        assert_eq!(recorded["status"], 0, "step {index}");
+        assert_eq!(recorded["stdout"], receipt, "step {index}");
+        assert_eq!(
+            portable(&recorded["tree"]),
+            portable(&tree(&fixture.root())),
+            "step {index}"
+        );
+        readable(recorded);
     }
-    let reference = Fixture::new();
-    let output = browser(&reference, "prune");
-    assert!(output.status.success());
-    assert_eq!(output.stdout, b"{\"passed\":true}\n");
     let fresh = Fixture::new();
+    let recorded = step(steps, 4, &fresh, "fresh", "prune");
     let mut guard = fresh.guard();
     let mut store = Store::open(&mut guard).unwrap();
     store.initialize().unwrap();
     store.prune_at(100).unwrap();
     guard.finish().unwrap();
-    let mut actual = tree(&fresh.root());
-    let mut expected = tree(&reference.root());
-    // Production managed admission is Linux-only. Its symlink permissions are
-    // not a policy field. macOS exposes Python CLI umask077 versus the library
-    // fixture's ambient umask on links; never change process-global umask here.
-    for value in [&mut actual, &mut expected] {
-        for row in value.as_array_mut().unwrap() {
-            if row[1] == "link" {
-                row[3] = Value::Null;
-            }
-        }
-    }
-    assert_eq!(actual, expected);
+    assert_eq!(
+        (recorded["status"].as_i64(), recorded["stdout"].as_str()),
+        (Some(0), Some("{\"passed\":true}\n"))
+    );
+    assert_eq!(portable(&recorded["tree"]), portable(&tree(&fresh.root())));
+    readable(recorded);
 }
+/// Each journal is admitted or refused by this store's lock as the recorded command admitted
+/// or refused it, each case bound to the SHA-256 of the journal's bytes.
 #[test]
-fn actual_python_journal_text_gates_refuse_bom_and_wide_encodings_for_both_journals() {
+fn journal_text_gates_refuse_bom_and_wide_encodings_for_both_journals_as_recorded() {
     let text = r#"{"schemaVersion":1,"finalized":true,"note":"escaped\u0000private"}"#;
     let mut cases = vec![("utf8", text.as_bytes().to_vec(), true)];
     let mut bom = b"\xef\xbb\xbf".to_vec();
@@ -204,6 +254,8 @@ fn actual_python_journal_text_gates_refuse_bom_and_wide_encodings_for_both_journ
         }
         cases.push((label, bytes, false));
     }
+    let mut recorded = recording().cases(JOURNALS);
+    let mut counted = BTreeMap::new();
     for journal in [
         "run/simplestchat-bench/current.json",
         "srv/simplestchat-public/release-state.json",
@@ -215,18 +267,39 @@ fn actual_python_journal_text_gates_refuse_bom_and_wide_encodings_for_both_journ
             fs::write(&path, bytes).unwrap();
             mode(&path, 0o600);
             let native = match fixture.hook(None) {
-                Ok(guard) => guard.finish().is_ok(),
-                Err(_) => false,
+                Ok(guard) => guard.finish().map_err(Failure::code),
+                Err(failure) => Err(failure.code()),
             };
-            let original = browser(&fixture, "initialize");
-            assert_eq!(native, *expected, "{journal}: {label}");
-            assert_eq!(original.status.success(), *expected, "{journal}: {label}");
-            assert!(!String::from_utf8_lossy(&original.stdout).contains("private"));
+            let case = recorded.case(bytes);
+            assert_eq!(
+                (case["label"].as_str(), case["journal"].as_str()),
+                (Some(*label), Some(journal))
+            );
+            assert_eq!(case["mode"], 0o600);
+            let original = &case["answer"];
+            assert_eq!(native.is_ok(), *expected, "{journal}: {label}");
+            assert_eq!(original["status"] == 0, *expected, "{journal}: {label}");
+            assert!(!original["stdout"].as_str().unwrap().contains("private"));
             if !expected {
-                assert!(!fixture.root().exists());
+                assert_eq!(original["rootExists"], false, "{journal}: {label}");
+                let refused: Value =
+                    serde_json::from_str(original["stdout"].as_str().unwrap()).unwrap();
+                assert_eq!(
+                    refused["failure"].as_str(),
+                    native.err(),
+                    "{journal}: {label}"
+                );
             }
+            let outcome = native.err().unwrap_or("accepted");
+            *counted.entry(outcome.to_string()).or_insert(0) += 1;
         }
     }
+    assert_eq!(recorded.finish(), 24);
+    // The recorder's tally: journals admitted, then refusals per code.
+    assert_eq!(
+        counted,
+        tally(&[("accepted", 2), ("asset_operation_failed", 22)])
+    );
 }
 fn tree(root: &Path) -> Value {
     fn visit(root: &Path, path: &Path, paths: &mut Vec<std::path::PathBuf>) {
@@ -384,8 +457,10 @@ fn publish_op(rev: char, now: u64, entries: &[(&str, &[u8])]) -> Value {
         .collect::<Vec<_>>();
     json!({"action":"publish","now":now,"captures":[[revision(rev),files]]})
 }
+/// Every store operation of the lifecycle leaves this store's result and tree, each bound to
+/// the SHA-256 of the operation as this test serializes it.
 #[test]
-fn actual_python_store_matches_complete_ordered_lifecycle_and_hardlink_graph() {
+fn store_matches_the_recorded_python_lifecycle_and_hardlink_graph() {
     let mut operations = vec![
         json!({"action":"initialize"}),
         json!({"action":"initialize"}),
@@ -433,32 +508,32 @@ fn actual_python_store_matches_complete_ordered_lifecycle_and_hardlink_graph() {
         json!({"action":"version-link","path":format!("{}/version-abcdef.js",revision('c'))}),
     );
     operations.push(json!({"action":"select","revision":revision('e')}));
-    let reference = Fixture::new();
+    let recording = recording();
     let native_fixture = Fixture::new();
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("ansible/files");
-    let output = Command::new("python3")
-        .args(["-c", PYTHON])
-        .arg(source)
-        .arg(
-            json!({"root":reference.root(),"operations":operations,"sources":sources()})
-                .to_string(),
-        )
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+    assert_eq!(
+        portable(&recording.test(STORE)["given"]),
+        portable(&tree(&native_fixture.path))
     );
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    for (index, (op, expected)) in operations.iter().zip(expected).enumerate() {
+    let mut recorded = recording.cases(STORE);
+    let (mut passed, mut refused) = (0, 0);
+    for (index, op) in operations.iter().enumerate() {
+        let mut expected = recorded.answer(&serde_json::to_vec(op).unwrap());
+        expected["tree"] = portable(&expected["tree"]);
         let result = native(&native_fixture, op);
+        let left = portable(&tree(&native_fixture.root()));
         let actual = match result {
-            Ok(value) => json!({"passed":true,"result":value,"tree":tree(&native_fixture.root())}),
-            Err(_) => json!({"passed":false,"tree":tree(&native_fixture.root())}),
+            Ok(value) => json!({"passed":true,"result":value,"tree":left}),
+            Err(_) => json!({"passed":false,"tree":left}),
         };
         assert_eq!(actual, expected, "operation {index}: {op}");
+        match actual["passed"].as_bool() {
+            Some(true) => passed += 1,
+            _ => refused += 1,
+        }
     }
+    assert_eq!(recorded.finish(), 22);
+    // The recorder's tally: operations that passed and that were refused.
+    assert_eq!((passed, refused), (22, 0));
     // Confirm the public capture wrapper itself agrees with the model used by
     // these fixtures; actual tar parity belongs to the separate capture suite.
     assert_eq!(capture(&[("left-abcdef.js", b"left")]).files(), 1);

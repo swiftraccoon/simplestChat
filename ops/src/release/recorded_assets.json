@@ -1,0 +1,3447 @@
+{
+ "comment": "What the retained browser-asset store and its command did in each state the tests of assets_oracle_tests.rs put them in. For the command test: the command's exit status, standard output and error, the whole fixture it was given and the store tree it left, first beside another process's exclusive flock on the fixture's workload lock (the recorder's own, standing for the test's held guard), then three runs on the same fixture once that lock was released, then a prune of a fresh fixture. For the journal test: the command's answer over each journal fixture. For the lifecycle test: the result and tree after every store operation. Trees are the PYTHON script's own tree() rows. Each run used a fresh copy of the fixture the patched test left, its root path in place of the test's, and wrote no bytecode. Recorded by running the BROWSER and PYTHON scripts assets_oracle_tests.rs embedded at revision c2ecf315, unchanged and with its interpreter flags, under the interpreter and with the reference modules named here by import name and source SHA-256; each journal case is bound to the SHA-256 of the journal's bytes, and each operation to the SHA-256 of the operation as the test serialized it. Two recordings over one dump of the cases and one over a second dump were byte for byte the same.",
+ "flags": {
+  "BROWSER": [],
+  "PYTHON": []
+ },
+ "interpreter": "CPython 3.14.10 unicodedata 16.0.0",
+ "reference": {
+  "bounded_process": "5486049c666023445db5a178204c4a202db92aa2ddbd5fd6ac7511975cbb91a9",
+  "browser_assets": "6fd40b970008481a27660e3a5389ce942adab98cf093143055fa27ddbf72e12d",
+  "release_artifact": "d6219ad2f6db7c45a8b4e5728437e1c6ef8aff58d3936c059fd52eea7aef1511",
+  "release_assets": "314c91956f13e72a867ac624c8027bf9c5fff740e953255dd5fbf2d87b6e72f2",
+  "release_json": "0012aa8c99115d409a9955c11b675fab6683dfa91b5c633f75bde5ee67df7e97",
+  "release_public": "07cb668c0c7dedde1d4bcc94bb20ee98a6e16b5127e05a93b32701b547e2c20e",
+  "runtime_profile": "22f9b098a6b19be111291c467e2a34a5c7c0f53a6aa3691f71390ddf8bd85965"
+ },
+ "tests": {
+  "browser_command_receipts_and_trees_match_the_recorded_python_command": {
+   "steps": [
+    {
+     "action": "initialize",
+     "given": [
+      [
+       "",
+       "directory",
+       "",
+       448,
+       5,
+       0
+      ],
+      [
+       "etc",
+       "directory",
+       "",
+       448,
+       3,
+       1
+      ],
+      [
+       "etc/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       2
+      ],
+      [
+       "run",
+       "directory",
+       "",
+       448,
+       3,
+       3
+      ],
+      [
+       "run/simplestchat-bench",
+       "directory",
+       "",
+       448,
+       3,
+       4
+      ],
+      [
+       "run/simplestchat-bench/workload.lock",
+       "file",
+       "",
+       384,
+       1,
+       5
+      ],
+      [
+       "srv",
+       "directory",
+       "",
+       448,
+       3,
+       6
+      ],
+      [
+       "srv/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       7
+      ]
+     ],
+     "state": "held",
+     "status": 0,
+     "stderr": "",
+     "stdout": "{\"passed\":true,\"busy\":true,\"changed\":false}\n",
+     "tree": []
+    },
+    {
+     "action": "initialize",
+     "given": [
+      [
+       "",
+       "directory",
+       "",
+       448,
+       5,
+       0
+      ],
+      [
+       "etc",
+       "directory",
+       "",
+       448,
+       3,
+       1
+      ],
+      [
+       "etc/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       2
+      ],
+      [
+       "run",
+       "directory",
+       "",
+       448,
+       3,
+       3
+      ],
+      [
+       "run/simplestchat-bench",
+       "directory",
+       "",
+       448,
+       3,
+       4
+      ],
+      [
+       "run/simplestchat-bench/workload.lock",
+       "file",
+       "",
+       384,
+       1,
+       5
+      ],
+      [
+       "srv",
+       "directory",
+       "",
+       448,
+       3,
+       6
+      ],
+      [
+       "srv/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       7
+      ]
+     ],
+     "state": "released",
+     "status": 0,
+     "stderr": "",
+     "stdout": "{\"passed\":true,\"changed\":true}\n",
+     "tree": [
+      [
+       "",
+       "directory",
+       "",
+       493,
+       5,
+       0
+      ],
+      [
+       "index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       1
+      ],
+      [
+       "public",
+       "directory",
+       "",
+       493,
+       3,
+       2
+      ],
+      [
+       "public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       3
+      ],
+      [
+       "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       4
+      ]
+     ]
+    },
+    {
+     "action": "initialize",
+     "given": [
+      [
+       "",
+       "directory",
+       "",
+       448,
+       5,
+       0
+      ],
+      [
+       "etc",
+       "directory",
+       "",
+       448,
+       3,
+       1
+      ],
+      [
+       "etc/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       2
+      ],
+      [
+       "run",
+       "directory",
+       "",
+       448,
+       3,
+       3
+      ],
+      [
+       "run/simplestchat-bench",
+       "directory",
+       "",
+       448,
+       3,
+       4
+      ],
+      [
+       "run/simplestchat-bench/workload.lock",
+       "file",
+       "",
+       384,
+       1,
+       5
+      ],
+      [
+       "srv",
+       "directory",
+       "",
+       448,
+       3,
+       6
+      ],
+      [
+       "srv/simplestchat-public",
+       "directory",
+       "",
+       448,
+       3,
+       7
+      ],
+      [
+       "srv/simplestchat-public/browser-assets",
+       "directory",
+       "",
+       493,
+       5,
+       8
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       9
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/public",
+       "directory",
+       "",
+       493,
+       3,
+       10
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       11
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       12
+      ]
+     ],
+     "state": "released",
+     "status": 0,
+     "stderr": "",
+     "stdout": "{\"passed\":true,\"changed\":false}\n",
+     "tree": [
+      [
+       "",
+       "directory",
+       "",
+       493,
+       5,
+       0
+      ],
+      [
+       "index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       1
+      ],
+      [
+       "public",
+       "directory",
+       "",
+       493,
+       3,
+       2
+      ],
+      [
+       "public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       3
+      ],
+      [
+       "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       4
+      ]
+     ]
+    },
+    {
+     "action": "prune",
+     "given": [
+      [
+       "",
+       "directory",
+       "",
+       448,
+       5,
+       0
+      ],
+      [
+       "etc",
+       "directory",
+       "",
+       448,
+       3,
+       1
+      ],
+      [
+       "etc/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       2
+      ],
+      [
+       "run",
+       "directory",
+       "",
+       448,
+       3,
+       3
+      ],
+      [
+       "run/simplestchat-bench",
+       "directory",
+       "",
+       448,
+       3,
+       4
+      ],
+      [
+       "run/simplestchat-bench/workload.lock",
+       "file",
+       "",
+       384,
+       1,
+       5
+      ],
+      [
+       "srv",
+       "directory",
+       "",
+       448,
+       3,
+       6
+      ],
+      [
+       "srv/simplestchat-public",
+       "directory",
+       "",
+       448,
+       3,
+       7
+      ],
+      [
+       "srv/simplestchat-public/browser-assets",
+       "directory",
+       "",
+       493,
+       5,
+       8
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       9
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/public",
+       "directory",
+       "",
+       493,
+       3,
+       10
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       11
+      ],
+      [
+       "srv/simplestchat-public/browser-assets/union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       12
+      ]
+     ],
+     "state": "released",
+     "status": 0,
+     "stderr": "",
+     "stdout": "{\"passed\":true}\n",
+     "tree": [
+      [
+       "",
+       "directory",
+       "",
+       493,
+       5,
+       0
+      ],
+      [
+       "index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       1
+      ],
+      [
+       "public",
+       "directory",
+       "",
+       493,
+       3,
+       2
+      ],
+      [
+       "public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       3
+      ],
+      [
+       "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       4
+      ]
+     ]
+    },
+    {
+     "action": "prune",
+     "given": [
+      [
+       "",
+       "directory",
+       "",
+       448,
+       5,
+       0
+      ],
+      [
+       "etc",
+       "directory",
+       "",
+       448,
+       3,
+       1
+      ],
+      [
+       "etc/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       2
+      ],
+      [
+       "run",
+       "directory",
+       "",
+       448,
+       2,
+       3
+      ],
+      [
+       "srv",
+       "directory",
+       "",
+       448,
+       3,
+       4
+      ],
+      [
+       "srv/simplestchat-public",
+       "directory",
+       "",
+       448,
+       2,
+       5
+      ]
+     ],
+     "state": "fresh",
+     "status": 0,
+     "stderr": "",
+     "stdout": "{\"passed\":true}\n",
+     "tree": [
+      [
+       "",
+       "directory",
+       "",
+       493,
+       5,
+       0
+      ],
+      [
+       "index.json",
+       "file",
+       "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+       420,
+       1,
+       1
+      ],
+      [
+       "public",
+       "directory",
+       "",
+       493,
+       3,
+       2
+      ],
+      [
+       "public/assets",
+       "link",
+       "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       448,
+       1,
+       3
+      ],
+      [
+       "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+       "directory",
+       "",
+       493,
+       2,
+       4
+      ]
+     ]
+    }
+   ]
+  },
+  "journal_text_gates_refuse_bom_and_wide_encodings_for_both_journals_as_recorded": {
+   "cases": [
+    {
+     "answer": {
+      "rootExists": true,
+      "status": 0,
+      "stderr": "",
+      "stdout": "{\"passed\":true,\"changed\":true}\n"
+     },
+     "input": "31bacd29175f0cca3a21ecbc4a9e7d99daf5d35363bf06f4f588368a82e3bc32",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf8",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "899774b91850871ca390c59a1e4b13c063d2c940819bc7df595bbfeb10dae549",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf8-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "2fb524846612ff0b87679d0b70862d45f5f6f6ad6f786bf96091839ef11c75ac",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "raw-nul",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "543cf3670daf106384361b3a98a6cc6afae0d4358a950cade78125df77dc7da1",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "invalid-utf8",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "fac07d9020fcffb41e273c0a37132ebeb9ea0f22e2eabf577bd03d439d3efd04",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf16le",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "2be8ad5f7abddc9822d6e933ff73904279163a5b3b582b20b929a644ad257d9b",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf16be",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "06630f8c69c36323a978b2a022ccf9dca06be0e7975582eb99ac031b9ad811cd",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf16le-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "6e8af286bf50f42b04250342fa8e09c00d2bd727bad5aaa5e09a3997ab4013e2",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf16be-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "16c3f31bb909274d1b97459610c9c95fdef10e1ea82cdfb51408993f1be0fc9f",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf32le",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "7db1884facaecc3b7b8c122796e4373bc819af7be61b4ee6a6ea0742460b9afe",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf32be",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "539a846890705be5875a04fbac34c95a15f7f82fa9305473513986e8cb478f2c",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf32le-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "7d21b59d21026794da700b7005bb2c1c8eaf4f3d7fd532abe4750b8e5b3ffa1d",
+     "journal": "run/simplestchat-bench/current.json",
+     "label": "utf32be-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": true,
+      "status": 0,
+      "stderr": "",
+      "stdout": "{\"passed\":true,\"changed\":true}\n"
+     },
+     "input": "31bacd29175f0cca3a21ecbc4a9e7d99daf5d35363bf06f4f588368a82e3bc32",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf8",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "899774b91850871ca390c59a1e4b13c063d2c940819bc7df595bbfeb10dae549",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf8-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "2fb524846612ff0b87679d0b70862d45f5f6f6ad6f786bf96091839ef11c75ac",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "raw-nul",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "543cf3670daf106384361b3a98a6cc6afae0d4358a950cade78125df77dc7da1",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "invalid-utf8",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "fac07d9020fcffb41e273c0a37132ebeb9ea0f22e2eabf577bd03d439d3efd04",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf16le",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "2be8ad5f7abddc9822d6e933ff73904279163a5b3b582b20b929a644ad257d9b",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf16be",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "06630f8c69c36323a978b2a022ccf9dca06be0e7975582eb99ac031b9ad811cd",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf16le-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "6e8af286bf50f42b04250342fa8e09c00d2bd727bad5aaa5e09a3997ab4013e2",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf16be-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "16c3f31bb909274d1b97459610c9c95fdef10e1ea82cdfb51408993f1be0fc9f",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf32le",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "7db1884facaecc3b7b8c122796e4373bc819af7be61b4ee6a6ea0742460b9afe",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf32be",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "539a846890705be5875a04fbac34c95a15f7f82fa9305473513986e8cb478f2c",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf32le-bom",
+     "mode": 384
+    },
+    {
+     "answer": {
+      "rootExists": false,
+      "status": 1,
+      "stderr": "",
+      "stdout": "{\"passed\": false, \"failure\": \"asset_operation_failed\"}\n"
+     },
+     "input": "7d21b59d21026794da700b7005bb2c1c8eaf4f3d7fd532abe4750b8e5b3ffa1d",
+     "journal": "srv/simplestchat-public/release-state.json",
+     "label": "utf32be-bom",
+     "mode": 384
+    }
+   ]
+  },
+  "store_matches_the_recorded_python_lifecycle_and_hardlink_graph": {
+   "cases": [
+    {
+     "answer": {
+      "passed": true,
+      "result": true,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        5,
+        0
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+        420,
+        1,
+        1
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        3,
+        2
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        493,
+        1,
+        3
+       ],
+       [
+        "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        "directory",
+        "",
+        493,
+        2,
+        4
+       ]
+      ]
+     },
+     "input": "71d644a2d39fc14e436ff54d5d00caa076d44812ac13c0cd01d706b28a989e85"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": false,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        5,
+        0
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+        420,
+        1,
+        1
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        3,
+        2
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        493,
+        1,
+        3
+       ],
+       [
+        "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        "directory",
+        "",
+        493,
+        2,
+        4
+       ]
+      ]
+     },
+     "input": "71d644a2d39fc14e436ff54d5d00caa076d44812ac13c0cd01d706b28a989e85"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": true,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        5,
+        0
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b5d7d0a",
+        420,
+        1,
+        1
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        2
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        3
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        493,
+        1,
+        4
+       ],
+       [
+        "union-d800c0742fe41653d4b73b1a96ab19a61f031d9cc1254fdeddd820b9f50abed5",
+        "directory",
+        "",
+        493,
+        2,
+        5
+       ]
+      ]
+     },
+     "input": "dc7a89324c522720e09538491fb2f42727ee7ced6054501eee558a5d243c1a6b"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 9,
+       "files": 2,
+       "generations": 1,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "907deafaa84276ab8fb2503b517eb1820c03ff9a8c79b9445f791e23c3ad50a2"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 9,
+       "files": 2,
+       "generations": 1,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-2e93169ee6a13cac1367be2807a1a36805be7f34eed3fe6d42644fafa99f5f1e/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "907deafaa84276ab8fb2503b517eb1820c03ff9a8c79b9445f791e23c3ad50a2"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": null,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a747275652c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a2d302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "c29e6c5377bfcd3299871aeac9139c0df547e695f16fbe24e7b97b744a2b8e61"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": false,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a747275652c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a2d302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-5a57ed127f5509a44b0f8492dc72147f336f6eee7f7898090a6cf43bca387a20/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "71d644a2d39fc14e436ff54d5d00caa076d44812ac13c0cd01d706b28a989e85"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": null,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312e302c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a2d302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "51c262aea01708855f729652895b086c86a31822477b444dbce4aad11c84d092"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": false,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312e302c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a2d302c22657870697265734174223a3630343830302c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d2c22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-e23e642fafc2adbc4428112e8fc6e470759f91e715770d4617838dad9f280a88/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "71d644a2d39fc14e436ff54d5d00caa076d44812ac13c0cd01d706b28a989e85"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 9,
+       "files": 2,
+       "generations": 1,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a312c22657870697265734174223a3630343830312c22617373657473223a7b22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d2c227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d5d7d0a",
+        420,
+        1,
+        4
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        5
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-86e280240b4a117d5dd99cc44ff6ce93aef6a88dc90d41c54a3602f2c18f146f",
+        493,
+        1,
+        7
+       ],
+       [
+        "union-86e280240b4a117d5dd99cc44ff6ce93aef6a88dc90d41c54a3602f2c18f146f",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "union-86e280240b4a117d5dd99cc44ff6ce93aef6a88dc90d41c54a3602f2c18f146f/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-86e280240b4a117d5dd99cc44ff6ce93aef6a88dc90d41c54a3602f2c18f146f/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "d7da04c50a85b862c7dec8b1f143963a70fe0409381105855dc283e1dbd0bacc"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 13,
+       "files": 3,
+       "generations": 2,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        7,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        4
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        1,
+        5
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a312c22657870697265734174223a3630343830312c22617373657473223a7b22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d2c227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d5d7d0a",
+        420,
+        1,
+        6
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        7
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        8
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-b2b47c1a92ea7751d6a9138266d775b02dff9c1c61bcc4b421e714b85181b442",
+        493,
+        1,
+        9
+       ],
+       [
+        "union-b2b47c1a92ea7751d6a9138266d775b02dff9c1c61bcc4b421e714b85181b442",
+        "directory",
+        "",
+        493,
+        4,
+        10
+       ],
+       [
+        "union-b2b47c1a92ea7751d6a9138266d775b02dff9c1c61bcc4b421e714b85181b442/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-b2b47c1a92ea7751d6a9138266d775b02dff9c1c61bcc4b421e714b85181b442/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "9cd4f0438102c529daac5e0475b6d37c66e0277f24bac8bbc44855f370c76c98"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 18,
+       "files": 4,
+       "generations": 3,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        8,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        4
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        1,
+        5
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        6
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        7
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a312c22657870697265734174223a3630343830312c22617373657473223a7b22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d2c227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d5d7d0a",
+        420,
+        1,
+        8
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        9
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        10
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-ced3fc8c2be7b2ca0715826e36f38eca0071ad7118b0f00fb3ccf0a6799238f5",
+        493,
+        1,
+        11
+       ],
+       [
+        "union-ced3fc8c2be7b2ca0715826e36f38eca0071ad7118b0f00fb3ccf0a6799238f5",
+        "directory",
+        "",
+        493,
+        5,
+        12
+       ],
+       [
+        "union-ced3fc8c2be7b2ca0715826e36f38eca0071ad7118b0f00fb3ccf0a6799238f5/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-ced3fc8c2be7b2ca0715826e36f38eca0071ad7118b0f00fb3ccf0a6799238f5/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        7
+       ],
+       [
+        "union-ced3fc8c2be7b2ca0715826e36f38eca0071ad7118b0f00fb3ccf0a6799238f5/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "d4dbc1b384888c7e31407517dd8ad395baa6b6c0aebb6fb46fd4e01c8b08a579"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 24,
+       "files": 5,
+       "generations": 4,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        9,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        4,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        4
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        1,
+        5
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        6
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        7
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd",
+        "directory",
+        "",
+        493,
+        3,
+        8
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        9
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2264646464646464646464646464646464646464646464646464646464646464646464646464646464222c22637265617465644174223a332c22657870697265734174223a3630343830332c22617373657473223a7b22666f757274682d6162636465662e6a73223a7b22736861323536223a2264633831623164333731613430373262653766636663336531393339663562646461653862646331363838343661353061373866616365393735623961663633222c2273697a65223a367d7d7d2c7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a312c22657870697265734174223a3630343830312c22617373657473223a7b22612d6162636465662e637373223a7b22736861323536223a2263623836656232643931346433376466363835376333636665343832376235663737306230316138363537383132303631386230623231353732313630626538222c2273697a65223a357d2c227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d5d7d0a",
+        420,
+        1,
+        10
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        11
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        12
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203",
+        493,
+        1,
+        13
+       ],
+       [
+        "union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203",
+        "directory",
+        "",
+        493,
+        6,
+        14
+       ],
+       [
+        "union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203/a-abcdef.css",
+        "file",
+        "7374796c65",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        9
+       ],
+       [
+        "union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        7
+       ],
+       [
+        "union-0ab05d5e8c544fce56e5f0c6e2a0be8105d45b113a417afb18da8d6e6ee86203/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        3
+       ]
+      ]
+     },
+     "input": "ad0a913a5a3c3436294549ff75ecffcb1b4e61b5a067ef807e3e45ba496c715e"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 20,
+       "files": 4,
+       "generations": 4,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        9,
+        0
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        2
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        4
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        6
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "directory",
+        "",
+        493,
+        3,
+        7
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        8
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2265656565656565656565656565656565656565656565656565656565656565656565656565656565222c22637265617465644174223a342c22657870697265734174223a3630343830342c22617373657473223a7b2266696674682d6162636465662e6a73223a7b22736861323536223a2231373734623865656264656335386335663131393938363639653938336638316533643263316431613633363439313133303936646465663134336137633262222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2264646464646464646464646464646464646464646464646464646464646464646464646464646464222c22637265617465644174223a332c22657870697265734174223a3630343830332c22617373657473223a7b22666f757274682d6162636465662e6a73223a7b22736861323536223a2264633831623164333731613430373262653766636663336531393339663562646461653862646331363838343661353061373866616365393735623961663633222c2273697a65223a367d7d7d2c7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2230393637313135663238313361333534316561656637376465396439643537373366316330633034333134623062626665346666336233623163353562356435222c2273697a65223a347d7d7d5d7d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        10
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        11
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456",
+        493,
+        1,
+        12
+       ],
+       [
+        "union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456",
+        "directory",
+        "",
+        493,
+        6,
+        13
+       ],
+       [
+        "union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        8
+       ],
+       [
+        "union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        6
+       ],
+       [
+        "union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-966e248ee940fbc18b922e5236910d287e7f94b2a7f81f290733257eb9f7c456/z-abcdef.js",
+        "file",
+        "73616d65",
+        420,
+        2,
+        2
+       ]
+      ]
+     },
+     "input": "e6314f472f0a24e47a9e8bfdf748f508b080d4f78b353d17df3e9eaa97b8ed9e"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 25,
+       "files": 4,
+       "generations": 4,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        9,
+        0
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff",
+        "directory",
+        "",
+        493,
+        3,
+        7
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666222c22637265617465644174223a352c22657870697265734174223a3630343830352c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2239643666393635616338333265343061356466366330366166653938336533623434396330376238343366663531636537363230346465303563363930643131222c2273697a65223a397d7d7d2c7b227265766973696f6e223a2265656565656565656565656565656565656565656565656565656565656565656565656565656565222c22637265617465644174223a342c22657870697265734174223a3630343830342c22617373657473223a7b2266696674682d6162636465662e6a73223a7b22736861323536223a2231373734623865656264656335386335663131393938363639653938336638316533643263316431613633363439313133303936646465663134336137633262222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2264646464646464646464646464646464646464646464646464646464646464646464646464646464222c22637265617465644174223a332c22657870697265734174223a3630343830332c22617373657473223a7b22666f757274682d6162636465662e6a73223a7b22736861323536223a2264633831623164333731613430373262653766636663336531393339663562646461653862646331363838343661353061373866616365393735623961663633222c2273697a65223a367d7d7d2c7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        10
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        11
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        493,
+        1,
+        12
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        "directory",
+        "",
+        493,
+        6,
+        13
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ]
+      ]
+     },
+     "input": "ffaa4b66a0a421ffd43336638dc7a80b84d60576ac1cfd14fea61a2667faf963"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": null,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        9,
+        0
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff",
+        "directory",
+        "",
+        493,
+        3,
+        7
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666222c22637265617465644174223a352c22657870697265734174223a3630343830352c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2239643666393635616338333265343061356466366330366166653938336533623434396330376238343366663531636537363230346465303563363930643131222c2273697a65223a397d7d7d2c7b227265766973696f6e223a2265656565656565656565656565656565656565656565656565656565656565656565656565656565222c22637265617465644174223a342c22657870697265734174223a3630343830342c22617373657473223a7b2266696674682d6162636465662e6a73223a7b22736861323536223a2231373734623865656264656335386335663131393938363639653938336638316533643263316431613633363439313133303936646465663134336137633262222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2264646464646464646464646464646464646464646464646464646464646464646464646464646464222c22637265617465644174223a332c22657870697265734174223a3630343830332c22617373657473223a7b22666f757274682d6162636465662e6a73223a7b22736861323536223a2264633831623164333731613430373262653766636663336531393339663562646461653862646331363838343661353061373866616365393735623961663633222c2273697a65223a367d7d7d2c7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        10
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        384,
+        1,
+        11
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        493,
+        1,
+        12
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        "directory",
+        "",
+        493,
+        6,
+        13
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ]
+      ]
+     },
+     "input": "35043d89973cf4b701722b4ffd4d7f64f378ba18d910d7d700edabae1583acf6"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": true,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        9,
+        0
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "dddddddddddddddddddddddddddddddddddddddd/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff",
+        "directory",
+        "",
+        493,
+        3,
+        7
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666222c22637265617465644174223a352c22657870697265734174223a3630343830352c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2239643666393635616338333265343061356466366330366166653938336533623434396330376238343366663531636537363230346465303563363930643131222c2273697a65223a397d7d7d2c7b227265766973696f6e223a2265656565656565656565656565656565656565656565656565656565656565656565656565656565222c22637265617465644174223a342c22657870697265734174223a3630343830342c22617373657473223a7b2266696674682d6162636465662e6a73223a7b22736861323536223a2231373734623865656264656335386335663131393938363639653938336638316533643263316431613633363439313133303936646465663134336137633262222c2273697a65223a357d7d7d2c7b227265766973696f6e223a2264646464646464646464646464646464646464646464646464646464646464646464646464646464222c22637265617465644174223a332c22657870697265734174223a3630343830332c22617373657473223a7b22666f757274682d6162636465662e6a73223a7b22736861323536223a2264633831623164333731613430373262653766636663336531393339663562646461653862646331363838343661353061373866616365393735623961663633222c2273697a65223a367d7d7d2c7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a322c22657870697265734174223a3630343830322c22617373657473223a7b226f746865722d6162636465662e6a73223a7b22736861323536223a2262316539393332343530356264333264613065316638356463663565313961303964623034383165386131356636326334316562333230333034613865393237222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        10
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        11
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        493,
+        1,
+        12
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10",
+        "directory",
+        "",
+        493,
+        6,
+        13
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fifth-abcdef.js",
+        "file",
+        "6669667468",
+        420,
+        2,
+        6
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/fourth-abcdef.js",
+        "file",
+        "666f75727468",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/other-abcdef.js",
+        "file",
+        "7468697264",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-9d346f0797079bfd555d9220d17c36c4e548475a0baa9848704e20003ee53a10/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        8
+       ]
+      ]
+     },
+     "input": "dc7a89324c522720e09538491fb2f42727ee7ced6054501eee558a5d243c1a6b"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": null,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        6,
+        0
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "ffffffffffffffffffffffffffffffffffffffff/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        2
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666222c22637265617465644174223a352c22657870697265734174223a3630343830352c22617373657473223a7b227a2d6162636465662e6a73223a7b22736861323536223a2239643666393635616338333265343061356466366330366166653938336533623434396330376238343366663531636537363230346465303563363930643131222c2273697a65223a397d7d7d5d7d0a",
+        420,
+        1,
+        3
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        4
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        5
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-b8535583d4b1675d4c068de12994c1000e929bd3f0aa783dbb3e61067f9d498b",
+        493,
+        1,
+        6
+       ],
+       [
+        "union-b8535583d4b1675d4c068de12994c1000e929bd3f0aa783dbb3e61067f9d498b",
+        "directory",
+        "",
+        493,
+        3,
+        7
+       ],
+       [
+        "union-b8535583d4b1675d4c068de12994c1000e929bd3f0aa783dbb3e61067f9d498b/z-abcdef.js",
+        "file",
+        "646966666572656e74",
+        420,
+        2,
+        2
+       ]
+      ]
+     },
+     "input": "e0698dd97f0bb0c2bda83a0f83cc1932a9375a30dd1240818a0d59acd65e4d8a"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 9,
+       "files": 2,
+       "generations": 2,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        7,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b226c6566742d6162636465662e6a73223a7b22736861323536223a2233363066383430333539343232343363366133363533376165326638363733343835653663303434353561306138356130646231393639306632353431343830222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b2272696768742d6162636465662e6a73223a7b22736861323536223a2232373034326634653665636137643062326137656534303236646632656366613531643333333965366431323261613039393131386563643835363362616439222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        5
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        6
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        7
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-bfa0bfa70f04c8ffc5d1f7b2c035afb6887e4d822728a2bb721c30d140219872",
+        493,
+        1,
+        8
+       ],
+       [
+        "union-bfa0bfa70f04c8ffc5d1f7b2c035afb6887e4d822728a2bb721c30d140219872",
+        "directory",
+        "",
+        493,
+        4,
+        9
+       ],
+       [
+        "union-bfa0bfa70f04c8ffc5d1f7b2c035afb6887e4d822728a2bb721c30d140219872/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-bfa0bfa70f04c8ffc5d1f7b2c035afb6887e4d822728a2bb721c30d140219872/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ]
+      ]
+     },
+     "input": "780915b49dceacc7d20df0ba2be58056ddea242caa31adc0d3dfcb246b9795c7"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": {
+       "bytes": 65,
+       "files": 3,
+       "generations": 3,
+       "maximumAgeSeconds": 604800
+      },
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        8,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        2,
+        6
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a3630343830362c22657870697265734174223a313230393630362c22617373657473223a7b2276657273696f6e2d6162636465662e6a73223a7b22736861323536223a2234353330383862626561316538343865303861643463313038356234653738373837653636616233633232383434623136323264353065303863643737343737222c2273697a65223a35367d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b226c6566742d6162636465662e6a73223a7b22736861323536223a2233363066383430333539343232343363366133363533376165326638363733343835653663303434353561306138356130646231393639306632353431343830222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b2272696768742d6162636465662e6a73223a7b22736861323536223a2232373034326634653665636137643062326137656534303236646632656366613531643333333965366431323261613039393131386563643835363362616439222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        7
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        493,
+        1,
+        10
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        "directory",
+        "",
+        493,
+        5,
+        11
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        2,
+        6
+       ]
+      ]
+     },
+     "input": "678435e20b1ac913e23794dc197712d2116b72acb58b69a26f9eecd10499d0b9"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": null,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        8,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        3,
+        6
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a3630343830362c22657870697265734174223a313230393630362c22617373657473223a7b2276657273696f6e2d6162636465662e6a73223a7b22736861323536223a2234353330383862626561316538343865303861643463313038356234653738373837653636616233633232383434623136323264353065303863643737343737222c2273697a65223a35367d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b226c6566742d6162636465662e6a73223a7b22736861323536223a2233363066383430333539343232343363366133363533376165326638363733343835653663303434353561306138356130646231393639306632353431343830222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b2272696768742d6162636465662e6a73223a7b22736861323536223a2232373034326634653665636137643062326137656534303236646632656366613531643333333965366431323261613039393131386563643835363362616439222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        7
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        3,
+        6
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        493,
+        1,
+        9
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        "directory",
+        "",
+        493,
+        5,
+        10
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        3,
+        6
+       ]
+      ]
+     },
+     "input": "d36f8b42110f9fdbeb182048bcdc6b2f763521b18bea96382c30c6d861ec9450"
+    },
+    {
+     "answer": {
+      "passed": true,
+      "result": true,
+      "tree": [
+       [
+        "",
+        "directory",
+        "",
+        493,
+        8,
+        0
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "directory",
+        "",
+        493,
+        3,
+        1
+       ],
+       [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "directory",
+        "",
+        493,
+        3,
+        3
+       ],
+       [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc",
+        "directory",
+        "",
+        493,
+        3,
+        5
+       ],
+       [
+        "cccccccccccccccccccccccccccccccccccccccc/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        2,
+        6
+       ],
+       [
+        "index.json",
+        "file",
+        "7b22736368656d6156657273696f6e223a312c2267656e65726174696f6e73223a5b7b227265766973696f6e223a2263636363636363636363636363636363636363636363636363636363636363636363636363636363222c22637265617465644174223a3630343830362c22657870697265734174223a313230393630362c22617373657473223a7b2276657273696f6e2d6162636465662e6a73223a7b22736861323536223a2234353330383862626561316538343865303861643463313038356234653738373837653636616233633232383434623136323264353065303863643737343737222c2273697a65223a35367d7d7d2c7b227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b226c6566742d6162636465662e6a73223a7b22736861323536223a2233363066383430333539343232343363366133363533376165326638363733343835653663303434353561306138356130646231393639306632353431343830222c2273697a65223a347d7d7d2c7b227265766973696f6e223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22637265617465644174223a3630343830352c22657870697265734174223a313230393630352c22617373657473223a7b2272696768742d6162636465662e6a73223a7b22736861323536223a2232373034326634653665636137643062326137656534303236646632656366613531643333333965366431323261613039393131386563643835363362616439222c2273697a65223a357d7d7d5d7d0a",
+        420,
+        1,
+        7
+       ],
+       [
+        "public",
+        "directory",
+        "",
+        493,
+        4,
+        8
+       ],
+       [
+        "public/app-version.json",
+        "file",
+        "7b227265766973696f6e223a2265656565656565656565656565656565656565656565656565656565656565656565656565656565227d0a",
+        420,
+        1,
+        9
+       ],
+       [
+        "public/assets",
+        "link",
+        "../union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        493,
+        1,
+        10
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679",
+        "directory",
+        "",
+        493,
+        5,
+        11
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/left-abcdef.js",
+        "file",
+        "6c656674",
+        420,
+        2,
+        2
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/right-abcdef.js",
+        "file",
+        "7269676874",
+        420,
+        2,
+        4
+       ],
+       [
+        "union-167eb8d4602ff766b7720711cc2f36ac58c078fb4953020dd52643880073c679/version-abcdef.js",
+        "file",
+        "7b227265766973696f6e223a2266666666666666666666666666666666666666666666666666666666666666666666666666666666227d0a",
+        420,
+        2,
+        6
+       ]
+      ]
+     },
+     "input": "aaf0ab23aac9541fc15b9faf6340a4b46555f23764ec55ff30406a7d71d85f42"
+    }
+   ],
+   "given": [
+    [
+     "",
+     "directory",
+     "",
+     448,
+     5,
+     0
+    ],
+    [
+     "etc",
+     "directory",
+     "",
+     448,
+     3,
+     1
+    ],
+    [
+     "etc/simplestchat-public",
+     "directory",
+     "",
+     448,
+     2,
+     2
+    ],
+    [
+     "run",
+     "directory",
+     "",
+     448,
+     2,
+     3
+    ],
+    [
+     "srv",
+     "directory",
+     "",
+     448,
+     3,
+     4
+    ],
+    [
+     "srv/simplestchat-public",
+     "directory",
+     "",
+     448,
+     2,
+     5
+    ]
+   ]
+  }
+ }
+}

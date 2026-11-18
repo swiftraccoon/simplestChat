@@ -102,13 +102,17 @@ fn streamed_inventory_exceeds_the_child_descriptor_limit_without_exhausting_it()
         )
         .unwrap();
     }
-    // The kernel carries this child-only limit across exec. The actual Ops
-    // command still runs with an empty PATH and never invokes a compiler.
-    let output = Command::new("python3")
+    // The kernel carries this child-only limit across exec: the shell lowers its
+    // soft and hard limits to 96, checks both, and execs the actual Ops command
+    // with only PATH (empty), LANG and LC_ALL. It never invokes a compiler.
+    let output = Command::new("/bin/sh")
         .args([
-            "-I",
             "-c",
-            "import os, resource, sys; resource.setrlimit(resource.RLIMIT_NOFILE, (96, 96)); assert resource.getrlimit(resource.RLIMIT_NOFILE) == (96, 96); os.execve(sys.argv[1], sys.argv[1:], {'PATH': '', 'LANG': 'C', 'LC_ALL': 'C'})",
+            concat!(
+                "ulimit -n 96 && [ \"$(ulimit -S -n)\" = 96 ] && [ \"$(ulimit -H -n)\" = 96 ] ",
+                "&& exec /usr/bin/env -i PATH= LANG=C LC_ALL=C \"$@\"",
+            ),
+            "sh",
             env!("CARGO_BIN_EXE_simplestchat-ops"),
             "distribution",
             "build-plan",

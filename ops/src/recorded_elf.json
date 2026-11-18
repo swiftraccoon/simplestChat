@@ -1,0 +1,742 @@
+{
+ "comment": "The facts the retained ELF parser gave for each of the 66 overlap fixtures of distribution_tests.rs, as that test's comparison script derived them. Recorded by running the comparison script distribution_tests.rs embedded at revision c2ecf315, unchanged and with its interpreter flags, under the interpreter and with the reference modules named here by import name and source SHA-256; each case is bound to the SHA-256 of the fixture file the parser read. Two recordings over one dump of the cases and one over a second dump were byte for byte the same.",
+ "flags": [
+  "-B"
+ ],
+ "interpreter": "CPython 3.14.10 unicodedata 16.0.0",
+ "reference": {
+  "security_elf": "a0ab75509b0bc507be988a7f09952c0bcbb0350b5cca18507cccc80b80416376"
+ },
+ "tests": {
+  "dynamic_overlap_matches_the_recorded_python_parser_without_reusing_glibc_policy": {
+   "cases": [
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "9c7c6ab956baa2bbb05ced09505c5f67a4b2ac6c08c00f3c0cbd3a3b6006e535"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "5fb4c3456949935d8e4bb6c363f8e2bf6ec5b9ef5c5d42e24fae5af4b94b83e4"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "78d813b0c8b6a5000b74fe636069ca2b5c7cc38eb6500ade7d897ac6df086d1d"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "1f311e998a7f2865ab2c7f500b648f779829d99e5a8011884d6accdd8a04eac8"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "26089496411f0668de2d9bc26b561fc25d4003c6a8e9aebe9605a918152d4bf4"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "9898e992f4681ecd10f1792cde00e44e42847de2fde45f6beb6b16d957ffc428"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "696d794a06c861a950491930894aee8734d7d7353cddaf7c23ed169bc433d358"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "b4a03ac5161fa6843e3200a2d291ec099b9cb66747c577520a8c6e3386666e50"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "a7f7aa3082be2a5a8f7f5757c2c07aecc882c798ee353e7a914cbc7579e2a885"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "d1a905ad09bd93f75b37cb40bcf078dd6579ecc88ffd2dd0e93d7cebca543d1c"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "fae1c87a604b4cec49affacb8a3c64199e14fd91807238d029be9f72eb274988"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "bb4f252023705e8fc01ba64208caab5b5b3ee6e027a73cf1a0f0daf2c5d29538"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "65bbab95405c8d8a2a076a0847eb146b17f841de2a091b174cae742869510263"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "b7227b1e83985d4553dacdde29985062aeae79e2c280e31e2f739f9bd0e7ed74"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "52e0c098bb6f1ed8a196b72800b47c2acaeb695a39edf19b7dd8d4a16e7c74a9"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "e2ec3ee62f0199c68952c2a7c8a12e695c216c1948bae9b760ddbdbb2c4257ec"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "ae8388768886aaa2153935f9d1003ca71d4bd926a6c696586303bc384c72857e"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "3aad3a93f78c6ab9fd07ffd01f1c5aadce3cfa35bf9209dbf87f5928f851c5ea"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "7008bb3bf993f5a5501e31326784204408a6f14e519c0ee282861a6b43081b7f"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "273d3f76f48a1c4c2877c1071b569e8130f434e384755de641ac2898d645b7e8"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "634ebebad545fd1e470e62f958a09955b0eda3f0075eccad9fc24ac95dbc18d2"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "47e70af80bb97457e28902746725ad1a7cefe0ae02a8f0d0a4a2579ecaa0b498"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "ff8f12bee197097d636bdc348fe6494758d479c3f73daf3083a76a09481cf541"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "4e344204664623260e198cbd1d7ad21fbf99b12bcbe598078ce4eee62b3f0c71"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "0410b853c0a8ba98a74797b1bc807c394944806de223a9188535d248f0b35b2d"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "bfba84f74ec3c510c38ce8caf72349df42e4d6b21615fda4b4699a590082077d"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "15dfbbe3dc3be902667c87c8ffdbe2e7b5b2a2473b35a7c78a777c51cdca7812"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "2a56f6e6a3431fd973293bba9a4c34b7fca1e159eb4db04232afc258724a4a11"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "6e92f1c2e292171b235eb0839cd5b3225da6d59bf7ad1dd02d43315ab895d92a"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "fa9aa5700e9848e200fe0b0452d80eb4936f903e4ee6d79b53749bbb33ec3450"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "d11b5596f026bd474ff57777b0e8ce503a02eb6b3971a1a1df0ce08546be3c79"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": true,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "fa478b4f583b2df4a159a056664a722914b5a1d7678157e36f4a52c40db71c2b"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "813597e20b4927c6efa8dd2795212da7fdc9d079ef2d1e93af7d32fc54b1914f"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "ded560e888e9d4679e1875762f41b053a6a75e2d0db13e7ee43219ab45e34c88"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "d010f232e0329e44933e6e314e4640fb0530955a2f4f96b6e9a93b333993346a"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "4319d3814f856eab8705afa5bd545d7948365b6681089db2af31661f8b115d11"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "8cce14a87770d896bed33d7975591385419bfb7b4a716504c9ea993eecbe454f"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "bdf52088941e0934a4796adbac5280994186326e28963ea867afffb7ed7aa2f5"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "c6e9264ce9c1b824715644ecb7a145cfb33c80f51fd2ad05dda0b455f2532fe7"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "2983877331d7c0163e0f6b349925bbd4596edbe42ae4f2415af8beb6b663451e"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "b7b6a7e2d736aa19283d0e807c8a62c8db4f24176e5d421dc98776adecfc0d21"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "b232260214a054b4880fa107ba5577e551ff3b9f17d206aafbdb439015d0a2d9"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "bbc383f0a7ae598c47b892561bb53dd1b744cd9e67eeef9914275fc35d5a0092"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "612c25d211b038246b7a5f72132a944cbf1b589ed4655cf165bb29e7b2712425"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "bce000f61ffc1767f455ea2d5e61cc0621e95eb465adaab6ff6573033244f97a"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "a5a6a21c6e2154b5e40351dc9252a5edcc7e53a865e9389757079a7073563ff4"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "c876e227a0303d4881f7e6ac524f55bc229a7decbab98b1ec806c00a55ef8faa"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": false,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "60489539b6ad0db2f3ba1d315a26c45b6f4fd964fb65e1f38ee2bedd75ef0be8"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "4e01c6c7aea1589f9b88e1c3ae729e34d4a8663c424476fdf6663488ebe48d64"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "b8b4631a62db48559e9ea2f36a249e54fdf448e9da01ed22fc9389d6d8c805e4"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "947e86309615a90e7e0b430c64d72f84ef8560b828e8be19c51f9e3db3280bd8"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "4917fd056b28417317a5205dff649ccd223d1713f5eb26fbe452687a3eefa2ae"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "b24b649ec13c5c17bfb26738df5494d8838d579b5518f092cfcbd80f91162c7c"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "f5a77aedb278c0e21c3f4ea3fb0977ab888aa34f90852aabfbbfe61e18b39885"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "1e2347d377b8cb89a90e972633925c1a3e438489ec1b577d0752af342e8c7e3c"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "b6580eeab082d84f6b451abb31f6c820c123a63ba6537264b9d499021a60175b"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "8afb5ccc7e68a44253807fe2a56f204dc51ea14b1bc287a86a84475b16313db6"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "d0b109a3dd0e82a1f7d26f4222bc28866eb0d5e73ccb5a85f4b9eded1048967c"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "3d4e1e2a69ec10870f47facb6ad0a791975e73f4ca1b161c466bbec3c9fbeff3"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": true,
+      "pieFlag": true
+     },
+     "input": "73ee46f92b1065834e168faf222ec6c675f1084e85d632fe9c5e17bfbb40e3ca"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "2c8ee7591d7bb763a7108811dafb65439cfe322eea17842e197fca8bcd0d5256"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "0b25513b506b91bbc788e70d2bb2850fa72d4ab8c2c6e54c16482e9f3afcb8a2"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "6bb47b2214c348600abbc37573a86e3105edb94f8fb2d35ba7bce5c19fef426f"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 1,
+      "noInterpreter": false,
+      "noNeeded": false,
+      "noTextRelocations": false,
+      "pieFlag": true
+     },
+     "input": "d8c78895314d80994545f567a760c8ebc442559fb1317028dafe24c8e2ed69e8"
+    },
+    {
+     "answer": {
+      "bindNow": true,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": true,
+      "pieFlag": false
+     },
+     "input": "fc6f0e7a0deb23d03c9530378dd4eb57dbbd949240c8129f4ddc4e953bb37ba0"
+    },
+    {
+     "answer": {
+      "bindNow": false,
+      "neededCount": 0,
+      "noInterpreter": true,
+      "noNeeded": true,
+      "noTextRelocations": false,
+      "pieFlag": false
+     },
+     "input": "0bb6934ff3fc36f66cdd11e53bf59b811eb7b6bd5c2e30657a728128c5165f60"
+    }
+   ]
+  }
+ }
+}

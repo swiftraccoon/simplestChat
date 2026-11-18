@@ -1,11 +1,10 @@
-//! Invoke actual retained pure validators. Every subprocess/host boundary inside
-//! the imported Python helpers is forbidden; journal fixtures use private files.
+//! The retained pure validators' recorded answers. When they were recorded every
+//! subprocess/host boundary inside the imported Python helpers was forbidden, and journal
+//! fixtures used private files.
 
 use super::*;
+use crate::test_support::{Recording, sha256_hex, tally};
 use serde_json::{Value, json};
-use std::io::Write;
-use std::path::Path;
-use std::process::{Command, Stdio};
 
 fn selection() -> Selection {
     Selection::new("owner/repo", &"a".repeat(40), 789, 789, 1).unwrap()
@@ -73,93 +72,87 @@ fn native(case: &Value) -> Result<Value, Error> {
         _ => panic!("unknown pure operation"),
     }
 }
-fn compare(cases: &[Value]) {
-    let script = r#"
-import io,json,pathlib,sys,tempfile,subprocess,hashlib,types
-from unittest.mock import patch
-root=pathlib.Path(sys.argv[1]);sys.path[:0]=[str(root/'build'),str(root/'ops/ansible/files')]
-import release_trust as t,release_fetch_receiver as r,release_fetch_controller as c,release_preflight as p
-from release_json import decode_json,DuplicateJsonError
-
-def forbidden(*args,**kwargs):raise AssertionError('operational boundary forbidden')
-subprocess.Popen=forbidden;subprocess.run=forbidden
-context=json.loads(sys.argv[2]);selected=json.loads(sys.argv[3]);results=[]
-for case in json.load(sys.stdin):
- try:
-  value=decode_json(case['raw']) if 'raw'in case else case['value']
-  op=case['op']
-  if op=='predicate': result=t.predicate(value,context)
-  elif op=='proof':result=t.proof(value,context)
-  elif op=='envelope':result=r.validate_envelope(value)
-  elif op=='line': result=r.validate_envelope(r.read_line(io.BytesIO(case['raw'].encode())))
-  elif op=='helpers':result=p._expected_helpers(value)
-  elif op=='preflight_producer':
-   with tempfile.TemporaryDirectory(prefix='ops-preflight-oracle-') as directory:
-    directory=pathlib.Path(directory);expected={}
-    for name in value:
-     content=b'owned public fixture';(directory/name).write_bytes(content)
-     expected[name]=hashlib.sha256(content).hexdigest()
-    with patch.object(p,'HELPERS',directory),patch.object(p,'protected',lambda *a,**kw:None), \
-         patch.object(p.os,'geteuid',lambda:0),patch.object(p.platform,'system',lambda:'Linux'), \
-         patch.object(p.platform,'machine',lambda:'x86_64'), \
-         patch.object(p.platform,'freedesktop_os_release',lambda:{'ID':'debian','VERSION_ID':'13'}), \
-         patch.object(p.uuid,'uuid4',lambda:types.SimpleNamespace(hex='b'*32)):
-     result=p.check(expected)
-  elif op=='receipt':result=c.verified_receipt(value,selected)
-  elif op=='journal':
-   with tempfile.TemporaryDirectory(prefix='ops-journal-oracle-') as directory:
-    path=pathlib.Path(directory)/'current.json';path.write_text(json.dumps(value))
-    r.protected=lambda *a,**kw:None;r.finished_journal(path);r.protected=forbidden
-    result={'schemaVersion':1,'finalized':True}
-  else:raise AssertionError('unexpected pure operation')
-  results.append({'ok':True,'value':result})
- except DuplicateJsonError:results.append({'ok':False,'error':'ambiguous_json'})
- except (t.TrustError,r.FetchError,c.FetchError,p.PreflightError) as error:
-  results.append({'ok':False,'error':str(error)})
- except KeyError:results.append({'ok':False,'error':'receiver_receipt_invalid'})
- except ValueError as error:
-  results.append({'ok':False,'error':'expected_object' if str(error)=='Expected a JSON object' else 'invalid_json'})
-json.dump(results,sys.stdout)
-"#;
-    let root = std::env::var_os("OPS_REFERENCE_ROOT")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .to_owned()
-        });
-    let mut child = Command::new("python3")
-        .args(["-I", "-c", script])
-        .arg(root)
-        .arg(serde_json::to_string(&selection()).unwrap())
-        .arg(envelope().to_string())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(cases).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+/// The retained validators' answers to every case these tests build, test by test, each bound
+/// to the SHA-256 of the case as `compare` serializes it; each test's selection and envelope
+/// arguments are bound the same way (`recorded_trust.json`).
+const RECORDED: &str = include_str!("recorded_trust.json");
+/// The recorder's printed tallies, test by test: cases accepted, then refusals per code.
+const TALLIES: [(&str, &[(&str, usize)]); 4] = [
+    (
+        "envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims",
+        &[
+            ("accepted", 6),
+            ("ambiguous_json", 1),
+            ("invalid_envelope", 107),
+            ("invalid_request", 1),
+        ],
+    ),
+    (
+        "helper_requests_and_finished_claims_preserve_the_operational_policy",
+        &[
+            ("accepted", 8),
+            ("invalid_helper_digest", 80),
+            ("invalid_helper_set", 11),
+            ("unfinished_operation", 4),
+        ],
+    ),
+    (
+        "predicates_and_proofs_match_selected_source_shapes_and_exact_hash_sets",
+        &[
+            ("accepted", 3),
+            ("attestation_file_digests", 41),
+            ("attestation_image_identity", 8),
+            ("attestation_predicate_shape", 14),
+            ("attestation_proof_digests", 29),
+            ("attestation_proof_shape", 4),
+            ("attestation_release_policy", 39),
+            ("attestation_schema", 8),
+            ("attestation_source_identity", 32),
+            ("expected_object", 21),
+        ],
+    ),
+    (
+        "receipt_consistency_and_redaction_match_the_recorded_controller_projection",
+        &[
+            ("accepted", 14),
+            ("receiver_byte_count_invalid", 18),
+            ("receiver_digest_invalid", 14),
+            ("receiver_evidence_invalid", 16),
+            ("receiver_failure_inconsistent", 1),
+            ("receiver_failure_invalid", 7),
+            ("receiver_identity_mismatch", 36),
+            ("receiver_phase_invalid", 9),
+            ("receiver_receipt_invalid", 42),
+            ("receiver_success_inconsistent", 5),
+            ("receiver_timing_invalid", 10),
+        ],
+    ),
+];
+/// Holds each case of `test` to the recorded answer, in order.
+fn compare(test: &str, cases: &[Value]) {
+    let recording = Recording::new(RECORDED, &TALLIES.map(|(name, _)| name));
+    let recorded = recording.test(test);
+    let selection = serde_json::to_string(&selection()).unwrap();
+    assert_eq!(recorded["selection"], sha256_hex(selection.as_bytes()));
+    assert_eq!(
+        recorded["envelope"],
+        sha256_hex(envelope().to_string().as_bytes())
     );
-    let expected: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
-    eprintln!("checked {} retained Python policy cases", cases.len());
-    for (index, (case, expected)) in cases.iter().zip(expected).enumerate() {
+    let mut recorded = recording.cases(test);
+    let mut counted = BTreeMap::new();
+    for (index, case) in cases.iter().enumerate() {
+        let expected = recorded.answer(&serde_json::to_vec(case).unwrap());
         let actual = match native(case) {
             Ok(value) => json!({"ok":true,"value":value}),
             Err(e) => json!({"ok":false,"error":e.code()}),
         };
         assert_eq!(actual, expected, "case{index}: {case}");
+        let outcome = actual["error"].as_str().unwrap_or("accepted").to_string();
+        *counted.entry(outcome).or_insert(0) += 1;
     }
+    assert_eq!(recorded.finish(), cases.len());
+    let (_, counts) = TALLIES.iter().find(|(name, _)| *name == test).unwrap();
+    assert_eq!(counted, tally(counts), "{test}");
 }
 fn mutations(op: &str, value: Value) -> Vec<Value> {
     let mut cases = vec![json!({"op":op,"value":value})];
@@ -212,7 +205,10 @@ fn predicates_and_proofs_match_selected_source_shapes_and_exact_hash_sets() {
             }
         }
     }
-    compare(&cases);
+    compare(
+        "predicates_and_proofs_match_selected_source_shapes_and_exact_hash_sets",
+        &cases,
+    );
 }
 #[test]
 fn envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims() {
@@ -250,6 +246,30 @@ fn envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims() {
             cases.push(json!({"op":"envelope","value":changed}));
         }
     }
+    // A dotted repository, the longest owner and name, and a name starting with
+    // punctuation, each the same in the envelope and in its attestation.
+    for repository in [
+        "owner/re.po".to_string(),
+        format!("{}/{}", "a".repeat(39), "b".repeat(100)),
+        "owner/.repo".to_string(),
+    ] {
+        let mut changed = envelope();
+        changed["repository"] = json!(repository);
+        changed["attestation"]["predicate"]["repository"] = json!(repository);
+        cases.push(json!({"op":"envelope","value":changed}));
+    }
+    // Run identifiers of zero, the same in the envelope and in its attestation: the run
+    // attempt, and the build and CI run, which the attestation requires to be equal.
+    let mut attempt = envelope();
+    attempt["runAttempt"] = json!(0);
+    attempt["attestation"]["predicate"]["runAttempt"] = json!(0);
+    let mut runs = envelope();
+    runs["buildRunId"] = json!(0);
+    runs["ciRunId"] = json!(0);
+    runs["attestation"]["predicate"]["runId"] = json!(0);
+    for changed in [attempt, runs] {
+        cases.push(json!({"op":"envelope","value":changed}));
+    }
     let line = format!("{}\n", envelope());
     cases.push(json!({"op":"line","raw":line}));
     for raw in ["", "{}", "[]\n", "{}\n", "{\"x\":1,\"x\":2}\n"] {
@@ -258,12 +278,15 @@ fn envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims() {
             cases.push(json!({"op":"line","raw":raw}));
         }
     }
-    compare(&cases);
+    compare(
+        "envelopes_reject_mixed_types_invalid_selectors_and_unbound_claims",
+        &cases,
+    );
     assert!(Envelope::decode_line(b"{}").is_err());
     assert!(Envelope::decode_line(b"").is_err());
 }
 #[test]
-fn receipt_consistency_and_redaction_match_actual_controller_projection() {
+fn receipt_consistency_and_redaction_match_the_recorded_controller_projection() {
     let mut cases = mutations("receipt", receipt());
     for value in [
         json!(-0.0),
@@ -298,7 +321,10 @@ fn receipt_consistency_and_redaction_match_actual_controller_projection() {
             }
         }
     }
-    compare(&cases);
+    compare(
+        "receipt_consistency_and_redaction_match_the_recorded_controller_projection",
+        &cases,
+    );
     let mut private = receipt();
     private["private_unrecognized"] = json!({"token":"PRIVATE_SENTINEL"});
     let document = ReceiverReceipt::decode(
@@ -339,7 +365,10 @@ fn helper_requests_and_finished_claims_preserve_the_operational_policy() {
     }
     cases.push(json!({"op":"preflight_producer","value":{}}));
     cases.push(json!({"op":"preflight_producer","value":helpers()}));
-    compare(&cases);
+    compare(
+        "helper_requests_and_finished_claims_preserve_the_operational_policy",
+        &cases,
+    );
 }
 #[test]
 fn originals_limits_and_preflight_producer_conformance_are_explicit() {
