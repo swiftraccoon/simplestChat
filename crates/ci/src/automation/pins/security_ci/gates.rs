@@ -167,21 +167,21 @@ fn aggregate_checks_stored_codeql_health_before_signing() {
     assert!(lacks(bootstrap, &["if", "env"]));
     assert!(lacks(gate, &["env"]));
     let (position, health) = located(steps, |step| {
-        script(step).contains("build/security_codeql_triage.py health")
+        script(step).contains(" codeql triage health ")
     });
     assert_eq!(health["env"], json!({"GH_TOKEN": "${{ github.token }}"}));
     assert_eq!(health["if"], "${{ !env.ACT }}");
     assert!(lacks(health, &["continue-on-error"]));
     assert!(position > 2);
-    for argument in [
-        "python3 build/security_codeql_triage.py health",
-        "--repository \"$GITHUB_REPOSITORY\"",
-        "--revision \"$GITHUB_SHA\"",
-        "--ref \"$GITHUB_REF\"",
-        "--output \"$RUNNER_TEMP/codeql-analysis-health\"",
-    ] {
-        assert!(run(health).contains(argument), "{argument}");
-    }
+    assert_eq!(
+        run(health),
+        concat!(
+            "cargo run --locked -q -p simplestchat-security -- codeql triage health \\\n",
+            "  --repository \"$GITHUB_REPOSITORY\" --revision \"$GITHUB_SHA\"",
+            " --ref \"$GITHUB_REF\" \\\n",
+            "  --output \"$RUNNER_TEMP/codeql-analysis-health\"\n",
+        )
+    );
     let upload = first(steps, |step| {
         uses(step).starts_with("actions/upload-artifact@")
     });

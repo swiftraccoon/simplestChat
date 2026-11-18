@@ -1,0 +1,473 @@
+{
+ "archives": [
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800100000000727573742f726573756c74732f612e62717273504b0506000000000100010041000000380000000000",
+   "name": "valid",
+   "valid": true
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000005000000727573742f66697874757265504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000050000000000000000000000800100000000727573742f504b0102140314000000000000002100ee40e505070000000700000013000000000000000000000080012a000000727573742f726573756c74732f612e62717273504b0506000000000200020074000000620000000000",
+   "name": "directory",
+   "valid": true
+  },
+  {
+   "hex": "504b030414000008000000002100ee40e505070000000700000014000000727573742f726573756c74732fc3a92e6271727366697874757265504b0102140314000008000000002100ee40e5050700000007000000140000000000000000000000800100000000727573742f726573756c74732fc3a92e62717273504b0506000000000100010042000000390000000000",
+   "name": "unicode",
+   "valid": true
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e5050700000007000000160000002e2e2f727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e50507000000070000001600000000000000000000008001000000002e2e2f727573742f726573756c74732f612e62717273504b05060000000001000100440000003b0000000000",
+   "name": "relative",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e5050700000007000000140000002f727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e50507000000070000001400000000000000000000008001000000002f727573742f726573756c74732f612e62717273504b0506000000000100010042000000390000000000",
+   "name": "absolute",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000014000000727573742f2f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800100000000727573742f2f726573756c74732f612e62717273504b0506000000000100010042000000390000000000",
+   "name": "double",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000015000000727573742f2e2f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000150000000000000000000000800100000000727573742f2e2f726573756c74732f612e62717273504b05060000000001000100430000003a0000000000",
+   "name": "dot",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000018000000727573742f782f2e2e2f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000180000000000000000000000800100000000727573742f782f2e2e2f726573756c74732f612e62717273504b05060000000001000100460000003d0000000000",
+   "name": "parent",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573745c726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800100000000727573745c726573756c74732f612e62717273504b0506000000000100010041000000380000000000",
+   "name": "backslash",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000014000000727573742f726573756c74732f61012e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800100000000727573742f726573756c74732f61012e62717273504b0506000000000100010042000000390000000000",
+   "name": "control",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800100000000727573742f726573756c74732f612e62717273504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800138000000727573742f726573756c74732f612e62717273504b0506000000000200020082000000700000000000",
+   "name": "same",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b030414000000000000002100ee40e505070000000700000014000000727573742f726573756c74732f612e627172732f66697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800100000000727573742f726573756c74732f612e62717273504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800138000000727573742f726573756c74732f612e627172732f504b0506000000000200020083000000710000000000",
+   "name": "file-directory",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e505070000000700000013000000000000000000000000a000000000727573742f726573756c74732f612e62717273504b0506000000000100010041000000380000000000",
+   "name": "symlink",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000001000000000727573742f726573756c74732f612e62717273504b0506000000000100010041000000380000000000",
+   "name": "fifo",
+   "valid": false
+  },
+  {
+   "hex": "504b0506000000000000000000000000000000000000",
+   "name": "empty",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e5050700000007000000140000006f746865722f726573756c74732f612e6271727366697874757265504b0102140314000000000000002100ee40e50507000000070000001400000000000000000000008001000000006f746865722f726573756c74732f612e62717273504b0506000000000100010042000000390000000000",
+   "name": "wrong-language",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000011000000727573742f64617461626173652e796d6c66697874757265504b0102140314000000000000002100ee40e5050700000007000000110000000000000000000000800100000000727573742f64617461626173652e796d6c504b050600000000010001003f000000360000000000",
+   "name": "no-results",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b030414000000000000002100ee40e505070000000700000014000000727573742f726573756c74732f612e736172696666697874757265504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800100000000727573742f726573756c74732f612e62717273504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800138000000727573742f726573756c74732f612e7361726966504b0506000000000200020083000000710000000000",
+   "name": "sarif",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000014000000727573742f726573756c74732fc3a92e6271727366697874757265504b030414000008000000002100ee40e505070000000700000014000000727573742f726573756c74732fc3a92e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800100000000727573742f726573756c74732fc3a92e62717273504b0102140314000008000000002100ee40e5050700000007000000140000000000000000000000800139000000727573742f726573756c74732fc3a92e62717273504b0506000000000200020084000000720000000000",
+   "name": "cp437-distinct",
+   "valid": true
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000014000000727573742f726573756c74732fc3a92e6271727366697874757265504b030414000008000000002100ee40e505070000000700000018000000727573742f726573756c74732fe2949ce28c902e6271727366697874757265504b0102140314000000000000002100ee40e5050700000007000000140000000000000000000000800100000000727573742f726573756c74732fc3a92e62717273504b0102140314000008000000002100ee40e5050700000007000000180000000000000000000000800139000000727573742f726573756c74732fe2949ce28c902e62717273504b0506000000000200020088000000760000000000",
+   "name": "cp437-collision",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013002000727573742f726573756c74732f612e6271727375701c0001db5d560f2e2e2f69676e6f7265642d756e69636f64652d7061746866697874757265504b0102140314000000000000002100ee40e5050700000007000000130020000000000000000000800100000000727573742f726573756c74732f612e6271727375701c0001db5d560f2e2e2f69676e6f7265642d756e69636f64652d70617468504b0506000000000100010061000000580000000000",
+   "name": "unicode-extra",
+   "valid": false
+  },
+  {
+   "hex": "504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f612e6271727366697874757265504b030414000000000000002100ee40e505070000000700000013000000727573742f726573756c74732f622e6271727366697874757265504b0102140314000000000000002100ee40e50507000000ffffffff130000000000000000000000800100000000727573742f726573756c74732f612e62717273504b0102140314000000000000002100ee40e5050700000007000000130000000000000000000000800138000000727573742f726573756c74732f622e62717273504b0506000000000200020082000000700000000000",
+   "name": "huge-declared",
+   "valid": false
+  }
+ ],
+ "identities": [
+  {
+   "compilerSha256": "compiler",
+   "inputs": "native-inputs",
+   "language": "c-cpp",
+   "name": "the reference's native identity",
+   "namespace": "main-linux-x86_64",
+   "opensslRoot": "/simplestchat codeql \u03bb/openssl",
+   "opensslSha256": "openssl",
+   "packages": "packages",
+   "result": {
+    "held": "codeql-analyzed-v2-c-cpp-main-linux-x86_64-a0a4611c238d24b89e5119c1f27cc6bcf85f50ab0305be26ca8716abb209bb32"
+   },
+   "sourceRoot": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "toolchain": {
+    "pin": "fixture \u03bb"
+   }
+  },
+  {
+   "compilerSha256": "compiler",
+   "inputs": "native-inputs",
+   "language": "c-cpp",
+   "name": "a native identity of an untrusted run",
+   "namespace": "untrusted-linux-x86_64",
+   "opensslRoot": "/simplestchat codeql \u03bb/openssl",
+   "opensslSha256": "openssl",
+   "packages": "packages",
+   "result": {
+    "held": "codeql-analyzed-v2-c-cpp-untrusted-linux-x86_64-a0a4611c238d24b89e5119c1f27cc6bcf85f50ab0305be26ca8716abb209bb32"
+   },
+   "sourceRoot": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "toolchain": {
+    "pin": "fixture \u03bb"
+   }
+  },
+  {
+   "compilerSha256": "compiler",
+   "inputs": "native-inputs",
+   "language": "c-cpp",
+   "name": "a native identity of both suites",
+   "namespace": "main-linux-x86_64",
+   "opensslRoot": "/simplestchat codeql \u03bb/openssl",
+   "opensslSha256": "openssl",
+   "packages": "packages",
+   "result": {
+    "held": "codeql-analyzed-v2-c-cpp-main-linux-x86_64-cae42e781bb0fe50001fd579cd12309eb1c0387d59faeee5606537c50648287c"
+   },
+   "sourceRoot": "/simplestchat codeql \u03bb/source",
+   "suite": "all",
+   "toolchain": {
+    "pin": "fixture \u03bb"
+   }
+  }
+ ],
+ "opensslIdentities": [
+  {
+   "name": "the reference's prefix",
+   "result": {
+    "held": "e3e012c6c4c4db81b12e491390cd2ee998aa55c9c031684ad6128530c22016fd"
+   },
+   "tree": {
+    "include/openssl/ssl.h": {
+     "text": "include/openssl/ssl.h"
+    },
+    "lib/libcrypto.a": {
+     "text": "lib/libcrypto.a"
+    },
+    "lib/libssl.a": {
+     "text": "lib/libssl.a"
+    },
+    "share/simplestchat/receipt.json": {
+     "text": "share/simplestchat/receipt.json"
+    }
+   }
+  },
+  {
+   "name": "a prefix with a link",
+   "result": {
+    "refused": "codeql_cache_openssl_symlink"
+   },
+   "tree": {
+    "include/alias": {
+     "link": "lib/libssl.a"
+    },
+    "include/openssl/ssl.h": {
+     "text": "include/openssl/ssl.h"
+    },
+    "lib/libcrypto.a": {
+     "text": "lib/libcrypto.a"
+    },
+    "lib/libssl.a": {
+     "text": "lib/libssl.a"
+    },
+    "share/simplestchat/receipt.json": {
+     "text": "share/simplestchat/receipt.json"
+    }
+   }
+  }
+ ],
+ "receipts": [
+  {
+   "asked": [
+    "codeql-cache-unbundle",
+    "codeql-cache-bundle"
+   ],
+   "language": "rust",
+   "pythonCache": {
+    "database.zip": {
+     "hex": "504b030414000000080000002100c4e9956a0a0000000800000018000000727573742f636f6465716c2d64617461626173652e796d6ccb4c49cd2bc92ca90400504b0304140000000800000021007247f88a09000000070000001a000000727573742f726573756c74732f73656375726974792e627172732b2c4d2dca4c2d0600504b0102140314000000080000002100c4e9956a0a00000008000000180000000000000000000000800100000000727573742f636f6465716c2d64617461626173652e796d6c504b01021403140000000800000021007247f88a09000000070000001a0000000000000000000000800140000000727573742f726573756c74732f73656375726974792e62717273504b050600000000020002008e000000810000000000",
+     "mode": 420
+    },
+    "receipt.json": {
+     "hex": "7b22736368656d6156657273696f6e223a20312c20226b6579223a2022707974686f6e2d6b6579222c20227265766973696f6e223a202262626262626262626262626262626262626262626262626262626262626262626262626262626262222c202262756e646c65536861323536223a202264656162633864633335663762396231386464313033396232316334316239313136313461656236376363336637313235303064616166303732623931323535222c202262756e646c654279746573223a203239337d0a",
+     "mode": 384
+    }
+   },
+   "restored": {
+    "held": {
+     "bundleBytes": 337,
+     "bundleSha256": "0a2395aa2f38128e15c7cf79c759b96f12cce5159adacd55fe3f13fbfefef96c",
+     "key": "native-key",
+     "reused": true,
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "schemaVersion": 1
+    }
+   },
+   "rustCache": {
+    "database.zip": {
+     "hex": "504b03041400080008000000000000000000000000000000000018000000727573742f636f6465716c2d64617461626173652e796d6cca4c49cd2bc92ca904000000ffff0300504b0708c4e9956a1000000008000000504b0304140008000800000000000000000000000000000000001a000000727573742f726573756c74732f73656375726974792e627172732a2c4d2dca4c2d06000000ffff0300504b07087247f88a0f00000007000000504b0102140014000800080000000000c4e9956a1000000008000000180000000000000000000000000000000000727573742f636f6465716c2d64617461626173652e796d6c504b01021400140008000800000000007247f88a0f000000070000001a0000000000000000000000000056000000727573742f726573756c74732f73656375726974792e62717273504b050600000000020002008e000000ad0000000000",
+     "mode": 420
+    },
+    "receipt.json": {
+     "hex": "7b2262756e646c654279746573223a3333372c2262756e646c65536861323536223a2230613233393561613266333831323865313563376366373963373539623936663132636365353135396164616364353566653366313366626665666566393663222c226b6579223a226e61746976652d6b6579222c227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22736368656d6156657273696f6e223a317d0a",
+     "mode": 384
+    }
+   },
+   "saved": {
+    "held": {
+     "bundleBytes": 293,
+     "bundleSha256": "deabc8dc35f7b9b18dd1039b21c41b911614aeb67cc3f712500daaf072b91255",
+     "key": "python-key",
+     "reused": false,
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "schemaVersion": 1
+    }
+   }
+  },
+  {
+   "asked": [
+    "codeql-cache-unbundle",
+    "codeql-cache-bundle"
+   ],
+   "language": "c-cpp",
+   "pythonCache": {
+    "database.zip": {
+     "hex": "504b030414000000080000002100c4e9956a0a0000000800000019000000632d6370702f636f6465716c2d64617461626173652e796d6ccb4c49cd2bc92ca90400504b0304140000000800000021007247f88a09000000070000001b000000632d6370702f726573756c74732f73656375726974792e627172732b2c4d2dca4c2d0600504b0102140314000000080000002100c4e9956a0a00000008000000190000000000000000000000800100000000632d6370702f636f6465716c2d64617461626173652e796d6c504b01021403140000000800000021007247f88a09000000070000001b0000000000000000000000800141000000632d6370702f726573756c74732f73656375726974792e62717273504b0506000000000200020090000000830000000000",
+     "mode": 420
+    },
+    "receipt.json": {
+     "hex": "7b22736368656d6156657273696f6e223a20312c20226b6579223a2022707974686f6e2d6b6579222c20227265766973696f6e223a202262626262626262626262626262626262626262626262626262626262626262626262626262626262222c202262756e646c65536861323536223a202233386138663334306330393630613037373536306135613538633935366436623561393938396639336130383032353765666665353231376334616164353533222c202262756e646c654279746573223a203239377d0a",
+     "mode": 384
+    }
+   },
+   "restored": {
+    "held": {
+     "bundleBytes": 341,
+     "bundleSha256": "0242d625a0fb9b473d5ad7a229cb7cfa189b2197718852351ec07d1925c8dd43",
+     "key": "native-key",
+     "reused": true,
+     "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "schemaVersion": 1
+    }
+   },
+   "rustCache": {
+    "database.zip": {
+     "hex": "504b03041400080008000000000000000000000000000000000019000000632d6370702f636f6465716c2d64617461626173652e796d6cca4c49cd2bc92ca904000000ffff0300504b0708c4e9956a1000000008000000504b0304140008000800000000000000000000000000000000001b000000632d6370702f726573756c74732f73656375726974792e627172732a2c4d2dca4c2d06000000ffff0300504b07087247f88a0f00000007000000504b0102140014000800080000000000c4e9956a1000000008000000190000000000000000000000000000000000632d6370702f636f6465716c2d64617461626173652e796d6c504b01021400140008000800000000007247f88a0f000000070000001b0000000000000000000000000057000000632d6370702f726573756c74732f73656375726974792e62717273504b0506000000000200020090000000af0000000000",
+     "mode": 420
+    },
+    "receipt.json": {
+     "hex": "7b2262756e646c654279746573223a3334312c2262756e646c65536861323536223a2230323432643632356130666239623437336435616437613232396362376366613138396232313937373138383532333531656330376431393235633864643433222c226b6579223a226e61746976652d6b6579222c227265766973696f6e223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161222c22736368656d6156657273696f6e223a317d0a",
+     "mode": 384
+    }
+   },
+   "saved": {
+    "held": {
+     "bundleBytes": 297,
+     "bundleSha256": "38a8f340c0960a077560a5a58c956d6b5a9989f93a080257effe5217c4aad553",
+     "key": "python-key",
+     "reused": false,
+     "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "schemaVersion": 1
+    }
+   }
+  }
+ ],
+ "rustKeys": [
+  {
+   "environment": {
+    "GITHUB_EVENT_NAME": "push",
+    "GITHUB_REF": "refs/heads/main",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "ImageOS": "ubuntu24",
+    "ImageVersion": "20261001.1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+   },
+   "includeVendor": false,
+   "language": "rust",
+   "machine": "x86_64",
+   "name": "the reference's key",
+   "result": {
+    "held": "codeql-analyzed-v2-rust-main-linux-x86_64-4741eb18810b30b7e450ae79917fd0831a757ac3b97488e1c04afe4578b81335"
+   },
+   "source": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "system": "Linux",
+   "tree": {
+    ".github/workflows/codeql.yml": {
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n"
+    },
+    "security/codeql-toolchain.json": {
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n"
+    },
+    "src/main.rs": {
+     "text": "fn main() {}\n"
+    }
+   }
+  },
+  {
+   "environment": {
+    "GITHUB_EVENT_NAME": "push",
+    "GITHUB_REF": "refs/heads/main",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "ImageOS": "ubuntu24",
+    "ImageVersion": "20261001.1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+   },
+   "includeVendor": false,
+   "language": "rust",
+   "machine": "x86_64",
+   "name": "a key of both suites",
+   "result": {
+    "held": "codeql-analyzed-v2-rust-main-linux-x86_64-8cb3035dbd9b52c0a87fbdeb0f9adc50cfe9ecfbce1f5220ed30c725e9059dc2"
+   },
+   "source": "/simplestchat codeql \u03bb/source",
+   "suite": "all",
+   "system": "Linux",
+   "tree": {
+    ".github/workflows/codeql.yml": {
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n"
+    },
+    "security/codeql-toolchain.json": {
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n"
+    },
+    "src/main.rs": {
+     "text": "fn main() {}\n"
+    }
+   }
+  },
+  {
+   "environment": {
+    "GITHUB_EVENT_NAME": "push",
+    "GITHUB_REF": "refs/heads/main",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "ImageOS": "ubuntu24",
+    "ImageVersion": "20261001.1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+   },
+   "includeVendor": true,
+   "language": "rust",
+   "machine": "x86_64",
+   "name": "a key of a vendor scan",
+   "result": {
+    "held": "codeql-analyzed-v2-rust-main-linux-x86_64-27220f5df3c72d6d90fa2db82f97885147934d9fb64ba0328037df5b89074f89"
+   },
+   "source": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "system": "Linux",
+   "tree": {
+    ".github/workflows/codeql.yml": {
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n"
+    },
+    "security/codeql-toolchain.json": {
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n"
+    },
+    "src/main.rs": {
+     "text": "fn main() {}\n"
+    }
+   }
+  },
+  {
+   "environment": {
+    "GITHUB_EVENT_NAME": "pull_request",
+    "GITHUB_REF": "refs/heads/main",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "ImageOS": "ubuntu24",
+    "ImageVersion": "20261001.1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+   },
+   "includeVendor": false,
+   "language": "rust",
+   "machine": "x86_64",
+   "name": "a key of a pull request",
+   "result": {
+    "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-a84d7a39ec8110424b5a1d99efccc4c5b82691d858a608cef13c5bed9b8b46a9"
+   },
+   "source": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "system": "Linux",
+   "tree": {
+    ".github/workflows/codeql.yml": {
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n"
+    },
+    "security/codeql-toolchain.json": {
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n"
+    },
+    "src/main.rs": {
+     "text": "fn main() {}\n"
+    }
+   }
+  },
+  {
+   "environment": {
+    "GITHUB_EVENT_NAME": "push",
+    "GITHUB_REF": "refs/heads/main",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "ImageOS": "ubuntu24",
+    "ImageVersion": "20261001.1",
+    "PYTHONDONTWRITEBYTECODE": "1"
+   },
+   "includeVendor": false,
+   "language": "rust",
+   "machine": "x86_64",
+   "name": "a key of a changed source",
+   "result": {
+    "held": "codeql-analyzed-v2-rust-main-linux-x86_64-9c73e7d93589711e31c2dc87927340f2514f75ad08f9ef29223b2c633f3edcad"
+   },
+   "source": "/simplestchat codeql \u03bb/source",
+   "suite": "security",
+   "system": "Linux",
+   "tree": {
+    ".github/workflows/codeql.yml": {
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n"
+    },
+    "security/codeql-toolchain.json": {
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n"
+    },
+    "src/main.rs": {
+     "text": "fn main() { println!(\"changed\"); }\n"
+    }
+   }
+  }
+ ]
+}

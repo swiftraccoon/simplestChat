@@ -167,6 +167,6 @@ test("local evidence workflow calls the compiled producer with no Python YAML bo
   );
   assert.match(
     codeql,
-    /Install the pinned Rust toolchain for compiled cache tooling\n\s+if: \$\{\{ env\.ACT \|\| matrix\.language == 'rust' \}\}\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,
+    /Install the pinned Rust toolchain for compiled CodeQL tooling\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,
   );
 });

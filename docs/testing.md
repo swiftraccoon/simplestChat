@@ -2068,7 +2068,7 @@ uploads when findings fail policy; that failure continues to block signing.
 Optional vendor CodeQL runs use the same CLI with an explicit local flag:
 
 ```sh
-python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git rev-parse HEAD)" \
   --include-vendor --language c-cpp --suite all \
   --openssl-prefix "$PWD/target/openssl-4.1.0" \
   --output "$PWD/results/codeql-native-local"
@@ -2103,8 +2103,10 @@ The same entrypoint offers `validate-bundle`, `validate-source`, `save` and
 `restore`; use `codeql-cache --help` for their explicit paths and arguments.
 Keys reuse the CI source inventory and bind the analyzer/query pin, source path,
 suite, trust/platform namespace, and native package/compiler/OpenSSL identities
-where applicable. The Python module remains the scanner driver's import API and
-parity reference. Reusing a database still regenerates reports and applies
+where applicable. `simplestchat-security codeql local --database-cache DIR` runs
+this tool for each operation and needs `--cache-tool` naming it by absolute path,
+such as `"$PWD/target/debug/simplestchat-ci"` after `cargo build --locked -p
+simplestchat-ci`. Reusing a database still regenerates reports and applies
 current finding policy.
 
 Native source readback supports the Stored and Deflate methods used by genuine

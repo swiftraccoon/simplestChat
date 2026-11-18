@@ -1,0 +1,131 @@
+{
+ "cases": [
+  {
+   "raised": "",
+   "status": 0,
+   "stdout": "4\n",
+   "value": null
+  },
+  {
+   "raised": "",
+   "status": 0,
+   "stdout": "1\n",
+   "value": "1"
+  },
+  {
+   "raised": "",
+   "status": 0,
+   "stdout": "2\n",
+   "value": "2"
+  },
+  {
+   "raised": "",
+   "status": 0,
+   "stdout": "3\n",
+   "value": "3"
+  },
+  {
+   "raised": "",
+   "status": 0,
+   "stdout": "4\n",
+   "value": "4"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "0"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "5"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "9"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "10"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "01"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "+1"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "-1"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "1.0"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": " 1"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "1 "
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "1\n"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": ""
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "a"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "\u0661"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "\uff11"
+  },
+  {
+   "raised": "security_tools.ToolError: codeql_build_jobs_range",
+   "status": 1,
+   "stdout": "",
+   "value": "1\u200b"
+  }
+ ],
+ "hostWorkers": 4
+}

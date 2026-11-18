@@ -1,5 +1,5 @@
-//! Replays of `recorded_coverage.json`: what `build/security_codeql.py`
-//! made of query results and of its command lines.
+//! Replays of `recorded_coverage.json`: what the reference made of query
+//! results and of its command lines.
 
 use super::{command, verify};
 use crate::{

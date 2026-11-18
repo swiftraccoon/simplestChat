@@ -190,6 +190,16 @@ but now incurs the tool build; this review makes no hosted cold-time claim.
 Restored databases still require source/receipt validation, regenerated reports
 and current policy.
 
+The CodeQL helpers are now the compiled security gate. The existing exact
+`codeql.yml#jobs/source-analysis/steps/1/uses` installer review, re-reviewed
+2026-11-18, covers every matrix entry: its guard is removed because each
+language builds the gate once before pin verification, analysis and finding
+policy. The immutable action, explicit Rust 1.99.0, credential-free checkout,
+official HTTPS bootstrap boundary and 2026-11-29 expiry are unchanged. The
+build receives no step or job token, and no artifact, pull-request value or
+restored cache selects its source or arguments. The added hosted compilation
+cost has not been measured on GitHub.
+
 The native-DTLS Rust port adds one exact informational installer review at
 `ci.yml#jobs/native-dtls/steps/2/uses`, only when its input cache misses. It uses
 the same immutable `89b12181fb390509a0842a86cc55eeb8eb928c1d` action and explicit

@@ -241,7 +241,7 @@ policy. `security/codeql-toolchain.json` authenticates the
 platform bundles. For a focused component on a clean committed tree:
 
 ```sh
-python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git rev-parse HEAD)" \
   --language javascript-typescript --output "$PWD/results/codeql-javascript"
 ```
 
@@ -256,7 +256,7 @@ this selects all five supported languages; native C/C++ requires the flag and
 a Linux environment with the pinned OpenSSL prefix:
 
 ```sh
-python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
+cargo run --locked -q -p simplestchat-security -- codeql local --revision "$(git rev-parse HEAD)" \
   --include-vendor --language c-cpp --suite all \
   --openssl-prefix "$PWD/target/openssl-4.1.0" \
   --output "$PWD/results/codeql-native-local"
@@ -268,7 +268,7 @@ queries and exact review policy remain active. It is rejected in CI environments
 and cannot be required by the hosted or complete local-CI aggregate.
 
 After ordinary analysis, every language job validates its original SARIF through
-`build/security_codeql_triage.py`. Unreviewed High and Critical findings fail the
+`simplestchat-security codeql triage sarif`. Unreviewed High and Critical findings fail the
 job even when the scanner process itself succeeds. Each exception binds the
 query, analyzer version, primary range, rendered-message digest and complete
 source identity. Generated native files require authenticated upstream archive
@@ -279,7 +279,7 @@ expression at its parent macro. A module-only edit invalidates its review even
 when the parent is unchanged. Unsupported dynamic includes, root escapes,
 symlinks, cycles and exceeded traversal limits fail closed.
 
-The required aggregate also runs `build/security_codeql_triage.py health` against
+The required aggregate also runs `simplestchat-security codeql triage health` against
 GitHub's stored analysis records. For each of the four automated security categories, the
 newest record must match the caller's exact ref and commit, contain executed
 queries, and have no error or warning. A successful upload or green analysis job

@@ -1,8 +1,9 @@
 //! Exact analyzed-database cache primitives, independent of current finding policy.
 //!
-//! The Python module remains the reference and scanner-driver import API. This
-//! CLI validates source/bundles without extraction; save/restore use only an
-//! explicitly selected installed CodeQL executable and private bounded commands.
+//! `simplestchat-security codeql local --cache-tool` runs this CLI for each cache
+//! operation of its analysis. It validates source/bundles without extraction;
+//! save/restore use only an explicitly selected installed CodeQL executable and
+//! private bounded commands.
 
 mod archive;
 mod cache;

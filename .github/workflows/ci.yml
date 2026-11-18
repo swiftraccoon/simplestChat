@@ -1333,7 +1333,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 build/security_codeql_triage.py health \
+          cargo run --locked -q -p simplestchat-security -- codeql triage health \
             --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" --ref "$GITHUB_REF" \
             --output "$RUNNER_TEMP/codeql-analysis-health"
       - name: Retain bounded CodeQL analysis health evidence

@@ -1,5 +1,5 @@
-//! Replays of `recorded_triage.json`: what `build/security_codeql_triage.py`
-//! made of values, scores, locations, reports, committed and native
+//! Replays of `recorded_triage.json`: what the reference made of
+//! values, scores, locations, reports, committed and native
 //! sources, findings, alerts and reviews, each case rebuilt in its own
 //! place and read through a `git show` that serves the recorded commit;
 //! and what the triage replays share.

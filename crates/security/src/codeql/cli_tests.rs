@@ -1,6 +1,6 @@
 //! The command lines of `codeql`, held to what the reference's parsers made
 //! of the recorded ones, and `codeql jobs`, held to the recorded runs of
-//! `build/security_codeql_resources.py`.
+//! the reference.
 
 use super::{Around, CARGO, Line, TOOLS, USAGE, command, parsed};
 use crate::{

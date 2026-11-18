@@ -14,7 +14,15 @@ export PIP_CONFIG_FILE=/dev/null PIP_INDEX_URL=https://pypi.org/simple
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 export PIP_CONSTRAINT="$project_root/build/pip-constraints.txt"
 export MEDIASOUP_BUILDTYPE=Release
-MEDIASOUP_BUILD_JOBS="$(python3 build/security_codeql_resources.py)"
+# The driver hands over its budget's compilers, already held to this host's
+# processors and memory; the traced build takes exactly those.
+case "${CODEQL_BUILD_JOBS-}" in
+  1 | 2 | 3 | 4) MEDIASOUP_BUILD_JOBS="$CODEQL_BUILD_JOBS" ;;
+  *)
+    echo 'CODEQL_BUILD_JOBS must be the driver budget: 1 to 4 compilers.' >&2
+    exit 1
+    ;;
+esac
 export MEDIASOUP_BUILD_JOBS
 printf 'CodeQL traced compile workers: %s\n' "$MEDIASOUP_BUILD_JOBS"
 unset DOCS_RS MESON MESON_ARGS MESON_VERSION NINJA_VERSION PYTHONPATH

@@ -87,14 +87,15 @@ pub(crate) fn event(name: &str, argv: &[&OsStr], how: &Run<'_>, place: &Path) ->
 
 /// The command the reference ran as the commands the port runs: this
 /// program's own `codeql triage` where the reference's interpreter ran its
-/// triage script, and its own `vendor` where it ran its vendor script.
+/// triage script, which the recorder wrote as `<triage>`, and its own
+/// `vendor` where it ran its vendor script.
 pub(crate) fn ported(event: &Document) -> Document {
     let mut event = event.clone();
     let Some(argv) = event.get("argv").and_then(Document::items) else {
         return event;
     };
     let head = argv.get(1).and_then(Document::text).unwrap_or_default();
-    let replaced: Option<&[&str]> = if head.ends_with("/build/security_codeql_triage.py") {
+    let replaced: Option<&[&str]> = if head == "<triage>" {
         Some(&["codeql", "triage"])
     } else if head.ends_with("/build/security_vendor.py") {
         Some(&["vendor"])

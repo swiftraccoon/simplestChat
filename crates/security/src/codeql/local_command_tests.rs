@@ -760,12 +760,12 @@ fn every_recorded_main_leaves_the_same_evidence() {
             same_listing(name, &left, &unkeyed(recorded), &[]);
         }
     }
-    assert_eq!(cases.len(), 117);
-    assert_eq!(statuses, [38, 73]);
+    assert_eq!(cases.len(), 120);
+    assert_eq!(statuses, [38, 76]);
     assert_eq!(stopped, 6);
-    assert_eq!(summaries, 112);
-    assert_eq!(cached, 26);
-    assert_eq!(directories, 115);
+    assert_eq!(summaries, 115);
+    assert_eq!(cached, 29);
+    assert_eq!(directories, 118);
 }
 
 #[test]

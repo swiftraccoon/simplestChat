@@ -1,4 +1,4 @@
-//! Replays of `recorded_cargo.json`: what `build/security_codeql_cargo.py`
+//! Replays of `recorded_cargo.json`: what the reference
 //! made of fixture checkouts listed by a fake `git`, with fake compiler
 //! drivers whose text the recording holds, and of restored build
 //! directories. Every key is of a fixed source path, so that the recorded
@@ -86,7 +86,7 @@ fn every_recorded_name_is_judged_an_input_alike() {
         );
         judged += 1;
     }
-    assert_eq!(judged, 60);
+    assert_eq!(judged, 51);
     let listed = |name: &str| -> Vec<String> {
         let words = items(&recorded, name)
             .iter()

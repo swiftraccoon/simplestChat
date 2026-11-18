@@ -1373,3 +1373,42 @@ fn public_types_are_send_and_sync() {
     assert_send_sync::<crate::bounded_log::Captures>();
     assert_send_sync::<crate::process::Native<'static>>();
 }
+
+/// Every file the native suites and the native CodeQL analysis name by path
+/// is still in the checkout, so a deleted file cannot linger as an input of
+/// their keys.
+#[test]
+fn every_named_native_input_is_a_file_of_the_checkout() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    for name in inputs::NATIVE_FILES
+        .iter()
+        .chain(inputs::CODEQL_NATIVE_FILES)
+    {
+        assert!(root.join(name).is_file(), "{name}");
+    }
+}
+
+/// The native CodeQL analysis keys what its traced build, its coverage proof
+/// and its policy actually read, as `test_ci_verified.py` holds the reference
+/// to the same inputs.
+#[test]
+fn native_codeql_selects_its_actual_build_analysis_and_policy_inputs() {
+    for name in [
+        "build/codeql-native-build.sh",
+        "build/pip-constraints.txt",
+        "build/install-openssl.sh",
+        "build/security_vendor.py",
+        "security/codeql-toolchain.json",
+        "security/codeql/native-coverage/compilations.ql",
+        ".github/workflows/codeql.yml",
+        "ops/ansible/files/bounded_process.py",
+        "vendor/mediasoup-sys-0.19.0/tasks.py",
+        "vendor/mediasoup-sys-0.19.0/meson.build",
+        "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+    ] {
+        assert!(inputs::selected(Scope::CodeqlNative, name), "{name}");
+    }
+}

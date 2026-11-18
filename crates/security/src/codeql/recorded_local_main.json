@@ -3,7 +3,7 @@
  "programs": {
   "codeql": "#!/bin/sh\nplace='<place>'\nif [ -f \"$place/fake/codeql.count\" ]; then count=$(/bin/cat \"$place/fake/codeql.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/codeql.count\"\nout=\nfor argument in \"$@\"; do\n  case \"$argument\" in --output=*) out=\"${argument#--output=}\" ;; esac\ndone\ncase \"$1 $2\" in\n  'database create'|'database init'|'database trace-command'|'database finalize') step=\"$2-$(/usr/bin/basename \"$3\")\" ;;\n  'database analyze') step=\"analyze-$(/usr/bin/basename \"$out\" .sarif)\" ;;\n  'query run') step=query ;;\n  'bqrs decode') step=decode ;;\n  *) step=\"$1\" ;;\nesac\n{\n  printf 'call %s %s\\n' \"$count\" \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n  printf 'OPENSSL_DIR %s\\n' \"${OPENSSL_DIR-<unset>}\"\n  printf 'CODEQL_BUILD_JOBS %s\\n' \"${CODEQL_BUILD_JOBS-<unset>}\"\n  printf 'JAVA_TOOL_OPTIONS %s\\n' \"${JAVA_TOOL_OPTIONS-<unset>}\"\n  printf 'TMPDIR %s\\n' \"${TMPDIR-<unset>}\"\n  printf 'HOME %s\\n' \"${HOME-<unset>}\"\n} >> \"$place/fake/codeql.log\"\nanswer=\"$place/fake/codeql/$step\"\nif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "git": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  rev-parse) step=head ;;\n  status) step=status ;;\n  ls-files) step=listing ;;\n  -C) step=stage ;;\n  *) step=other ;;\nesac\nif [ -f \"$place/fake/git.$step.count\" ]; then count=$(/bin/cat \"$place/fake/git.$step.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/git.$step.count\"\n{\n  printf 'call %s %s\\n' \"$step\" \"$count\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/git.log\"\nanswer=\"$place/fake/git/$step\"\nif [ -f \"$answer.$count.sh\" ]; then . \"$answer.$count.sh\"; elif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.$count.stdout\" ]; then /bin/cat \"$answer.$count.stdout\"; elif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.$count.status\" ]; then exit \"$(/bin/cat \"$answer.$count.status\")\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
-  "helper": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+  "helper": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "cache": "#!/bin/sh\nplace='<place>'\noperation=\"$2\"\ndatabase=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --database ]; then database=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ -f \"$place/fake/cache.$operation.count\" ]; then count=$(/bin/cat \"$place/fake/cache.$operation.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/cache.$operation.count\"\n{\n  printf 'call %s %s\\n' \"$operation\" \"$count\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/cache.log\"\nanswer=\"$place/fake/cache/$operation.$count\"\nif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "rustc": "#!/bin/sh\nprintf 'rustc 1.99.0 (pinned)\\nhost: fixture\\n'\n",
   "cargo": "#!/bin/sh\nprintf 'cargo 1.99.0 (pinned)\\n'\n",
@@ -113,7 +113,7 @@
    "mode": 493
   },
   "bin/helper": {
-   "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+   "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
    "mode": 493
   },
   "bin/rustc": {
@@ -248,7 +248,8 @@
    "text": "fixture crypto\n"
   }
  },
- "snippet": "import os\nimport sys\nfrom pathlib import Path\nsys.path.insert(0, 'build')\nfrom security_codeql_local import upload_ready\noutput = Path(os.environ['RUNNER_TEMP']) / 'codeql-local'\nwith open(os.environ['GITHUB_OUTPUT'], 'a') as destination:\n    for category in ('security', 'quality-advisory'):\n        if upload_ready(output, os.environ['GITHUB_SHA'], category, 'rust'):\n            destination.write(f'{category}=true\\n')\n",
+ "snippetRevision": "0f6be079cf230d8fd3010e4e9c02d44725d03c40",
+ "snippetSha256": "573ad9b58abd72d3f428b2984fc957d2386d6c6bd022b98ad82978522c88cd53",
  "mains": [
   {
    "name": "every automated language",
@@ -422,7 +423,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -493,7 +494,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -564,7 +565,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -636,7 +637,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1481,7 +1482,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1502,7 +1503,7 @@
      "run": "codeql-policy-actions-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1598,7 +1599,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1619,7 +1620,7 @@
      "run": "codeql-policy-javascript-typescript-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1715,7 +1716,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1736,7 +1737,7 @@
      "run": "codeql-policy-python-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1833,7 +1834,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1854,7 +1855,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2830,7 +2831,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3472,7 +3473,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -4114,7 +4115,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -4757,7 +4758,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5427,7 +5428,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5448,7 +5449,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -6129,7 +6130,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -6772,7 +6773,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -7419,7 +7420,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8069,7 +8070,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8712,7 +8713,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9358,7 +9359,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9379,7 +9380,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -10048,7 +10049,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -10119,7 +10120,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -10190,7 +10191,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -10262,7 +10263,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -11351,7 +11352,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -12201,7 +12202,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -12272,7 +12273,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -12343,7 +12344,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -12414,7 +12415,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -13137,7 +13138,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -13965,7 +13966,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -13989,7 +13990,7 @@
      "run": "codeql-policy-c-cpp-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -14733,7 +14734,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -14804,7 +14805,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -14875,7 +14876,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -14946,7 +14947,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -15111,7 +15112,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -16474,7 +16475,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -18576,7 +18577,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -22805,7 +22806,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -23943,7 +23944,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -24421,7 +24422,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -25071,7 +25072,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -25723,7 +25724,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -28205,7 +28206,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -28899,7 +28900,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -36107,7 +36108,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -36560,7 +36561,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -37039,7 +37040,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -37060,7 +37061,7 @@
      "run": "codeql-policy-python-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -37549,7 +37550,7 @@
      "run": "codeql-policy-actions-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -37620,7 +37621,7 @@
      "run": "codeql-policy-javascript-typescript-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -38133,7 +38134,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -39851,7 +39852,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -40540,7 +40541,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -40561,7 +40562,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -41262,7 +41263,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -41922,7 +41923,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -43221,7 +43222,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -44038,7 +44039,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -44894,7 +44895,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -44915,7 +44916,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -45737,7 +45738,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -46530,7 +46531,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -46551,7 +46552,7 @@
      "run": "codeql-policy-rust-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -51614,7 +51615,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -52768,7 +52769,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -54758,7 +54759,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -55595,7 +55596,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -56395,7 +56396,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -57215,7 +57216,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -58001,7 +58002,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -58910,7 +58911,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -59841,7 +59842,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -59865,7 +59866,7 @@
      "run": "codeql-policy-c-cpp-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -60421,6 +60422,1561 @@
     "codeql": "call 1 version\ncwd <place>/root\nargument version\nargument --format=json\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 2 query\ncwd <place>/root\nargument query\nargument run\nargument <place>/root/security/codeql/native-coverage/compilations.ql\nargument --database=<place>/out/databases/c-cpp\nargument --output=<place>/out/native-coverage.bqrs\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 3 decode\ncwd <place>/root\nargument bqrs\nargument decode\nargument --format=json\nargument <place>/out/native-coverage.bqrs\nargument --output=<place>/out/native-coverage.json\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 4 analyze-c-cpp-security\ncwd <place>/root\nargument database\nargument analyze\nargument <place>/out/databases/c-cpp\nargument <place>/bundle/qlpacks/codeql/cpp-queries/1.9.0/codeql-suites/cpp-security-extended.qls\nargument --format=sarifv2.1.0\nargument --output=<place>/out/c-cpp-security.sarif\nargument --threads=2\nargument --ram=7168\nargument --sarif-category=/language:c-cpp/security\nargument --sarif-run-property=queryReuseEnabled=true\nargument --sarif-run-property=originalEvaluationRevision=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 5 analyze-c-cpp-quality-advisory\ncwd <place>/root\nargument database\nargument analyze\nargument <place>/out/databases/c-cpp\nargument <place>/bundle/qlpacks/codeql/cpp-queries/1.9.0/codeql-suites/cpp-security-and-quality.qls\nargument --format=sarifv2.1.0\nargument --output=<place>/out/c-cpp-quality-advisory.sarif\nargument --threads=2\nargument --ram=7168\nargument --sarif-category=/language:c-cpp/quality-advisory\nargument --sarif-run-property=queryReuseEnabled=true\nargument --sarif-run-property=originalEvaluationRevision=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\n",
     "git": "call head 1\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 1\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall listing 1\ncwd <place>/root\nargument ls-files\nargument -z\nargument --cached\nargument --others\nargument --exclude-standard\ncall head 2\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 2\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall head 3\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 3\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall listing 2\ncwd <place>/root\nargument ls-files\nargument -z\nargument --cached\nargument --others\nargument --exclude-standard\n",
     "helper": "call vendor\ncwd <place>/root\nargument verify\nargument --root\nargument <place>/out/source\nargument --cache\nargument <place>/out/vendor-cache\nargument --output\nargument <place>/out/vendor-integrity\ncall policy-c-cpp-security-policy\ncwd <place>/root\nargument sarif\nargument --revision\nargument aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nargument --input\nargument <place>/out/c-cpp-security.sarif\nargument --output\nargument <place>/out/c-cpp-security-policy\nargument --source-cache\nargument <place>/out/vendor-cache\nargument --include-vendor\ncall policy-c-cpp-quality-advisory-policy\ncwd <place>/root\nargument sarif\nargument --revision\nargument aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nargument --input\nargument <place>/out/c-cpp-quality-advisory.sarif\nargument --output\nargument <place>/out/c-cpp-quality-advisory-policy\nargument --source-cache\nargument <place>/out/vendor-cache\nargument --include-vendor\n",
+    "curl": ""
+   },
+   "trees": {}
+  },
+  {
+   "name": "a database cache whose creation fails",
+   "arguments": [
+    "--revision",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<place>/out",
+    "--codeql",
+    "<place>/bundle/codeql",
+    "--language",
+    "rust",
+    "--database-cache",
+    "<place>/database-cache"
+   ],
+   "changes": {
+    "fake/codeql/create-rust.status": {
+     "text": "1\n"
+    }
+   },
+   "environment": {
+    "PATH": "<place>/bin",
+    "HOME": "<place>/caller"
+   },
+   "budgets": [
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    }
+   ],
+   "caches": {
+    "key": [
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     }
+    ],
+    "restore": [
+     {
+      "held": null
+     }
+    ],
+    "source": [
+     {
+      "held": null
+     }
+    ],
+    "save": [
+     {
+      "held": {
+       "schemaVersion": 1,
+       "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+       "bundleBytes": 1234,
+       "reused": false
+      }
+     }
+    ]
+   },
+   "platform": "darwin",
+   "result": {
+    "status": 1
+   },
+   "stdout": "Local CodeQL: failed; evidence: <place>/out\n",
+   "events": [
+    {
+     "run": "codeql-source-head",
+     "argv": [
+      "<place>/bin/git",
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-source-status",
+     "argv": [
+      "<place>/bin/git",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=normal"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "source-inventory",
+     "argv": [
+      "<place>/bin/git",
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-version",
+     "argv": [
+      "<place>/bundle/codeql",
+      "version",
+      "--format=json"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "cache": "key",
+     "arguments": {
+      "root": "<place>/root",
+      "source": "<place>/out/source",
+      "openssl": "<place>/root/target/openssl-4.1.0",
+      "language": "rust",
+      "suite": "security",
+      "includeVendor": false
+     },
+     "answer": {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "cache": "restore",
+     "arguments": {
+      "codeql": "<place>/bundle/codeql",
+      "directory": "<place>/database-cache",
+      "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "database": "<place>/out/databases/rust"
+     },
+     "answer": {
+      "held": null
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "run": "codeql-create-rust",
+     "argv": [
+      "<place>/bundle/codeql",
+      "database",
+      "create",
+      "<place>/out/databases/rust",
+      "--source-root=<place>/out/source",
+      "--language=rust",
+      "--build-mode=none",
+      "--threads=2",
+      "--ram=4096",
+      "--codescanning-config=<place>/out/source/security/codeql/first-party.yml",
+      "--extractor-option=extract_dependencies_as_source=false"
+     ],
+     "cwd": "<place>/out/source",
+     "timeout": 2100,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": {
+      "OPENSSL_DIR": "<place>/root/target/openssl-4.1.0",
+      "CODEQL_BUILD_JOBS": "2"
+     }
+    }
+   ],
+   "requested": [
+    null
+   ],
+   "masks": [
+    63
+   ],
+   "evidence": {
+    "01-codeql-source-head.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "01-codeql-source-head.stdout": {
+     "kind": "file",
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+     "mode": 420
+    },
+    "02-codeql-source-status.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "02-codeql-source-status.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stdout": {
+     "kind": "file",
+     "text": ".github/workflows/codeql.yml\u0000Cargo.lock\u0000Cargo.toml\u0000build/group.sh\u0000build/other.sh\u0000build/owner.sh\u0000build/plain.txt\u0000build/run.sh\u0000build/tool.sh\u0000security/codeql-toolchain.json\u0000security/codeql/first-party.yml\u0000security/codeql/native-coverage/compilations.ql\u0000src/main.rs\u0000vendor/dependency/lib.rs\u0000",
+     "mode": 420
+    },
+    "04-codeql-version.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "04-codeql-version.stdout": {
+     "kind": "file",
+     "text": "{\"version\": \"2.27.1\", \"productName\": \"CodeQL\"}",
+     "mode": 420
+    },
+    "05-codeql-create-rust.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "05-codeql-create-rust.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "cache": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "config": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases/rust": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "databases/rust/codeql-database.yml": {
+     "kind": "file",
+     "text": "primaryLanguage: rust\ncliVersion: 2.27.1\nfinalised: true\noverlayBaseDatabase: false\noverlayDatabase: false\nbuildMode: none\n",
+     "mode": 420
+    },
+    "home": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source-manifest.json": {
+     "kind": "file",
+     "text": "{\n  \".github/workflows/codeql.yml\": \"06a06ace6468f3196d0025f893c9461f3c8dc4322119598cc80b8833db964f6e\",\n  \"Cargo.lock\": \"083791b01c1a67ae66aca99070c9ee48082d04307473d494376e6de7cf9a654a\",\n  \"Cargo.toml\": \"2565c4efa751f1b2c642d1b92c4b7b6d42590f7b116008c11d625d49074b5e4f\",\n  \"build/group.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/other.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/owner.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/plain.txt\": \"dacf36547c7774a0a170806363b5d412991fbc0d6260b2c00b1d3a80a816c23f\",\n  \"build/run.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/tool.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"security/codeql-toolchain.json\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"security/codeql/first-party.yml\": \"5c1cf243751f0129189b0665da04cb305d2c1e8838dce755cc9f3f8d4f3a1264\",\n  \"security/codeql/native-coverage/compilations.ql\": \"8903abffd68710879da59014708c6187f8e839fadc2bdf94ae73a036aa591623\",\n  \"src/main.rs\": \"536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4\",\n  \"vendor/dependency/lib.rs\": \"346f71f8b743be698cb3a0caaab4cda7bafec8f37a34afd3881b67ae88b975d6\"\n}\n",
+     "mode": 384
+    },
+    "source/.github": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/.github/workflows": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/.github/workflows/codeql.yml": {
+     "kind": "file",
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n",
+     "mode": 384
+    },
+    "source/Cargo.lock": {
+     "kind": "file",
+     "text": "version = 4\n",
+     "mode": 384
+    },
+    "source/Cargo.toml": {
+     "kind": "file",
+     "text": "[package]\nname = \"fixture\"\n",
+     "mode": 384
+    },
+    "source/build": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/build/group.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/other.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/owner.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/plain.txt": {
+     "kind": "file",
+     "text": "plain\n",
+     "mode": 384
+    },
+    "source/build/run.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/tool.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/security": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql-toolchain.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n",
+     "mode": 384
+    },
+    "source/security/codeql/first-party.yml": {
+     "kind": "file",
+     "text": "name: First-party source\npaths-ignore:\n  - vendor/**\n",
+     "mode": 384
+    },
+    "source/security/codeql/native-coverage": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql/native-coverage/compilations.ql": {
+     "kind": "file",
+     "text": "select 1\n",
+     "mode": 384
+    },
+    "source/src": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/src/main.rs": {
+     "kind": "file",
+     "text": "fn main() {}\n",
+     "mode": 384
+    },
+    "source/vendor": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/vendor/dependency": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/vendor/dependency/lib.rs": {
+     "kind": "file",
+     "text": "pub fn dependency() {}\n",
+     "mode": 384
+    },
+    "summary.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-create-rust\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"security\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-create-rust\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+     "mode": 384
+    },
+    "tmp": {
+     "kind": "directory",
+     "mode": 448
+    }
+   },
+   "outputMode": 448,
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-create-rust\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"security\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-create-rust\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+   "logs": {
+    "codeql": "call 1 version\ncwd <place>/root\nargument version\nargument --format=json\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 2 create-rust\ncwd <place>/out/source\nargument database\nargument create\nargument <place>/out/databases/rust\nargument --source-root=<place>/out/source\nargument --language=rust\nargument --build-mode=none\nargument --threads=2\nargument --ram=4096\nargument --codescanning-config=<place>/out/source/security/codeql/first-party.yml\nargument --extractor-option=extract_dependencies_as_source=false\nOPENSSL_DIR <place>/root/target/openssl-4.1.0\nCODEQL_BUILD_JOBS 2\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\n",
+    "git": "call head 1\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 1\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall listing 1\ncwd <place>/root\nargument ls-files\nargument -z\nargument --cached\nargument --others\nargument --exclude-standard\n",
+    "helper": "",
+    "curl": ""
+   },
+   "trees": {}
+  },
+  {
+   "name": "a database cache of both suites whose advisory analysis fails",
+   "arguments": [
+    "--revision",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<place>/out",
+    "--codeql",
+    "<place>/bundle/codeql",
+    "--language",
+    "rust",
+    "--database-cache",
+    "<place>/database-cache",
+    "--suite",
+    "all"
+   ],
+   "changes": {
+    "fake/codeql/analyze-rust-quality-advisory.status": {
+     "text": "1\n"
+    }
+   },
+   "environment": {
+    "PATH": "<place>/bin",
+    "HOME": "<place>/caller"
+   },
+   "budgets": [
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    }
+   ],
+   "caches": {
+    "key": [
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     }
+    ],
+    "restore": [
+     {
+      "held": null
+     }
+    ],
+    "source": [
+     {
+      "held": null
+     }
+    ],
+    "save": [
+     {
+      "held": {
+       "schemaVersion": 1,
+       "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+       "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "bundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+       "bundleBytes": 1234,
+       "reused": false
+      }
+     }
+    ]
+   },
+   "platform": "darwin",
+   "result": {
+    "status": 1
+   },
+   "stdout": "Local CodeQL: failed; evidence: <place>/out\n",
+   "events": [
+    {
+     "run": "codeql-source-head",
+     "argv": [
+      "<place>/bin/git",
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-source-status",
+     "argv": [
+      "<place>/bin/git",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=normal"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "source-inventory",
+     "argv": [
+      "<place>/bin/git",
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-version",
+     "argv": [
+      "<place>/bundle/codeql",
+      "version",
+      "--format=json"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "cache": "key",
+     "arguments": {
+      "root": "<place>/root",
+      "source": "<place>/out/source",
+      "openssl": "<place>/root/target/openssl-4.1.0",
+      "language": "rust",
+      "suite": "all",
+      "includeVendor": false
+     },
+     "answer": {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "cache": "restore",
+     "arguments": {
+      "codeql": "<place>/bundle/codeql",
+      "directory": "<place>/database-cache",
+      "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "database": "<place>/out/databases/rust"
+     },
+     "answer": {
+      "held": null
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "run": "codeql-create-rust",
+     "argv": [
+      "<place>/bundle/codeql",
+      "database",
+      "create",
+      "<place>/out/databases/rust",
+      "--source-root=<place>/out/source",
+      "--language=rust",
+      "--build-mode=none",
+      "--threads=2",
+      "--ram=4096",
+      "--codescanning-config=<place>/out/source/security/codeql/first-party.yml",
+      "--extractor-option=extract_dependencies_as_source=false"
+     ],
+     "cwd": "<place>/out/source",
+     "timeout": 2100,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": {
+      "OPENSSL_DIR": "<place>/root/target/openssl-4.1.0",
+      "CODEQL_BUILD_JOBS": "2"
+     }
+    },
+    {
+     "cache": "source",
+     "arguments": {
+      "database": "<place>/out/databases/rust",
+      "source": "<place>/out/source",
+      "manifest": [
+       ".github/workflows/codeql.yml",
+       "Cargo.lock",
+       "Cargo.toml",
+       "build/group.sh",
+       "build/other.sh",
+       "build/owner.sh",
+       "build/plain.txt",
+       "build/run.sh",
+       "build/tool.sh",
+       "security/codeql-toolchain.json",
+       "security/codeql/first-party.yml",
+       "security/codeql/native-coverage/compilations.ql",
+       "src/main.rs",
+       "vendor/dependency/lib.rs"
+      ],
+      "language": "rust"
+     },
+     "answer": {
+      "held": null
+     },
+     "checks": 5,
+     "sequence": 5
+    },
+    {
+     "run": "codeql-analyze-rust-security",
+     "argv": [
+      "<place>/bundle/codeql",
+      "database",
+      "analyze",
+      "--rerun",
+      "<place>/out/databases/rust",
+      "<place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-extended.qls",
+      "--format=sarifv2.1.0",
+      "--output=<place>/out/rust-security.sarif",
+      "--threads=2",
+      "--ram=7168",
+      "--sarif-category=/language:rust/security",
+      "--sarif-run-property=queryReuseEnabled=false",
+      "--sarif-run-property=originalEvaluationRevision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     ],
+     "cwd": null,
+     "timeout": 2100,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-analyze-rust-quality-advisory",
+     "argv": [
+      "<place>/bundle/codeql",
+      "database",
+      "analyze",
+      "--rerun",
+      "<place>/out/databases/rust",
+      "<place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-and-quality.qls",
+      "--format=sarifv2.1.0",
+      "--output=<place>/out/rust-quality-advisory.sarif",
+      "--threads=2",
+      "--ram=7168",
+      "--sarif-category=/language:rust/quality-advisory",
+      "--sarif-run-property=queryReuseEnabled=false",
+      "--sarif-run-property=originalEvaluationRevision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     ],
+     "cwd": null,
+     "timeout": 2100,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    }
+   ],
+   "requested": [
+    null
+   ],
+   "masks": [
+    63
+   ],
+   "evidence": {
+    "01-codeql-source-head.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "01-codeql-source-head.stdout": {
+     "kind": "file",
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+     "mode": 420
+    },
+    "02-codeql-source-status.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "02-codeql-source-status.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stdout": {
+     "kind": "file",
+     "text": ".github/workflows/codeql.yml\u0000Cargo.lock\u0000Cargo.toml\u0000build/group.sh\u0000build/other.sh\u0000build/owner.sh\u0000build/plain.txt\u0000build/run.sh\u0000build/tool.sh\u0000security/codeql-toolchain.json\u0000security/codeql/first-party.yml\u0000security/codeql/native-coverage/compilations.ql\u0000src/main.rs\u0000vendor/dependency/lib.rs\u0000",
+     "mode": 420
+    },
+    "04-codeql-version.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "04-codeql-version.stdout": {
+     "kind": "file",
+     "text": "{\"version\": \"2.27.1\", \"productName\": \"CodeQL\"}",
+     "mode": 420
+    },
+    "05-codeql-create-rust.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "05-codeql-create-rust.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "06-codeql-analyze-rust-security.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "06-codeql-analyze-rust-security.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "07-codeql-analyze-rust-quality-advisory.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "07-codeql-analyze-rust-quality-advisory.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "cache": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "config": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases/rust": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "databases/rust/codeql-database.yml": {
+     "kind": "file",
+     "text": "primaryLanguage: rust\ncliVersion: 2.27.1\nfinalised: true\noverlayBaseDatabase: false\noverlayDatabase: false\nbuildMode: none\n",
+     "mode": 420
+    },
+    "home": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "rust-quality-advisory.sarif": {
+     "kind": "file",
+     "text": "{\"version\": \"2.1.0\", \"runs\": [{\"tool\": {\"driver\": {\"name\": \"CodeQL\", \"semanticVersion\": \"2.27.1\", \"rules\": [{\"id\": \"rust/query/0\"}]}}, \"automationDetails\": {\"id\": \"/language:rust/quality-advisory/\"}, \"invocations\": [{\"executionSuccessful\": true}], \"results\": [], \"properties\": {\"metricResults\": [{\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements unextracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction warnings\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total user\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - with errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - without errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Lines of user code extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - resolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - unresolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Taint edges - number of edges\"}, \"value\": 10}]}}]}",
+     "mode": 420
+    },
+    "rust-security.sarif": {
+     "kind": "file",
+     "text": "{\"version\": \"2.1.0\", \"runs\": [{\"tool\": {\"driver\": {\"name\": \"CodeQL\", \"semanticVersion\": \"2.27.1\", \"rules\": [{\"id\": \"rust/query/0\"}]}}, \"automationDetails\": {\"id\": \"/language:rust/security/\"}, \"invocations\": [{\"executionSuccessful\": true}], \"results\": [], \"properties\": {\"metricResults\": [{\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements unextracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction warnings\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total user\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - with errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - without errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Lines of user code extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - resolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - unresolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Taint edges - number of edges\"}, \"value\": 10}]}}]}",
+     "mode": 420
+    },
+    "rust-security.validated.json": {
+     "kind": "file",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"sarifSha256\": \"57710c17cc769e8b12d13473ef5f58a730578c3479ee729036079723a41d270b\", \"includeVendor\": false}\n",
+     "mode": 384
+    },
+    "source": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source-manifest.json": {
+     "kind": "file",
+     "text": "{\n  \".github/workflows/codeql.yml\": \"06a06ace6468f3196d0025f893c9461f3c8dc4322119598cc80b8833db964f6e\",\n  \"Cargo.lock\": \"083791b01c1a67ae66aca99070c9ee48082d04307473d494376e6de7cf9a654a\",\n  \"Cargo.toml\": \"2565c4efa751f1b2c642d1b92c4b7b6d42590f7b116008c11d625d49074b5e4f\",\n  \"build/group.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/other.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/owner.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/plain.txt\": \"dacf36547c7774a0a170806363b5d412991fbc0d6260b2c00b1d3a80a816c23f\",\n  \"build/run.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/tool.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"security/codeql-toolchain.json\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"security/codeql/first-party.yml\": \"5c1cf243751f0129189b0665da04cb305d2c1e8838dce755cc9f3f8d4f3a1264\",\n  \"security/codeql/native-coverage/compilations.ql\": \"8903abffd68710879da59014708c6187f8e839fadc2bdf94ae73a036aa591623\",\n  \"src/main.rs\": \"536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4\",\n  \"vendor/dependency/lib.rs\": \"346f71f8b743be698cb3a0caaab4cda7bafec8f37a34afd3881b67ae88b975d6\"\n}\n",
+     "mode": 384
+    },
+    "source/.github": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/.github/workflows": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/.github/workflows/codeql.yml": {
+     "kind": "file",
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n",
+     "mode": 384
+    },
+    "source/Cargo.lock": {
+     "kind": "file",
+     "text": "version = 4\n",
+     "mode": 384
+    },
+    "source/Cargo.toml": {
+     "kind": "file",
+     "text": "[package]\nname = \"fixture\"\n",
+     "mode": 384
+    },
+    "source/build": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/build/group.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/other.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/owner.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/plain.txt": {
+     "kind": "file",
+     "text": "plain\n",
+     "mode": 384
+    },
+    "source/build/run.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/tool.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/security": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql-toolchain.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n",
+     "mode": 384
+    },
+    "source/security/codeql/first-party.yml": {
+     "kind": "file",
+     "text": "name: First-party source\npaths-ignore:\n  - vendor/**\n",
+     "mode": 384
+    },
+    "source/security/codeql/native-coverage": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql/native-coverage/compilations.ql": {
+     "kind": "file",
+     "text": "select 1\n",
+     "mode": 384
+    },
+    "source/src": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/src/main.rs": {
+     "kind": "file",
+     "text": "fn main() {}\n",
+     "mode": 384
+    },
+    "source/vendor": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/vendor/dependency": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/vendor/dependency/lib.rs": {
+     "kind": "file",
+     "text": "pub fn dependency() {}\n",
+     "mode": 384
+    },
+    "summary.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-analyze-rust-quality-advisory\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"all\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-create-rust\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-security\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-quality-advisory\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+     "mode": 384
+    },
+    "tmp": {
+     "kind": "directory",
+     "mode": 448
+    }
+   },
+   "outputMode": 448,
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-analyze-rust-quality-advisory\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"all\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-create-rust\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-security\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-quality-advisory\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+   "logs": {
+    "codeql": "call 1 version\ncwd <place>/root\nargument version\nargument --format=json\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 2 create-rust\ncwd <place>/out/source\nargument database\nargument create\nargument <place>/out/databases/rust\nargument --source-root=<place>/out/source\nargument --language=rust\nargument --build-mode=none\nargument --threads=2\nargument --ram=4096\nargument --codescanning-config=<place>/out/source/security/codeql/first-party.yml\nargument --extractor-option=extract_dependencies_as_source=false\nOPENSSL_DIR <place>/root/target/openssl-4.1.0\nCODEQL_BUILD_JOBS 2\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 3 analyze-rust-security\ncwd <place>/root\nargument database\nargument analyze\nargument --rerun\nargument <place>/out/databases/rust\nargument <place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-extended.qls\nargument --format=sarifv2.1.0\nargument --output=<place>/out/rust-security.sarif\nargument --threads=2\nargument --ram=7168\nargument --sarif-category=/language:rust/security\nargument --sarif-run-property=queryReuseEnabled=false\nargument --sarif-run-property=originalEvaluationRevision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 4 analyze-rust-quality-advisory\ncwd <place>/root\nargument database\nargument analyze\nargument --rerun\nargument <place>/out/databases/rust\nargument <place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-and-quality.qls\nargument --format=sarifv2.1.0\nargument --output=<place>/out/rust-quality-advisory.sarif\nargument --threads=2\nargument --ram=7168\nargument --sarif-category=/language:rust/quality-advisory\nargument --sarif-run-property=queryReuseEnabled=false\nargument --sarif-run-property=originalEvaluationRevision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\n",
+    "git": "call head 1\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 1\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall listing 1\ncwd <place>/root\nargument ls-files\nargument -z\nargument --cached\nargument --others\nargument --exclude-standard\n",
+    "helper": "",
+    "curl": ""
+   },
+   "trees": {}
+  },
+  {
+   "name": "a database cache that hits whose policy fails",
+   "arguments": [
+    "--revision",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "--output",
+    "<place>/out",
+    "--codeql",
+    "<place>/bundle/codeql",
+    "--language",
+    "rust",
+    "--database-cache",
+    "<place>/database-cache"
+   ],
+   "changes": {
+    "fake/helper/policy-rust-security-policy.status": {
+     "text": "1\n"
+    }
+   },
+   "environment": {
+    "PATH": "<place>/bin",
+    "HOME": "<place>/caller"
+   },
+   "budgets": [
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    },
+    {
+     "workers": 2,
+     "ramMiB": 4096,
+     "queryRamMiB": 7168
+    }
+   ],
+   "caches": {
+    "key": [
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     }
+    ],
+    "restore": [
+     {
+      "held": {
+       "schemaVersion": 1,
+       "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+       "revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "bundleSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "bundleBytes": 4321,
+       "reused": true
+      }
+     }
+    ],
+    "source": [
+     {
+      "held": null
+     }
+    ]
+   },
+   "platform": "darwin",
+   "result": {
+    "status": 1
+   },
+   "stdout": "Local CodeQL: failed; evidence: <place>/out\n",
+   "events": [
+    {
+     "run": "codeql-source-head",
+     "argv": [
+      "<place>/bin/git",
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-source-status",
+     "argv": [
+      "<place>/bin/git",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=normal"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "source-inventory",
+     "argv": [
+      "<place>/bin/git",
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-version",
+     "argv": [
+      "<place>/bundle/codeql",
+      "version",
+      "--format=json"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "cache": "key",
+     "arguments": {
+      "root": "<place>/root",
+      "source": "<place>/out/source",
+      "openssl": "<place>/root/target/openssl-4.1.0",
+      "language": "rust",
+      "suite": "security",
+      "includeVendor": false
+     },
+     "answer": {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "cache": "restore",
+     "arguments": {
+      "codeql": "<place>/bundle/codeql",
+      "directory": "<place>/database-cache",
+      "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "database": "<place>/out/databases/rust"
+     },
+     "answer": {
+      "held": {
+       "schemaVersion": 1,
+       "key": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+       "revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "bundleSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "bundleBytes": 4321,
+       "reused": true
+      }
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "cache": "source",
+     "arguments": {
+      "database": "<place>/out/databases/rust",
+      "source": "<place>/out/source",
+      "manifest": [
+       ".github/workflows/codeql.yml",
+       "Cargo.lock",
+       "Cargo.toml",
+       "build/group.sh",
+       "build/other.sh",
+       "build/owner.sh",
+       "build/plain.txt",
+       "build/run.sh",
+       "build/tool.sh",
+       "security/codeql-toolchain.json",
+       "security/codeql/first-party.yml",
+       "security/codeql/native-coverage/compilations.ql",
+       "src/main.rs",
+       "vendor/dependency/lib.rs"
+      ],
+      "language": "rust"
+     },
+     "answer": {
+      "held": null
+     },
+     "checks": 4,
+     "sequence": 4
+    },
+    {
+     "run": "codeql-analyze-rust-security",
+     "argv": [
+      "<place>/bundle/codeql",
+      "database",
+      "analyze",
+      "<place>/out/databases/rust",
+      "<place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-extended.qls",
+      "--format=sarifv2.1.0",
+      "--output=<place>/out/rust-security.sarif",
+      "--threads=2",
+      "--ram=7168",
+      "--sarif-category=/language:rust/security",
+      "--sarif-run-property=queryReuseEnabled=true",
+      "--sarif-run-property=originalEvaluationRevision=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+     ],
+     "cwd": null,
+     "timeout": 2100,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-source-head",
+     "argv": [
+      "<place>/bin/git",
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "run": "codeql-source-status",
+     "argv": [
+      "<place>/bin/git",
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=normal"
+     ],
+     "cwd": null,
+     "timeout": 180,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    },
+    {
+     "cache": "key",
+     "arguments": {
+      "root": "<place>/root",
+      "source": "<place>/out/source",
+      "openssl": "<place>/root/target/openssl-4.1.0",
+      "language": "rust",
+      "suite": "security",
+      "includeVendor": false
+     },
+     "answer": {
+      "held": "codeql-analyzed-v2-rust-untrusted-linux-x86_64-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+     },
+     "checks": 7,
+     "sequence": 7
+    },
+    {
+     "run": "codeql-policy-rust-security",
+     "argv": [
+      "<place>/bin/helper",
+      "<triage>",
+      "sarif",
+      "--revision",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--input",
+      "<place>/out/rust-security.sarif",
+      "--output",
+      "<place>/out/rust-security-policy"
+     ],
+     "cwd": null,
+     "timeout": 600,
+     "accepted": [
+      0
+     ],
+     "input": "",
+     "env": null
+    }
+   ],
+   "requested": [
+    null
+   ],
+   "masks": [
+    63
+   ],
+   "evidence": {
+    "01-codeql-source-head.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "01-codeql-source-head.stdout": {
+     "kind": "file",
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+     "mode": 420
+    },
+    "02-codeql-source-status.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "02-codeql-source-status.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "03-source-inventory.stdout": {
+     "kind": "file",
+     "text": ".github/workflows/codeql.yml\u0000Cargo.lock\u0000Cargo.toml\u0000build/group.sh\u0000build/other.sh\u0000build/owner.sh\u0000build/plain.txt\u0000build/run.sh\u0000build/tool.sh\u0000security/codeql-toolchain.json\u0000security/codeql/first-party.yml\u0000security/codeql/native-coverage/compilations.ql\u0000src/main.rs\u0000vendor/dependency/lib.rs\u0000",
+     "mode": 420
+    },
+    "04-codeql-version.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "04-codeql-version.stdout": {
+     "kind": "file",
+     "text": "{\"version\": \"2.27.1\", \"productName\": \"CodeQL\"}",
+     "mode": 420
+    },
+    "05-codeql-analyze-rust-security.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "05-codeql-analyze-rust-security.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "06-codeql-source-head.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "06-codeql-source-head.stdout": {
+     "kind": "file",
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+     "mode": 420
+    },
+    "07-codeql-source-status.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "07-codeql-source-status.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "08-codeql-policy-rust-security.stderr": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "08-codeql-policy-rust-security.stdout": {
+     "kind": "file",
+     "text": "",
+     "mode": 420
+    },
+    "cache": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "config": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "databases/rust": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "databases/rust/codeql-database.yml": {
+     "kind": "file",
+     "text": "primaryLanguage: rust\ncliVersion: 2.27.1\nfinalised: true\noverlayBaseDatabase: false\noverlayDatabase: false\nbuildMode: none\n",
+     "mode": 420
+    },
+    "home": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "rust-security-policy": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "rust-security-policy/report.json": {
+     "kind": "file",
+     "text": "{\"passed\": true}\n",
+     "mode": 420
+    },
+    "rust-security.sarif": {
+     "kind": "file",
+     "text": "{\"version\": \"2.1.0\", \"runs\": [{\"tool\": {\"driver\": {\"name\": \"CodeQL\", \"semanticVersion\": \"2.27.1\", \"rules\": [{\"id\": \"rust/query/0\"}]}}, \"automationDetails\": {\"id\": \"/language:rust/security/\"}, \"invocations\": [{\"executionSuccessful\": true}], \"results\": [], \"properties\": {\"metricResults\": [{\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Elements unextracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Extraction warnings\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - total user\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - with errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Files extracted - without errors\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Lines of user code extracted\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - resolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - total\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Macro calls - unresolved\"}, \"value\": 10}, {\"ruleId\": \"rust/summary/summary-statistics\", \"message\": {\"text\": \"Taint edges - number of edges\"}, \"value\": 10}]}}]}",
+     "mode": 420
+    },
+    "rust-security.validated.json": {
+     "kind": "file",
+     "text": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"sarifSha256\": \"57710c17cc769e8b12d13473ef5f58a730578c3479ee729036079723a41d270b\", \"includeVendor\": false}\n",
+     "mode": 384
+    },
+    "source": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source-manifest.json": {
+     "kind": "file",
+     "text": "{\n  \".github/workflows/codeql.yml\": \"06a06ace6468f3196d0025f893c9461f3c8dc4322119598cc80b8833db964f6e\",\n  \"Cargo.lock\": \"083791b01c1a67ae66aca99070c9ee48082d04307473d494376e6de7cf9a654a\",\n  \"Cargo.toml\": \"2565c4efa751f1b2c642d1b92c4b7b6d42590f7b116008c11d625d49074b5e4f\",\n  \"build/group.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/other.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/owner.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/plain.txt\": \"dacf36547c7774a0a170806363b5d412991fbc0d6260b2c00b1d3a80a816c23f\",\n  \"build/run.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"build/tool.sh\": \"306c6ca7407560340797866e077e053627ad409277d1b9da58106fce4cf717cb\",\n  \"security/codeql-toolchain.json\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"security/codeql/first-party.yml\": \"5c1cf243751f0129189b0665da04cb305d2c1e8838dce755cc9f3f8d4f3a1264\",\n  \"security/codeql/native-coverage/compilations.ql\": \"8903abffd68710879da59014708c6187f8e839fadc2bdf94ae73a036aa591623\",\n  \"src/main.rs\": \"536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4\",\n  \"vendor/dependency/lib.rs\": \"346f71f8b743be698cb3a0caaab4cda7bafec8f37a34afd3881b67ae88b975d6\"\n}\n",
+     "mode": 384
+    },
+    "source/.github": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/.github/workflows": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/.github/workflows/codeql.yml": {
+     "kind": "file",
+     "text": "jobs:\n  analyze:\n    steps:\n      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\n      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\n",
+     "mode": 384
+    },
+    "source/Cargo.lock": {
+     "kind": "file",
+     "text": "version = 4\n",
+     "mode": 384
+    },
+    "source/Cargo.toml": {
+     "kind": "file",
+     "text": "[package]\nname = \"fixture\"\n",
+     "mode": 384
+    },
+    "source/build": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/build/group.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/other.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/owner.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/plain.txt": {
+     "kind": "file",
+     "text": "plain\n",
+     "mode": 384
+    },
+    "source/build/run.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/build/tool.sh": {
+     "kind": "file",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": 448
+    },
+    "source/security": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql-toolchain.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"cliVersion\": \"2.27.1\",\n  \"actionRevision\": \"2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2\",\n  \"languages\": {\n    \"actions\": {\"extractor\": \"actions\", \"queriesVersion\": \"0.6.36\"},\n    \"javascript-typescript\": {\"extractor\": \"javascript\", \"queriesVersion\": \"2.4.6\"},\n    \"python\": {\"extractor\": \"python\", \"queriesVersion\": \"1.8.11\"},\n    \"rust\": {\"extractor\": \"rust\", \"queriesVersion\": \"0.1.43\"},\n    \"c-cpp\": {\"extractor\": \"cpp\", \"queriesVersion\": \"1.9.0\"}\n  },\n  \"bundles\": {\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux64.tar.zst\",\n      \"bytes\": 557306446,\n      \"sha256\": \"1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-linux-arm64.tar.zst\",\n      \"bytes\": 548212714,\n      \"sha256\": \"5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a\"\n    },\n    \"darwin\": {\n      \"url\": \"https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.1/codeql-bundle-osx64.tar.zst\",\n      \"bytes\": 876476743,\n      \"sha256\": \"b63286d8189b90f6045a18797d191603f611f0003216783cade7166ec80ada45\"\n    }\n  }\n}\n",
+     "mode": 384
+    },
+    "source/security/codeql/first-party.yml": {
+     "kind": "file",
+     "text": "name: First-party source\npaths-ignore:\n  - vendor/**\n",
+     "mode": 384
+    },
+    "source/security/codeql/native-coverage": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/security/codeql/native-coverage/compilations.ql": {
+     "kind": "file",
+     "text": "select 1\n",
+     "mode": 384
+    },
+    "source/src": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/src/main.rs": {
+     "kind": "file",
+     "text": "fn main() {}\n",
+     "mode": 384
+    },
+    "source/vendor": {
+     "kind": "directory",
+     "mode": 493
+    },
+    "source/vendor/dependency": {
+     "kind": "directory",
+     "mode": 448
+    },
+    "source/vendor/dependency/lib.rs": {
+     "kind": "file",
+     "text": "pub fn dependency() {}\n",
+     "mode": 384
+    },
+    "summary.json": {
+     "kind": "file",
+     "text": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-policy-rust-security\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"security\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-security\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-policy-rust-security\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+     "mode": 384
+    },
+    "tmp": {
+     "kind": "directory",
+     "mode": 448
+    }
+   },
+   "outputMode": 448,
+   "summary": "{\n  \"schemaVersion\": 1,\n  \"passed\": false,\n  \"failure\": \"scanner_command_failed_codeql-policy-rust-security\",\n  \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"fullScan\": true,\n  \"includeVendor\": false,\n  \"excludedPaths\": [\n    \"vendor/**\"\n  ],\n  \"suite\": \"security\",\n  \"toolchainSha256\": \"9472f41501331f498463560a7de9274dcf28897b72bcf11d4aaf745bf6651445\",\n  \"sourceManifestSha256\": \"146cf953fddf073e64a210f7908bd59cf56e7530fb01f2199132ef24d08b9834\",\n  \"languages\": [\n    \"rust\"\n  ],\n  \"reports\": [],\n  \"checks\": [\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"source-inventory\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-version\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-analyze-rust-security\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-head\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-source-status\",\n      \"exitStatus\": 0,\n      \"elapsedSeconds\": 0.0\n    },\n    {\n      \"name\": \"codeql-policy-rust-security\",\n      \"exitStatus\": 1,\n      \"elapsedSeconds\": 0.0\n    }\n  ]\n}\n",
+   "logs": {
+    "codeql": "call 1 version\ncwd <place>/root\nargument version\nargument --format=json\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\ncall 2 analyze-rust-security\ncwd <place>/root\nargument database\nargument analyze\nargument <place>/out/databases/rust\nargument <place>/bundle/qlpacks/codeql/rust-queries/0.1.43/codeql-suites/rust-security-extended.qls\nargument --format=sarifv2.1.0\nargument --output=<place>/out/rust-security.sarif\nargument --threads=2\nargument --ram=7168\nargument --sarif-category=/language:rust/security\nargument --sarif-run-property=queryReuseEnabled=true\nargument --sarif-run-property=originalEvaluationRevision=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\nOPENSSL_DIR <unset>\nCODEQL_BUILD_JOBS <unset>\nJAVA_TOOL_OPTIONS -Duser.home=<place>/out/home -Djava.io.tmpdir=<place>/out/tmp\nTMPDIR <place>/out/tmp\nHOME <place>/out/home\n",
+    "git": "call head 1\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 1\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\ncall listing 1\ncwd <place>/root\nargument ls-files\nargument -z\nargument --cached\nargument --others\nargument --exclude-standard\ncall head 2\ncwd <place>/root\nargument rev-parse\nargument HEAD\ncall status 2\ncwd <place>/root\nargument status\nargument --porcelain=v1\nargument --untracked-files=normal\n",
+    "helper": "call policy-rust-security-policy\ncwd <place>/root\nargument sarif\nargument --revision\nargument aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nargument --input\nargument <place>/out/rust-security.sarif\nargument --output\nargument <place>/out/rust-security-policy\n",
     "curl": ""
    },
    "trees": {}

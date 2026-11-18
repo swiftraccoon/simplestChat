@@ -40,11 +40,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Rust toolchain for compiled cache tooling
-        if: ${{ env.ACT || matrix.language == 'rust' }}
+      - name: Install the pinned Rust toolchain for compiled CodeQL tooling
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
+      - name: Build the compiled CodeQL tooling once
+        env:
+          CODEQL_LANGUAGE: ${{ matrix.language }}
+        run: |
+          packages=(-p simplestchat-security)
+          if [[ "$CODEQL_LANGUAGE" == rust ]]; then
+            packages+=(-p simplestchat-ci)
+          fi
+          cargo build --locked -q --no-default-features --target-dir "$RUNNER_TEMP/codeql-tooling" "${packages[@]}"
       - name: Initialize the pinned analyzer
         if: ${{ !env.ACT && matrix.language != 'rust' }}
         id: init
@@ -61,7 +69,7 @@ jobs:
           CODEQL_BINARY: ${{ steps.init.outputs.codeql-path }}
           CODEQL_LANGUAGE: ${{ matrix.language }}
         run: |
-          python3 build/security_codeql_tools.py --codeql "$CODEQL_BINARY" \
+          "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql tools --codeql "$CODEQL_BINARY" \
             --language "$CODEQL_LANGUAGE" --output "$RUNNER_TEMP/codeql-tools"
       - name: Fingerprint the exact Rust analysis inputs
         if: matrix.language == 'rust'
@@ -69,7 +77,7 @@ jobs:
         env:
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
-          key="$(cargo run --locked -q -p simplestchat-ci -- codeql-cache key --language rust --suite "$CODEQL_SUITE" \
+          key="$("$RUNNER_TEMP/codeql-tooling/debug/simplestchat-ci" codeql-cache key --language rust --suite "$CODEQL_SUITE" \
             --source-root "$RUNNER_TEMP/codeql-local/source")"
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - name: Restore the exact evaluated Rust database
@@ -83,7 +91,7 @@ jobs:
         if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
         id: rust-cargo-inputs
         run: |
-          key="$(python3 build/security_codeql_cargo.py --source-root "$RUNNER_TEMP/codeql-local/source")"
+          key="$("$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql cargo-key --source-root "$RUNNER_TEMP/codeql-local/source")"
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - name: Restore Rust extraction build output
         if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
@@ -108,11 +116,12 @@ jobs:
           cache=()
           if [[ "$CODEQL_LANGUAGE" == rust ]]; then
             cache=(--database-cache "$RUNNER_TEMP/codeql-rust-database" \
-              --rust-cargo-cache "$RUNNER_TEMP/codeql-rust-cargo")
+              --rust-cargo-cache "$RUNNER_TEMP/codeql-rust-cargo" \
+              --cache-tool "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-ci")
           fi
           rm -f "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json"
           status=0
-          python3 build/security_codeql_local.py --revision "$GITHUB_SHA" \
+          "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql local --revision "$GITHUB_SHA" \
             --language "$CODEQL_LANGUAGE" --suite "$CODEQL_SUITE" --output "$RUNNER_TEMP/codeql-local" "${cache[@]}" || status=$?
           if [[ -f "$RUNNER_TEMP/codeql-local/$CODEQL_LANGUAGE-cache-ready.json" ]]; then
             echo 'database-cache-ready=true' >> "$GITHUB_OUTPUT"
@@ -133,7 +142,7 @@ jobs:
         id: rust-cargo-size
         run: |
           set -euo pipefail
-          python3 build/security_codeql_cargo.py --source-root "$RUNNER_TEMP/codeql-local/source" \
+          "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql cargo-key --source-root "$RUNNER_TEMP/codeql-local/source" \
             --publication-check "$RUNNER_TEMP/codeql-rust-cargo" | tee -a "$GITHUB_OUTPUT"
       - name: Save bounded Rust extraction build output
         if: ${{ always() && !cancelled() && steps.rust-cargo-size.outputs.cacheable == 'true' }}
@@ -173,24 +182,14 @@ jobs:
             echo 'Exactly one original CodeQL report is required.' >&2
             exit 1
           fi
-          python3 build/security_codeql_triage.py sarif --revision "$GITHUB_SHA" \
+          "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql triage sarif --revision "$GITHUB_SHA" \
             --input "${reports[0]}" --output "$RUNNER_TEMP/codeql-policy-evidence"
       - name: Identify valid current Rust reports even when policy failed
         if: ${{ always() && !env.ACT && matrix.language == 'rust' }}
         id: rust-reports
         run: |
-          python3 - <<'PY'
-          import os
-          import sys
-          from pathlib import Path
-          sys.path.insert(0, 'build')
-          from security_codeql_local import upload_ready
-          output = Path(os.environ['RUNNER_TEMP']) / 'codeql-local'
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as destination:
-              for category in ('security', 'quality-advisory'):
-                  if upload_ready(output, os.environ['GITHUB_SHA'], category, 'rust'):
-                      destination.write(f'{category}=true\n')
-          PY
+          "$RUNNER_TEMP/codeql-tooling/debug/simplestchat-security" codeql upload-ready --output "$RUNNER_TEMP/codeql-local" \
+            --revision "$GITHUB_SHA" --language rust >> "$GITHUB_OUTPUT"
       - name: Upload the current Rust security analysis
         if: ${{ always() && !env.ACT && matrix.language == 'rust' && steps.rust-reports.outputs.security == 'true' }}
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4

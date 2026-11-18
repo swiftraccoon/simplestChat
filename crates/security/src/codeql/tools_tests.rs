@@ -1,7 +1,6 @@
-//! Replays of `recorded_tools.json`: what `build/security_codeql_tools.py`
-//! made of fixture checkouts, analyzers and query packs, and of the
-//! installation of a bundle by fake `curl` and `tar` programs whose texts
-//! the recording holds.
+//! Replays of `recorded_tools.json`: what the reference made of fixture
+//! checkouts, analyzers and query packs, and of the installation of a
+//! bundle by fake `curl` and `tar` programs whose texts the recording holds.
 
 use super::{
     Field, Host, LANGUAGES, archive_digest, install, language_pin, pin, scalar, suite, verify,

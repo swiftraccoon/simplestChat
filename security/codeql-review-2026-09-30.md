@@ -249,21 +249,21 @@ was changed to silence this query, and this review performs no remote dismissal.
 
 ## Maintained command contract
 
-Run commands from the repository root with the documented Python environment.
+Run commands from the repository root with the pinned Rust toolchain.
 Every output argument selects a **new directory**: the helper refuses an existing
 directory, creates it with mode 0700, and writes mode-0600 evidence. Replace the
 revision and paths below with exact reviewed values.
 
 ```sh
-python3 build/security_codeql_triage.py sarif \
+cargo run --locked -q -p simplestchat-security -- codeql triage sarif \
   --revision "$REVISION" --input "$ORIGINAL_CODEQL_SARIF" \
   --output "$NEW_SARIF_EVIDENCE_DIRECTORY"
 
-python3 build/security_codeql_triage.py plan \
+cargo run --locked -q -p simplestchat-security -- codeql triage plan \
   --revision "$REVISION" --ref refs/heads/main \
   --output "$NEW_PLAN_DIRECTORY"
 
-python3 build/security_codeql_triage.py check \
+cargo run --locked -q -p simplestchat-security -- codeql triage check \
   --revision "$REVISION" --ref refs/heads/main \
   --output "$NEW_CHECK_DIRECTORY"
 ```
@@ -368,7 +368,7 @@ claim that the complete CI run passed and does not change remote alert states.
 Review the exact plan under the repository maintenance authorization before running:
 
 ```sh
-python3 build/security_codeql_triage.py apply \
+cargo run --locked -q -p simplestchat-security -- codeql triage apply \
   --revision "$REVISION" --ref refs/heads/main \
   --input "$REVIEWED_PLAN_DIRECTORY/report.json" \
   --output "$NEW_APPLY_DIRECTORY" --authorize-dismissals
@@ -1135,7 +1135,7 @@ covers that TLS finding. Hosted ingestion remains a separate required check.
 The commits from `87f527b2` to `303e43f0` shifted lines in the exact-review
 files or changed their complete-file digests. Fresh local CodeQL `2.27.1`
 security analysis of `83f5a954144f62b2bfd257d19ae16164960a5fe3` (Rust,
-Python and JavaScript/TypeScript, `build/security_codeql_local.py`) supplies
+Python and JavaScript/TypeScript, the local CodeQL driver of that revision) supplies
 the current findings. Each record in the first table below was rebound with
 the line-mapping tool after its flagged lines were confirmed byte-identical to
 the reviewed source; `rebind.py validate` matches every rebound identity that
@@ -1355,8 +1355,8 @@ CodeQL `2.27.1`, the primary range `171:175:19:6` and the rendered message
 (`messageSha256`
 `67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694`) are
 unchanged. Fresh local CodeQL `2.27.1` security analysis of
-`c53e4d75d1181b56f8a0f972263087ce5d228e22` (`build/security_codeql_local.py
---language python`, 50 queries, 12 results) reports the copy at its new path
+`c53e4d75d1181b56f8a0f972263087ce5d228e22` (its local CodeQL driver with
+`--language python`, 50 queries, 12 results) reports the copy at its new path
 as its only blocked result; the other eleven results are waived at their
 reviewed identities. The flagged lines still read:
 
@@ -1393,7 +1393,7 @@ file at `2d825018`), waives nothing and lapses with its exception on
 `rebind.py plan` lists no rebind; its seven unmapped records (alerts 32, 59–62,
 64 and 65) stay retired in place. `rebind.py validate` against the local policy
 report matches all ten reviewed identities it contains, with no mismatch.
-Replaying that SARIF with `build/security_codeql_triage.py sarif` against the
+Replaying that SARIF through the triage `sarif` mode against the
 updated ledger waives all twelve findings and blocks none. No query, path or
 test is excluded and no remote alert state changed; hosted ingestion remains a
 separate required check.

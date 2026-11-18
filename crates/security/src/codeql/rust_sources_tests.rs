@@ -1,7 +1,6 @@
-//! Replays of `recorded_rust_sources.json`: what
-//! `build/security_codeql_rust_sources.py` made of Rust texts, of their
-//! literal includes, of committed include closures read through a `git
-//! show` of the recorded commit, and of include paths.
+//! Replays of `recorded_rust_sources.json`: what the reference made of
+//! Rust texts, of their literal includes, of committed include closures
+//! read through a `git show` of the recorded commit, and of include paths.
 
 use super::{Token, include_path, included_sources, literal_includes, tokens};
 use crate::{

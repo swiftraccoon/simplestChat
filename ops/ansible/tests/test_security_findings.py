@@ -12,7 +12,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 
-import security_codeql
 import security_findings as findings
 import security_policy
 from security_tools import ToolError
@@ -159,18 +158,6 @@ class FindingTests(unittest.TestCase):
             _ = old.write_text("SELECT 2;\n")
             with self.assertRaisesRegex(ToolError, "reviewed_migration_modified"):
                 _ = findings.new_migrations(root)
-
-    def test_native_coverage_requires_each_compiled_protocol(self) -> None:
-        """A successful generic C++ scan does not prove the actual worker was extracted."""
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "coverage.json"
-            rows = [[name] for name in sorted(security_codeql.REQUIRED)]
-            _ = path.write_text(json.dumps({"#select": {"tuples": rows}}))
-            self.assertEqual(security_codeql.verify(path), len(rows))
-            _ = rows.pop()
-            _ = path.write_text(json.dumps({"#select": {"tuples": rows}}))
-            with self.assertRaisesRegex(ToolError, "codeql_native_extraction_incomplete"):
-                _ = security_codeql.verify(path)
 
 
 if __name__ == "__main__":

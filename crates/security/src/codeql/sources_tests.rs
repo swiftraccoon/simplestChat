@@ -1,5 +1,5 @@
-//! Replays of `recorded_sources.json`: what `build/security_codeql_sources.py`
-//! made of committed files, of authenticated archives, and of the native
+//! Replays of `recorded_sources.json`: what the reference made of
+//! committed files, of authenticated archives, and of the native
 //! sources of fixture checkouts with private caches, read through a `git
 //! show` that serves the recorded commit and logs what it was asked.
 

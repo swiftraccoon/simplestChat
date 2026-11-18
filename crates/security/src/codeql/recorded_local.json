@@ -20,7 +20,7 @@
  "programs": {
   "codeql": "#!/bin/sh\nplace='<place>'\nif [ -f \"$place/fake/codeql.count\" ]; then count=$(/bin/cat \"$place/fake/codeql.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/codeql.count\"\nout=\nfor argument in \"$@\"; do\n  case \"$argument\" in --output=*) out=\"${argument#--output=}\" ;; esac\ndone\ncase \"$1 $2\" in\n  'database create'|'database init'|'database trace-command'|'database finalize') step=\"$2-$(/usr/bin/basename \"$3\")\" ;;\n  'database analyze') step=\"analyze-$(/usr/bin/basename \"$out\" .sarif)\" ;;\n  'query run') step=query ;;\n  'bqrs decode') step=decode ;;\n  *) step=\"$1\" ;;\nesac\n{\n  printf 'call %s %s\\n' \"$count\" \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n  printf 'OPENSSL_DIR %s\\n' \"${OPENSSL_DIR-<unset>}\"\n  printf 'CODEQL_BUILD_JOBS %s\\n' \"${CODEQL_BUILD_JOBS-<unset>}\"\n  printf 'JAVA_TOOL_OPTIONS %s\\n' \"${JAVA_TOOL_OPTIONS-<unset>}\"\n  printf 'TMPDIR %s\\n' \"${TMPDIR-<unset>}\"\n  printf 'HOME %s\\n' \"${HOME-<unset>}\"\n} >> \"$place/fake/codeql.log\"\nanswer=\"$place/fake/codeql/$step\"\nif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "git": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  rev-parse) step=head ;;\n  status) step=status ;;\n  ls-files) step=listing ;;\n  -C) step=stage ;;\n  *) step=other ;;\nesac\nif [ -f \"$place/fake/git.$step.count\" ]; then count=$(/bin/cat \"$place/fake/git.$step.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/git.$step.count\"\n{\n  printf 'call %s %s\\n' \"$step\" \"$count\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/git.log\"\nanswer=\"$place/fake/git/$step\"\nif [ -f \"$answer.$count.sh\" ]; then . \"$answer.$count.sh\"; elif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.$count.stdout\" ]; then /bin/cat \"$answer.$count.stdout\"; elif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.$count.status\" ]; then exit \"$(/bin/cat \"$answer.$count.status\")\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
-  "helper": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+  "helper": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "cache": "#!/bin/sh\nplace='<place>'\noperation=\"$2\"\ndatabase=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --database ]; then database=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ -f \"$place/fake/cache.$operation.count\" ]; then count=$(/bin/cat \"$place/fake/cache.$operation.count\"); else count=0; fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$place/fake/cache.$operation.count\"\n{\n  printf 'call %s %s\\n' \"$operation\" \"$count\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/cache.log\"\nanswer=\"$place/fake/cache/$operation.$count\"\nif [ -f \"$answer.sh\" ]; then . \"$answer.sh\"; fi\nif [ -f \"$answer.stdout\" ]; then /bin/cat \"$answer.stdout\"; fi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
   "rustc": "#!/bin/sh\nprintf 'rustc 1.99.0 (pinned)\\nhost: fixture\\n'\n",
   "cargo": "#!/bin/sh\nprintf 'cargo 1.99.0 (pinned)\\n'\n",
@@ -8474,7 +8474,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8490,7 +8490,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8557,7 +8557,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8573,7 +8573,7 @@
      "run": "codeql-policy-python-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8640,7 +8640,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8656,7 +8656,7 @@
      "run": "codeql-policy-python-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8724,7 +8724,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8740,7 +8740,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8810,7 +8810,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8826,7 +8826,7 @@
      "run": "codeql-policy-c-cpp-quality-advisory",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8896,7 +8896,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },
@@ -8912,7 +8912,7 @@
      "run": "codeql-policy-c-cpp-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -8981,7 +8981,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -8996,7 +8996,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9063,7 +9063,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9078,7 +9078,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9145,7 +9145,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9160,7 +9160,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9227,7 +9227,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9242,7 +9242,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9309,7 +9309,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9325,7 +9325,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9392,7 +9392,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9408,7 +9408,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9475,7 +9475,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9491,7 +9491,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9558,7 +9558,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9574,7 +9574,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9641,7 +9641,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9657,7 +9657,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9715,7 +9715,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.status": {
@@ -9730,7 +9730,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9797,7 +9797,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     },
     "fake/helper/policy-rust-security-policy.sh": {
@@ -9815,7 +9815,7 @@
      "run": "codeql-policy-rust-security",
      "argv": [
       "<place>/bin/helper",
-      "<place>/root/build/security_codeql_triage.py",
+      "<triage>",
       "sarif",
       "--revision",
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -9885,7 +9885,7 @@
      "directory": true
     },
     "bin/helper": {
-     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/security_codeql_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
+     "text": "#!/bin/sh\nplace='<place>'\ncase \"$1\" in\n  codeql) kind=policy; shift 2 ;;\n  vendor) kind=vendor; shift 1 ;;\n  */build/*_triage.py) kind=policy; shift 1 ;;\n  */build/security_vendor.py) kind=vendor; shift 1 ;;\n  *) kind=other ;;\nesac\nout=\nprevious=\nfor argument in \"$@\"; do\n  if [ \"$previous\" = --output ]; then out=\"$argument\"; fi\n  previous=\"$argument\"\ndone\nif [ \"$kind\" = policy ]; then step=\"policy-$(/usr/bin/basename \"$out\")\"; else step=\"$kind\"; fi\n{\n  printf 'call %s\\n' \"$step\"\n  printf 'cwd %s\\n' \"$(pwd -P)\"\n  for argument in \"$@\"; do printf 'argument %s\\n' \"$argument\"; done\n} >> \"$place/fake/helper.log\"\nanswer=\"$place/fake/helper/$step\"\nif [ -f \"$answer.sh\" ]; then\n  . \"$answer.sh\"\nelif [ \"$kind\" = policy ]; then\n  /bin/mkdir -p \"$out\" && printf '{\"passed\": true}\\n' > \"$out/report.json\"\nfi\nif [ -f \"$answer.status\" ]; then exit \"$(/bin/cat \"$answer.status\")\"; fi\nexit 0\n",
      "mode": 493
     }
    },

@@ -40,7 +40,7 @@ recorded identity field before the repository gate permits it.
 ## Source verification
 
 The native report uses generated Meson paths that are intentionally absent from
-the tracked checkout. `security_codeql_sources.py` maps only directories declared
+the tracked checkout. `crates/security/src/codeql/sources.rs` maps only directories declared
 by the current `vendor/integrity.json` and revision-bound wrap files. Original
 archives must already exist in the private vendor-verification cache. The reader
 checks their complete SHA256 before bounded in-memory parsing; it never downloads,
@@ -58,7 +58,7 @@ not relax the existing vendor integrity reader's stricter archive contract.
 Run native policy checks with the same cache prepared before worker compilation:
 
 ```sh
-python3 build/security_codeql_triage.py sarif \
+cargo run --locked -q -p simplestchat-security -- codeql triage sarif \
   --revision "$REVISION" --source-cache "$VERIFIED_VENDOR_CACHE" \
   --input "$ORIGINAL_NATIVE_SARIF" --output "$NEW_NATIVE_POLICY_DIRECTORY"
 ```

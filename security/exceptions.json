@@ -1896,8 +1896,8 @@
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/1/uses",
       "owner": "swiftraccoon",
-      "rationale": "Compiled analyzed-database keys require the exact repository Rust 1.99.0 toolchain before hosted Rust cache lookup. The maintained local act image also needs this immutable installer for execution receipts in every matrix entry.",
-      "reachability": "Re-reviewed 2026-10-21 for this exact installer location and unchanged immutable action reference. The guard now includes hosted Rust and local execution; the redundant miss-only installer was removed. Checkout disables persisted credentials and all installer arguments are fixed repository values. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Database identity, source validation, fresh reports and current policy remain blocking; no analyzed database substitutes for finding policy.",
+      "rationale": "Every matrix entry runs the compiled CodeQL tooling: pin verification, analysis and finding policy for each language, and the analyzed-database keys for Rust. They require the exact repository Rust 1.99.0 toolchain, and the maintained local act image also needs this immutable installer for execution receipts.",
+      "reachability": "Re-reviewed 2026-11-18 for this exact installer location and unchanged immutable action reference. The step is no longer guarded: it runs in every hosted and local matrix entry, because the compiled gate replaced the Python helpers. Checkout disables persisted credentials and all installer arguments are fixed repository values. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Database identity, source validation, fresh reports and current policy remain blocking; no analyzed database substitutes for finding policy.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },

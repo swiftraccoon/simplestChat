@@ -118,6 +118,41 @@ impl Drop for Fixture {
     }
 }
 
+/// What the deleted Python cache module answered for these tests' fixtures,
+/// recorded from it before it was removed.
+fn reference() -> Value {
+    serde_json::from_str(include_str!("recorded_reference.json")).unwrap()
+}
+
+/// The bytes a recording spells in hexadecimal.
+fn unhex(text: &str) -> Vec<u8> {
+    (0..text.len())
+        .step_by(2)
+        .map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap())
+        .collect()
+}
+
+/// Write the recorded tree `tree` below `root`: a text, hexadecimal bytes
+/// with their mode, or a link to another name below `root`.
+fn planted(root: &Path, tree: &Value) {
+    for (name, spec) in tree.as_object().unwrap() {
+        let path = root.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        if let Some(target) = spec["link"].as_str() {
+            symlink(root.join(target), &path).unwrap();
+            continue;
+        }
+        match spec["text"].as_str() {
+            Some(text) => fs::write(&path, text).unwrap(),
+            None => fs::write(&path, unhex(spec["hex"].as_str().unwrap())).unwrap(),
+        }
+        if let Some(mode) = spec["mode"].as_u64() {
+            let mode = u32::try_from(mode).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+    }
+}
+
 fn zip(path: &Path, members: &[(&str, &[u8])]) {
     let mut archive = rawzip::ZipArchiveWriter::new(File::create(path).unwrap());
     for (name, bytes) in members {
@@ -578,62 +613,57 @@ fn restore_rejects_tampering_wrong_keys_partial_inventory_and_symlinks_before_co
 
 #[test]
 fn openssl_identity_matches_reference_and_rejects_links() {
-    let fixture = Fixture::new();
-    for name in [
-        "include/openssl/ssl.h",
-        "lib/libssl.a",
-        "lib/libcrypto.a",
-        "share/simplestchat/receipt.json",
-    ] {
-        fixture.write(name, name);
+    // The reference's prefix (four files, each holding its own name) and the
+    // same prefix with a link to one of them.
+    let mut tally = [0; 2];
+    for case in reference()["opensslIdentities"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let fixture = Fixture::new();
+        planted(&fixture.root, &case["tree"]);
+        let native = key::openssl_identity(&fixture.root);
+        if let Some(held) = case["result"]["held"].as_str() {
+            assert_eq!(native.unwrap(), held, "{name}");
+            tally[0] += 1;
+        } else {
+            let refused = case["result"]["refused"].as_str().unwrap();
+            assert_eq!(native.unwrap_err().to_string(), refused, "{name}");
+            tally[1] += 1;
+        }
     }
-    let native = key::openssl_identity(&fixture.root).unwrap();
-    let expected = fixture.python("import sys;from pathlib import Path;sys.path.insert(0,sys.argv[1]);import security_codeql_cache as c;print(c.openssl_identity(Path(sys.argv[2])))",&[&fixture.root]);
-    assert_eq!(native, String::from_utf8(expected).unwrap().trim());
-    symlink(
-        fixture.root.join("lib/libssl.a"),
-        fixture.root.join("include/alias"),
-    )
-    .unwrap();
-    assert!(key::openssl_identity(&fixture.root).is_err());
+    assert_eq!(tally, [1, 1]);
 }
 
 #[test]
 fn full_rust_keys_match_reference_and_change_for_source_suite_scope_and_paths() {
+    // Each recorded checkout is tracked here as the recorder tracked it, and
+    // keyed at the recorded source path in the recorded environment.
+    let mut keyed = 0;
+    for case in reference()["rustKeys"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let fixture = Fixture::new();
+        planted(&fixture.root, &case["tree"]);
+        fixture.git(&["init", "-q"]);
+        fixture.git(&["add", "."]);
+        let mut context = fixture.context();
+        for (variable, value) in case["environment"].as_object().unwrap() {
+            let value = value.as_str().unwrap().to_owned();
+            context.environment.insert(variable.clone(), value);
+        }
+        assert_eq!(context.system, case["system"].as_str().unwrap());
+        assert_eq!(context.architecture, case["machine"].as_str().unwrap());
+        let source = Path::new(case["source"].as_str().unwrap());
+        let suite = case["suite"].as_str().unwrap();
+        let vendor = case["includeVendor"].as_bool().unwrap();
+        let native = key::key(&context, source, None, "rust", suite, vendor).unwrap();
+        assert_eq!(native, case["result"]["held"].as_str().unwrap(), "{name}");
+        keyed += 1;
+    }
+    assert_eq!(keyed, 5);
     let fixture = Fixture::new();
     fixture.tracked();
     let context = fixture.context();
     let source = fixture.root.join("source");
     let native = key::key(&context, &source, None, "rust", "security", false).unwrap();
-    let program = r"
-import json,os,sys
-from pathlib import Path
-from unittest.mock import patch
-sys.path.insert(0,sys.argv[1])
-import security_codeql_cache as c
-with patch.dict(os.environ,json.loads(sys.argv[3]),clear=True),patch('platform.system',return_value='Linux'),patch('platform.machine',return_value='x86_64'):
-    print(c.cache_key(Path(sys.argv[2]),Path(sys.argv[2])/'source',None,'rust','security'))
-";
-    let output = Command::new(&fixture.python)
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .args(["-c", program])
-        .arg(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .and_then(Path::parent)
-                .unwrap()
-                .join("build"),
-        )
-        .arg(&fixture.root)
-        .arg(serde_json::to_string(&context.environment).unwrap())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(native, String::from_utf8(output.stdout).unwrap().trim());
     assert_ne!(
         native,
         key::key(&context, &source, None, "rust", "all", false).unwrap()
@@ -662,65 +692,27 @@ with patch.dict(os.environ,json.loads(sys.argv[3]),clear=True),patch('platform.s
 }
 
 #[test]
-fn archive_path_encoding_alias_and_size_decisions_match_python() {
+fn archive_path_encoding_alias_and_size_decisions_match_the_reference() {
+    // The reference's own archives, as it wrote them and judged them. Its
+    // interpreter refused the ambiguous Unicode path override, so every
+    // maintained reader is held to the same verdict.
     let fixture = Fixture::new();
-    let program = r"
-import json,pathlib,stat,struct,sys,warnings,zipfile
-sys.path.insert(0,sys.argv[1])
-import security_codeql_cache as reference
-root=pathlib.Path(sys.argv[2]); report=[]
-cases=[('valid',['rust/results/a.bqrs']),('directory',['rust/','rust/results/a.bqrs']),
-    ('unicode',['rust/results/é.bqrs']),('relative',['../rust/results/a.bqrs']),
-    ('absolute',['/rust/results/a.bqrs']),('double',['rust//results/a.bqrs']),
-    ('dot',['rust/./results/a.bqrs']),('parent',['rust/x/../results/a.bqrs']),
-    ('backslash',['rust\\results/a.bqrs']),('control',['rust/results/a\x01.bqrs']),
-    ('same',['rust/results/a.bqrs','rust/results/a.bqrs']),
-    ('file-directory',['rust/results/a.bqrs','rust/results/a.bqrs/']),
-    ('symlink',['rust/results/a.bqrs']),('fifo',['rust/results/a.bqrs']),
-    ('empty',[]),('wrong-language',['other/results/a.bqrs']),
-    ('no-results',['rust/database.yml']),('sarif',['rust/results/a.bqrs','rust/results/a.sarif']),
-    ('cp437-distinct',['rust/results/aa.bqrs','rust/results/é.bqrs']),
-    ('cp437-collision',['rust/results/aa.bqrs','rust/results/├⌐.bqrs']),
-    ('unicode-extra',['rust/results/a.bqrs']),('huge-declared',['rust/results/a.bqrs','rust/results/b.bqrs'])]
-for label,names in cases:
-    path=root/(label+'.zip')
-    with warnings.catch_warnings(),zipfile.ZipFile(path,'w') as archive:
-        warnings.simplefilter('ignore',UserWarning)
-        for name in names:
-            item=zipfile.ZipInfo(name)
-            if label in ('symlink','fifo'): item.external_attr=(stat.S_IFLNK if label=='symlink' else stat.S_IFIFO)<<16
-            if label=='unicode-extra':
-                import zlib
-                field=b'\x01'+struct.pack('<I',zlib.crc32(name.encode()))+b'../ignored-unicode-path'
-                item.extra=struct.pack('<HH',0x7075,len(field))+field
-            archive.writestr(item,b'fixture')
-    data=path.read_bytes()
-    if label.startswith('cp437'): data=data.replace(b'/aa.bqrs',b'/\xc3\xa9.bqrs')
-    if label=='huge-declared':
-        data=bytearray(data); offset=data.index(b'PK\x01\x02'); struct.pack_into('<I',data,offset+24,0xffffffff)
-    path.write_bytes(data)
-    try: reference.bundle_integrity(path,'rust'); valid=True
-    except (reference.ToolError,ValueError,zipfile.BadZipFile): valid=False
-    report.append([label,valid])
-print(json.dumps(report))
-";
-    let reports: Vec<(String, bool)> =
-        serde_json::from_slice(&fixture.python(program, &[&fixture.root])).unwrap();
-    for (label, expected) in reports {
-        // Python before 3.14 ignores UnicodePath; all maintained readers reject
-        // ambiguous unsafe overrides consistently, including on those hosts.
-        if label == "unicode-extra" {
-            assert!(
-                archive::bundle_integrity(&fixture.root.join("unicode-extra.zip"), "rust").is_err()
-            );
-            continue;
-        }
+    let mut tally = [0; 2];
+    for case in reference()["archives"].as_array().unwrap() {
+        let label = case["name"].as_str().unwrap();
+        let bundle = fixture.write(
+            &format!("{label}.zip"),
+            unhex(case["hex"].as_str().unwrap()),
+        );
+        let valid = case["valid"].as_bool().unwrap();
         assert_eq!(
-            archive::bundle_integrity(&fixture.root.join(format!("{label}.zip")), "rust").is_ok(),
-            expected,
+            archive::bundle_integrity(&bundle, "rust").is_ok(),
+            valid,
             "{label}"
         );
+        tally[usize::from(valid)] += 1;
     }
+    assert_eq!(tally, [18, 4]);
 }
 
 #[test]
@@ -912,24 +904,32 @@ fn actual_command_boundary_is_private_bounded_and_preserves_literal_arguments() 
 }
 
 #[test]
-fn native_identity_framing_matches_python_and_every_native_component_binds() {
-    let fixture = Fixture::new();
-    let identity = json!({"inputs":"native-inputs","language":"c-cpp","suite":"security",
-        "includeVendor":false,"sourceRoot":fixture.root.join("source").to_str().unwrap(),
-        "toolchain":{"pin":"fixture λ"},"opensslRoot":fixture.root.join("openssl").to_str().unwrap(),
-        "opensslSha256":"openssl","packagesSha256":io::sha256(b"packages"),
-        "compilerSha256":{"gcc":"compiler","g++":"compiler"}});
-    let expected = fixture.python(r"
-import sys
-from pathlib import Path
-from unittest.mock import patch
-sys.path.insert(0,sys.argv[1])
-import security_codeql_cache as c
-with patch.object(c.ci_verified,'cache_key',return_value='native-inputs'),patch.object(c.ci_verified,'cache_namespace',return_value='main-linux-x86_64'),patch.object(c,'command',return_value=b'packages'),patch.object(c,'executable',return_value='/usr/bin/dpkg-query'),patch.object(c.ci_verified,'digest',return_value='compiler'),patch.object(c,'openssl_identity',return_value='openssl'),patch.object(c.tools,'pin',return_value={'pin':'fixture λ'}):
-    print(c.cache_key(Path(sys.argv[2]),Path(sys.argv[2])/'source',Path(sys.argv[2])/'openssl','c-cpp','security'))
-",&[&fixture.root]);
+fn native_identity_framing_matches_the_reference_and_every_native_component_binds() {
+    // Each identity is what the reference made of the inputs it was given in
+    // place of its source closure, namespace, packages, compilers, OpenSSL
+    // and pin.
+    let identity = |case: &Value| {
+        let compiler = &case["compilerSha256"];
+        json!({"inputs":case["inputs"],"language":case["language"],"suite":case["suite"],
+            "includeVendor":false,"sourceRoot":case["sourceRoot"],
+            "toolchain":case["toolchain"],"opensslRoot":case["opensslRoot"],
+            "opensslSha256":case["opensslSha256"],
+            "packagesSha256":io::sha256(case["packages"].as_str().unwrap().as_bytes()),
+            "compilerSha256":{"gcc":compiler,"g++":compiler}})
+    };
+    let cases = reference()["identities"].as_array().unwrap().clone();
+    for case in &cases {
+        let namespace = case["namespace"].as_str().unwrap();
+        assert_eq!(
+            key::identity_key(&identity(case), namespace, "c-cpp"),
+            case["result"]["held"].as_str().unwrap(),
+            "{}",
+            case["name"]
+        );
+    }
+    assert_eq!(cases.len(), 3);
+    let identity = identity(&cases[0]);
     let native = key::identity_key(&identity, "main-linux-x86_64", "c-cpp");
-    assert_eq!(native, String::from_utf8(expected).unwrap().trim());
     for field in identity.as_object().unwrap().keys() {
         let mut changed = identity.clone();
         changed[field] = json!("changed");
@@ -946,9 +946,12 @@ with patch.object(c.ci_verified,'cache_key',return_value='native-inputs'),patch.
 }
 
 #[test]
-fn native_and_python_receipts_restore_each_others_genuine_bundles() {
+fn native_and_reference_receipts_restore_each_others_genuine_bundles() {
     let fixture = Fixture::new();
-    for language in ["rust", "c-cpp"] {
+    let reference = reference();
+    let mut languages = Vec::new();
+    for case in reference["receipts"].as_array().unwrap() {
+        let language = case["language"].as_str().unwrap();
         let root = fixture.root.join(language);
         fs::create_dir(&root).unwrap();
         let native_cache = root.join("native-cache");
@@ -962,41 +965,39 @@ fn native_and_python_receipts_restore_each_others_genuine_bundles() {
             language,
         )
         .unwrap();
-        let program = r"
-import json,pathlib,sys,zipfile
-from unittest.mock import patch
-sys.path.insert(0,sys.argv[1])
-import security_codeql_cache as c
-from security_context import Context,ROOT
-root=pathlib.Path(sys.argv[2]); language=root.name
-output=root/'python-output';output.mkdir();context=Context(ROOT,output)
-def run(label,argv,**kwargs):
-    if label=='codeql-cache-bundle':
-        path=pathlib.Path(next(value.removeprefix('--output=') for value in argv if value.startswith('--output=')))
-        with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr(language+'/codeql-database.yml',b'identity')
-            archive.writestr(language+'/results/security.bqrs',b'queries')
-    return 0,b''
-with patch.object(context,'run',side_effect=run):
-    restored=c.restore(context,pathlib.Path('/fake-codeql'),root/'native-cache','native-key',root/'restored'/language)
-    saved=c.save(context,pathlib.Path('/fake-codeql'),root/'python-cache','python-key','b'*40,language=language)
-print(json.dumps({'restored':restored,'saved':saved}))
-";
-        let output: Value = serde_json::from_slice(&fixture.python(program, &[&root])).unwrap();
-        assert_eq!(output["restored"]["bundleSha256"], saved["bundleSha256"]);
-        assert_eq!(output["restored"]["reused"], true);
+        // This save made, byte for byte, the cache the reference restored.
+        let recorded = case["rustCache"].as_object().unwrap();
+        assert_eq!(native_cache.read_dir().unwrap().count(), recorded.len());
+        for (name, file) in recorded {
+            assert_eq!(
+                fs::read(native_cache.join(name)).unwrap(),
+                unhex(file["hex"].as_str().unwrap()),
+                "{language} {name}"
+            );
+        }
+        let restored = &case["restored"]["held"];
+        assert_eq!(restored["bundleSha256"], saved["bundleSha256"]);
+        assert_eq!(restored["reused"], true);
+        // The reference's own cache, as it saved it, restores here.
+        let python_cache = root.join("python-cache");
+        planted(&python_cache, &case["pythonCache"]);
         let restored = cache::restore(
             &mut driver,
-            &root.join("python-cache"),
+            &python_cache,
             "python-key",
             &root.join("restored").join(language),
         )
         .unwrap()
         .unwrap();
-        assert_eq!(restored["bundleSha256"], output["saved"]["bundleSha256"]);
+        assert_eq!(
+            restored["bundleSha256"],
+            case["saved"]["held"]["bundleSha256"]
+        );
         assert_eq!(restored["revision"], "b".repeat(40));
         assert_eq!(restored["reused"], true);
+        languages.push(language);
     }
+    assert_eq!(languages, ["rust", "c-cpp"]);
 }
 
 #[test]

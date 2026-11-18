@@ -241,8 +241,6 @@ class VerifiedCacheTests(unittest.TestCase):
             ".github/workflows/codeql.yml",
             "security/authorization/operations.json",
             "security/image-policy.json",
-            "build/security_codeql_local.py",
-            "build/security_codeql_cache.py",
             "crates/security/src/image/gate.rs",
             "ops/ansible/files/release_public.py",
         )
@@ -322,11 +320,6 @@ class VerifiedCacheTests(unittest.TestCase):
             "build/codeql-native-build.sh",
             "build/pip-constraints.txt",
             "build/install-openssl.sh",
-            "build/security_codeql_resources.py",
-            "build/security_codeql_local.py",
-            "build/security_codeql_cache.py",
-            "build/security_codeql_tools.py",
-            "build/security_codeql_triage.py",
             "build/security_vendor.py",
             "security/codeql-toolchain.json",
             "security/codeql/native-coverage/compilations.ql",
@@ -357,7 +350,7 @@ class VerifiedCacheTests(unittest.TestCase):
             for directory in (ROOT / "build", ROOT / "ops/ansible/files")
             for path in directory.glob("*.py")
         }
-        pending = ["security_codeql_local", "security_codeql_cache", "security_vendor"]
+        pending = ["security_vendor"]
         visited: set[str] = set()
         while pending:
             name = pending.pop()
