@@ -3,13 +3,16 @@
 //! the native sources, the pinned analyzer with its bundled query suites,
 //! the key of the Rust extractor's dependency build and its reuse, the
 //! exact committed and vendored bytes that a finding's location is bound
-//! to, and the triage of the findings against their exact reviews, with
-//! the authorized dismissal of reviewed false positives on GitHub. Each
-//! step keeps the reference's fixed codes and bounds.
+//! to, the triage of the findings against their exact reviews, with the
+//! authorized dismissal of reviewed false positives on GitHub, and the
+//! complete local analysis of the clean commit with the readiness of its
+//! reports for upload. Each step keeps the reference's fixed codes and
+//! bounds.
 
 pub mod cargo;
 pub mod cli;
 pub mod coverage;
+pub mod local;
 pub mod rust_sources;
 pub mod sources;
 pub mod tools;

@@ -65,6 +65,33 @@ fn a_command_that_is_not_one_is_told_the_usage() {
 }
 
 #[test]
+fn the_usage_names_the_codeql_group_and_its_commands() {
+    let output = run(&[]);
+    assert_eq!(output.status.code(), Some(2));
+    let usage = concat!(
+        "usage: simplestchat-security fast|deep|tools|rulesets ...\n",
+        "       simplestchat-security codeql",
+        " jobs|coverage|tools|cargo-key|triage|local|upload-ready ...\n",
+    );
+    assert_eq!(text(&output.stderr), usage);
+    for (arguments, usage) in [
+        (
+            &["codeql", "local"][..],
+            "usage: simplestchat-security codeql local --revision SHA --output DIR ",
+        ),
+        (
+            &["codeql", "upload-ready"],
+            "usage: simplestchat-security codeql upload-ready --output DIR --revision SHA ",
+        ),
+    ] {
+        let output = run(arguments);
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert!(text(&output.stderr).starts_with(usage), "{arguments:?}");
+        assert!(output.stdout.is_empty(), "{arguments:?}");
+    }
+}
+
+#[test]
 fn a_rulesets_command_that_is_not_one_is_told_the_usage_and_asks_nobody() {
     let usage = "usage: simplestchat-security rulesets plan|check|apply [--revision COMMIT]\n";
     for arguments in [
@@ -842,4 +869,355 @@ fn an_image_archive_check_that_fails_says_its_code_in_one_line_and_writes_nothin
         "Image archive check failed: image_tar_terminator\n"
     );
     assert!(!Path::new(&evidence).exists());
+}
+
+/// A checkout's analyzer faked below `place` for `languages`: a CLI that
+/// says the pinned version, makes a finished database of `language` and
+/// writes `report` for each analysis, beside the pinned query packs; and a
+/// `git` that names `revision`, has nothing uncommitted, lists one file and
+/// makes a directory with its default mode at `probe`.
+fn faked_analyzer(place: &Path, language: &str, revision: &str, report: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let pin = std::fs::read(root.join("security/codeql-toolchain.json")).expect("the pin");
+    let pin: serde_json::Value = serde_json::from_slice(&pin).expect("a pin");
+    let cli = pin["cliVersion"].as_str().expect("a version");
+    let write = |name: &str, text: &str, mode: u32| {
+        let path = place.join(name);
+        std::fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
+        std::fs::write(&path, text).expect("a file");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).expect("a mode");
+    };
+    let spelled = place.to_str().expect("a path");
+    let git = format!(
+        "#!/bin/sh\ncase \"$1\" in\n  rev-parse) /bin/mkdir -p '{spelled}/probe'; printf '%s\\n' '{revision}' ;;\n  status) ;;\n  ls-files) printf 'Cargo.toml\\000' ;;\n  -C) printf '100644 {object} 0\\tCargo.toml\\000100644 {object} 0\\tCargo.lock\\000' ;;\n  *) exit 9 ;;\nesac\n",
+        object = "c".repeat(40)
+    );
+    write("bin/git", &git, 0o755);
+    write("bin/rustc", "#!/bin/sh\nprintf 'rustc fixture\\n'\n", 0o755);
+    write("bin/cargo", "#!/bin/sh\nprintf 'cargo fixture\\n'\n", 0o755);
+    let codeql = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{spelled}/codeql.log'\nout=\nfor argument in \"$@\"; do case \"$argument\" in --output=*) out=\"${{argument#--output=}}\" ;; esac; done\ncase \"$1 $2\" in\n  'version --format=json') printf '{{\"version\": \"{cli}\"}}\\n' ;;\n  'database create') /bin/mkdir -p \"$3\" && /bin/cp '{spelled}/database.yml' \"$3/codeql-database.yml\" ;;\n  'database analyze') /bin/cp '{spelled}/report.sarif' \"$out\" ;;\n  *) exit 9 ;;\nesac\n"
+    );
+    write("bundle/codeql", &codeql, 0o755);
+    for (name, pinned) in pin["languages"].as_object().expect("languages") {
+        let extractor = pinned["extractor"].as_str().expect("an extractor");
+        let version = pinned["queriesVersion"].as_str().expect("a version");
+        let pack = format!("bundle/qlpacks/codeql/{extractor}-queries/{version}");
+        let metadata =
+            format!("name: codeql/{extractor}-queries\nversion: {version}\ncliVersion: {cli}\n");
+        write(&format!("{pack}/qlpack.yml"), &metadata, 0o644);
+        for queries in ["security-extended", "security-and-quality"] {
+            write(
+                &format!("{pack}/codeql-suites/{extractor}-{queries}.qls"),
+                "- queries: .\n",
+                0o644,
+            );
+        }
+        if name == language {
+            let database = format!(
+                "primaryLanguage: {extractor}\ncliVersion: {cli}\nfinalised: true\noverlayBaseDatabase: false\noverlayDatabase: false\nbuildMode: none\n"
+            );
+            write("database.yml", &database, 0o644);
+        }
+    }
+    write("report.sarif", report, 0o644);
+    place.join("bundle/codeql")
+}
+
+/// A local run of the real program with only `git` and the analyzer faked,
+/// and the caller's `variables` besides its search path and home.
+fn local(place: &Path, arguments: &[&str], variables: &[(&str, &str)]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_simplestchat-security"))
+        .args(["codeql", "local"])
+        .args(arguments)
+        .env_clear()
+        .env("PATH", place.join("bin"))
+        .env("HOME", place)
+        .envs(variables.iter().copied())
+        .output()
+        .expect("the executable runs")
+}
+
+/// The names of the checks of a run's summary, and what it failed of.
+fn summarized(output: &Path) -> (Vec<String>, serde_json::Value) {
+    let summary = std::fs::read(output.join("summary.json")).expect("a summary");
+    let summary: serde_json::Value = serde_json::from_slice(&summary).expect("a summary");
+    let checks = summary["checks"].as_array().expect("checks");
+    let names = checks
+        .iter()
+        .map(|check| check["name"].as_str().expect("a name").to_owned());
+    (names.collect(), summary["failure"].clone())
+}
+
+#[test]
+fn a_local_run_enforces_its_policy_with_this_program_and_keeps_its_files_private() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let scratch = Scratch::new("local-run");
+    let revision = "a".repeat(40);
+    let report = concat!(
+        "{\"version\": \"2.1.0\", \"runs\": [{\"tool\": {\"driver\": {\"name\": \"CodeQL\",",
+        " \"semanticVersion\": \"2.27.1\", \"rules\": [{\"id\": \"actions/fixture\",",
+        " \"properties\": {\"security-severity\": \"7.5\", \"tags\": [\"security\"]}}]}},",
+        " \"automationDetails\": {\"id\": \"/language:actions/security/\"},",
+        " \"invocations\": [{\"executionSuccessful\": true}], \"results\": []}]}",
+    );
+    let codeql = faked_analyzer(&scratch.0, "actions", &revision, report);
+    let output = scratch.0.join("out");
+    let named = |path: &Path| path.to_str().expect("a path").to_owned();
+    let (codeql, out) = (named(&codeql), named(&output));
+    let ran = local(
+        &scratch.0,
+        &[
+            "--revision",
+            &revision,
+            "--output",
+            &out,
+            "--codeql",
+            &codeql,
+            "--language",
+            "actions",
+        ],
+        &[],
+    );
+    // The analyzer's own files are private: the command's mask is 077.
+    let probe = scratch.0.join("probe").metadata().expect("a probe");
+    assert_eq!(probe.permissions().mode() & 0o777, 0o700);
+    // This program's own triage was run on the report, as the reference ran
+    // its triage script, and wrote its request before it read the policy.
+    let request = std::fs::read_to_string(output.join("actions-security-policy/request.json"));
+    let expected = format!(
+        "{{\"mode\": \"sarif\", \"repository\": \"swiftraccoon/simplestChat\", \"revision\": \"{revision}\", \"ref\": \"refs/heads/main\"}}\n"
+    );
+    assert_eq!(request.expect("a triage request"), expected);
+    let (checks, failure) = summarized(&output);
+    let mut expected = vec![
+        "codeql-source-head",
+        "codeql-source-status",
+        "source-inventory",
+        "codeql-version",
+        "codeql-create-actions",
+        "codeql-analyze-actions-security",
+        "codeql-policy-actions-security",
+    ];
+    // The checkout's own reviews decide the policy: a review that has
+    // expired fails it, and the run with it.
+    let verdict = std::fs::read(output.join("actions-security-policy/report.json")).ok();
+    if verdict.is_some() {
+        expected.extend([
+            "codeql-source-head",
+            "codeql-source-status",
+            "final-source-inventory",
+        ]);
+        assert_eq!(failure, serde_json::Value::Null);
+        assert_eq!(ran.status.code(), Some(0));
+        assert_eq!(
+            text(&ran.stdout),
+            format!("Local CodeQL: passed; evidence: {out}\n")
+        );
+    } else {
+        assert_eq!(
+            failure,
+            "scanner_command_failed_codeql-policy-actions-security"
+        );
+        assert_eq!(ran.status.code(), Some(1));
+        assert_eq!(
+            text(&ran.stdout),
+            format!("Local CodeQL: failed; evidence: {out}\n")
+        );
+    }
+    assert_eq!(checks, expected);
+    assert_eq!(text(&ran.stderr), "");
+}
+
+#[test]
+fn a_local_run_of_the_native_language_needs_linux() {
+    let scratch = Scratch::new("local-native");
+    let revision = "a".repeat(40);
+    let codeql = faked_analyzer(&scratch.0, "c-cpp", &revision, "{}");
+    let output = scratch.0.join("out");
+    let named = |path: &Path| path.to_str().expect("a path").to_owned();
+    let (codeql, out, prefix) = (
+        named(&codeql),
+        named(&output),
+        named(&scratch.0.join("openssl")),
+    );
+    let ran = local(
+        &scratch.0,
+        &[
+            "--revision",
+            &revision,
+            "--output",
+            &out,
+            "--codeql",
+            &codeql,
+            "--language",
+            "c-cpp",
+            "--include-vendor",
+            "--openssl-prefix",
+            &prefix,
+        ],
+        &[],
+    );
+    assert_eq!(ran.status.code(), Some(1));
+    assert_eq!(
+        text(&ran.stdout),
+        format!("Local CodeQL: failed; evidence: {out}\n")
+    );
+    let (checks, failure) = summarized(&output);
+    assert_eq!(
+        checks,
+        [
+            "codeql-source-head",
+            "codeql-source-status",
+            "source-inventory",
+            "codeql-version"
+        ]
+    );
+    let refused = if cfg!(target_os = "linux") {
+        "codeql_static_openssl_missing"
+    } else {
+        "codeql_native_requires_linux"
+    };
+    assert_eq!(failure, refused);
+}
+
+#[test]
+fn a_local_run_of_a_relative_output_is_refused_before_anything_is_made() {
+    let scratch = Scratch::new("local-relative");
+    let ran = Command::new(env!("CARGO_BIN_EXE_simplestchat-security"))
+        .args([
+            "codeql",
+            "local",
+            "--revision",
+            "x",
+            "--output",
+            "relative-output",
+        ])
+        .current_dir(&scratch.0)
+        .env_clear()
+        .output()
+        .expect("the executable runs");
+    assert_eq!(ran.status.code(), Some(1));
+    assert_eq!(text(&ran.stdout), "");
+    assert_eq!(
+        text(&ran.stderr),
+        "Local CodeQL stopped: codeql_output_absolute\n"
+    );
+    let left: Vec<_> = std::fs::read_dir(&scratch.0)
+        .expect("a directory")
+        .collect();
+    assert!(left.is_empty(), "nothing is made");
+}
+
+/// What `uname` says of this host's system, or of its machine with `-m`.
+fn uname(option: &str) -> String {
+    let said = Command::new("/usr/bin/uname")
+        .arg(option)
+        .output()
+        .expect("uname runs");
+    text(&said.stdout).trim().to_lowercase()
+}
+
+#[test]
+fn a_local_run_of_rust_binds_its_dependency_build_and_its_budget_to_this_host() {
+    let scratch = Scratch::new("local-rust");
+    let place = scratch.0.canonicalize().expect("a place");
+    let revision = "a".repeat(40);
+    let labels = [
+        "Elements extracted",
+        "Elements unextracted",
+        "Extraction errors",
+        "Extraction warnings",
+        "Files extracted - total",
+        "Files extracted - total user",
+        "Files extracted - with errors",
+        "Files extracted - without errors",
+        "Lines of user code extracted",
+        "Macro calls - resolved",
+        "Macro calls - total",
+        "Macro calls - unresolved",
+        "Taint edges - number of edges",
+    ];
+    let metrics: Vec<serde_json::Value> = labels
+        .iter()
+        .map(|label| {
+            serde_json::json!({"ruleId": "rust/summary/summary-statistics",
+                "message": {"text": label}, "value": 1})
+        })
+        .collect();
+    let report = serde_json::json!({"version": "2.1.0", "runs": [{
+        "tool": {"driver": {"name": "CodeQL", "semanticVersion": "2.27.1",
+            "rules": [{"id": "rust/fixture", "properties": {"security-severity": "7.5",
+                "tags": ["security"]}}]}},
+        "automationDetails": {"id": "/language:rust/security/"},
+        "invocations": [{"executionSuccessful": true}], "results": [],
+        "properties": {"metricResults": metrics}}]});
+    let codeql = faked_analyzer(&place, "rust", &revision, &report.to_string());
+    let named = |path: &Path| path.to_str().expect("a path").to_owned();
+    let (codeql, out, cargo) = (
+        named(&codeql),
+        named(&place.join("out")),
+        named(&place.join("cargo")),
+    );
+    let hosted = [
+        ("GITHUB_REF", "refs/heads/main"),
+        ("GITHUB_EVENT_NAME", "push"),
+        ("ImageOS", "fixture"),
+        ("ImageVersion", "1"),
+    ];
+    let arguments = [
+        "--revision",
+        &revision,
+        "--output",
+        &out,
+        "--codeql",
+        &codeql,
+        "--language",
+        "rust",
+        "--rust-cargo-cache",
+        &cargo,
+    ];
+    let ran = local(&place, &arguments, &hosted);
+    assert_eq!(text(&ran.stderr), "");
+    // The dependency build's key names this host's system and machine, and
+    // the trust of the run its caller's variables give.
+    let receipt = std::fs::read_to_string(place.join("cargo/receipt.json")).expect("a receipt");
+    let namespace = format!(
+        "\"key\": \"codeql-rust-cargo-v1-main-{}-{}-",
+        uname("-s"),
+        uname("-m")
+    );
+    assert!(receipt.contains(&namespace), "{receipt}");
+    // The extraction and the analysis are given this host's budget.
+    let budget = simplestchat_security::budget::detect(None).expect("a budget");
+    let log = std::fs::read_to_string(place.join("codeql.log")).expect("a log");
+    let create = log
+        .lines()
+        .find(|line| line.starts_with("database create"))
+        .expect("a creation");
+    let target = format!("--extractor-option=cargo_target_dir={cargo}/target");
+    for word in [
+        format!("--threads={}", budget.workers),
+        format!("--ram={}", budget.ram_mib),
+        target,
+    ] {
+        assert!(
+            create.split(' ').any(|said| said == word),
+            "{word}: {create}"
+        );
+    }
+    let analyze = log
+        .lines()
+        .find(|line| line.starts_with("database analyze"))
+        .expect("an analysis");
+    for word in [
+        format!("--threads={}", budget.workers),
+        format!("--ram={}", budget.query_ram_mib),
+    ] {
+        assert!(
+            analyze.split(' ').any(|said| said == word),
+            "{word}: {analyze}"
+        );
+    }
 }

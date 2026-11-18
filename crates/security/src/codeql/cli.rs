@@ -1,5 +1,6 @@
-//! `simplestchat-security codeql jobs|coverage|tools|cargo-key|triage`:
-//! the CodeQL tier's commands, each answering as its reference did.
+//! `simplestchat-security codeql
+//! jobs|coverage|tools|cargo-key|triage|local|upload-ready`: the CodeQL
+//! tier's commands, each answering as its reference did.
 
 use super::{cargo, coverage, tools};
 use crate::{
@@ -23,7 +24,10 @@ pub const USAGE: &str = concat!(
     "       simplestchat-security codeql cargo-key --source-root DIR",
     " [--publication-check DIR]\n",
     "       simplestchat-security codeql triage health|sarif|plan|check|apply",
-    " --output DIR --revision SHA ...",
+    " --output DIR --revision SHA ...\n",
+    "       simplestchat-security codeql local --revision SHA --output DIR ...\n",
+    "       simplestchat-security codeql upload-ready --output DIR --revision SHA",
+    " --language LANGUAGE [--category CATEGORY ...]",
 );
 /// The options of `tools`.
 const TOOLS: [&str; 3] = ["--codeql", "--language", "--output"];
@@ -207,12 +211,16 @@ pub fn command(root: &Path, arguments: &[String], around: &mut Around<'_>) -> u8
 }
 
 /// Run the command line `arguments` against the checkout `root`; `triage`
-/// reaches GitHub, its clock and the caller's environment on its own.
+/// reaches GitHub, its clock and the caller's environment on its own, and
+/// `local` and `upload-ready` this program and this host.
 pub fn run(root: &Path, arguments: &[String]) -> ExitCode {
-    if let Some((group, rest)) = arguments.split_first()
-        && group == "triage"
-    {
-        return super::triage::run(root, rest);
+    if let Some((group, rest)) = arguments.split_first() {
+        match group.as_str() {
+            "triage" => return super::triage::run(root, rest),
+            "local" => return super::local::run(root, rest),
+            "upload-ready" => return super::local::command::upload_run(root, rest),
+            _ => {}
+        }
     }
     let variable = |name: &str| std::env::var_os(name);
     let search = variable("PATH");

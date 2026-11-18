@@ -1,13 +1,17 @@
 //! `simplestchat-security fast|deep`, `tools install|path`,
-//! `codeql jobs|coverage|tools|cargo-key` and `rulesets plan|check|apply`:
-//! the security gate's command line.
+//! `codeql jobs|coverage|tools|cargo-key|triage|local|upload-ready` and
+//! `rulesets plan|check|apply`: the security gate's command line.
 
 use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
 
-const USAGE: &str = "usage: simplestchat-security fast|deep|tools|rulesets ...";
+const USAGE: &str = concat!(
+    "usage: simplestchat-security fast|deep|tools|rulesets ...\n",
+    "       simplestchat-security codeql",
+    " jobs|coverage|tools|cargo-key|triage|local|upload-ready ...",
+);
 
 /// The checkout this executable was built from holds the lock and the cache.
 fn repository_root() -> Option<PathBuf> {

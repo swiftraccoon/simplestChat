@@ -285,6 +285,15 @@ pub(crate) fn string(value: &Document) -> Result<&str> {
     value.text().ok_or(VALUE)
 }
 
+/// The whole number `value` is, as the reference's reader took one: no
+/// truth value, no fraction, and nothing that is no number.
+pub(crate) fn integer(value: &Document) -> Result<i128> {
+    match value {
+        Document::Number(_) => value.whole().ok_or(VALUE),
+        _ => Err(VALUE),
+    }
+}
+
 /// Whether `value` is the text `text`.
 pub(crate) fn same(value: &Document, text: &str) -> bool {
     value.text() == Some(text)
