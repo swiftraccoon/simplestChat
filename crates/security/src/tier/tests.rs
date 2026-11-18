@@ -27,6 +27,11 @@ use std::{
 
 const RECORDING: &str = include_str!("recorded_tier.json");
 
+/// The vendor script the reference's deep tier ran, as the recording names
+/// it. It was deleted after the recording; the gate's own `vendor verify`
+/// replaced it, and the check is handed what the script was given.
+const REFERENCE_VENDOR: &str = "build/security_vendor.py";
+
 /// Command lines the reference's reader took and judged, and this one
 /// refuses: a value that is empty, an option given twice (the last one
 /// counted), one before the tier, one cut short and one joined to its
@@ -363,7 +368,7 @@ impl Host for Deep<'_> {
 
     fn vendor(&self, root: &Path, cache: &Path, output: &Path) -> std::result::Result<(), String> {
         // What the reference gave its command is what the check is handed.
-        let mut call = vec![json!("build/security_vendor.py"), json!("verify")];
+        let mut call = vec![json!(REFERENCE_VENDOR), json!("verify")];
         for (option, path) in [("--root", root), ("--cache", cache), ("--output", output)] {
             call.extend([json!(option), json!(self.spelled(path))]);
         }

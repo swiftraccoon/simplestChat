@@ -85,6 +85,10 @@ pub(crate) fn event(name: &str, argv: &[&OsStr], how: &Run<'_>, place: &Path) ->
     ])
 }
 
+/// The vendor script the reference ran, as the recordings name it. It was
+/// deleted after them; this program's own `vendor` replaced it.
+const REFERENCE_VENDOR: &str = "/build/security_vendor.py";
+
 /// The command the reference ran as the commands the port runs: this
 /// program's own `codeql triage` where the reference's interpreter ran its
 /// triage script, which the recorder wrote as `<triage>`, and its own
@@ -97,7 +101,7 @@ pub(crate) fn ported(event: &Document) -> Document {
     let head = argv.get(1).and_then(Document::text).unwrap_or_default();
     let replaced: Option<&[&str]> = if head == "<triage>" {
         Some(&["codeql", "triage"])
-    } else if head.ends_with("/build/security_vendor.py") {
+    } else if head.ends_with(REFERENCE_VENDOR) {
         Some(&["vendor"])
     } else {
         None

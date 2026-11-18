@@ -1,10 +1,9 @@
-total 75455
+total 72504
 11	build/build-release.py
 307	build/caddy_materials.py
 2290	build/caddy_probe_guest.py
 1104	build/caddy_probe_vm.py
 241	build/ci_release_checks.py
-566	build/ci_verified.py
 11	build/fetch-release.py
 621	build/maintain_namespace_probe.py
 1438	build/maintain_namespace_probe_guest.py
@@ -21,7 +20,6 @@ total 75455
 185	build/security_policy.py
 27	build/security_source_scope.py
 512	build/security_tools.py
-830	build/security_vendor.py
 1423	build/security_vm.py
 804	build/security_vm_deploy.py
 3236	build/security_vm_deploy_guest.py
@@ -70,7 +68,6 @@ total 75455
 1893	ops/ansible/tests/test_caddy_probe_guest.py
 1077	ops/ansible/tests/test_caddy_probe_vm.py
 276	ops/ansible/tests/test_ci_release_checks.py
-1055	ops/ansible/tests/test_ci_verified.py
 675	ops/ansible/tests/test_deploy_controller.py
 267	ops/ansible/tests/test_force_release.py
 431	ops/ansible/tests/test_maintain_namespace_probe.py
@@ -103,7 +100,6 @@ total 75455
 164	ops/ansible/tests/test_security_findings.py
 144	ops/ansible/tests/test_security_policy.py
 419	ops/ansible/tests/test_security_tools.py
-500	ops/ansible/tests/test_security_vendor.py
 1040	ops/ansible/tests/test_security_vm.py
 320	ops/ansible/tests/test_security_vm_boot.py
 2019	ops/ansible/tests/test_security_vm_deploy.py

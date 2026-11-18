@@ -9,9 +9,23 @@ const RECORDING: &[u8] = include_bytes!("recorded_diff.json");
 
 #[test]
 fn every_recorded_difference_is_rendered_alike() {
-    let recording = Document::read(RECORDING).expect("a recording");
+    assert_eq!(rendered_alike(RECORDING, "cases"), (126, 0));
+}
+
+/// The deleted tests' differences: a binary change shown whole in base64,
+/// an empty file that is added, and a missing line end.
+#[test]
+fn the_reference_tests_differences_are_rendered_alike() {
+    let recording = crate::vendor::tests::TESTS;
+    assert_eq!(rendered_alike(recording, "diffs"), (3, 0));
+}
+
+/// Render every case of the section, and count those held to the text and
+/// those held to its length and digest.
+fn rendered_alike(recording: &[u8], section: &str) -> (usize, usize) {
+    let recording = Document::read(recording).expect("a recording");
     let cases = recording
-        .get("cases")
+        .get(section)
         .and_then(Document::items)
         .expect("cases");
     let (mut text, mut long) = (0, 0);
@@ -37,7 +51,7 @@ fn every_recorded_difference_is_rendered_alike() {
             long += 1;
         }
     }
-    assert_eq!((text, long), (126, 0));
+    (text, long)
 }
 
 #[test]

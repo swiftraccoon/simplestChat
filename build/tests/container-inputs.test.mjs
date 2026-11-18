@@ -307,7 +307,7 @@ test('the builder authenticates cargo-auditable with the security crate built fr
   assert.equal(builder.match(/simplestchat-security tools /g).length, 2);
   assert.ok(!dockerfile.includes('security_tools.py'), 'no stage installs through the retired installer');
   assert.equal(excluded('build/security_tools.py'), true, 'the retired installer stays outside the context');
-  for (const retired of ['build/security_vendor.py', 'build/security_elf.py']) {
+  for (const retired of ['build/security_elf.py']) {
     assert.ok(!dockerfile.includes(retired.slice('build/'.length)), `no stage runs ${retired}`);
     assert.equal(excluded(retired), true, `${retired} stays outside the context`);
   }
@@ -500,6 +500,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/security/src/tier/private.env', 'crates/security/src/tier/recorded_tier.json',
     'crates/security/src/elf/private.env', 'crates/security/src/elf/recorded_elf.json',
     'crates/security/src/vendor/private.env', 'crates/security/src/vendor/recorded_vendor.json',
+    'crates/security/src/vendor/recorded_tests.json',
     'crates/security/src/awslc/private.env', 'crates/security/src/awslc/recorded_awslc.json',
     'crates/security/src/native/private.env', 'crates/security/src/native/recorded_record.json',
     'crates/security/src/image/private.env', 'crates/security/src/image/recorded_archive.json',
@@ -569,6 +570,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/toolkit/src/private.env', 'crates/toolkit/src/CLAUDE.md',
     'crates/toolkit/src/test_env/private.env',
     'crates/ci/private.env', 'crates/ci/src/private.env', 'crates/ci/src/CLAUDE.md',
+    'crates/ci/src/recorded_fingerprint.json',
     'crates/ci/tests/private.env', 'crates/ci/src/automation/pins/private.env',
     'crates/release/private.env', 'crates/release/src/private.env', 'crates/release/src/CLAUDE.md',
     'crates/release/src/bootstrap/private.env',

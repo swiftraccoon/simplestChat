@@ -43,9 +43,8 @@ const CODEQL_RUST_MANIFESTS: [&str; 5] = [
     "rust-project.json",
 ];
 /// The tracked files of the native analysis, which every CodeQL key binds.
-const CODEQL_NATIVE_FILES: [&str; 14] = [
+const CODEQL_NATIVE_FILES: [&str; 12] = [
     ".github/workflows/codeql.yml",
-    "build/ci_verified.py",
     "build/codeql-native-build.sh",
     "build/install-openssl.sh",
     "build/pip-constraints.txt",
@@ -54,7 +53,6 @@ const CODEQL_NATIVE_FILES: [&str; 14] = [
     "build/security_policy.py",
     "build/security_source_scope.py",
     "build/security_tools.py",
-    "build/security_vendor.py",
     "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
     "security/codeql-toolchain.json",

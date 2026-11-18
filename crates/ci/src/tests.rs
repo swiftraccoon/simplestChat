@@ -1,24 +1,89 @@
 use super::*;
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::cell::RefCell;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::io::Write;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+/// The tracked files every fixture checkout starts with, besides the workflow.
+const FIXTURE_FILES: [&str; 12] = [
+    "src/main.rs",
+    "docs/example.md",
+    "vendor/worker.cpp",
+    "xtask/src/check.rs",
+    "build/native-security.Dockerfile",
+    "security/exceptions.json",
+    "security/native/toolchain.json",
+    ".github/workflows/security.yml",
+    "web/src/media.ts",
+    "web/tests/media.test.mjs",
+    "web/tests/layer-cap-cases.json",
+    "web/e2e/package-lock.json",
+];
+
+/// What the deleted CI cache reference in Python answered for the fixtures of these
+/// tests and of `reference_tests.rs`, recorded from it before it was removed,
+/// with the two deleted helpers already out of its closures as they are out
+/// of Rust's. Each tape is named after the test that replays it and holds,
+/// in order, every answer that test compares with. The fixtures were built
+/// as `Fixture::recorded` builds them, in the recorded environment, on the
+/// recorded system and machine and with the recorded workflow. Where the
+/// reference hashed its checkout's own path the recording says `<root>`;
+/// a receipt names a root-dependent key or digest `<key>` or
+/// `<digest of NAME>`.
+fn recording() -> &'static Value {
+    static RECORDING: OnceLock<Value> = OnceLock::new();
+    RECORDING
+        .get_or_init(|| serde_json::from_str(include_str!("recorded_fingerprint.json")).unwrap())
+}
+
+/// A recording's text field.
+fn text<'a>(value: &'a Value, name: &str) -> &'a str {
+    value[name].as_str().unwrap_or_else(|| panic!("{name}"))
+}
+
+/// SHA-256 of the chunks in lowercase hexadecimal, computed here rather than
+/// by the code under test.
+fn hashed<'a>(chunks: impl IntoIterator<Item = &'a [u8]>) -> String {
+    let mut hasher = Sha256::new();
+    for chunk in chunks {
+        hasher.update(chunk);
+    }
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// The path an input the reference framed as `name\0mode\0digest` names.
+fn framed_name(input: &str) -> &str {
+    input.split('\0').next().unwrap()
+}
+
+/// How far a recorded fixture's replay has come.
+struct Tape {
+    name: &'static str,
+    next: usize,
+    omitting: usize,
+    refused: usize,
+}
+
 struct Fixture {
     context: Context,
+    tape: Option<RefCell<Tape>>,
 }
 
 impl Fixture {
+    /// A checkout in this process's own environment with the live workflow.
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "simplestchat-ci space-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir(&root).unwrap();
-        let root = root.canonicalize().unwrap();
+        let root = Self::root();
         let mut context = Context::current(&root).unwrap();
         for (name, value) in [
             ("ACT", "true".to_owned()),
@@ -33,30 +98,60 @@ impl Fixture {
             context.environment.insert(name.to_owned(), value);
         }
         context.environment.remove("CARGO_TARGET_DIR");
-        let fixture = Self { context };
-        fixture.git(&["init", "--quiet"]);
-        for name in [
-            "src/main.rs",
-            "docs/example.md",
-            "vendor/worker.cpp",
-            "xtask/src/check.rs",
-            "build/native-security.Dockerfile",
-            "security/exceptions.json",
-            "security/native/toolchain.json",
-            ".github/workflows/security.yml",
-            "web/src/media.ts",
-            "web/tests/media.test.mjs",
-            "web/tests/layer-cap-cases.json",
-            "web/e2e/package-lock.json",
-        ] {
-            fixture.write(name, b"original\n");
-        }
         let workflow = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(Path::parent)
             .unwrap()
             .join(".github/workflows/ci.yml");
-        fixture.write(".github/workflows/ci.yml", &fs::read(workflow).unwrap());
+        Self::checkout(context, None, &fs::read(workflow).unwrap())
+    }
+
+    /// The checkout the recorder built for the tape `name`: the recorded
+    /// environment with this host's search path, the recorded system and
+    /// machine, and the recorded workflow.
+    fn recorded(name: &'static str) -> Self {
+        let recording = recording();
+        let mut environment = recording["environment"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(name, value)| (name.clone(), value.as_str().unwrap().to_owned()))
+            .collect::<BTreeMap<_, _>>();
+        environment.insert("PATH".to_owned(), std::env::var("PATH").unwrap());
+        let context = Context {
+            root: Self::root(),
+            environment,
+            system: text(recording, "system").to_owned(),
+            architecture: text(recording, "architecture").to_owned(),
+        };
+        assert!(recording["tapes"][name].is_array(), "{name}");
+        let tape = Tape {
+            name,
+            next: 0,
+            omitting: 0,
+            refused: 0,
+        };
+        let workflow = text(recording, "workflow").as_bytes();
+        Self::checkout(context, Some(RefCell::new(tape)), workflow)
+    }
+
+    fn root() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "simplestchat-ci space-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        root.canonicalize().unwrap()
+    }
+
+    fn checkout(context: Context, tape: Option<RefCell<Tape>>, workflow: &[u8]) -> Self {
+        let fixture = Self { context, tape };
+        fixture.git(&["init", "--quiet"]);
+        for name in FIXTURE_FILES {
+            fixture.write(name, b"original\n");
+        }
+        fixture.write(".github/workflows/ci.yml", workflow);
         fixture.git(&["add", "."]);
         fixture
     }
@@ -78,43 +173,261 @@ impl Fixture {
         assert!(status.success());
     }
 
+    /// What the reference printed for `operation`, read from the tape: a key
+    /// or an original revision on its own line. Its `save` is planted in
+    /// `directory` as it left it.
     fn oracle(&self, operation: &str, scope: Scope, key: &str, directory: &Path) -> Vec<u8> {
-        let build = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .unwrap()
-            .join("build");
-        let script = concat!(
-            "import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); ",
-            "import ci_verified as c; import platform; platform.system=lambda:sys.argv[7]; ",
-            "platform.machine=lambda:sys.argv[8]; root=Path(sys.argv[2]); scope=sys.argv[3]; op=sys.argv[4]; ",
-            "key=sys.argv[5]; directory=Path(sys.argv[6]); ",
-            "result = c.cache_key(root,scope) if op=='key' else ",
-            "c.save(root,scope,key,directory) if op=='save' else c.verify(root,scope,key,directory); ",
-            "print(result) if result is not None else None"
+        let entry = self.reference(operation, scope);
+        assert!(entry.get("refused").is_none() && entry.get("raised").is_none());
+        match operation {
+            "key" => {
+                let (reference, held) = self.implied(entry, scope);
+                assert_eq!(reference, held, "no shared crate is tracked here");
+                format!("{reference}\n").into_bytes()
+            }
+            "save" => {
+                self.plant(entry, scope, key, directory);
+                Vec::new()
+            }
+            _ => format!("{}\n", text(entry, "revision")).into_bytes(),
+        }
+    }
+
+    /// The reference's next answer, which must be to `operation` in `scope`.
+    fn reference(&self, operation: &str, scope: Scope) -> &'static Value {
+        let mut tape = self.tape.as_ref().expect("a recorded fixture").borrow_mut();
+        let entries = recording()["tapes"][tape.name].as_array().unwrap();
+        let place = format!("{} answer {}", tape.name, tape.next);
+        let entry = entries.get(tape.next).unwrap_or_else(|| panic!("{place}"));
+        tape.next += 1;
+        tape.omitting += usize::from(entry.get("omitted").is_some());
+        tape.refused +=
+            usize::from(entry.get("refused").is_some() || entry.get("raised").is_some());
+        assert_eq!(entry["operation"], operation, "{place}");
+        assert_eq!(entry["scope"], scope.name(), "{place}");
+        entry
+    }
+
+    /// The tape's answers replayed, all of them; of those the keys whose
+    /// checkout tracked a shared crate the reference omitted; and the
+    /// answers the reference refused.
+    fn replayed(&self) -> [usize; 3] {
+        let tape = self.tape.as_ref().unwrap().borrow();
+        let entries = recording()["tapes"][tape.name].as_array().unwrap();
+        assert_eq!(
+            tape.next,
+            entries.len(),
+            "{}: every answer replayed",
+            tape.name
         );
-        let result = Command::new("python3")
-            .arg("-c")
-            .arg(script)
-            .arg(build)
-            .arg(&self.context.root)
-            .arg(scope.name())
-            .arg(operation)
-            .arg(key)
-            .arg(directory)
-            .arg(&self.context.system)
-            .arg(&self.context.architecture)
-            .current_dir(&self.context.root)
-            .env_clear()
-            .envs(&self.context.environment)
-            .output()
-            .unwrap();
+        [tape.next, tape.omitting, tape.refused]
+    }
+
+    /// A recorded text with this checkout's path where the reference hashed
+    /// its own. The reference hashed it as JSON text, so it must need no
+    /// escaping.
+    fn rooted(&self, recorded: &str) -> String {
+        let root = self.context.root.to_str().unwrap();
         assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
+            root.bytes()
+                .all(|byte| (b' '..=b'~').contains(&byte) && byte != b'"' && byte != b'\\'),
+            "{root}"
         );
-        result.stdout
+        recorded.replace("<root>", root)
+    }
+
+    /// The key the reference's recorded answer implies for this checkout,
+    /// and the key Rust must give: the same hash over the reference's own
+    /// inputs, joined in Git's order by each shared-crate input the
+    /// reference omitted and Rust holds.
+    fn implied(&self, entry: &Value, scope: Scope) -> (String, String) {
+        let Some(listed) = entry.get("inputs") else {
+            let key = text(entry, "key").to_owned();
+            return (key.clone(), key);
+        };
+        let mut header = vec![text(entry, "identity").to_owned()];
+        if let Some(environment) = entry.get("environment") {
+            header.push(self.rooted(environment.as_str().unwrap()));
+        }
+        let recorded = listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|input| self.rooted(input.as_str().unwrap()))
+            .collect::<Vec<_>>();
+        assert!(recorded.is_sorted_by_key(|input| framed_name(input).to_owned()));
+        let prefix = match entry.get("key") {
+            Some(key) => {
+                key.as_str()
+                    .unwrap()
+                    .split_at(key.as_str().unwrap().len() - 64)
+                    .0
+            }
+            None => text(entry, "prefix"),
+        };
+        let key = |inputs: &[String]| {
+            let chunks = header.iter().chain(inputs).map(String::as_bytes);
+            format!("{prefix}{}", hashed(chunks))
+        };
+        let reference = key(&recorded);
+        if let Some(recorded) = entry.get("key") {
+            assert_eq!(reference, recorded.as_str().unwrap(), "the recorded hash");
+        }
+        let mut held = recorded.clone();
+        for omitted in entry
+            .get("omitted")
+            .into_iter()
+            .flat_map(|list| list.as_array().unwrap())
+        {
+            let omitted = omitted.as_str().unwrap();
+            let name = framed_name(omitted);
+            assert!(name.starts_with("crates/"), "{name}");
+            assert!(inputs::selected(scope, name), "{scope:?} keys {name}");
+            held.push(omitted.to_owned());
+        }
+        held.sort_by_key(|input| framed_name(input).to_owned());
+        (reference, key(&held))
+    }
+
+    /// The receipt the reference wrote for `key`, its root-dependent key and
+    /// rule digests filled in for this checkout's own files.
+    fn receipt(&self, entry: &Value, key: &str) -> String {
+        let recorded = text(entry, "receipt");
+        assert!(recorded.matches("<key>").count() <= 1);
+        let mut receipt = recorded.replace("<key>", key);
+        for name in inputs::BINARIES
+            .iter()
+            .map(|name| (*name).to_owned())
+            .chain(inputs::BINARIES.iter().map(|name| format!("{name}.d")))
+        {
+            let mark = format!("<digest of {name}>");
+            if receipt.contains(&mark) {
+                let output = fs::read(self.context.root.join("target/debug").join(&name)).unwrap();
+                receipt = receipt.replace(&mark, &hashed([output.as_slice()]));
+            }
+        }
+        assert!(!receipt.contains('<'), "{receipt}");
+        receipt
+    }
+
+    /// What the reference's `save` left in `directory`: its receipt and, for
+    /// the backend, its copy of each executable and rule.
+    fn plant(&self, entry: &Value, scope: Scope, key: &str, directory: &Path) {
+        fs::DirBuilder::new().mode(0o700).create(directory).unwrap();
+        let receipt = self.receipt(entry, key);
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(directory.join("receipt.json"))
+            .unwrap()
+            .write_all(receipt.as_bytes())
+            .unwrap();
+        if scope == Scope::Backend {
+            for name in inputs::BINARIES {
+                for name in [(*name).to_owned(), format!("{name}.d")] {
+                    let copy = directory.join(&name);
+                    fs::copy(self.context.root.join("target/debug").join(&name), &copy).unwrap();
+                    fs::set_permissions(copy, fs::Permissions::from_mode(0o700)).unwrap();
+                }
+            }
+        }
+    }
+
+    /// Whether a Rust outcome ends as the reference's answer `entry` ended:
+    /// refused with the same code, or raised, or done.
+    fn ended_alike<T>(entry: &Value, outcome: &Result<T>) -> bool {
+        let place = format!("{entry}");
+        match (entry.get("refused"), entry.get("raised"), outcome) {
+            (Some(code), None, Err(error)) => {
+                let code = code.as_str().unwrap();
+                assert!(error.to_string().contains(code), "{error}: {place}");
+                false
+            }
+            (None, Some(_), Err(_)) => false,
+            (None, None, Ok(_)) => true,
+            _ => panic!("{place}"),
+        }
+    }
+
+    /// Rust's key for `scope`, held to the reference's answer, and the key
+    /// the reference itself gave this checkout; `None` where both refused.
+    fn keys(&self, scope: Scope) -> Option<(String, String)> {
+        let entry = self.reference("key", scope);
+        let outcome = fingerprint::key(&self.context, scope);
+        if !Self::ended_alike(entry, &outcome) {
+            return None;
+        }
+        let (reference, held) = self.implied(entry, scope);
+        let key = outcome.unwrap();
+        assert_eq!(key, held, "{scope:?}");
+        Some((key, reference))
+    }
+
+    /// The reference's last answer replayed.
+    fn last(&self) -> &'static Value {
+        let tape = self.tape.as_ref().unwrap().borrow();
+        &recording()["tapes"][tape.name][tape.next - 1]
+    }
+
+    /// The code with which the reference refused its last answer.
+    fn refused(&self) -> &'static str {
+        text(self.last(), "refused")
+    }
+
+    /// The shared-crate files the reference's last key omitted.
+    fn omitted(&self) -> Vec<&'static str> {
+        let omitted = self.last().get("omitted").and_then(Value::as_array);
+        omitted
+            .into_iter()
+            .flatten()
+            .map(|input| framed_name(input.as_str().unwrap()))
+            .collect()
+    }
+
+    /// Rust's `save` refuses the backend's dependency rules as the
+    /// reference's rule check did, before anything is published.
+    fn dependencies_refused(&self, key: &str, directory: &Path) {
+        let entry = self.reference("dependencies", Scope::Backend);
+        let outcome = receipts::save(&self.context, Scope::Backend, key, directory);
+        assert!(!Self::ended_alike(entry, &outcome));
+        assert!(!directory.exists());
+    }
+
+    /// Rust's key for `scope`, held to the reference's answer.
+    fn key(&self, scope: Scope) -> String {
+        self.keys(scope).expect("a key").0
+    }
+
+    /// Rust refuses a key for `scope` as the reference did.
+    fn key_refused(&self, scope: Scope) {
+        assert!(self.keys(scope).is_none());
+    }
+
+    /// Rust's `save`, held to the reference's: the same refusal, or the
+    /// receipt it wrote, byte for byte. Whether it saved.
+    fn save(&self, scope: Scope, key: &str, directory: &Path) -> bool {
+        let entry = self.reference("save", scope);
+        let outcome = receipts::save(&self.context, scope, key, directory);
+        if !Self::ended_alike(entry, &outcome) {
+            return false;
+        }
+        let written = fs::read_to_string(directory.join("receipt.json")).unwrap();
+        assert_eq!(written, self.receipt(entry, key));
+        true
+    }
+
+    /// Rust's `verify`, held to the reference's: the same refusal, or the
+    /// same original revision.
+    fn verify(&self, scope: Scope, key: &str, directory: &Path) -> Option<String> {
+        let entry = self.reference("verify", scope);
+        let outcome = receipts::verify(&self.context, scope, key, directory);
+        if !Self::ended_alike(entry, &outcome) {
+            return None;
+        }
+        let revision = outcome.unwrap();
+        assert_eq!(revision, text(entry, "revision"));
+        Some(revision)
     }
 
     fn backend(&self) {
@@ -144,7 +457,8 @@ impl Drop for Fixture {
 
 #[test]
 fn every_reference_scope_matches_the_python_oracle_and_worktree_changes() {
-    let fixture = Fixture::new();
+    let fixture =
+        Fixture::recorded("every_reference_scope_matches_the_python_oracle_and_worktree_changes");
     for changed in [false, true] {
         if changed {
             fixture.write("src/main.rs", b"changed worktree, unchanged index\n");
@@ -159,11 +473,16 @@ fn every_reference_scope_matches_the_python_oracle_and_worktree_changes() {
             );
         }
     }
+    assert_eq!(fixture.replayed(), [18, 0, 0]);
 }
 
+/// The reference's receipt is planted where it saved one, and its
+/// verification is the one of its own receipt, which holds the Rust
+/// receipt's bytes.
 #[test]
 fn receipt_bytes_and_original_revision_interoperate_with_python() {
-    let mut fixture = Fixture::new();
+    let mut fixture =
+        Fixture::recorded("receipt_bytes_and_original_revision_interoperate_with_python");
     let scope = Scope::RustTest;
     let key = fingerprint::key(&fixture.context, scope).unwrap();
     let rust = fixture.context.root.join("rust-receipt");
@@ -194,6 +513,7 @@ fn receipt_bytes_and_original_revision_interoperate_with_python() {
             & 0o777,
         0o600
     );
+    assert_eq!(fixture.replayed(), [2, 0, 0]);
 }
 
 #[test]
@@ -249,7 +569,7 @@ fn assert_key_parity(fixture: &Fixture, scope: Scope) -> String {
 
 #[test]
 fn input_closures_and_index_modes_preserve_oracle_decisions() {
-    let fixture = Fixture::new();
+    let fixture = Fixture::recorded("input_closures_and_index_modes_preserve_oracle_decisions");
     let scopes = inputs::REFERENCE_SCOPES
         .iter()
         .map(|name| Scope::parse(name).unwrap())
@@ -302,11 +622,12 @@ fn input_closures_and_index_modes_preserve_oracle_decisions() {
             .to_string()
             .contains("ci_cache_source_missing")
     );
+    assert_eq!(fixture.replayed(), [24, 0, 0]);
 }
 
 #[test]
 fn runner_trust_isa_and_backend_overrides_retain_exact_keys() {
-    let mut fixture = Fixture::new();
+    let mut fixture = Fixture::recorded("runner_trust_isa_and_backend_overrides_retain_exact_keys");
     let original = assert_key_parity(&fixture, Scope::RustTest);
     for (variable, value) in [
         ("GITHUB_EVENT_NAME", "pull_request"),
@@ -382,14 +703,47 @@ fn runner_trust_isa_and_backend_overrides_retain_exact_keys() {
             .to_string()
             .contains("ci_backend_target_directory")
     );
+    assert_eq!(fixture.replayed(), [13, 0, 0]);
 }
 
+/// The projection, held to the reference over the recorded workflow and
+/// judged by Rust alone over the live one.
 #[test]
 fn workflow_projection_preserves_build_and_rejects_late_global_or_alias_inputs() {
+    let name = "workflow_projection_preserves_build_and_rejects_late_global_or_alias_inputs";
+    let recorded = Fixture::recorded(name);
+    projected_alike(&recorded, |fixture| {
+        assert_key_parity(fixture, Scope::Backend)
+    });
+    assert_eq!(recorded.replayed(), [6, 0, 0]);
     let fixture = Fixture::new();
+    let source = projected_alike(&fixture, |fixture| {
+        fingerprint::key(&fixture.context, Scope::Backend).unwrap()
+    });
+    let path = fixture.context.root.join(".github/workflows/ci.yml");
+    for text in [
+        format!("{source}\nenv:\n  RUSTFLAGS: changed\n"),
+        source.replace("  browser:\n", "  browser: &shared\n"),
+        source.replace("    env:\n", "    env: *shared\n"),
+        source.replace("Save the exact backend success", "renamed boundary"),
+        source.replace("  web:\n", "    container: changed\n\n  web:\n"),
+    ] {
+        fs::write(&path, text).unwrap();
+        assert!(
+            fingerprint::key(&fixture.context, Scope::Backend)
+                .unwrap_err()
+                .to_string()
+                .contains("ci_backend_workflow")
+        );
+    }
+}
+
+/// Edits outside the backend's projection of the workflow keep its key;
+/// edits inside it change the key. The workflow as it was.
+fn projected_alike(fixture: &Fixture, key: impl Fn(&Fixture) -> String) -> String {
     let path = fixture.context.root.join(".github/workflows/ci.yml");
     let source = fs::read_to_string(&path).unwrap();
-    let original = assert_key_parity(&fixture, Scope::Backend);
+    let original = key(fixture);
     for (before, after, changed) in [
         (
             "name: Build production container",
@@ -411,31 +765,14 @@ fn workflow_projection_preserves_build_and_rejects_late_global_or_alias_inputs()
     ] {
         assert!(source.contains(before));
         fs::write(&path, source.replace(before, after)).unwrap();
-        assert_eq!(
-            assert_key_parity(&fixture, Scope::Backend) != original,
-            changed
-        );
+        assert_eq!(key(fixture) != original, changed);
     }
-    for text in [
-        format!("{source}\nenv:\n  RUSTFLAGS: changed\n"),
-        source.replace("  browser:\n", "  browser: &shared\n"),
-        source.replace("    env:\n", "    env: *shared\n"),
-        source.replace("Save the exact backend success", "renamed boundary"),
-        source.replace("  web:\n", "    container: changed\n\n  web:\n"),
-    ] {
-        fs::write(&path, text).unwrap();
-        assert!(
-            fingerprint::key(&fixture.context, Scope::Backend)
-                .unwrap_err()
-                .to_string()
-                .contains("ci_backend_workflow")
-        );
-    }
+    source
 }
 
 #[test]
 fn backend_receipt_bytes_and_depinfo_interoperate_with_python() {
-    let fixture = Fixture::new();
+    let fixture = Fixture::recorded("backend_receipt_bytes_and_depinfo_interoperate_with_python");
     fixture.backend();
     let key = assert_key_parity(&fixture, Scope::Backend);
     let rust = fixture.context.root.join("rust-receipt");
@@ -465,6 +802,7 @@ fn backend_receipt_bytes_and_depinfo_interoperate_with_python() {
         fixture.oracle("verify", Scope::Backend, &key, &rust),
         format!("{}\n", "1".repeat(40)).as_bytes()
     );
+    assert_eq!(fixture.replayed(), [3, 0, 0]);
 }
 
 #[test]
@@ -584,9 +922,95 @@ fn dependency_refusals_precede_backend_cache_publication() {
     }
 }
 
+/// The authorization policy the server embeds is a backend input outside
+/// every backend prefix: it is selected by name, and its bytes change the
+/// backend's key.
+#[test]
+fn the_embedded_authorization_policy_is_a_backend_input() {
+    let fixture = Fixture::new();
+    let policy = "security/authorization/operations.json";
+    assert!(inputs::selected(Scope::Backend, policy));
+    fixture.write(policy, b"original authorization policy\n");
+    fixture.git(&["add", policy]);
+    let original = fingerprint::key(&fixture.context, Scope::Backend).unwrap();
+    fixture.write(policy, b"changed authorization policy\n");
+    let changed = fingerprint::key(&fixture.context, Scope::Backend).unwrap();
+    assert_ne!(changed, original);
+}
+
+/// A backend success publishes only executables, and never over a copy
+/// already in its directory: either refusal comes before any receipt, and
+/// a refused executable is not copied.
+#[test]
+fn backend_saves_refuse_a_plain_file_or_an_earlier_copy_before_any_receipt() {
+    let fixture = Fixture::new();
+    fixture.backend();
+    let key = fingerprint::key(&fixture.context, Scope::Backend).unwrap();
+    let save = |directory: &Path| {
+        receipts::save(&fixture.context, Scope::Backend, &key, directory)
+            .unwrap_err()
+            .to_string()
+    };
+    let executable = fixture.context.root.join("target/debug/simplestChat");
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o600)).unwrap();
+    let plain = fixture.context.root.join("plain");
+    assert_eq!(save(&plain), "ci_cache_binary_not_executable");
+    assert_eq!(fs::read_dir(&plain).unwrap().count(), 0);
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+    let earlier = fixture.context.root.join("earlier");
+    fs::DirBuilder::new().mode(0o700).create(&earlier).unwrap();
+    fs::write(earlier.join("simplestChat"), b"an earlier copy").unwrap();
+    assert_eq!(save(&earlier), "ci_cache_existing_binary");
+    assert_eq!(
+        fs::read(earlier.join("simplestChat")).unwrap(),
+        b"an earlier copy"
+    );
+    assert!(!earlier.join("receipt.json").exists());
+}
+
+/// A dependency rule must name a tracked, keyed source and nothing a shell
+/// would read: a rule of generated inputs alone, or one with a dollar sign,
+/// a quote, a carriage return or a zero byte, is refused before anything
+/// is published.
+#[test]
+fn backend_rules_need_a_keyed_source_and_plain_make_words() {
+    let fixture = Fixture::new();
+    fixture.backend();
+    let key = fingerprint::key(&fixture.context, Scope::Backend).unwrap();
+    let generated = "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs";
+    fixture.write(generated, b"generated compiler input\n");
+    let escaped = |path: &Path| path.display().to_string().replace(' ', "\\ ");
+    let root = &fixture.context.root;
+    let (source, generated) = (
+        escaped(&root.join("src/main.rs")),
+        escaped(&root.join(generated)),
+    );
+    for (rule, code) in [
+        (format!(" {generated}\n"), "ci_backend_dep_empty"),
+        (format!(" {source} {source}$\n"), "ci_backend_dep_syntax"),
+        (format!(" '{source}'\n"), "ci_backend_dep_syntax"),
+        (format!(" \"{source}\"\n"), "ci_backend_dep_syntax"),
+        (format!(" {source}\r\n"), "ci_backend_dep_syntax"),
+        (format!(" {source}\0\n"), "ci_backend_dep_syntax"),
+    ] {
+        for name in inputs::BINARIES {
+            let target = escaped(&root.join("target/debug").join(name));
+            fixture.write(
+                &format!("target/debug/{name}.d"),
+                format!("{target}:{rule}").as_bytes(),
+            );
+        }
+        let directory = root.join("unpublished");
+        let refused = receipts::save(&fixture.context, Scope::Backend, &key, &directory);
+        assert_eq!(refused.unwrap_err().to_string(), code, "{rule:?}");
+        assert!(!directory.exists(), "{rule:?}");
+    }
+}
+
 #[test]
 fn generated_dependencies_are_bound_and_restored_depinfo_is_authenticated() {
-    let mut fixture = Fixture::new();
+    let name = "generated_dependencies_are_bound_and_restored_depinfo_is_authenticated";
+    let mut fixture = Fixture::recorded(name);
     fixture.backend();
     let paths = [
         "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs",
@@ -695,6 +1119,7 @@ fn generated_dependencies_are_bound_and_restored_depinfo_is_authenticated() {
                 .exists()
         );
     }
+    assert_eq!(fixture.replayed(), [2, 0, 0]);
 }
 
 #[test]
@@ -736,7 +1161,8 @@ fn symlinked_sources_or_restored_executables_never_become_proof() {
 
 #[test]
 fn every_reference_scope_binds_the_compiled_fingerprint_implementation() {
-    let fixture = Fixture::new();
+    let fixture =
+        Fixture::recorded("every_reference_scope_binds_the_compiled_fingerprint_implementation");
     for path in [
         "xtask/src/ci/mod.rs",
         "xtask/Cargo.toml",
@@ -754,6 +1180,7 @@ fn every_reference_scope_binds_the_compiled_fingerprint_implementation() {
         assert_ne!(assert_key_parity(&fixture, scope), original, "{name}");
         fixture.write("xtask/src/ci/mod.rs", b"original compiler input\n");
     }
+    assert_eq!(fixture.replayed(), [18, 0, 0]);
 }
 
 #[test]
@@ -814,7 +1241,8 @@ fn oversized_git_diagnostics_are_rejected_before_waiting_for_the_child() {
 
 #[test]
 fn backend_default_and_unicode_environment_values_match_python_json() {
-    let mut fixture = Fixture::new();
+    let mut fixture =
+        Fixture::recorded("backend_default_and_unicode_environment_values_match_python_json");
     fixture.context.environment.remove("CARGO_HOME");
     fixture.context.environment.remove("CARGO_INCREMENTAL");
     let original = assert_key_parity(&fixture, Scope::Backend);
@@ -844,11 +1272,13 @@ fn backend_default_and_unicode_environment_values_match_python_json() {
         .environment
         .insert("HOME".to_owned(), String::new());
     assert_key_parity(&fixture, Scope::Backend);
+    assert_eq!(fixture.replayed(), [4, 0, 0]);
 }
 
 #[test]
 fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
-    let fixture = Fixture::new();
+    let fixture =
+        Fixture::recorded("operations_workspace_inputs_change_rust_keys_with_exact_python_parity");
     let inputs = [
         "Cargo.toml",
         "ops/Cargo.toml",
@@ -894,11 +1324,13 @@ fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
         fs::remove_file(fixture.context.root.join("ops/src/new_policy.rs")).unwrap();
         assert_eq!(assert_key_parity(&fixture, scope), original);
     }
+    assert_eq!(fixture.replayed(), [60, 0, 0]);
 }
 
 #[test]
 fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity() {
-    let fixture = Fixture::new();
+    let name = "embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity";
+    let fixture = Fixture::recorded(name);
     let catalog = "ops/ops-build-inputs.lock.json";
     let adjacent = "ops/unrelated-local-selection.json";
     fixture.write(catalog, b"original reviewed catalog\n");
@@ -920,11 +1352,13 @@ fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity
         fixture.write(adjacent, b"original unrelated JSON\n");
         assert_eq!(assert_key_parity(&fixture, scope), original, "{name}");
     }
+    assert_eq!(fixture.replayed(), [36, 0, 0]);
 }
 
 #[test]
 fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
-    let fixture = Fixture::new();
+    let name = "restore_test_and_registration_inputs_invalidate_existing_success_receipts";
+    let fixture = Fixture::recorded(name);
     let paths = [
         "ops/ansible/tests/test_restore_verify.py",
         "ops/ansible/tests/test_restore_database.py",
@@ -966,6 +1400,7 @@ fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
             );
         }
     }
+    assert_eq!(fixture.replayed(), [10, 0, 0]);
 }
 #[test]
 fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_fingerprints() {
@@ -1032,7 +1467,7 @@ fn shared_crates_are_keyed_wherever_xtask_is() {
     }
     // The key-computing modules live in the CI crate and compile against the
     // whole toolkit crate: main.rs routes its replay child and github_output.rs
-    // takes its Environment. The frozen oracle omits `crates/`, so only these
+    // takes its Environment. The recorded reference omits `crates/`, so only these
     // Rust-only selections pin the moved implementation's own paths.
     for name in [
         "crates/ci/Cargo.toml",
@@ -1391,24 +1826,57 @@ fn every_named_native_input_is_a_file_of_the_checkout() {
     }
 }
 
+/// What the native CodeQL analysis's traced build, its coverage proof and its
+/// policy actually read, each a file of the checkout.
+const NATIVE_CODEQL_INPUTS: [&str; 10] = [
+    "build/codeql-native-build.sh",
+    "build/pip-constraints.txt",
+    "build/install-openssl.sh",
+    "security/codeql-toolchain.json",
+    "security/codeql/native-coverage/compilations.ql",
+    ".github/workflows/codeql.yml",
+    "ops/ansible/files/bounded_process.py",
+    "vendor/mediasoup-sys-0.19.0/tasks.py",
+    "vendor/mediasoup-sys-0.19.0/meson.build",
+    "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
+];
+
 /// The native CodeQL analysis keys what its traced build, its coverage proof
-/// and its policy actually read, as `test_ci_verified.py` holds the reference
-/// to the same inputs.
+/// and its policy actually read; `reference_tests.rs` holds the keys to the
+/// reference's over the same inputs.
 #[test]
 fn native_codeql_selects_its_actual_build_analysis_and_policy_inputs() {
-    for name in [
-        "build/codeql-native-build.sh",
-        "build/pip-constraints.txt",
-        "build/install-openssl.sh",
-        "build/security_vendor.py",
-        "security/codeql-toolchain.json",
-        "security/codeql/native-coverage/compilations.ql",
-        ".github/workflows/codeql.yml",
-        "ops/ansible/files/bounded_process.py",
-        "vendor/mediasoup-sys-0.19.0/tasks.py",
-        "vendor/mediasoup-sys-0.19.0/meson.build",
-        "vendor/mediasoup-sys-0.19.0/python-tools-requirements.txt",
-    ] {
+    for name in NATIVE_CODEQL_INPUTS {
         assert!(inputs::selected(Scope::CodeqlNative, name), "{name}");
     }
 }
+
+/// Every closure Rust names file by file is the reference's, sorted, and the
+/// lists the replays walk are walked in the order the recorder walked them.
+/// The compiled tool's own prefixes are the reference's two, to which Rust
+/// adds `crates/`: `reference_tests.rs` states what that changes.
+#[test]
+fn every_recorded_closure_is_the_rust_one() {
+    let closures = &recording()["closures"];
+    let recorded = |name: &str| -> Vec<&str> {
+        let names = closures[name].as_array().unwrap().iter();
+        names.map(|name| name.as_str().unwrap()).collect()
+    };
+    for (name, list) in [
+        ("nativeFiles", inputs::NATIVE_FILES),
+        ("codeqlNativeFiles", inputs::CODEQL_NATIVE_FILES),
+        ("codeqlPolicyData", inputs::CODEQL_POLICY_DATA),
+        ("backendFiles", inputs::BACKEND_FILES),
+        ("backendEnvironment", inputs::BACKEND_ENVIRONMENT),
+    ] {
+        assert_eq!(list, recorded(name), "{name}");
+    }
+    assert_eq!(recorded("ciToolPrefixes"), ["xtask/", ".cargo/"]);
+    for prefix in ["xtask/", ".cargo/", "crates/"] {
+        let name = format!("{prefix}any.md");
+        assert!(inputs::selected(Scope::NativeAsan, &name), "{name}");
+    }
+}
+
+#[path = "reference_tests.rs"]
+mod reference;

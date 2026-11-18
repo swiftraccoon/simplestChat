@@ -2,7 +2,8 @@
 
 use super::Scope;
 
-// Matched against the frozen Python oracle, which deliberately omits the `crates/` Rust adds.
+// The scopes `recorded_fingerprint.json` holds the reference's keys for. Its closures lacked the
+// `crates/` Rust adds, and the replays say where the keys differ by it.
 pub(super) const REFERENCE_SCOPES: &[&str] = &[
     "automation",
     "rust-lint",
@@ -97,14 +98,12 @@ pub(super) const NATIVE_FILES: &[&str] = &[
     "build/ci-local-act.json",
     "build/ci-local-act.patch",
     "build/ci-local-docker.sh",
-    "build/ci_verified.py",
     "build/install-openssl.sh",
     "build/native-security.Dockerfile",
     "build/pip-constraints.txt",
     "build/security_context.py",
     "build/security_source_scope.py",
     "build/security_tools.py",
-    "build/security_vendor.py",
     "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
 ];
@@ -121,7 +120,6 @@ pub(super) const CODEQL_POLICY_DATA: &[&str] = &[
 
 pub(super) const CODEQL_NATIVE_FILES: &[&str] = &[
     ".github/workflows/codeql.yml",
-    "build/ci_verified.py",
     "build/codeql-native-build.sh",
     "build/install-openssl.sh",
     "build/pip-constraints.txt",
@@ -130,7 +128,6 @@ pub(super) const CODEQL_NATIVE_FILES: &[&str] = &[
     "build/security_policy.py",
     "build/security_source_scope.py",
     "build/security_tools.py",
-    "build/security_vendor.py",
     "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
     "security/codeql-toolchain.json",
@@ -171,7 +168,6 @@ pub(super) const BACKEND_FILES: &[&str] = &[
     "build/ci-local-act.json",
     "build/ci-local-act.patch",
     "build/ci-local-postgres.sh",
-    "build/ci_verified.py",
     "build/install-aws-lc.sh",
     "build/install-openssl.sh",
     "build/pip-constraints.txt",

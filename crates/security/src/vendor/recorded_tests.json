@@ -1,0 +1,830 @@
+{
+ "comment": "Recorded from the vendored-source verifier in Python before it was deleted, for the cases of its own tests; see the replays in verify_tests.rs, archive_tests.rs, diff_tests.rs and tests.rs.",
+ "verifications": [
+  {
+   "name": "a changed hidden file, an unlisted file and a deletion",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "dW5leHBlY3RlZAo=",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK",
+    "vendor/pkg/unlisted": "bmV3IHNvdXJjZQo="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unlisted or stale deviation: vendor/pkg/.hidden; Unlisted or stale deviation: vendor/pkg/same; Unlisted or stale deviation: vendor/pkg/unlisted"
+   },
+   "evidence": {
+    "failure.json": "ewogICJlcnJvcnMiOiBbCiAgICAiVW5saXN0ZWQgb3Igc3RhbGUgZGV2aWF0aW9uOiB2ZW5kb3IvcGtnLy5oaWRkZW4iLAogICAgIlVubGlzdGVkIG9yIHN0YWxlIGRldmlhdGlvbjogdmVuZG9yL3BrZy9zYW1lIiwKICAgICJVbmxpc3RlZCBvciBzdGFsZSBkZXZpYXRpb246IHZlbmRvci9wa2cvdW5saXN0ZWQiCiAgXQp9Cg==",
+    "vendor.diff": "ZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvLmhpZGRlbiBiL3ZlbmRvci9wa2cvLmhpZGRlbgotLS0gYS92ZW5kb3IvcGtnLy5oaWRkZW4KKysrIGIvdmVuZG9yL3BrZy8uaGlkZGVuCkBAIC0xICsxIEBACi1oaWRkZW4gb3JpZ2luYWwKK3VuZXhwZWN0ZWQKZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvYWRkZWQgYi92ZW5kb3IvcGtnL2FkZGVkCm5ldyBmaWxlCi0tLSAvZGV2L251bGwKKysrIGIvdmVuZG9yL3BrZy9hZGRlZApAQCAtMCwwICsxIEBACithZGRlZApkaWZmIC0tZ2l0IGEvdmVuZG9yL3BrZy9jaGFuZ2VkIGIvdmVuZG9yL3BrZy9jaGFuZ2VkCi0tLSBhL3ZlbmRvci9wa2cvY2hhbmdlZAorKysgYi92ZW5kb3IvcGtnL2NoYW5nZWQKQEAgLTEgKzEgQEAKLW9sZAorbmV3CmRpZmYgLS1naXQgYS92ZW5kb3IvcGtnL2RlbGV0ZWQgYi92ZW5kb3IvcGtnL2RlbGV0ZWQKZGVsZXRlZCBmaWxlCi0tLSBhL3ZlbmRvci9wa2cvZGVsZXRlZAorKysgL2Rldi9udWxsCkBAIC0xICswLDAgQEAKLXJlbW92ZQpkaWZmIC0tZ2l0IGEvdmVuZG9yL3BrZy9zYW1lIGIvdmVuZG9yL3BrZy9zYW1lCmRlbGV0ZWQgZmlsZQotLS0gYS92ZW5kb3IvcGtnL3NhbWUKKysrIC9kZXYvbnVsbApAQCAtMSArMCwwIEBACi11bmNoYW5nZWQKZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvdW5saXN0ZWQgYi92ZW5kb3IvcGtnL3VubGlzdGVkCm5ldyBmaWxlCi0tLSAvZGV2L251bGwKKysrIGIvdmVuZG9yL3BrZy91bmxpc3RlZApAQCAtMCwwICsxIEBACituZXcgc291cmNlCg=="
+   },
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "an upstreamed change and an edited addition",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "ZGlmZmVyZW50IHBhdGNoCg==",
+    "vendor/pkg/changed": "b2xkCg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unlisted or stale deviation: vendor/pkg/added; Unlisted or stale deviation: vendor/pkg/changed"
+   },
+   "evidence": {
+    "failure.json": "ewogICJlcnJvcnMiOiBbCiAgICAiVW5saXN0ZWQgb3Igc3RhbGUgZGV2aWF0aW9uOiB2ZW5kb3IvcGtnL2FkZGVkIiwKICAgICJVbmxpc3RlZCBvciBzdGFsZSBkZXZpYXRpb246IHZlbmRvci9wa2cvY2hhbmdlZCIKICBdCn0K",
+    "vendor.diff": "ZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvYWRkZWQgYi92ZW5kb3IvcGtnL2FkZGVkCm5ldyBmaWxlCi0tLSAvZGV2L251bGwKKysrIGIvdmVuZG9yL3BrZy9hZGRlZApAQCAtMCwwICsxIEBACitkaWZmZXJlbnQgcGF0Y2gKZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvZGVsZXRlZCBiL3ZlbmRvci9wa2cvZGVsZXRlZApkZWxldGVkIGZpbGUKLS0tIGEvdmVuZG9yL3BrZy9kZWxldGVkCisrKyAvZGV2L251bGwKQEAgLTEgKzAsMCBAQAotcmVtb3ZlCg=="
+   },
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a new vendored package and no maintained notice",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/new-package/source.c": "dW5yZXZpZXdlZAo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unlisted or missing vendor files: ['vendor/README.md', 'vendor/new-package/source.c']"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "an unreviewed copied licence",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "dW5yZXZpZXdlZCBsaWNlbnNlCg==",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Copied upstream file differs: vendor/corpus/LICENSE"
+   },
+   "evidence": {
+    "failure.json": "ewogICJlcnJvcnMiOiBbCiAgICAiQ29waWVkIHVwc3RyZWFtIGZpbGUgZGlmZmVyczogdmVuZG9yL2NvcnB1cy9MSUNFTlNFIgogIF0KfQo=",
+    "vendor.diff": "ZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvYWRkZWQgYi92ZW5kb3IvcGtnL2FkZGVkCm5ldyBmaWxlCi0tLSAvZGV2L251bGwKKysrIGIvdmVuZG9yL3BrZy9hZGRlZApAQCAtMCwwICsxIEBACithZGRlZApkaWZmIC0tZ2l0IGEvdmVuZG9yL3BrZy9jaGFuZ2VkIGIvdmVuZG9yL3BrZy9jaGFuZ2VkCi0tLSBhL3ZlbmRvci9wa2cvY2hhbmdlZAorKysgYi92ZW5kb3IvcGtnL2NoYW5nZWQKQEAgLTEgKzEgQEAKLW9sZAorbmV3CmRpZmYgLS1naXQgYS92ZW5kb3IvcGtnL2RlbGV0ZWQgYi92ZW5kb3IvcGtnL2RlbGV0ZWQKZGVsZXRlZCBmaWxlCi0tLSBhL3ZlbmRvci9wa2cvZGVsZXRlZAorKysgL2Rldi9udWxsCkBAIC0xICswLDAgQEAKLXJlbW92ZQo="
+   },
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a second wrap that the record lacks",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/extra.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unlisted or missing native wraps"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "the reviewed native components maintained here",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\",\n    \"vendor/native-components.json\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/native-components.json": "ewogICJ3cmFwX2NvbXBvbmVudHMiOiBbCiAgICB7CiAgICAgICJzb3VyY2UiOiAiYWJzZWlsLWNwcC0yMDI2MDgxNy4wIiwKICAgICAgIm5hbWUiOiAiYWJzZWlsLWNwcCIsCiAgICAgICJ2ZXJzaW9uIjogIjIwMjYwODE3LjAiLAogICAgICAibGlua2FnZSI6ICJzdGF0aWMiLAogICAgICAidXNhZ2UiOiAicHJvZHVjdGlvbiIsCiAgICAgICJsaWNlbnNlIjogIkFwYWNoZS0yLjAiCiAgICB9LAogICAgewogICAgICAic291cmNlIjogImNhdGNoMi0zLjE2LjAiLAogICAgICAibmFtZSI6ICJDYXRjaDIiLAogICAgICAidmVyc2lvbiI6ICIzLjE2LjAiLAogICAgICAibGlua2FnZSI6ICJzdGF0aWMiLAogICAgICAidXNhZ2UiOiAibmF0aXZlLXRlc3QiLAogICAgICAibGljZW5zZSI6ICJCU0wtMS4wIgogICAgfSwKICAgIHsKICAgICAgInNvdXJjZSI6ICJmbGF0YnVmZmVycy0yNS4xMi4xOS0yMDI2LTAyLTA2LTAzZmZmYjIiLAogICAgICAibmFtZSI6ICJGbGF0QnVmZmVycyIsCiAgICAgICJ2ZXJzaW9uIjogIjI1LjEyLjE5LTIwMjYtMDItMDYtMDNmZmZiMiIsCiAgICAgICJsaW5rYWdlIjogInN0YXRpYyIsCiAgICAgICJ1c2FnZSI6ICJwcm9kdWN0aW9uIiwKICAgICAgImxpY2Vuc2UiOiAiQXBhY2hlLTIuMCIKICAgIH0sCiAgICB7CiAgICAgICJzb3VyY2UiOiAibGlic3J0cC0zLjAuMC1iZXRhLTJmYzA3OGRiIiwKICAgICAgIm5hbWUiOiAibGlic3J0cCIsCiAgICAgICJ2ZXJzaW9uIjogIjMuMC4wLWJldGEtMmZjMDc4ZGIiLAogICAgICAibGlua2FnZSI6ICJzdGF0aWMiLAogICAgICAidXNhZ2UiOiAicHJvZHVjdGlvbiIsCiAgICAgICJsaWNlbnNlIjogIkJTRC0zLUNsYXVzZSIKICAgIH0sCiAgICB7CiAgICAgICJzb3VyY2UiOiAibGlidXYtdjEuNTMuMCIsCiAgICAgICJuYW1lIjogImxpYnV2IiwKICAgICAgInZlcnNpb24iOiAiMS41My4wIiwKICAgICAgImxpbmthZ2UiOiAic3RhdGljIiwKICAgICAgInVzYWdlIjogInByb2R1Y3Rpb24iLAogICAgICAibGljZW5zZSI6ICJNSVQgQU5EIEJTRC0yLUNsYXVzZSBBTkQgSVNDIgogICAgfSwKICAgIHsKICAgICAgInNvdXJjZSI6ICJ1bm9yZGVyZWRfZGVuc2UtNS4zLjEiLAogICAgICAibmFtZSI6ICJ1bm9yZGVyZWRfZGVuc2UiLAogICAgICAidmVyc2lvbiI6ICI1LjMuMSIsCiAgICAgICJsaW5rYWdlIjogImhlYWRlci1vbmx5IiwKICAgICAgInVzYWdlIjogInByb2R1Y3Rpb24iLAogICAgICAibGljZW5zZSI6ICJNSVQiCiAgICB9LAogICAgewogICAgICAic291cmNlIjogIndpbmdldG9wdC0xLjAwIiwKICAgICAgIm5hbWUiOiAid2luZ2V0b3B0IiwKICAgICAgInZlcnNpb24iOiAiMS4wMCIsCiAgICAgICJsaW5rYWdlIjogInN0YXRpYyIsCiAgICAgICJ1c2FnZSI6ICJ3aW5kb3dzLW9ubHkiLAogICAgICAibGljZW5zZSI6ICJJU0MgQU5EIEJTRC0yLUNsYXVzZSIKICAgIH0KICBdLAogICJhZGFwdGVkX2NvbXBvbmVudCI6IHsKICAgICJuYW1lIjogImxpYndlYnJ0YyIsCiAgICAidmVyc2lvbiI6ICJtNzciLAogICAgInJldmlzaW9uIjogIjJiYWM3ZGExMzQ5Yzc1ZTVjZjg5NjEyYWI5NjE5YTE5MjBkNWQ5NzQiLAogICAgInBhdGgiOiAidmVuZG9yL21lZGlhc291cC1zeXMtMC4xOS4wL2RlcHMvbGlid2VicnRjIiwKICAgICJsaWNlbnNlIjogIkJTRC0zLUNsYXVzZSIKICB9LAogICJvcGVuc3NsIjogewogICAgInZlcnNpb24iOiAiNC4xLjAiLAogICAgInNvdXJjZSI6IHsKICAgICAgImlkIjogIm9wZW5zc2wtNC4xLjAiLAogICAgICAidXJsIjogImh0dHBzOi8vZ2l0aHViLmNvbS9vcGVuc3NsL29wZW5zc2wvcmVsZWFzZXMvZG93bmxvYWQvb3BlbnNzbC00LjEuMC9vcGVuc3NsLTQuMS4wLnRhci5neiIsCiAgICAgICJzaGEyNTYiOiAiNTBjMTdiYWY1NGNiMDA4ZjZjZTQyZDUwZGViNGIyODA1MGExYWFkNzExNjM2Y2FiZDRiMjQxYzdlOTBjYzJmZCIsCiAgICAgICJmb3JtYXQiOiAidGFyLmd6IgogICAgfSwKICAgICJpbnN0YWxsZXJfc2hhMjU2IjogIjk3M2RmYmVmMmM1NzViZWVmZDdjYTczNWExNDY1NjJlYTc5Y2NmNWQ2ODU1Nzc3OTU1MGY5ZTZiYTkzNDFjYmEiLAogICAgImxpY2Vuc2UiOiAiQXBhY2hlLTIuMCIsCiAgICAiY29uZmlndXJlX29wdGlvbnMiOiBbCiAgICAgICJuby1zaGFyZWQiLAogICAgICAibm8tZHNvIiwKICAgICAgIm5vLW1vZHVsZSIsCiAgICAgICJuby1lbmdpbmUiLAogICAgICAibm8tdGVzdHMiCiAgICBdCiAgfSwKICAicmVnaXN0cnlfY29tcG9uZW50IjogewogICAgIm5hbWUiOiAiQVdTLUxDIiwKICAgICJ2ZXJzaW9uIjogIjUuMTEuMCIsCiAgICAicmV2aXNpb24iOiAiZmE5YmM4ZDZmN2NmYjJjZjg0OWIyNDdmYjA2YmJiZmM0MWVjYzlkNiIsCiAgICAiY3JhdGUiOiAiYXdzLWxjLXN5cyIsCiAgICAiY3JhdGVfdmVyc2lvbiI6ICIwLjQ1LjAiLAogICAgInNvdXJjZSI6IHsKICAgICAgImlkIjogImF3cy1sYy1zeXMtMC40NS4wIiwKICAgICAgInVybCI6ICJodHRwczovL3N0YXRpYy5jcmF0ZXMuaW8vY3JhdGVzL2F3cy1sYy1zeXMvYXdzLWxjLXN5cy0wLjQ1LjAuY3JhdGUiLAogICAgICAic2hhMjU2IjogIjliZmY2YzNiNTRmYWQ3OWEyZTYwYjgxMDJjYWY1NjU4MTk3MTE0OTdjMWY1ZjA5MmY0OTUwOGUyZjVjMzFiMjciLAogICAgICAiZm9ybWF0IjogInRhci5neiIKICAgIH0sCiAgICAibGljZW5zZSI6ICJJU0MgQU5EIChBcGFjaGUtMi4wIE9SIElTQykgQU5EIEFwYWNoZS0yLjAgQU5EIE1JVCBBTkQgQlNELTMtQ2xhdXNlIEFORCAoQXBhY2hlLTIuMCBPUiBJU0MgT1IgTUlUKSBBTkQgKEFwYWNoZS0yLjAgT1IgSVNDIE9SIE1JVC0wKSIsCiAgICAic3lzdGVtIjogewogICAgICAic291cmNlIjogewogICAgICAgICJpZCI6ICJhd3MtbGMtNS4xMS4wIiwKICAgICAgICAidXJsIjogImh0dHBzOi8vZ2l0aHViLmNvbS9hd3MvYXdzLWxjL2FyY2hpdmUvcmVmcy90YWdzL3Y1LjExLjAudGFyLmd6IiwKICAgICAgICAic2hhMjU2IjogIjhjYjI0YzZlNmJlMWZhN2ZmMDUwNzVjNDU2MGNhOGI1MzdhN2VmNDhmOWU2ZjQ2NWFmNGVhNDU1Nzk0ZDc0ZjQiLAogICAgICAgICJmb3JtYXQiOiAidGFyLmd6IgogICAgICB9LAogICAgICAiYmluZGdlbl9zb3VyY2UiOiB7CiAgICAgICAgImlkIjogImJpbmRnZW4tY2xpLTAuNzMuMiIsCiAgICAgICAgInVybCI6ICJodHRwczovL3N0YXRpYy5jcmF0ZXMuaW8vY3JhdGVzL2JpbmRnZW4tY2xpL2JpbmRnZW4tY2xpLTAuNzMuMi5jcmF0ZSIsCiAgICAgICAgInNoYTI1NiI6ICI1NjIyZTA0MzYyNWI2ZDFmMzJjODRmNTM2OTk2OTBhNDRkMTQxOWU2NTc4NzlkZTI2ZWIyNTI2OTlmNWViYjdjIiwKICAgICAgICAiZm9ybWF0IjogInRhci5neiIKICAgICAgfSwKICAgICAgImluc3RhbGxlcl9zaGEyNTYiOiAiZjQ4MWE1OTVmZTUyYmQ3OWM5OGU4ZGI3NTU1YTIwNTVmNDc3MWU5Y2YyNzM1N2Y3YmE0YjI2ZWQ5MjFhODVkOCIsCiAgICAgICJzeW1ib2xfcHJlZml4IjogInNpbXBsZXN0Y2hhdF9hd3NsY181XzExXzAiLAogICAgICAiY29uZmlndXJlX29wdGlvbnMiOiB7CiAgICAgICAgIkNNQUtFX0JVSUxEX1RZUEUiOiAiUmVsZWFzZSIsCiAgICAgICAgIkJVSUxEX1NIQVJFRF9MSUJTIjogIk9GRiIsCiAgICAgICAgIkJVSUxEX1RFU1RJTkciOiAiT0ZGIiwKICAgICAgICAiQlVJTERfVE9PTCI6ICJPRkYiLAogICAgICAgICJCVUlMRF9MSUJTU0wiOiAiT0ZGIiwKICAgICAgICAiRU5BQkxFX1NPVVJDRV9NT0RJRklDQVRJT04iOiAiT0ZGIiwKICAgICAgICAiQlVJTERfQVdTTENfUFJPVklERVIiOiAiT0ZGIiwKICAgICAgICAiRU5BQkxFX0NSWVBUT19QT0xJQ0lFUyI6ICJPRkYiLAogICAgICAgICJHRU5FUkFURV9SVVNUX0JJTkRJTkdTIjogIk9OIiwKICAgICAgICAiUlVTVF9CSU5ESU5HU19UQVJHRVRfVkVSU0lPTiI6ICIxLjcwIiwKICAgICAgICAiQk9SSU5HU1NMX1BSRUZJWCI6ICJzaW1wbGVzdGNoYXRfYXdzbGNfNV8xMV8wIiwKICAgICAgICAiQ01BS0VfUE9TSVRJT05fSU5ERVBFTkRFTlRfQ09ERSI6ICJPTiIsCiAgICAgICAgIkNNQUtFX0lOU1RBTExfTElCRElSIjogImxpYiIKICAgICAgfSwKICAgICAgInNvdXJjZV9saWNlbnNlX3NoYTI1NiI6ICI5NzdjNTQxYmQyNWZmZTM2OTc1ZGRlMjVjMDI4YzBjZDE1ZGRmM2QwODI0Mzk4M2I1OGU4YTZhM2Q5NDQ3NTIzIgogICAgfQogIH0sCiAgIm5hdGl2ZV9saW5rcyI6IHsKICAgICJtZWRpYXNvdXAtc3lzIjogewogICAgICAic3RhdGljIjogWwogICAgICAgICJzdGRjKysiLAogICAgICAgICJtZWRpYXNvdXAtd29ya2VyIiwKICAgICAgICAic3NsIiwKICAgICAgICAiY3J5cHRvIgogICAgICBdLAogICAgICAic3lzdGVtIjogWwogICAgICAgICJkbCIsCiAgICAgICAgInB0aHJlYWQiLAogICAgICAgICJtIiwKICAgICAgICAicnQiCiAgICAgIF0KICAgIH0sCiAgICAib3BlbnNzbC1zeXMiOiB7CiAgICAgICJzdGF0aWMiOiBbCiAgICAgICAgInNzbCIsCiAgICAgICAgImNyeXB0byIKICAgICAgXSwKICAgICAgInN5c3RlbSI6IFsKICAgICAgICAiZGwiLAogICAgICAgICJwdGhyZWFkIiwKICAgICAgICAibSIsCiAgICAgICAgInJ0IgogICAgICBdCiAgICB9LAogICAgImF3cy1sYy1zeXMiOiB7CiAgICAgICJzdGF0aWMiOiBbCiAgICAgICAgImNyeXB0by1hd3NsYyIKICAgICAgXSwKICAgICAgInN5c3RlbSI6IFtdCiAgICB9CiAgfQp9Cg==",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "passed": true
+   },
+   "evidence": {
+    "report.json": "ewogICJkaWZmX3NoYTI1NiI6ICJmNTIwOWZkNmZjODU5ZTAzOThlYTlmZDljZDJmYzQ2NjI0NDRlY2QxZTU5M2VkYjEzZmZhNGNlN2YxNWNlOTBlIiwKICAiZmlsZXMiOiBbCiAgICB7CiAgICAgICJwYXRoIjogInZlbmRvci9jb3JwdXMvTElDRU5TRSIsCiAgICAgICJzaGEyNTYiOiAiYzBjNTY5NThlZjhiZTVjMTk3OTM2Njg5NmI3ZTBjNzIwNjk0OWE1YWEyYjIzZjUxNDI5YzdmNTZiMTA5OTBkMyIsCiAgICAgICJzb3VyY2UiOiAibGljZW5zZSIKICAgIH0KICBdLAogICJtYWludGFpbmVkX2ZpbGVzIjogWwogICAgewogICAgICAicGF0aCI6ICJ2ZW5kb3IvUkVBRE1FLm1kIiwKICAgICAgInNoYTI1NiI6ICJkNGE0YjY3YjM3YThhZDBhODlkNGMzMmYwYmQ0ZTU5YzFlYmE3NGZlYzlkNzUxMTU4OTM3N2YwNTU3YWIwZTZmIgogICAgfSwKICAgIHsKICAgICAgInBhdGgiOiAidmVuZG9yL25hdGl2ZS1jb21wb25lbnRzLmpzb24iLAogICAgICAic2hhMjU2IjogImQyNjQzMDZlZmIwMzQyNmNkY2MzNDQ0MjFmZjkwZjVlY2M1MjlhMmRmMTQwY2ZiMjgyN2M1MjM3NGEzN2YyMzAiCiAgICB9CiAgXSwKICAibWFuaWZlc3Rfc2hhMjU2IjogIjMwMTIzZGVjNWFkMDkyNDU3YmRlY2UyY2Y4YmVkMzIyZTRiNWVmMTc4ZWEzZjJhMjhkMjdkMDEwOWM5YmI2OTAiLAogICJzb3VyY2VzIjogWwogICAgewogICAgICAiZm9ybWF0IjogInRhci5neiIsCiAgICAgICJpZCI6ICJjcmF0ZSIsCiAgICAgICJzaGEyNTYiOiAiMzI4ODM5ODIzNDdkNGEwNDA4MjA1OWVjNTlkYjA1Y2E1Yjg4MDViNGJmMGNlNDJjNjllOWVmYWJjMjk1MWI3ZCIsCiAgICAgICJzaXplIjogMzUwLAogICAgICAidXJsIjogImh0dHBzOi8vZXhhbXBsZS5pbnZhbGlkL2NyYXRlIgogICAgfSwKICAgIHsKICAgICAgImZvcm1hdCI6ICJmaWxlIiwKICAgICAgImlkIjogImxpY2Vuc2UiLAogICAgICAic2hhMjU2IjogImMwYzU2OTU4ZWY4YmU1YzE5NzkzNjY4OTZiN2UwYzcyMDY5NDlhNWFhMmIyM2Y1MTQyOWM3ZjU2YjEwOTkwZDMiLAogICAgICAic2l6ZSI6IDgsCiAgICAgICJ1cmwiOiAiaHR0cHM6Ly9leGFtcGxlLmludmFsaWQvbGljZW5zZSIKICAgIH0sCiAgICB7CiAgICAgICJmb3JtYXQiOiAidGFyLmd6IiwKICAgICAgImlkIjogIm5hdGl2ZSIsCiAgICAgICJzaGEyNTYiOiAiOGM3NTNkNzI2NDUwOWI2MjQ1NDQwODExNTU3NmJkMGFlOTRmNDI4ODllYTc0N2EyOTgwOWRhYmJiZDljYzBlMCIsCiAgICAgICJzaXplIjogMTE5LAogICAgICAidXJsIjogImh0dHBzOi8vZXhhbXBsZS5pbnZhbGlkL25hdGl2ZSIKICAgIH0KICBdLAogICJ0cmVlcyI6IFsKICAgIHsKICAgICAgImZpbGVzIjogWwogICAgICAgIHsKICAgICAgICAgICJwYXRoIjogIi5oaWRkZW4iLAogICAgICAgICAgInVwc3RyZWFtX3NoYTI1NiI6ICI0Yjg0ZjZjZTg0Yjk4NWQ4MzIzMjcyZTUwOGVkNGI4OWM2ZGRiY2IyMTRjMTc5ZDBjMjQ1ZWNmOTYyNWFhZmI3IiwKICAgICAgICAgICJ2ZW5kb3JlZF9zaGEyNTYiOiAiNGI4NGY2Y2U4NGI5ODVkODMyMzI3MmU1MDhlZDRiODljNmRkYmNiMjE0YzE3OWQwYzI0NWVjZjk2MjVhYWZiNyIKICAgICAgICB9LAogICAgICAgIHsKICAgICAgICAgICJwYXRoIjogImFkZGVkIiwKICAgICAgICAgICJ1cHN0cmVhbV9zaGEyNTYiOiBudWxsLAogICAgICAgICAgInZlbmRvcmVkX3NoYTI1NiI6ICIzNDI4NzE5Yjc2ODhjNzhhMGNjOGJhNGI5ZTgwYjRlNDY0YzgxNWZiY2NmZDRiMjA2OTVhMTVmZmNlZmMyMmFmIgogICAgICAgIH0sCiAgICAgICAgewogICAgICAgICAgInBhdGgiOiAiY2hhbmdlZCIsCiAgICAgICAgICAidXBzdHJlYW1fc2hhMjU2IjogIjAxZDA5ZDE5YzIxMzlhNDZhZWJmYjU3Nzc4MGQxMjNkNzM5NmU5NzIwMWJjN2VhZDIxMGEyZWJmZjgyMzlkZWUiLAogICAgICAgICAgInZlbmRvcmVkX3NoYTI1NiI6ICI3YWE3YTUzNTkxNzNkMDViNjNjZmQ2ODJlM2MzODQ4N2YzY2I0ZjdmMWQ2MDY1OWZlNTlmYWIxNTA1OTc3ZDRjIgogICAgICAgIH0sCiAgICAgICAgewogICAgICAgICAgInBhdGgiOiAiZGVsZXRlZCIsCiAgICAgICAgICAidXBzdHJlYW1fc2hhMjU2IjogIjIzMDhjZDc3Njg5YWNlMTFiN2MyZjI0N2NiYjk5N2NhMzk0ZjQ2OWZlYmU2Mzg1YmM4OWFjNzE3NTg0ZWUwYWQiLAogICAgICAgICAgInZlbmRvcmVkX3NoYTI1NiI6IG51bGwKICAgICAgICB9LAogICAgICAgIHsKICAgICAgICAgICJwYXRoIjogInNhbWUiLAogICAgICAgICAgInVwc3RyZWFtX3NoYTI1NiI6ICIxY2QyNjNmMTEwMjY1NmRkNmI2Y2YxZDYyNmQxYTk2ZjllYmEwNDA2YWYzY2IyYTUyNTYwZDQ3M2Q0ODAxMDUyIiwKICAgICAgICAgICJ2ZW5kb3JlZF9zaGEyNTYiOiAiMWNkMjYzZjExMDI2NTZkZDZiNmNmMWQ2MjZkMWE5NmY5ZWJhMDQwNmFmM2NiMmE1MjU2MGQ0NzNkNDgwMTA1MiIKICAgICAgICB9LAogICAgICAgIHsKICAgICAgICAgICJwYXRoIjogInN1YnByb2plY3RzL25hdGl2ZS53cmFwIiwKICAgICAgICAgICJ1cHN0cmVhbV9zaGEyNTYiOiAiODEzODQ0NDI2MWEzNThkMWIwOGVkNThlYWFhMmJjOGU5MWQxYTUzMGM2MDc3MTMwODM2NzJkOGUyNTkxYjU3NyIsCiAgICAgICAgICAidmVuZG9yZWRfc2hhMjU2IjogIjgxMzg0NDQyNjFhMzU4ZDFiMDhlZDU4ZWFhYTJiYzhlOTFkMWE1MzBjNjA3NzEzMDgzNjcyZDhlMjU5MWI1NzciCiAgICAgICAgfQogICAgICBdLAogICAgICAicGF0aCI6ICJ2ZW5kb3IvcGtnIiwKICAgICAgInNvdXJjZSI6ICJjcmF0ZSIKICAgIH0KICBdCn0K",
+    "vendor.diff": "ZGlmZiAtLWdpdCBhL3ZlbmRvci9wa2cvYWRkZWQgYi92ZW5kb3IvcGtnL2FkZGVkCm5ldyBmaWxlCi0tLSAvZGV2L251bGwKKysrIGIvdmVuZG9yL3BrZy9hZGRlZApAQCAtMCwwICsxIEBACithZGRlZApkaWZmIC0tZ2l0IGEvdmVuZG9yL3BrZy9jaGFuZ2VkIGIvdmVuZG9yL3BrZy9jaGFuZ2VkCi0tLSBhL3ZlbmRvci9wa2cvY2hhbmdlZAorKysgYi92ZW5kb3IvcGtnL2NoYW5nZWQKQEAgLTEgKzEgQEAKLW9sZAorbmV3CmRpZmYgLS1naXQgYS92ZW5kb3IvcGtnL2RlbGV0ZWQgYi92ZW5kb3IvcGtnL2RlbGV0ZWQKZGVsZXRlZCBmaWxlCi0tLSBhL3ZlbmRvci9wa2cvZGVsZXRlZAorKysgL2Rldi9udWxsCkBAIC0xICswLDAgQEAKLXJlbW92ZQo="
+   },
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "native components with a field nobody reviewed",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\",\n    \"vendor/native-components.json\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/native-components.json": "ewogICJhZGFwdGVkX2NvbXBvbmVudCI6IHsKICAgICJsaWNlbnNlIjogIkJTRC0zLUNsYXVzZSIsCiAgICAibmFtZSI6ICJsaWJ3ZWJydGMiLAogICAgInBhdGgiOiAidmVuZG9yL21lZGlhc291cC1zeXMtMC4xOS4wL2RlcHMvbGlid2VicnRjIiwKICAgICJyZXZpc2lvbiI6ICIyYmFjN2RhMTM0OWM3NWU1Y2Y4OTYxMmFiOTYxOWExOTIwZDVkOTc0IiwKICAgICJ2ZXJzaW9uIjogIm03NyIKICB9LAogICJuYXRpdmVfbGlua3MiOiB7CiAgICAiYXdzLWxjLXN5cyI6IHsKICAgICAgInN0YXRpYyI6IFsKICAgICAgICAiY3J5cHRvLWF3c2xjIgogICAgICBdLAogICAgICAic3lzdGVtIjogW10KICAgIH0sCiAgICAibWVkaWFzb3VwLXN5cyI6IHsKICAgICAgInN0YXRpYyI6IFsKICAgICAgICAic3RkYysrIiwKICAgICAgICAibWVkaWFzb3VwLXdvcmtlciIsCiAgICAgICAgInNzbCIsCiAgICAgICAgImNyeXB0byIKICAgICAgXSwKICAgICAgInN5c3RlbSI6IFsKICAgICAgICAiZGwiLAogICAgICAgICJwdGhyZWFkIiwKICAgICAgICAibSIsCiAgICAgICAgInJ0IgogICAgICBdCiAgICB9LAogICAgIm9wZW5zc2wtc3lzIjogewogICAgICAic3RhdGljIjogWwogICAgICAgICJzc2wiLAogICAgICAgICJjcnlwdG8iCiAgICAgIF0sCiAgICAgICJzeXN0ZW0iOiBbCiAgICAgICAgImRsIiwKICAgICAgICAicHRocmVhZCIsCiAgICAgICAgIm0iLAogICAgICAgICJydCIKICAgICAgXQogICAgfQogIH0sCiAgIm9wZW5zc2wiOiB7CiAgICAiY29uZmlndXJlX29wdGlvbnMiOiBbCiAgICAgICJuby1zaGFyZWQiLAogICAgICAibm8tZHNvIiwKICAgICAgIm5vLW1vZHVsZSIsCiAgICAgICJuby1lbmdpbmUiLAogICAgICAibm8tdGVzdHMiCiAgICBdLAogICAgImluc3RhbGxlcl9zaGEyNTYiOiAiOTczZGZiZWYyYzU3NWJlZWZkN2NhNzM1YTE0NjU2MmVhNzljY2Y1ZDY4NTU3Nzc5NTUwZjllNmJhOTM0MWNiYSIsCiAgICAibGljZW5zZSI6ICJBcGFjaGUtMi4wIiwKICAgICJzb3VyY2UiOiB7CiAgICAgICJmb3JtYXQiOiAidGFyLmd6IiwKICAgICAgImlkIjogIm9wZW5zc2wtNC4xLjAiLAogICAgICAic2hhMjU2IjogIjUwYzE3YmFmNTRjYjAwOGY2Y2U0MmQ1MGRlYjRiMjgwNTBhMWFhZDcxMTYzNmNhYmQ0YjI0MWM3ZTkwY2MyZmQiLAogICAgICAidXJsIjogImh0dHBzOi8vZ2l0aHViLmNvbS9vcGVuc3NsL29wZW5zc2wvcmVsZWFzZXMvZG93bmxvYWQvb3BlbnNzbC00LjEuMC9vcGVuc3NsLTQuMS4wLnRhci5neiIKICAgIH0sCiAgICAidmVyc2lvbiI6ICI0LjEuMCIKICB9LAogICJyZWdpc3RyeV9jb21wb25lbnQiOiB7CiAgICAiY3JhdGUiOiAiYXdzLWxjLXN5cyIsCiAgICAiY3JhdGVfdmVyc2lvbiI6ICIwLjQ1LjAiLAogICAgImxpY2Vuc2UiOiAiSVNDIEFORCAoQXBhY2hlLTIuMCBPUiBJU0MpIEFORCBBcGFjaGUtMi4wIEFORCBNSVQgQU5EIEJTRC0zLUNsYXVzZSBBTkQgKEFwYWNoZS0yLjAgT1IgSVNDIE9SIE1JVCkgQU5EIChBcGFjaGUtMi4wIE9SIElTQyBPUiBNSVQtMCkiLAogICAgIm5hbWUiOiAiQVdTLUxDIiwKICAgICJyZXZpc2lvbiI6ICJmYTliYzhkNmY3Y2ZiMmNmODQ5YjI0N2ZiMDZiYmJmYzQxZWNjOWQ2IiwKICAgICJzb3VyY2UiOiB7CiAgICAgICJmb3JtYXQiOiAidGFyLmd6IiwKICAgICAgImlkIjogImF3cy1sYy1zeXMtMC40NS4wIiwKICAgICAgInNoYTI1NiI6ICI5YmZmNmMzYjU0ZmFkNzlhMmU2MGI4MTAyY2FmNTY1ODE5NzExNDk3YzFmNWYwOTJmNDk1MDhlMmY1YzMxYjI3IiwKICAgICAgInVybCI6ICJodHRwczovL3N0YXRpYy5jcmF0ZXMuaW8vY3JhdGVzL2F3cy1sYy1zeXMvYXdzLWxjLXN5cy0wLjQ1LjAuY3JhdGUiCiAgICB9LAogICAgInN5c3RlbSI6IHsKICAgICAgImJpbmRnZW5fc291cmNlIjogewogICAgICAgICJmb3JtYXQiOiAidGFyLmd6IiwKICAgICAgICAiaWQiOiAiYmluZGdlbi1jbGktMC43My4yIiwKICAgICAgICAic2hhMjU2IjogIjU2MjJlMDQzNjI1YjZkMWYzMmM4NGY1MzY5OTY5MGE0NGQxNDE5ZTY1Nzg3OWRlMjZlYjI1MjY5OWY1ZWJiN2MiLAogICAgICAgICJ1cmwiOiAiaHR0cHM6Ly9zdGF0aWMuY3JhdGVzLmlvL2NyYXRlcy9iaW5kZ2VuLWNsaS9iaW5kZ2VuLWNsaS0wLjczLjIuY3JhdGUiCiAgICAgIH0sCiAgICAgICJjb25maWd1cmVfb3B0aW9ucyI6IHsKICAgICAgICAiQk9SSU5HU1NMX1BSRUZJWCI6ICJzaW1wbGVzdGNoYXRfYXdzbGNfNV8xMV8wIiwKICAgICAgICAiQlVJTERfQVdTTENfUFJPVklERVIiOiAiT0ZGIiwKICAgICAgICAiQlVJTERfTElCU1NMIjogIk9GRiIsCiAgICAgICAgIkJVSUxEX1NIQVJFRF9MSUJTIjogIk9GRiIsCiAgICAgICAgIkJVSUxEX1RFU1RJTkciOiAiT0ZGIiwKICAgICAgICAiQlVJTERfVE9PTCI6ICJPRkYiLAogICAgICAgICJDTUFLRV9CVUlMRF9UWVBFIjogIlJlbGVhc2UiLAogICAgICAgICJDTUFLRV9JTlNUQUxMX0xJQkRJUiI6ICJsaWIiLAogICAgICAgICJDTUFLRV9QT1NJVElPTl9JTkRFUEVOREVOVF9DT0RFIjogIk9OIiwKICAgICAgICAiRU5BQkxFX0NSWVBUT19QT0xJQ0lFUyI6ICJPRkYiLAogICAgICAgICJFTkFCTEVfU09VUkNFX01PRElGSUNBVElPTiI6ICJPRkYiLAogICAgICAgICJHRU5FUkFURV9SVVNUX0JJTkRJTkdTIjogIk9OIiwKICAgICAgICAiUlVTVF9CSU5ESU5HU19UQVJHRVRfVkVSU0lPTiI6ICIxLjcwIgogICAgICB9LAogICAgICAiaW5zdGFsbGVyX3NoYTI1NiI6ICJmNDgxYTU5NWZlNTJiZDc5Yzk4ZThkYjc1NTVhMjA1NWY0NzcxZTljZjI3MzU3ZjdiYTRiMjZlZDkyMWE4NWQ4IiwKICAgICAgInNvdXJjZSI6IHsKICAgICAgICAiZm9ybWF0IjogInRhci5neiIsCiAgICAgICAgImlkIjogImF3cy1sYy01LjExLjAiLAogICAgICAgICJzaGEyNTYiOiAiOGNiMjRjNmU2YmUxZmE3ZmYwNTA3NWM0NTYwY2E4YjUzN2E3ZWY0OGY5ZTZmNDY1YWY0ZWE0NTU3OTRkNzRmNCIsCiAgICAgICAgInVybCI6ICJodHRwczovL2dpdGh1Yi5jb20vYXdzL2F3cy1sYy9hcmNoaXZlL3JlZnMvdGFncy92NS4xMS4wLnRhci5neiIKICAgICAgfSwKICAgICAgInNvdXJjZV9saWNlbnNlX3NoYTI1NiI6ICI5NzdjNTQxYmQyNWZmZTM2OTc1ZGRlMjVjMDI4YzBjZDE1ZGRmM2QwODI0Mzk4M2I1OGU4YTZhM2Q5NDQ3NTIzIiwKICAgICAgInN5bWJvbF9wcmVmaXgiOiAic2ltcGxlc3RjaGF0X2F3c2xjXzVfMTFfMCIKICAgIH0sCiAgICAidmVyc2lvbiI6ICI1LjExLjAiCiAgfSwKICAidW5rbm93biI6IHRydWUsCiAgIndyYXBfY29tcG9uZW50cyI6IFsKICAgIHsKICAgICAgImxpY2Vuc2UiOiAiQXBhY2hlLTIuMCIsCiAgICAgICJsaW5rYWdlIjogInN0YXRpYyIsCiAgICAgICJuYW1lIjogImFic2VpbC1jcHAiLAogICAgICAic291cmNlIjogImFic2VpbC1jcHAtMjAyNjA4MTcuMCIsCiAgICAgICJ1c2FnZSI6ICJwcm9kdWN0aW9uIiwKICAgICAgInZlcnNpb24iOiAiMjAyNjA4MTcuMCIKICAgIH0sCiAgICB7CiAgICAgICJsaWNlbnNlIjogIkJTTC0xLjAiLAogICAgICAibGlua2FnZSI6ICJzdGF0aWMiLAogICAgICAibmFtZSI6ICJDYXRjaDIiLAogICAgICAic291cmNlIjogImNhdGNoMi0zLjE2LjAiLAogICAgICAidXNhZ2UiOiAibmF0aXZlLXRlc3QiLAogICAgICAidmVyc2lvbiI6ICIzLjE2LjAiCiAgICB9LAogICAgewogICAgICAibGljZW5zZSI6ICJBcGFjaGUtMi4wIiwKICAgICAgImxpbmthZ2UiOiAic3RhdGljIiwKICAgICAgIm5hbWUiOiAiRmxhdEJ1ZmZlcnMiLAogICAgICAic291cmNlIjogImZsYXRidWZmZXJzLTI1LjEyLjE5LTIwMjYtMDItMDYtMDNmZmZiMiIsCiAgICAgICJ1c2FnZSI6ICJwcm9kdWN0aW9uIiwKICAgICAgInZlcnNpb24iOiAiMjUuMTIuMTktMjAyNi0wMi0wNi0wM2ZmZmIyIgogICAgfSwKICAgIHsKICAgICAgImxpY2Vuc2UiOiAiQlNELTMtQ2xhdXNlIiwKICAgICAgImxpbmthZ2UiOiAic3RhdGljIiwKICAgICAgIm5hbWUiOiAibGlic3J0cCIsCiAgICAgICJzb3VyY2UiOiAibGlic3J0cC0zLjAuMC1iZXRhLTJmYzA3OGRiIiwKICAgICAgInVzYWdlIjogInByb2R1Y3Rpb24iLAogICAgICAidmVyc2lvbiI6ICIzLjAuMC1iZXRhLTJmYzA3OGRiIgogICAgfSwKICAgIHsKICAgICAgImxpY2Vuc2UiOiAiTUlUIEFORCBCU0QtMi1DbGF1c2UgQU5EIElTQyIsCiAgICAgICJsaW5rYWdlIjogInN0YXRpYyIsCiAgICAgICJuYW1lIjogImxpYnV2IiwKICAgICAgInNvdXJjZSI6ICJsaWJ1di12MS41My4wIiwKICAgICAgInVzYWdlIjogInByb2R1Y3Rpb24iLAogICAgICAidmVyc2lvbiI6ICIxLjUzLjAiCiAgICB9LAogICAgewogICAgICAibGljZW5zZSI6ICJNSVQiLAogICAgICAibGlua2FnZSI6ICJoZWFkZXItb25seSIsCiAgICAgICJuYW1lIjogInVub3JkZXJlZF9kZW5zZSIsCiAgICAgICJzb3VyY2UiOiAidW5vcmRlcmVkX2RlbnNlLTUuMy4xIiwKICAgICAgInVzYWdlIjogInByb2R1Y3Rpb24iLAogICAgICAidmVyc2lvbiI6ICI1LjMuMSIKICAgIH0sCiAgICB7CiAgICAgICJsaWNlbnNlIjogIklTQyBBTkQgQlNELTItQ2xhdXNlIiwKICAgICAgImxpbmthZ2UiOiAic3RhdGljIiwKICAgICAgIm5hbWUiOiAid2luZ2V0b3B0IiwKICAgICAgInNvdXJjZSI6ICJ3aW5nZXRvcHQtMS4wMCIsCiAgICAgICJ1c2FnZSI6ICJ3aW5kb3dzLW9ubHkiLAogICAgICAidmVyc2lvbiI6ICIxLjAwIgogICAgfQogIF0KfQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unexpected manifest fields: ['unknown']"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a git wrap",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZ2l0XQp1cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9zb3VyY2UuZ2l0CnJldmlzaW9uID0gbWFpbgo="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Only pinned wrap-file dependencies are allowed: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a wrap without its source digest",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negp1bmxpc3RlZF9oYXNoID0gOGM3NTNkNzI2NDUwOWI2MjQ1NDQwODExNTU3NmJkMGFlOTRmNDI4ODllYTc0N2EyOTgwOWRhYmJiZDljYzBlMAo="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unsupported native wrap fields: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a wrap of another address",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9vdGhlcgpzb3VyY2VfZmlsZW5hbWUgPSBuYXRpdmUudGFyLmd6CnNvdXJjZV9oYXNoID0gOGM3NTNkNzI2NDUwOWI2MjQ1NDQwODExNTU3NmJkMGFlOTRmNDI4ODllYTc0N2EyOTgwOWRhYmJiZDljYzBlMAo="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Native source pin differs: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a wrap with an undeclared fallback",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAKc291cmNlX2ZhbGxiYWNrX3VybCA9IGh0dHBzOi8vZXhhbXBsZS5pbnZhbGlkL2ZhbGxiYWNrCg=="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Native fallback pin differs: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a wrap with an undeclared patch",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAKcGF0Y2hfdXJsID0gaHR0cHM6Ly9leGFtcGxlLmludmFsaWQvcGF0Y2guemlwCg=="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unlisted remote native patch: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a wrap with patch files",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": true,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAKZGlmZl9maWxlcyA9IHVubGlzdGVkLnBhdGNoCg=="
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "H4sIAAAAAAAC/+3X306DMByGYY53FbsBoZSWgolXYowp9DeoMiAF5p+rt9vUuJno0dgB33MCKQQC9CXQP1dRWFtjqA0uhXmpEIeld75kjP9YP4wrJXmwZsEMpmHUzp8yWKbjo193zla21c0qgEXpff+D3tIlz/Fv/zE/7z9JFfqf5fLbstZtRQblL7b/zxlwvf6ZOO0/ZiwR6H8OXYPyl96/oYbGq/avfvUv0f8sHG27HeEVsOjv/6noXfdE5ThErR7tjsIXp/vZ+ufq7Ps/TrhM0P8c7vdP+mZjG3pYGev8HOjc2/pufZwHq6GbXEmPk2v8WD2O/XAbRfSqt31DoW13urEmOt13f6zW/1F+HyT0Nzis3r+213qo/basVDIxiqdCsrxIuZBCsCyOpVRpYZimXGwEz7KctBJK8zxjudFFUZi8LBkxvLIAAAAAAAAAAAAA/vQBwjs41gAoAAA=",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Unsupported native wrap fields: vendor/pkg/subprojects/native.wrap"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  },
+  {
+   "name": "a corrupt cached source with the network allowed",
+   "record": "{\n  \"files\": [\n    {\n      \"path\": \"vendor/corpus/LICENSE\",\n      \"source\": \"license\"\n    }\n  ],\n  \"maintained_files\": [\n    \"vendor/README.md\"\n  ],\n  \"sources\": [\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"crate\",\n      \"sha256\": \"32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d\",\n      \"url\": \"https://example.invalid/crate\"\n    },\n    {\n      \"format\": \"tar.gz\",\n      \"id\": \"native\",\n      \"sha256\": \"8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0\",\n      \"url\": \"https://example.invalid/native\"\n    },\n    {\n      \"format\": \"file\",\n      \"id\": \"license\",\n      \"sha256\": \"c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3\",\n      \"url\": \"https://example.invalid/license\"\n    }\n  ],\n  \"trees\": [\n    {\n      \"changes\": [\n        {\n          \"path\": \"changed\",\n          \"upstream_sha256\": \"01d09d19c2139a46aebfb577780d123d7396e97201bc7ead210a2ebff8239dee\",\n          \"vendored_sha256\": \"7aa7a5359173d05b63cfd682e3c38487f3cb4f7f1d60659fe59fab1505977d4c\"\n        },\n        {\n          \"path\": \"added\",\n          \"upstream_sha256\": null,\n          \"vendored_sha256\": \"3428719b7688c78a0cc8ba4b9e80b4e464c815fbccfd4b20695a15ffcefc22af\"\n        },\n        {\n          \"path\": \"deleted\",\n          \"upstream_sha256\": \"2308cd77689ace11b7c2f247cbb997ca394f469febe6385bc89ac717584ee0ad\",\n          \"vendored_sha256\": null\n        }\n      ],\n      \"path\": \"vendor/pkg\",\n      \"prefix\": \"pkg\",\n      \"source\": \"crate\"\n    }\n  ],\n  \"wraps\": [\n    {\n      \"fallback_urls\": [],\n      \"patch_directory\": null,\n      \"patch_source\": null,\n      \"path\": \"vendor/pkg/subprojects/native.wrap\",\n      \"source\": \"native\"\n    }\n  ]\n}\n",
+   "padding": 0,
+   "offline": false,
+   "files": {
+    "vendor/README.md": "UmV2aWV3ZWQgdmVuZG9yIGZpeHR1cmUuCg==",
+    "vendor/corpus/LICENSE": "bGljZW5zZQo=",
+    "vendor/pkg/.hidden": "aGlkZGVuIG9yaWdpbmFsCg==",
+    "vendor/pkg/added": "YWRkZWQK",
+    "vendor/pkg/changed": "bmV3Cg==",
+    "vendor/pkg/same": "dW5jaGFuZ2VkCg==",
+    "vendor/pkg/subprojects/native.wrap": "W3dyYXAtZmlsZV0KZGlyZWN0b3J5ID0gbmF0aXZlCnNvdXJjZV91cmwgPSBodHRwczovL2V4YW1wbGUuaW52YWxpZC9uYXRpdmUKc291cmNlX2ZpbGVuYW1lID0gbmF0aXZlLnRhci5negpzb3VyY2VfaGFzaCA9IDhjNzUzZDcyNjQ1MDliNjI0NTQ0MDgxMTU1NzZiZDBhZTk0ZjQyODg5ZWE3NDdhMjk4MDlkYWJiYmQ5Y2MwZTAK"
+   },
+   "links": {},
+   "pipes": [],
+   "directories": [],
+   "modes": {},
+   "cacheLinks": {},
+   "cacheMode": 448,
+   "cache_state": "there",
+   "output_state": "new",
+   "vendor_state": "there",
+   "cache": {
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d": "Y29ycnVwdA==",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0": "H4sIAAAAAAAC/+3SMQ6CQBQE0K09BSfQxWyg8DSEUNCsCSyc35XGxF4T43vN/Ewzzc9Dmffpst63ZZzOY/iEWHUpHVm9Z4xtet3Pvo1dfw1NDF+wrWVY6nz4T3MuTT5+4HYKAAAAAAAAAAAA/IwHEB5LsgAoAAA=",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3": "bGljZW5zZQo="
+   },
+   "result": {
+    "refused": "Source SHA-256 differs: crate"
+   },
+   "evidence": {},
+   "cached": [
+    "32883982347d4a04082059ec59db05ca5b8805b4bf0ce42c69e9efabc2951b7d",
+    "8c753d7264509b62454408115576bd0ae94f42889ea747a29809dabbbd9cc0e0",
+    "c0c56958ef8be5c1979366896b7e0c7206949a5aa2b23f51429c7f56b10990d3"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "name": "an unauthenticated body",
+   "format": "tar.gz",
+   "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "archive": {
+    "deflated": "eNorzUssLclIzSvJTE4sSU0BADL/Bkc=",
+    "bytes": 15,
+    "sha256": "b6545eef9260416b48e2865c45167b7c2896d749c802a0e495ddd86dcb723489"
+   },
+   "result": {
+    "refused": "Source SHA-256 or size differs: upstream"
+   }
+  },
+  {
+   "name": "a tar.gz member named ../outside",
+   "format": "tar.gz",
+   "sha256": "5443b025dbadd41c75a9939154fbaf3b741841201f56cbbdcbfa369e18f21308",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PWnM1B4iwXNgtEr6Abd4uOUWxMEb7B59qozyrmCcVz5JcNnPTGrvXRv3vFfOC03O90tPuz9yr9/fGbrWtgVc+Mr/e8yV4X8//LawMMOC/hVmgz/cmgwYDAwD8PSew",
+    "bytes": 102,
+    "sha256": "5443b025dbadd41c75a9939154fbaf3b741841201f56cbbdcbfa369e18f21308"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '../outside'"
+   }
+  },
+  {
+   "name": "a zip member named ../outside",
+   "format": "zip",
+   "sha256": "8e66947e91830726be8ac0814c374628fb063b174bf2bec4d470efd039f1395a",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFghzAbGenn5+aUlxZkpqRYA3I5MIM26lMNAAEkDSGODNysYAVsfIYAGkNcGqAMVzDu4=",
+    "bytes": 119,
+    "sha256": "8e66947e91830726be8ac0814c374628fb063b174bf2bec4d470efd039f1395a"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '../outside'"
+   }
+  },
+  {
+   "name": "a tar.gz member named /absolute",
+   "format": "tar.gz",
+   "sha256": "0781da44fbd87ec2e53db46c65e6e91e00ac678da72d9077f5c4500db6bf1e2b",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGnI1O4iwXKgXyZ8gGmbb3xSrIBD74ce6sKT5Dieqz/JcPpM8Z9r1zWuKa/xW/Zpzfs27yK3T6944X3+aEVTjGHntY6z+Y/tcRgYoOKB/izFXn9+IQYOBAQBd9iiy",
+    "bytes": 101,
+    "sha256": "0781da44fbd87ec2e53db46c65e6e91e00ac678da72d9077f5c4500db6bf1e2b"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '/absolute'"
+   }
+  },
+  {
+   "name": "a zip member named /absolute",
+   "format": "zip",
+   "sha256": "6825e29045dc558f5db308b581061dcea11802e12da5eedd878e10c23b3b8995",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFghzArF+YlJxfk5pSWpFgDcjkwgzbpUw0AASQOgL8GZlYwArY2QwB9IaYEUAuNcO9g==",
+    "bytes": 117,
+    "sha256": "6825e29045dc558f5db308b581061dcea11802e12da5eedd878e10c23b3b8995"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: '/absolute'"
+   }
+  },
+  {
+   "name": "a tar.gz member named pkg/../escape",
+   "format": "tar.gz",
+   "sha256": "66a87fd345a6fe9699a41d80c6b42467d7cb390a03c8c41f36d8009f729b5742",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGnI1BwiwXLD18lvwX/ijndARpd4jHHL3VUM95B1r1s9MnDVzfvBtk7c7bNoqe/5rrHy/y3/ZfZ+vq5/Hea/9vmOqxYFde9rD7x03zWVkgIIDkm9/mMurMWgwMAAAyyEq+w==",
+    "bytes": 104,
+    "sha256": "66a87fd345a6fe9699a41d80c6b42467d7cb390a03c8c41f36d8009f729b5742"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/../escape'"
+   }
+  },
+  {
+   "name": "a zip member named pkg/../escape",
+   "format": "zip",
+   "sha256": "9508d5a23b017025e8cd2e51cbc8ba6dce88c9163f043871b5b90ca1376e4e64",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFgjzAnFBdrq+np5+anFyYkFqRYA3I5MIM27VMNAAEkDVG+DNysYAVsrIYA2kdcAKAWXEEMQ=",
+    "bytes": 125,
+    "sha256": "9508d5a23b017025e8cd2e51cbc8ba6dce88c9163f043871b5b90ca1376e4e64"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/../escape'"
+   }
+  },
+  {
+   "name": "a tar.gz member named pkg//file",
+   "format": "tar.gz",
+   "sha256": "dceb23cbc7ec265472c5d2da447515fe99563f5fa9c883fc21cfd037f18db955",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGvI1OYiwXKgXyd+QfedApU6LhC5PwqGPkSs79qq0fZ8108d4vfv8oPL6e4/Ki65O2ZT2de7Vysv21dF6vnOK3jyw9bu+MO6Y4VlGBig4YB/FsGv6L38GDQYGAMC3Kpw=",
+    "bytes": 103,
+    "sha256": "dceb23cbc7ec265472c5d2da447515fe99563f5fa9c883fc21cfd037f18db955"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg//file'"
+   }
+  },
+  {
+   "name": "a zip member named pkg//file",
+   "format": "zip",
+   "sha256": "2b313bf82c7ebd5d3446b77c86981b68e69ef85f42aca6444da4cf8a103a8a10",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFghzAnFBdrq+flpmTmpFgDcjkwgzbpUw0AASQOgL8GZlYwArY2QwB9IaYEUAmY8OWg==",
+    "bytes": 117,
+    "sha256": "2b313bf82c7ebd5d3446b77c86981b68e69ef85f42aca6444da4cf8a103a8a10"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg//file'"
+   }
+  },
+  {
+   "name": "a tar.gz member named pkg/./file",
+   "format": "tar.gz",
+   "sha256": "9b1a52bb41bdc681be336071fb86fb39381120426c713b537b21d7974c71c320",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/POnI1JUiwXHivMU9BtO61jV6Ik3gSq+z9/WGP7jlU5RsfzkmTa/8U9O37yu7DITdNl+an/T7zyvf/m+3L/AJDPjKvP7459lPqn+XlDDBQ4Kb9X1yqlUGDgQEAubEqpQ==",
+    "bytes": 103,
+    "sha256": "9b1a52bb41bdc681be336071fb86fb39381120426c713b537b21d7974c71c320"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/./file'"
+   }
+  },
+  {
+   "name": "a zip member named pkg/./file",
+   "format": "zip",
+   "sha256": "1634d4f3fa75c116fbaed456cfa9e671d9c0858c8593883d0d60ae4fd4bf18bb",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFghzAXFBdrq+nn5aZk5qRYA3I5MIM26lMNAAEkDSGODNysYAVsfIYAGkNcGqAL5VDro=",
+    "bytes": 119,
+    "sha256": "1634d4f3fa75c116fbaed456cfa9e671d9c0858c8593883d0d60ae4fd4bf18bb"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/./file'"
+   }
+  },
+  {
+   "name": "a tar.gz member named C:/file",
+   "format": "tar.gz",
+   "sha256": "1f44bcad91d065568bf9d897e78b8d114ecc2913ee9e63ca2de1cc1f3e068d6c",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGnIdChBguWDrlffA/4fbhq8qmiJMK3uajpdvnfRF0OledtqMNL3nh3PnrNu4bNKvqP0zp828Nf/fTf+nN1yDH/HP+5y843nqm8vaDDBwY5G5gKq2IIMGAwMAC+crnQ==",
+    "bytes": 102,
+    "sha256": "1f44bcad91d065568bf9d897e78b8d114ecc2913ee9e63ca2de1cc1f3e068d6c"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'C:/file'"
+   }
+  },
+  {
+   "name": "a zip member named C:/file",
+   "format": "zip",
+   "sha256": "b78f39a756b4393c3192fdf279478f79a32b673adae10f54156af46a1669cd0e",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFgizA7GzlX5aZk5qRYA3I5MIM251MNAAEoDpCvBmZWMAK2JkMAXSamAlABEJDGo=",
+    "bytes": 113,
+    "sha256": "b78f39a756b4393c3192fdf279478f79a32b673adae10f54156af46a1669cd0e"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'C:/file'"
+   }
+  },
+  {
+   "name": "a tar.gz member named pkg\\file",
+   "format": "tar.gz",
+   "sha256": "668fc7f0c0466285ea178e96c860a0507848bfca18f6346cdd3df88027619561",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PWnM1B4iwXNgtMj3hQ6LZZLVWtotOnxinv7+qtaRfoMjP+LCJcf92b3uf2JrAubeCvvnMn+mXX3v7/FLNwKuFDdcfV+59nvpnuSoDDPxw1Z4hxefAoMHAAAA6iSfQ",
+    "bytes": 102,
+    "sha256": "668fc7f0c0466285ea178e96c860a0507848bfca18f6346cdd3df88027619561"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg\\\\file'"
+   }
+  },
+  {
+   "name": "a zip member named pkg\\file",
+   "format": "zip",
+   "sha256": "e5feb449c8baa2e04b8d1b896cb03cc3f186ba6feca90d28f9a4deee0823d137",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFghzAHFBdnpMWmZOakWANyOTCDNuhTDQABKAawvwZmVjAKtiZDAD0upgNQCIQw5S",
+    "bytes": 115,
+    "sha256": "e5feb449c8baa2e04b8d1b896cb03cc3f186ba6feca90d28f9a4deee0823d137"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg\\\\file'"
+   }
+  },
+  {
+   "name": "a tar.gz member named pkg/new<line end>line",
+   "format": "tar.gz",
+   "sha256": "e2f81837622676e7bbf19dfdbf0bb9dbb0cf0a1734fe8a962777e23832e5ba6f",
+   "archive": {
+    "deflated": "eNqT7+ZgAAGm/2/PGnIdChBgubC2mCt/wn/DCvluARfORROf/IgM6tzb9GRvWlvmszrZWxvnz76d+uaxt5dV6d1pL42Da1/vvB702pBPte7B1znn+vf010YxMUBBQ/0WJi3+GE8GDQYGAJ3NLC4=",
+    "bytes": 106,
+    "sha256": "e2f81837622676e7bbf19dfdbf0bb9dbb0cf0a1734fe8a962777e23832e5ba6f"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/new\\nline'"
+   }
+  },
+  {
+   "name": "a zip member named pkg/new<line end>line",
+   "format": "zip",
+   "sha256": "2f81bedba76335d439fa12aaec20903edc029927a3d31292290fa93d9ad95232",
+   "archive": {
+    "deflated": "eNoL8GZmEWGAAEWGZrE7PYxAFgjzAHFBdrp+Xmo5V05mXmpFgDcjkwgzbsUw0AASQNEa4M3KxgBWychgBaS1weoAVPMQwA==",
+    "bytes": 123,
+    "sha256": "2f81bedba76335d439fa12aaec20903edc029927a3d31292290fa93d9ad95232"
+   },
+   "result": {
+    "refused": "Unsafe or noncanonical path: 'pkg/new\\nline'"
+   }
+  }
+ ],
+ "urls": [
+  {
+   "value": "http://example.invalid/x",
+   "result": {
+    "refused": "Source URLs must be credential-free HTTPS URLs"
+   }
+  },
+  {
+   "value": "file:///tmp/x",
+   "result": {
+    "refused": "Source URLs must be credential-free HTTPS URLs"
+   }
+  },
+  {
+   "value": "https://user:secret@example.invalid/x",
+   "result": {
+    "refused": "Source URLs must be credential-free HTTPS URLs"
+   }
+  },
+  {
+   "value": "https://example.invalid:8080/x",
+   "result": {
+    "refused": "Source URLs must be credential-free HTTPS URLs"
+   }
+  },
+  {
+   "value": "https://example.invalid/x#fragment",
+   "result": {
+    "refused": "Source URLs must be credential-free HTTPS URLs"
+   }
+  }
+ ],
+ "diffs": [
+  {
+   "name": "a binary file changed",
+   "path": "vendor/pkg/file",
+   "old": "AG9sZA==",
+   "new": "/25ldw==",
+   "text": "diff --git a/vendor/pkg/file b/vendor/pkg/file\n--- a/vendor/pkg/file\n+++ b/vendor/pkg/file\nBinary old sha256=2a6013f83555ed1c5f4c16e2eba14a1cf64b3bf6be8268fe291e2a000378193d base64=AG9sZA==\nBinary new sha256=4faa3ffa721db073568fc3aa6ccf16de84f45314b34cef845ac1f00a332f0b5d base64=/25ldw==\n"
+  },
+  {
+   "name": "an empty file added",
+   "path": "vendor/pkg/empty",
+   "old": null,
+   "new": "",
+   "text": "diff --git a/vendor/pkg/empty b/vendor/pkg/empty\nnew file\n"
+  },
+  {
+   "name": "a text without its line end changed",
+   "path": "vendor/pkg/text",
+   "old": "b2xk",
+   "new": "bmV3",
+   "text": "diff --git a/vendor/pkg/text b/vendor/pkg/text\n--- a/vendor/pkg/text\n+++ b/vendor/pkg/text\n@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file\n"
+  }
+ ]
+}

@@ -171,6 +171,28 @@ fn every_recorded_archive_is_read_alike() {
     assert_eq!(tally, [[45, 35, 18, 1], [20, 18, 9, 2], [2, 3, 2, 0]]);
 }
 
+/// The deleted tests' sources, read as the reference read them: a body
+/// that is not what its record pins is refused before it is unpacked, and
+/// no member path that could leave or alias its tree is admitted from
+/// either kind of archive.
+#[test]
+fn the_reference_tests_archives_are_read_alike() {
+    let recording = Document::read(super::super::tests::TESTS).expect("a recording");
+    let cases = recording.get("sources").and_then(Document::items);
+    let mut tally = [0; 4];
+    for case in cases.expect("cases") {
+        let source = Source {
+            identifier: "upstream".to_owned(),
+            url: "https://example.invalid/upstream".to_owned(),
+            sha256: text(case, "sha256").to_owned(),
+            format: text(case, "format").to_owned(),
+        };
+        let read = files(&source, &archive(case), &Bounds::REVIEWED);
+        tally[alike(&[], case, &read)] += 1;
+    }
+    assert_eq!(tally, [0, 17, 0, 0]);
+}
+
 /// The archive of the recorded case `name`.
 fn recorded(section: &str, name: &str) -> Vec<u8> {
     let recording = Document::read(RECORDING).expect("a recording");

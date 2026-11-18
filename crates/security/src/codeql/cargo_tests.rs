@@ -22,6 +22,11 @@ use std::{
 
 const RECORDED: &[u8] = include_bytes!("recorded_cargo.json");
 
+/// Files of the native analysis that were deleted after the recording was
+/// made: the recording lists them among the files every CodeQL key binds
+/// and judged each an input, and neither is one any longer.
+const REMOVED_SINCE_RECORDING: [&str; 2] = ["build/ci_verified.py", "build/security_vendor.py"];
+
 /// The code here of what the reference's interpreter raised.
 fn raised(class: &str, words: &str) -> String {
     match class {
@@ -75,18 +80,17 @@ fn logged(place: &Path) -> Document {
 #[test]
 fn every_recorded_name_is_judged_an_input_alike() {
     let recorded = recording(RECORDED);
-    let mut judged = 0;
+    let mut judged = [0; 2];
     for case in items(&recorded, "inputs") {
+        let name = text(case, "name");
         let held = case.get("held") == Some(&Document::Bool(true));
-        assert_eq!(
-            dependency_input(text(case, "name")),
-            held,
-            "{}",
-            text(case, "name")
-        );
-        judged += 1;
+        // A file removed since the recording was an input then and is none now.
+        let removed = REMOVED_SINCE_RECORDING.contains(&name);
+        assert!(!removed || held, "{name}");
+        assert_eq!(dependency_input(name), held != removed, "{name}");
+        judged[usize::from(removed)] += 1;
     }
-    assert_eq!(judged, 51);
+    assert_eq!(judged, [49, 2]);
     let listed = |name: &str| -> Vec<String> {
         let words = items(&recorded, name)
             .iter()
@@ -98,7 +102,13 @@ fn every_recorded_name_is_judged_an_input_alike() {
         .map(|name| (*name).to_owned())
         .collect();
     native.sort();
-    assert_eq!(native, listed("nativeFiles"));
+    let mut kept = listed("nativeFiles");
+    kept.retain(|name| !REMOVED_SINCE_RECORDING.contains(&name.as_str()));
+    assert_eq!(
+        kept.len() + REMOVED_SINCE_RECORDING.len(),
+        listed("nativeFiles").len()
+    );
+    assert_eq!(native, kept);
     let mut manifests: Vec<String> = CODEQL_RUST_MANIFESTS.map(str::to_owned).to_vec();
     manifests.sort();
     assert_eq!(manifests, listed("manifests"));

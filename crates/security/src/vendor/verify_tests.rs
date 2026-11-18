@@ -280,6 +280,8 @@ fn replayed(index: usize, case: &Document) -> usize {
     if let Some(evidence) = evidence {
         let wanted: Vec<&str> = evidence.iter().map(|(name, _)| name.as_str()).collect();
         assert_eq!(listed(&output), wanted, "{name}");
+        let mode = output.metadata().expect("evidence").permissions();
+        assert_eq!(mode.mode() & 0o777, 0o700, "{name}");
         for (file, content) in evidence {
             let written = std::fs::read(output.join(file)).expect("evidence");
             assert_eq!(
@@ -311,6 +313,58 @@ fn every_recorded_verification_ends_alike_with_the_same_evidence() {
         tally[replayed(index, case)] += 1;
     }
     assert_eq!(tally, [8, 40, 14, 2]);
+}
+
+/// The cases of the reference's own deleted tests, built from their
+/// fixture, end alike with the same evidence.
+#[test]
+fn every_case_of_the_reference_tests_ends_alike() {
+    let recording = Document::read(super::super::tests::TESTS).expect("a recording");
+    let cases = recording.get("verifications").and_then(Document::items);
+    let mut tally = [0; 4];
+    for (index, case) in cases.expect("cases").iter().enumerate() {
+        tally[replayed(1000 + index, case)] += 1;
+    }
+    assert_eq!(tally, [1, 13, 0, 0]);
+}
+
+/// Evidence that is there is never written over: a second verification
+/// into it is refused as the reference refused an output that was there,
+/// and the first report stays as it was.
+#[test]
+fn existing_evidence_is_never_written_over() {
+    let recording = Document::read(RECORDING).expect("a recording");
+    let cases = recording.get("cases").and_then(Document::items);
+    let cases = cases.expect("cases");
+    let named = |name: &str| cases.iter().find(|case| text(case, "name") == name);
+    let (passed, there) = (
+        named("everything as recorded"),
+        named("an output that is there"),
+    );
+    let (passed, there) = (passed.expect("a case"), there.expect("a case"));
+    let scratch = Scratch::new("vendor-verify-twice");
+    let root = &scratch.0;
+    let (cache, output) = built(root, passed);
+    let asked = Verification {
+        root,
+        cache: &cache,
+        output: &output,
+        bounds: Bounds::REVIEWED,
+    };
+    assert_eq!(verify(&asked, None), Ok(()));
+    let report = std::fs::read(output.join("report.json")).expect("a report");
+    let words = REWORDED
+        .iter()
+        .find(|(name, _)| *name == text(there, "name"));
+    let words = words
+        .expect("reworded")
+        .1
+        .replace("<root>", root.to_str().expect("a path"));
+    assert_eq!(verify(&asked, None), Err(Problem(words)));
+    assert_eq!(
+        std::fs::read(output.join("report.json")).expect("a report"),
+        report
+    );
 }
 
 /// The most bytes a source may have.

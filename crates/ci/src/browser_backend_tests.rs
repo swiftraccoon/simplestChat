@@ -1,4 +1,4 @@
-//! Rust-only browser policy; reference closures add `crates/`, which the oracle omits deliberately.
+//! Rust-only browser policy; reference closures add `crates/`, which the recorded reference omits.
 //! Inert binaries and depinfo test reuse without running an application or compiler.
 
 use super::*;

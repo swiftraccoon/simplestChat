@@ -13,6 +13,10 @@ use crate::{document::Document, scratch::base64};
 
 const RECORDING: &[u8] = include_bytes!("recorded_vendor.json");
 
+/// What the reference answered for the cases of its own deleted tests,
+/// recorded from it before it was removed.
+pub(super) const TESTS: &[u8] = include_bytes!("recorded_tests.json");
+
 /// Complaints that are worded otherwise here, by the case or the value: a
 /// character that is no ASCII is shown as its escape, a port that is no
 /// port is refused as every other address is, and bytes that are no JSON
@@ -144,6 +148,36 @@ fn paths_digests_and_addresses_are_judged_alike() {
     }
     assert_eq!(tally, [[18, 21, 1], [2, 12, 0], [18, 24, 5]]);
     assert_eq!(stricter, 1);
+}
+
+/// The addresses of the reference's own tests, the redirects' targets
+/// among them, are judged as it judged them.
+#[test]
+fn the_reference_tests_addresses_are_judged_alike() {
+    let recording = Document::read(TESTS).expect("a recording");
+    let mut tally = [0; 3];
+    for case in list(&recording, "urls") {
+        let value = text(case, "value");
+        tally[alike(value, &manifest::https_url(value), field(case, "result"))] += 1;
+    }
+    assert_eq!(tally, [0, 5, 0]);
+}
+
+/// The repository's own record covers every file of its vendored tree and
+/// every wrap, and names both mediasoup sources.
+#[test]
+fn the_repository_record_covers_its_vendored_tree_and_wraps() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor");
+    let local = crate::vendor::tree::files(&root, &Bounds::REVIEWED).expect("the vendored tree");
+    let local: Files = local
+        .into_iter()
+        .map(|(path, data)| (format!("vendor/{path}"), data))
+        .collect();
+    let record = manifest::parse(&local["vendor/integrity.json"]).expect("the record");
+    assert_eq!(compare::coverage(&record, &local), Ok(()));
+    for source in ["mediasoup-0.29.0", "mediasoup-sys-0.19.0"] {
+        assert!(record.source(source).is_some(), "{source}");
+    }
 }
 
 /// A record in the recording's shape.
