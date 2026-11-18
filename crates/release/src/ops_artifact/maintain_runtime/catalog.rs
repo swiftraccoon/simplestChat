@@ -8,14 +8,7 @@ pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
     if purpose == Purpose::Deploy {
         for name in [
             ".github/workflows/release-deploy-runtime.yml",
-            "build/security_vm_deploy.py",
-            "build/security_vm_deploy_guest.py",
-            "build/security_vm_deploy_injection.py",
-            "build/release_container_harness.py",
             "ops/ansible/security-vm-native-deploy.yml",
-            "ops/ansible/tests/test_security_vm_deploy.py",
-            "ops/ansible/tests/test_security_vm_deploy_injection.py",
-            "crates/release/src/ops_artifact.rs",
         ] {
             names.insert(name.into());
         }

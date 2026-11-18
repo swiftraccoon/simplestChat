@@ -423,23 +423,6 @@ mod tests {
         assert_eq!(fixture.admit(&changed), Err(Error::Bounds));
     }
     #[test]
-    fn frozen_reference_and_its_native_isolation_limit_remain_source_bound() {
-        use sha2::{Digest, Sha256};
-        let source = include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../build/security_vm_deploy_guest.py"
-        ));
-        assert_eq!(source.len(), 129071);
-        let hash = Sha256::digest(source)
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-        assert_eq!(
-            hash,
-            "55bc7b486b61c2200a2b17f0b4d4a25dff8416eddda50022a632f9e4a030a7bd"
-        );
-    }
-    #[test]
     fn every_event_is_an_object_before_type_filtering_and_actor_actions_keep_frozen_shapes() {
         let fixture = Fixture::new();
         for row in [

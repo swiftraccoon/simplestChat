@@ -7,6 +7,12 @@ use super::{CommandOutput, Executor, Role};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+/// The whole environment of every command the native deploy starts: the fixed system search
+/// path and the C locale, with nothing inherited from the caller. The deploy fixture's
+/// inspection barrier stands in for the Docker client and passes the real client these pairs.
+pub(in crate::release::attestation) const ENVIRONMENT: [(&str, &str); 2] =
+    [("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), ("LC_ALL", "C")];
+
 pub(in crate::release::attestation) struct Native;
 
 fn command_error(
@@ -61,10 +67,9 @@ impl Executor for Native {
             Invocation {
                 program: request.program,
                 arguments: request.arguments,
-                environment: BTreeMap::from([
-                    ("PATH".into(), "/usr/sbin:/usr/bin:/sbin:/bin".into()),
-                    ("LC_ALL".into(), "C".into()),
-                ]),
+                environment: BTreeMap::from(
+                    ENVIRONMENT.map(|(name, value)| (name.into(), value.into())),
+                ),
                 body_end: request.body_end,
                 settlement_end: end,
                 cleanup,

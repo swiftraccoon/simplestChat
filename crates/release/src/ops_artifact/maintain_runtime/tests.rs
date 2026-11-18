@@ -972,3 +972,29 @@ fn executable_measurement_refuses_weak_elf_fields_before_transfer() {
         );
     }
 }
+#[test]
+fn every_purpose_reads_sources_the_checkout_holds_and_deploy_adds_only_its_two() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap();
+    let common = catalog::sources();
+    for purpose in [options::Purpose::Prerequisite, options::Purpose::Host] {
+        assert_eq!(catalog::sources_for(purpose), common);
+    }
+    let deploy = catalog::sources_for(options::Purpose::Deploy);
+    assert!(deploy.is_superset(&common));
+    assert_eq!(
+        deploy.difference(&common).collect::<Vec<_>>(),
+        [
+            ".github/workflows/release-deploy-runtime.yml",
+            "ops/ansible/security-vm-native-deploy.yml",
+        ]
+    );
+    // The controller opens every listed source before it authenticates anything and
+    // refuses one that is absent or longer than a mebibyte.
+    for name in &deploy {
+        let length = std::fs::metadata(root.join(name)).map(|file| file.len());
+        assert!(length.is_ok_and(|bytes| bytes <= 1024 * 1024), "{name}");
+    }
+}

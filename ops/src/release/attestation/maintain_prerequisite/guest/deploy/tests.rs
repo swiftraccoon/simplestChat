@@ -42,6 +42,30 @@ fn request() -> Value {
 }
 
 #[test]
+fn the_barrier_serves_exactly_the_inspection_the_native_deploy_issues() {
+    // The client intercepts, and the service answers, one exact `docker inspect` template.
+    // A native caller with any other template would reach the real CLI past the barrier.
+    fn pieces(source: &str, name: &str) -> String {
+        let marker = format!("\nconst {name}: &str = concat!(\n");
+        let (_, tail) = source.split_once(&marker).expect("the constant");
+        let (pieces, _) = tail.split_once("\n);").expect("the end of the constant");
+        pieces
+            .lines()
+            .map(|line| line.trim().trim_end_matches(','))
+            .collect()
+    }
+    let native = include_str!("../../../deploy/execution.rs");
+    assert!(native.contains("argv(&[\"inspect\", \"--format\", CONTAINER, id])"));
+    let issued = pieces(native, "CONTAINER");
+    assert!(issued.starts_with("\"{\\\"id\\\":{{json .Id}}"));
+    assert_eq!(pieces(include_str!("injection.rs"), "FORMAT"), issued);
+    assert_eq!(
+        pieces(include_str!("injection_client.rs"), "NATIVE_FORMAT"),
+        issued
+    );
+}
+
+#[test]
 fn deploy_admits_the_actual_frozen_postgres_profile_and_refuses_other_images() {
     let source = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

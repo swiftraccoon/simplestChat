@@ -3024,10 +3024,9 @@ Bounded stdout and outcome observations retain closed `rollbackFailure` facts
 before ordinary report or success checks. Their stage, boundary, cause and
 nullable positive log ordinal are passive diagnostics; they cannot authorize a
 retry or turn failed rollback into passing proof. Both independently valid
-diagnostics survive a later mismatch refusal. The previous Python controller,
-guest, injection client and playbook remain unchanged as references. The active
-fixture's controller, guest and injection mechanism are Rust; Ansible and pinned
-platform provisioning retain their existing roles.
+diagnostics survive a later mismatch refusal. The fixture's controller, guest
+and injection mechanism are Rust; Ansible and pinned platform provisioning
+retain their existing roles.
 
 Harmless help is available locally:
 

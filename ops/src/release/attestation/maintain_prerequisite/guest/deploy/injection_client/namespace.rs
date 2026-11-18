@@ -157,10 +157,11 @@ fn execute(context: &mut Context, original: usize, args: &[OsString], native: bo
         .iter()
         .map(|value| CString::new(value.as_os_str().as_bytes()).map_err(|_| Error::Input))
         .collect::<Result<Vec<_>>>()?;
-    let mut environment = vec![
-        CString::new("PATH=/usr/sbin:/usr/bin:/sbin:/bin").map_err(|_| Error::Input)?,
-        CString::new("LC_ALL=C").map_err(|_| Error::Input)?,
-    ];
+    // The real client gets the native caller's environment; only the native re-entry adds HOME.
+    let mut environment = crate::release::attestation::deploy::process::ENVIRONMENT
+        .iter()
+        .map(|(name, value)| CString::new(format!("{name}={value}")).map_err(|_| Error::Input))
+        .collect::<Result<Vec<_>>>()?;
     if native {
         environment.push(CString::new(format!("HOME={ROOT}")).map_err(|_| Error::Input)?);
     }

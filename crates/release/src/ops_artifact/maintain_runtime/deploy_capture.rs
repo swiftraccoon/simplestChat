@@ -275,3 +275,40 @@ pub(super) fn admit(value: &Value) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The guest is built with a feature this crate leaves off, so its vocabulary is read
+    /// from its source.
+    const GUEST: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../ops/src/release/attestation/maintain_prerequisite/guest/deploy/native_report.rs"
+    ));
+    /// Every string literal of the guest's table `name`, in source order.
+    fn guest_table(name: &str) -> Vec<&'static str> {
+        let (_, tail) = GUEST
+            .split_once(&format!("\nconst {name}: &["))
+            .expect("the guest's table");
+        let (body, _) = tail.split_once("\n];").expect("the end of the table");
+        body.split('"').skip(1).step_by(2).collect()
+    }
+    #[test]
+    fn the_admitted_vocabulary_is_the_one_the_guest_reports() {
+        assert_eq!(guest_table("STAGES"), STAGES);
+        assert_eq!(guest_table("BOUNDARIES"), BOUNDARIES);
+        assert_eq!(guest_table("CAUSES"), CAUSES);
+        // A failure label is the second half of a mapped pair, an asset code reported as
+        // itself, or one of the two that the guest's `failure_label` returns outright.
+        let mapped = guest_table("LABELS");
+        let (pairs, unpaired) = mapped.as_chunks::<2>();
+        assert!(unpaired.is_empty());
+        let mut labels = pairs.iter().map(|[_, label]| *label).collect::<Vec<_>>();
+        labels.extend(guest_table("ASSET_LABELS"));
+        assert!(GUEST.contains("return (\"native-command\", Some(number));"));
+        assert!(GUEST.contains("\n    (\"other-refusal\", None)\n}"));
+        labels.extend(["native-command", "other-refusal"]);
+        assert_eq!(labels, FAILURE_LABELS);
+    }
+}

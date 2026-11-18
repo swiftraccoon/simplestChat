@@ -1,4 +1,4 @@
-total 62807
+total 54290
 11	build/build-release.py
 241	build/ci_release_checks.py
 11	build/fetch-release.py
@@ -16,9 +16,6 @@ total 62807
 27	build/security_source_scope.py
 512	build/security_tools.py
 1423	build/security_vm.py
-804	build/security_vm_deploy.py
-3236	build/security_vm_deploy_guest.py
-800	build/security_vm_deploy_injection.py
 1020	build/security_vm_fetch.py
 217	build/security_vm_fetch_guest.py
 218	build/security_vm_fetch_hosts.py
@@ -93,9 +90,6 @@ total 62807
 419	ops/ansible/tests/test_security_tools.py
 1040	ops/ansible/tests/test_security_vm.py
 320	ops/ansible/tests/test_security_vm_boot.py
-2019	ops/ansible/tests/test_security_vm_deploy.py
-1165	ops/ansible/tests/test_security_vm_deploy_injection.py
-493	ops/ansible/tests/test_security_vm_deploy_injection_client.py
 900	ops/ansible/tests/test_security_vm_fetch.py
 173	ops/ansible/tests/test_security_vm_fetch_guest.py
 178	ops/ansible/tests/test_security_vm_fetch_hosts.py

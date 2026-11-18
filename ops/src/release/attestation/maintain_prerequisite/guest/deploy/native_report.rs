@@ -469,7 +469,7 @@ mod tests {
         assert_eq!(capture(&padded, usize::MAX), Capture::invalid());
     }
     #[test]
-    fn decoder_domains_match_the_actual_native_producer_and_frozen_label_maps() {
+    fn rollback_domains_match_the_actual_native_producer() {
         let producer = include_str!("../../../deploy/rollback_diagnostic.rs");
         assert_eq!(
             producer
@@ -506,38 +506,5 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(actual, expected);
         }
-        let original = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../build/security_vm_deploy_guest.py"
-        ));
-        let body = original
-            .split_once("FAILURE_LABELS = {")
-            .unwrap()
-            .1
-            .split_once("\n}")
-            .unwrap()
-            .0;
-        let labels = body
-            .lines()
-            .filter(|line| line.contains('"'))
-            .map(|line| {
-                let parts = line.split('"').collect::<Vec<_>>();
-                (parts[1], parts[3])
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(labels, LABELS);
-        let body = original
-            .split_once("STATIC_ASSET_FAILURES = frozenset(")
-            .unwrap()
-            .1
-            .split_once("\n)")
-            .unwrap()
-            .0;
-        let labels = body
-            .lines()
-            .filter_map(|line| line.trim().strip_prefix('"'))
-            .map(|line| line.strip_suffix("\",").unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(labels, ASSET_LABELS);
     }
 }
