@@ -3342,9 +3342,9 @@ The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall
 hooks. Network regressions require this exact profile and its canonical IPAM
 gateway; internal networks, missing/enabled masquerading, extra routing options
-and an empty or changed endpoint gateway refuse. The frozen Python fixture keeps
-its old internal bridge. A local exact-Docker comparison stopped at a nested
-cgroup startup refusal, so it establishes neither HTTP publication nor firewall
+and an empty or changed endpoint gateway refuse. A local exact-Docker comparison
+stopped at a nested cgroup startup refusal, so it establishes neither HTTP
+publication nor firewall
 enforcement. The fresh signed VM must prove the unchanged launcher's actual
 loopback readiness, natural TLS, containment and complete finalization.
 
@@ -3361,29 +3361,8 @@ The dev/test profile optimizes the pinned `sha2` dependency so full retained-inp
 checks do not run unoptimized compression. Integrity checks and clocks are
 unchanged; hosted runtime success remains required.
 
-The manual maintenance prerequisites KVM experiment
-(`.github/workflows/maintenance-prerequisites.yml`) has two independent free-runner jobs. One observes the exact pinned Caddy image,
-naturally generated local TLS material, guest-only public-root trust, fresh-process
-reuse and the existing network-none validator with separate 8 MiB `/data` and
-`/config` tmpfs mounts. Its guest OUTPUT/FORWARD and
-physical egress guards remain until the exact owned VM exits. The other runs the
-fixed PID-namespace topology catalog, with 11
-named cases and 14 fresh namespaces, original kernel handles and actual adopted
-reaps. Neither job proves the other's behavior or complete maintenance success.
-The optional workflow has no artifact selector, API token, production host,
-required-CI role or installed caller change.
-
-The Caddy 97-case suite and namespace 14-case boundary suite use the maintained strict
-Python configuration. These local tests execute no actual helper role, namespace,
-KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog.
-The [Caddy run at `4322717`](https://github.com/swiftraccoon/simplestChat/actions/runs/40226216828)
-passed its finite TLS/storage prerequisite with cleanup and all VM lifecycle
-checks. The operational 900-second launcher and Rust fd0 transport remain unrun.
-No application deployment, caller cutover or authenticated Ops distribution is
-established by that Caddy-only run.
-
-The separate manual fixed-launcher runtime fixture
-(`.github/workflows/maintenance-launcher-runtime.yml`) adds four independent signed-musl guests: positive, dirty source, controlled
+The manual fixed-launcher runtime fixture
+(`.github/workflows/maintenance-launcher-runtime.yml`) runs four independent signed-musl guests: positive, dirty source, controlled
 cancellation and the actual unchanged 900-second timeout. It joins the exact
 installed Ops inode, shallow source tree, native PID-namespace settlement,
 PostgreSQL state, naturally generated Caddy materials and known daemon actors.
@@ -3398,120 +3377,6 @@ controller's protocol and catalog tests with:
 ```sh
 cargo test --locked -p simplestchat-release maintain_runtime -- --test-threads=1
 ```
-
-Run the two earlier local prerequisite suites independently:
-
-```sh
-ops/ansible/.venv/bin/python -B -m unittest discover \
-  -s ops/ansible/tests -p 'test_caddy*.py' -q
-ops/ansible/.venv/bin/python -B -m unittest discover \
-  -s ops/ansible/tests -p 'test_maintain_namespace_probe.py' -q
-```
-
-The optional jobs keep positive summaries success-only and separately attempt an
-exact closed failure-summary artifact under `always()`. Its fixed negative
-checkpoint/case/status/error metadata contains no raw streams, keys, work or
-configuration. Missing or partial metadata is unavailable evidence; final nonzero
-exit invalidates passive bytes and never becomes success through retention.
-
-The e271a8c optional run passed the finite namespace experiment (11 cases / 14
-trials) and failed Caddy at a hash-bound `tool_missing` prerequisite refusal.
-No Caddy TLS or complete maintenance proof is established. The guest bootstrap
-now explicitly installs the separate Docker CLI with the daemon under the same
-no-recommends policy. A fixed workflow choice selects `both` (default), `caddy`
-or `namespace`; the corrected Caddy-only trial remains pending.
-
-The first corrected Caddy-only run reached containment after tool/image/network
-setup and failed with an I/O exception; cleanup passed, but no exact errno/site
-was retained. A source-backed Linux DROP `EPERM` marker edge is now handled only
-with a fresh exact named counter delta and live capture. Unrelated I/O, stale
-counters, close failures and original deadlines remain negative. Fixed local
-checkpoints and symbolic errno categories retain future failures without raw
-messages or paths. The actual recorded I/O cause and Caddy TLS proof remain
-unproven pending a further Caddy-only trial.
-
-
-The Caddy transport correction retains the internal bridge and all
-containment/capture/resource caps. It selects only the fresh owned container's
-joined internal IPv4 endpoint, rechecks the same container/image/network/address
-around TLS phases, and observes actual port mappings separately from requested
-ones. SNI, Host, trust, Caddyfile and natural seven-file material policy remain
-unchanged. Direct bridge TLS does not establish the production loopback-published
-path. Closed connection/handshake diagnostics contain no raw address or error
-text. Source fixtures cover wrong identities, special/foreign addresses, stale
-observations and late phase completion, including the old helper's admitted
-31-second success under a 30-second phase. No actual engine, TLS or KVM result is
-established by this correction; the `f54d8ed` trial remains `tls_not_ready` with
-its exact connection cause unknown. The suite also exercises a full
-real-file negative-copy loop over exact-owned terminal daemon observations,
-refuses ambiguous/foreign terminal identities, and pairs actual local descriptor
-closes with SSL refusal. A close error retains the initial SSL exception and
-cannot become successful negative proof or a retry. Further timing fixtures
-join an initially running copy to a later exact-owned nonzero exit only after
-an actual clean phase-live refusal. They reject foreign identity/image/network,
-global expiry/cancellation, successful-TLS downgrade and a successful close that
-finishes after the TLS phase. Final observed-state metadata uses only remaining guest
-body time and the existing command caps, never another TLS window. Versioned
-Moby-shaped fixtures distinguish nonzero restart backoff (`Running` and
-`Restarting` true, PID0) from live unpaused serving state; backoff is only an
-observed refusal and never terminal proof. The fixed `unless-stopped` policy is
-unchanged. Negative retry exhaustion performs one fresh joined state query;
-positive/fresh TLS paths remain strict.
-
-The pinned Caddy base OCI configuration exposes `2019/tcp` in addition to the
-three requested ports. A fixture accepts that admin key only when unbound
-(null or empty); every actual admin host binding and every other unknown port
-remain refused. Unbound EXPOSE metadata never proves operational publication.
-
-The `8c6b451` Caddy trial reached endpoint admission and refused `endpoint_ipv4`
-before TLS, with cleanup/restoration verified. No exact address predicate or
-successful TLS is established by that summary. The versioned Moby
-[bridge join][moby-gateway-join], [endpoint accessor][moby-gateway-endpoint] and
-[inspect update][moby-gateway-inspect] permit an empty inspected container
-`Gateway` while IPAM retains its gateway. The fixture accepts only that empty string or the exact
-canonical
-IPAM gateway, with a distinct closed `endpoint_gateway` refusal for null,
-missing, foreign or nonstring values. IPAM canonical/subnet checks and gateway
-exclusion from target selection remain unchanged; all live validation is pending.
-
-[moby-gateway-join]:
-  https://github.com/moby/moby/blob/v28.2.2/libnetwork/drivers/bridge/bridge_linux.go
-[moby-gateway-endpoint]:
-  https://github.com/moby/moby/blob/v28.2.2/libnetwork/endpoint_info.go
-[moby-gateway-inspect]:
-  https://github.com/moby/moby/blob/v28.2.2/daemon/container_operations.go
-
-The post-TLS diagnostic fixtures distinguish a failed endpoint metadata recheck
-after a completed TLS exchange, a later original-file open, and the unchanged
-material analyzer. They retain actual local originals through admission failure
-and checked cleanup, exercise the real metadata-schema refusal, and reject
-unknown codes, non-scalar arguments and error subclasses from public projection.
-A secondary close refusal cannot replace the first admission error. The three
-new checkpoint literals and analyzer-code catalog are checked against the
-controller's bounded projection; no arbitrary guest value enters its summary.
-The `1381912` actual `unexpected` failure remains unexplained by its historical
-TLS `close` checkpoint, and no complete Caddy material/TLS result is claimed.
-
-A real synthetic certificate chain exercises successful analyzer completion and
-clears its checkpoint before the next phase. Separate trusted-TLS fixtures
-refuse the initial metadata check without stale material context and mark a
-post-success endpoint refusal distinctly. These tests add no live authority.
-
-The material fixture constructor also guards each current parent/file descriptor
-before metadata or reads. Actual admitted-FD child-open, metadata and read
-refusals paired with checked-close errors preserve the first exception and
-close every current descriptor before assertions.
-
-The source-bound leaf profile tests use real cryptography-generated signatures
-and certificates without BasicConstraints. The retained old-analyzer trial ran
-one positive regression and refused `leaf_constraints`; the corrected profile
-permits that extension to be absent only on the leaf. Both two- and three-cert
-chains pass, while present `ca=true`, missing/unsuitable KU, missing or
-client-only EKU, and either authority missing BasicConstraints remain negative.
-All other analyzer checks remain exercised unchanged. The actual `f3559e6`
-summary reports the grouped code rather than private extension facts, so these
-source/inert results do not identify its exact branch or prove a corrected
-engine/TLS/KVM trial.
 
 ## Prepared-host native maintenance
 

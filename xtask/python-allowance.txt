@@ -1,12 +1,7 @@
-total 72504
+total 62807
 11	build/build-release.py
-307	build/caddy_materials.py
-2290	build/caddy_probe_guest.py
-1104	build/caddy_probe_vm.py
 241	build/ci_release_checks.py
 11	build/fetch-release.py
-621	build/maintain_namespace_probe.py
-1438	build/maintain_namespace_probe_guest.py
 407	build/release_attestation.py
 747	build/release_build.py
 267	build/release_container_fixture.py
@@ -64,13 +59,9 @@ total 72504
 188	ops/ansible/files/runtime_profile.py
 344	ops/ansible/tests/test_bounded_process.py
 188	ops/ansible/tests/test_browser_assets_command.py
-536	ops/ansible/tests/test_caddy_materials.py
-1893	ops/ansible/tests/test_caddy_probe_guest.py
-1077	ops/ansible/tests/test_caddy_probe_vm.py
 276	ops/ansible/tests/test_ci_release_checks.py
 675	ops/ansible/tests/test_deploy_controller.py
 267	ops/ansible/tests/test_force_release.py
-431	ops/ansible/tests/test_maintain_namespace_probe.py
 113	ops/ansible/tests/test_migration_prepare.py
 424	ops/ansible/tests/test_public_backup.py
 766	ops/ansible/tests/test_public_reboot.py

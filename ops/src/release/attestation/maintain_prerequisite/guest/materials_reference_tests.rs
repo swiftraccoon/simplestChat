@@ -1,4 +1,4 @@
-//! The retained reference analyzer's verdicts over this fixture's variants, replayed.
+//! The reference analyzer's verdicts over this fixture's variants, replayed.
 //!
 //! `recorded_materials.json` holds what the reference concluded for every variant this fixture
 //! builds: the code of a refusal, the class of an error it raised outside its vocabulary, or a

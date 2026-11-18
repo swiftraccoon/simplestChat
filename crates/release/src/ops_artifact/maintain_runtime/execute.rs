@@ -139,37 +139,59 @@ fn identity(control: &mut Control) -> Result<String> {
     control.check()?;
     Ok(files::hex(&random))
 }
-fn fixture_config(runner: &Runner, control: &mut Control) -> Result<(String, String, String)> {
+/// The Caddy image the installed guest admits; it refuses a request that names any other.
+pub(super) const CADDY_IMAGE: &str = concat!(
+    "ghcr.io/swiftraccoon/simplestchat-caddy:",
+    "2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071",
+    "@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0"
+);
+/// The images and the Docker engine version the fixture takes from the deployment's group
+/// variables.
+#[derive(Debug, PartialEq, Eq)]
+struct FixtureConfig {
+    postgres: String,
+    engine: String,
+    caddy: String,
+}
+impl FixtureConfig {
+    /// Reads the three values from the bytes of `benchmark_hosts.yml`.
+    ///
+    /// Refuses with [`Error::Input`] unless the PostgreSQL image is pinned by digest, the
+    /// engine package version carries a three-part upstream version, and `scpub_caddy_image`
+    /// is exactly [`CADDY_IMAGE`].
+    fn parse(data: &[u8]) -> Result<Self> {
+        let value: Value =
+            serde_saphyr::from_str(std::str::from_utf8(data).map_err(|_| Error::Input)?)
+                .map_err(|_| Error::Input)?;
+        let image = value["scpub_postgres_image"].as_str().ok_or(Error::Input)?;
+        let engine = value["scbench_docker_engine_version"]
+            .as_str()
+            .ok_or(Error::Input)?;
+        let version = engine
+            .split_once(':')
+            .and_then(|(_, tail)| tail.split_once('-'))
+            .map(|(version, _)| version)
+            .ok_or(Error::Input)?;
+        let pattern = regex::Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").map_err(|_| Error::Input)?;
+        if !image.contains("@sha256:") || !pattern.is_match(version) {
+            return Err(Error::Input);
+        }
+        let caddy = value["scpub_caddy_image"].as_str().ok_or(Error::Input)?;
+        if caddy != CADDY_IMAGE {
+            return Err(Error::Input);
+        }
+        Ok(Self {
+            postgres: image.into(),
+            engine: version.into(),
+            caddy: caddy.into(),
+        })
+    }
+}
+fn fixture_config(runner: &Runner, control: &mut Control) -> Result<FixtureConfig> {
     let data = runner.source("ops/ansible/group_vars/benchmark_hosts.yml", control)?;
-    let value: Value =
-        serde_saphyr::from_str(std::str::from_utf8(&data).map_err(|_| Error::Input)?)
-            .map_err(|_| Error::Input)?;
-    let image = value["scpub_postgres_image"].as_str().ok_or(Error::Input)?;
-    let engine = value["scbench_docker_engine_version"]
-        .as_str()
-        .ok_or(Error::Input)?;
-    let version = engine
-        .split_once(':')
-        .and_then(|(_, tail)| tail.split_once('-'))
-        .map(|(version, _)| version)
-        .ok_or(Error::Input)?;
-    let pattern = regex::Regex::new(r"^[0-9]+\.[0-9]+\.[0-9]+$").map_err(|_| Error::Input)?;
-    if !image.contains("@sha256:") || !pattern.is_match(version) {
-        return Err(Error::Input);
-    }
-    // Fixed concatenated Python string literals are data only; no Python evaluator runs.
-    let caddy = runner.source("build/caddy_probe_guest.py", control)?;
-    let text = std::str::from_utf8(&caddy).map_err(|_| Error::Input)?;
-    let expression =
-        regex::Regex::new(r#"(?s)\nIMAGE = \(\s*"([^"]+)"\s*"([^"]+)"\s*"([^"]+)"\s*\)"#)
-            .map_err(|_| Error::Input)?;
-    let found = expression.captures(text).ok_or(Error::Input)?;
-    let caddy = format!("{}{}{}", &found[1], &found[2], &found[3]);
-    if !caddy.contains("@sha256:") {
-        return Err(Error::Input);
-    }
+    let config = FixtureConfig::parse(&data)?;
     control.check()?;
-    Ok((image.into(), version.into(), caddy))
+    Ok(config)
 }
 fn quote(text: &str) -> String {
     if !text.is_empty()
@@ -505,7 +527,11 @@ impl Owners {
         bundle.original.check(control)?;
         server.check(control)?;
         ops.check(control)?;
-        let (postgres, engine, caddy) = fixture_config(runner, control)?;
+        let FixtureConfig {
+            postgres,
+            engine,
+            caddy,
+        } = fixture_config(runner, control)?;
         // Acquire network-dependent images before destroying the preparation
         // network stack. The fresh restricted guest admits only local digests.
         for (role, selected) in [("postgres", &postgres), ("caddy", &caddy)] {
@@ -885,6 +911,80 @@ mod tests {
             format!("{good}{good}"),
         ] {
             assert_eq!(recap(bad.as_bytes()), Err(Error::Refused));
+        }
+    }
+    const GROUP_VARS: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../ops/ansible/group_vars/benchmark_hosts.yml"
+    ));
+    /// The checkout's group variables with the value of `scpub_caddy_image` replaced.
+    fn group_vars_with(caddy: &str) -> String {
+        let key = "scpub_caddy_image: >-\n";
+        let (head, tail) = GROUP_VARS.split_once(key).expect("the key in block form");
+        let (_, rest) = tail.split_once('\n').expect("the value's own line");
+        assert!(!rest.contains("scpub_caddy_image:"));
+        format!("{head}{caddy}{rest}")
+    }
+    #[test]
+    fn the_group_variables_name_the_caddy_image_the_guest_admits() {
+        let config = FixtureConfig::parse(GROUP_VARS.as_bytes()).expect("the checkout's file");
+        assert_eq!(config.caddy, CADDY_IMAGE);
+        // The guest is built with a feature this crate leaves off, so its literal is read
+        // from its source: the string pieces of its `CADDY_IMAGE`, joined as `concat!` does.
+        let guest = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../ops/src/release/attestation/maintain_prerequisite/guest/protocol.rs"
+        ));
+        let (_, tail) = guest
+            .split_once("pub(super) const CADDY_IMAGE: &str = concat!(")
+            .expect("the guest's constant");
+        let (pieces, _) = tail.split_once(");").expect("the end of the constant");
+        let admitted = pieces
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .collect::<Vec<_>>()
+            .concat();
+        assert!(guest.contains("request.caddy_image != CADDY_IMAGE"));
+        assert_eq!(config.caddy, admitted);
+        // Replacing the value with itself is the identity, so the refusals below come from
+        // the replaced value alone.
+        let same = group_vars_with(&format!("scpub_caddy_image: {CADDY_IMAGE}\n"));
+        assert_eq!(FixtureConfig::parse(same.as_bytes()), Ok(config));
+    }
+    #[test]
+    fn group_variables_without_the_admitted_caddy_image_are_refused() {
+        let digest = CADDY_IMAGE.replace("@sha256:2", "@sha256:3");
+        let tag = CADDY_IMAGE.replace(":2.11.7-", ":2.11.8-");
+        assert!(digest != CADDY_IMAGE && tag != CADDY_IMAGE);
+        for (case, replacement) in [
+            ("missing", String::new()),
+            ("null", "scpub_caddy_image:\n".into()),
+            ("empty", "scpub_caddy_image: \"\"\n".into()),
+            ("number", "scpub_caddy_image: 7\n".into()),
+            ("boolean", "scpub_caddy_image: true\n".into()),
+            ("list", format!("scpub_caddy_image: [\"{CADDY_IMAGE}\"]\n")),
+            (
+                "mapping",
+                format!("scpub_caddy_image: {{image: \"{CADDY_IMAGE}\"}}\n"),
+            ),
+            ("another digest", format!("scpub_caddy_image: {digest}\n")),
+            ("another tag", format!("scpub_caddy_image: {tag}\n")),
+            (
+                "a prefix",
+                format!("scpub_caddy_image: {}\n", &CADDY_IMAGE[..80]),
+            ),
+            ("a suffix", format!("scpub_caddy_image: {CADDY_IMAGE}0\n")),
+            (
+                "another key",
+                format!("scpub_caddy_images: {CADDY_IMAGE}\n"),
+            ),
+        ] {
+            assert_eq!(
+                FixtureConfig::parse(group_vars_with(&replacement).as_bytes()),
+                Err(Error::Input),
+                "{case}"
+            );
         }
     }
 }

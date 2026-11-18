@@ -378,9 +378,7 @@ mod tests {
             "sourceBundle":{"sha256":"c".repeat(64),"bytes":335544320},
             "sourceTree":"b".repeat(40),"engineVersion":"29.8.2",
             "postgresImage":format!("postgres:17-alpine@sha256:{}","c".repeat(64)),
-            "caddyImage":concat!("ghcr.io/swiftraccoon/simplestchat-caddy:",
-                "2.11.7-73c81fdbfe625d3df3989ba807064c81fbe2c071",
-                "@sha256:23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0")});
+            "caddyImage":super::super::execute::CADDY_IMAGE});
         let mut facts = json!({"adoptedReaped":0,"adoptedRawStatuses":[],"wrapperRawStatus":0,
             "launcherRawStatus":0,"stdoutBytes":0,"stderrBytes":0,"launcherWorkElapsedNs":1});
         for name in projection::BOOLEAN_FACTS {

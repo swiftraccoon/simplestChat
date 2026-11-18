@@ -117,8 +117,6 @@ pub(super) fn sources() -> BTreeSet<String> {
     }
     for name in [
         "Cargo.toml",
-        // The unchanged outer image selector reads this fixed literal as data.
-        "build/caddy_probe_guest.py",
         "Cargo.lock",
         "rust-toolchain.toml",
         "build/security_vm_fetch.py",

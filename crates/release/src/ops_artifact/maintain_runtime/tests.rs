@@ -769,14 +769,7 @@ fn native_catalog_keeps_the_frozen_guest_roster_and_thirty_eight_migrations() {
     assert_eq!(catalog::MIGRATIONS.len(), 38);
     assert_eq!(catalog::guest_sources().len(), 50);
     assert_eq!(catalog::HELPERS.len(), 15);
-    for old_proof in [
-        "build/security_vm_stage_guest.py",
-        "build/caddy_probe_guest.py",
-        "build/caddy_materials.py",
-    ] {
-        assert!(!catalog::guest_sources().contains(old_proof));
-    }
-    assert!(catalog::sources().contains("build/caddy_probe_guest.py"));
+    assert!(!catalog::guest_sources().contains("build/security_vm_stage_guest.py"));
     assert!(
         !catalog::sources()
             .iter()

@@ -1,7 +1,7 @@
 //! Passive validation of exactly seven retained natural Caddy material byte strings.
 //! Filesystem custody and endpoint authority stay with the fixture owner.
 //!
-//! [`inspect`] holds the materials to the retained reference analyzer: its checks in its order,
+//! [`inspect`] holds the materials to a reference analyzer: its checks in its order,
 //! its clock arithmetic and its closed [`Refusal`] vocabulary. `recorded_materials.json` holds
 //! that reference's verdicts over this module's fixture variants. [`analyze`] reports a refusal
 //! in the guest's own failure categories.
