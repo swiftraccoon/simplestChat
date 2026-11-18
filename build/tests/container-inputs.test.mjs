@@ -464,6 +464,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/src/release/recorded_admit.json', 'ops/src/release/recorded_authorize.json',
     'ops/src/release/recorded_profile.json', 'ops/src/release/recorded_ledger.json',
     'ops/src/release/recorded_profile_inprocess.json',
+    'ops/src/release/attestation/maintain_prerequisite/guest/recorded_materials.json',
     'ops/src/capacity_vps/private.env', 'ops/src/capacity_vps/retained/artifact.zip',
     'ops/src/backup/private.env', 'ops/src/backup/recorded_nightly.json',
     'ops/src/host/private.env',

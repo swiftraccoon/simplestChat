@@ -835,6 +835,7 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/migration_upgrade.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy_upgrade.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile",
+        "ops/src/release/attestation/maintain_prerequisite/guest/recorded_materials.json",
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/legacy_proxy.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/host/events/proxy_upgrade.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/host/events/diagnostic.rs",

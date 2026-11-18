@@ -263,6 +263,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "ops/src/distribution_install_tests.rs",
         "ops/tests/release_maintain_cli.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile",
+        "ops/src/release/attestation/maintain_prerequisite/guest/recorded_materials.json",
     ] {
         names.insert(name.into());
     }
@@ -395,6 +396,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "host/tests",
         "host/upgrade",
         "materials",
+        "materials_reference_tests",
         "materials_tests",
         "mod",
         "native",

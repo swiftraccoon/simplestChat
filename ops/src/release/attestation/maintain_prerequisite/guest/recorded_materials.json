@@ -1,0 +1,3106 @@
+{
+ "comment": "Verdicts of the retained reference analyzer over every variant materials_tests.rs builds: a refusal's code, the class of an error it raised outside its vocabulary, or a passed analysis keeping every key and every value except the certificate and public-key digests, which depend on the keys, and the library versions, which depend on the analyzer. Recorded twice over one dump of the variants and once over a second dump with fresh keys; the three recordings were identical.",
+ "variants": {
+  "AiaEmptyRegisteredId": {
+   "refused": "certificate_structure"
+  },
+  "AiaInvalidUtf8": {
+   "refused": "certificate_structure"
+  },
+  "AiaShortIp": {
+   "refused": "certificate_structure"
+  },
+  "AiaTruncatedRegisteredId": {
+   "refused": "certificate_structure"
+  },
+  "AiaUnframedOtherName": {
+   "refused": "certificate_structure"
+  },
+  "AiaUnsupportedName": {
+   "raised": "UnsupportedGeneralNameType"
+  },
+  "AkiIssuerWithoutSerial": {
+   "refused": "certificate_structure"
+  },
+  "AkiSerialWithoutIssuer": {
+   "refused": "certificate_structure"
+  },
+  "BadRootKeyForeignIntermediateKey": {
+   "refused": "private_key_pem"
+  },
+  "BlankRootCertificate": {
+   "refused": "certificate_pem"
+  },
+  "CaIssuers": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "CalendarEndAt": {
+   "refused": "certificate_validity"
+  },
+  "CalendarEndEarly": {
+   "refused": "certificate_validity"
+  },
+  "CalendarEndLate": {
+   "refused": "fixture_clock"
+  },
+  "CertificatePolicies": {
+   "refused": "certificate_extension"
+  },
+  "ChainExtraLeaf": {
+   "refused": "certificate_chain"
+  },
+  "ChainForeignIntermediate": {
+   "refused": "certificate_chain"
+  },
+  "ChainIntermediateTwice": {
+   "refused": "certificate_chain"
+  },
+  "ChainLeafOnly": {
+   "refused": "certificate_chain"
+  },
+  "ChainReversed": {
+   "refused": "certificate_chain"
+  },
+  "ChainRootAsLeaf": {
+   "refused": "certificate_chain"
+  },
+  "ChainRootAsLeafHeld": {
+   "refused": "certificate_chain"
+  },
+  "ChainSkipsIntermediate": {
+   "refused": "certificate_chain"
+  },
+  "DoubledRoot": {
+   "refused": "certificate_chain"
+  },
+  "DoubledRootKey": {
+   "refused": "private_key_pem"
+  },
+  "DuplicateKu": {
+   "refused": "certificate_structure"
+  },
+  "EarlyClock": {
+   "refused": "certificate_validity"
+  },
+  "Ed448": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "EmptyRootCertificate": {
+   "refused": "material_size"
+  },
+  "Expired": {
+   "refused": "certificate_validity"
+  },
+  "ExtraEku": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "ExtraMaterial": {
+   "refused": "material_set"
+  },
+  "ForeignIntermediateKey": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignIntermediateSigner": {
+   "refused": "certificate_signature"
+  },
+  "ForeignLeafKey": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignLeafSigner": {
+   "refused": "certificate_signature"
+  },
+  "ForeignRootKey": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignRootKeyBadIntermediateKey": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignRootKeyIntermediateOcsp": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignRootKeyIntermediateUnsupported": {
+   "refused": "private_key_mismatch"
+  },
+  "ForeignRootSigner": {
+   "refused": "certificate_signature"
+  },
+  "FourCertificateChain": {
+   "refused": "certificate_chain"
+  },
+  "Future": {
+   "refused": "certificate_validity"
+  },
+  "Good": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "HeldRoot": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 3,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "HourLeaf": {
+   "refused": "certificate_renewal_window"
+  },
+  "InhibitAnyPolicy": {
+   "refused": "certificate_extension"
+  },
+  "IntermediateNoBc": {
+   "refused": "authority_constraints"
+  },
+  "IntermediateNoBcLeafExtraSan": {
+   "refused": "authority_constraints"
+  },
+  "IntermediateRenewalAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "IntermediateRenewalEarly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 5400.0,
+     "notAfter": "2050-01-01T01:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 3600.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 11780.000001
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2070360.000001
+    },
+    "schemaVersion": 1
+   }
+  },
+  "IntermediateRenewalLate": {
+   "refused": "certificate_renewal_window"
+  },
+  "IssuerNameCase": {
+   "refused": "certificate_signature"
+  },
+  "KeyCrlf": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "KeyLeadingSpace": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "KeySpaceInBody": {
+   "refused": "private_key_pem"
+  },
+  "KeyTrailingSpace": {
+   "refused": "private_key_pem"
+  },
+  "KeyVerticalTabs": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LateClock": {
+   "refused": "certificate_validity"
+  },
+  "LeafBc": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LeafBcNoEku": {
+   "refused": "leaf_constraints"
+  },
+  "LeafBcPathLength": {
+   "refused": "certificate_structure"
+  },
+  "LeafBcSignsCertificates": {
+   "refused": "leaf_constraints"
+  },
+  "LeafCa": {
+   "refused": "leaf_constraints"
+  },
+  "LeafClientAuthOnly": {
+   "refused": "leaf_constraints"
+  },
+  "LeafDecipherOnly": {
+   "refused": "certificate_structure"
+  },
+  "LeafEncipherOnly": {
+   "refused": "certificate_structure"
+  },
+  "LeafKeyAgreementEncipherOnly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LeafMarginAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafMarginLong": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 686700.000001
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 7200.0,
+     "notAfter": "2050-01-01T01:59:00+00:00",
+     "notBefore": "2049-12-31T23:59:00+00:00",
+     "remainingSeconds": 7140.0,
+     "renewalMarginAfterFixtureSeconds": 600.000001
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2068740.000001
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LeafMarginShort": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafNoDigitalSignature": {
+   "refused": "leaf_constraints"
+  },
+  "LeafNoSan": {
+   "refused": "leaf_constraints"
+  },
+  "LeafRenewalAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafRenewalEarly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 676540.000001
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2058580.000001
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LeafRenewalLate": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafRenewalReached": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafRenewalRoundedDown": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 676540.000001
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2058580.000001
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LeafRenewalRoundedUp": {
+   "refused": "certificate_renewal_window"
+  },
+  "LeafSignsCertificates": {
+   "refused": "leaf_constraints"
+  },
+  "LongLeafRenewalAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "LongLeafRenewalEarly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2150-01-11T23:50:00+00:00",
+     "notBefore": "2150-01-01T23:20:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690239.333335
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 4733640001.0,
+     "notAfter": "2200-01-02T12:00:01+00:00",
+     "notBefore": "2050-01-01T00:00:00+00:00",
+     "remainingSeconds": 1577880601.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2150-01-31T23:50:00+00:00",
+     "notBefore": "2150-01-01T22:50:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072279.333335
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LongLeafRenewalLate": {
+   "refused": "certificate_renewal_window"
+  },
+  "LongRootRenewalAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "LongRootRenewalEarly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2370-01-13T23:50:00+00:00",
+     "notBefore": "2370-01-03T23:20:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2370-01-04T05:50:00+00:00",
+     "notBefore": "2370-01-03T23:45:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 12623040000.0,
+     "notAfter": "2450-01-04T00:00:00+00:00",
+     "notBefore": "2050-01-01T00:00:00+00:00",
+     "remainingSeconds": 2524608600.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "schemaVersion": 1
+   }
+  },
+  "LongRootRenewalLate": {
+   "refused": "certificate_renewal_window"
+  },
+  "MalformedAia": {
+   "refused": "certificate_structure"
+  },
+  "MalformedAki": {
+   "refused": "certificate_structure"
+  },
+  "MalformedSki": {
+   "refused": "certificate_structure"
+  },
+  "MetadataAndRootUnreadable": {
+   "refused": "metadata_json"
+  },
+  "MetadataAtBound": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "MetadataBadEscape": {
+   "refused": "metadata_json"
+  },
+  "MetadataByteOrderMark": {
+   "refused": "metadata_json"
+  },
+  "MetadataControlCharacter": {
+   "refused": "metadata_json"
+  },
+  "MetadataDeepValue": {
+   "refused": "metadata_schema"
+  },
+  "MetadataDuplicateBeforeSyntax": {
+   "refused": "metadata_json"
+  },
+  "MetadataDuplicateIssuer": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataDuplicateSans": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataDuplicateTrailing": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataEscapedDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataEscapedName": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "MetadataEscapes": {
+   "refused": "metadata_schema"
+  },
+  "MetadataExponentSignWithoutDigits": {
+   "refused": "metadata_json"
+  },
+  "MetadataExponentWithoutDigits": {
+   "refused": "metadata_json"
+  },
+  "MetadataExtraKey": {
+   "refused": "metadata_schema"
+  },
+  "MetadataFloatExponentWithoutDigits": {
+   "refused": "metadata_json"
+  },
+  "MetadataFractionWithoutDigits": {
+   "refused": "metadata_json"
+  },
+  "MetadataHugeNumber": {
+   "refused": "metadata_schema"
+  },
+  "MetadataInvalidUtf8": {
+   "refused": "metadata_json"
+  },
+  "MetadataIssuerNan": {
+   "refused": "metadata_json"
+  },
+  "MetadataIssuerObject": {
+   "refused": "metadata_schema"
+  },
+  "MetadataLeadingZero": {
+   "refused": "metadata_json"
+  },
+  "MetadataList": {
+   "refused": "metadata_schema"
+  },
+  "MetadataLoneSurrogate": {
+   "refused": "metadata_schema"
+  },
+  "MetadataLongFloat": {
+   "refused": "metadata_schema"
+  },
+  "MetadataLongInteger": {
+   "refused": "metadata_json"
+  },
+  "MetadataLongestInteger": {
+   "refused": "metadata_schema"
+  },
+  "MetadataMinusAlone": {
+   "refused": "metadata_json"
+  },
+  "MetadataNameAsString": {
+   "refused": "metadata_schema"
+  },
+  "MetadataNan": {
+   "refused": "metadata_json"
+  },
+  "MetadataNestedDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataNestedName": {
+   "refused": "metadata_schema"
+  },
+  "MetadataNoIssuer": {
+   "refused": "metadata_schema"
+  },
+  "MetadataPairAfterLow": {
+   "refused": "metadata_schema"
+  },
+  "MetadataPairBeforeLow": {
+   "refused": "metadata_schema"
+  },
+  "MetadataPairHighestDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataPairLowFirstDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataPairLowLastDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataPairLowestDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataPretty": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "MetadataSpaceInName": {
+   "refused": "metadata_schema"
+  },
+  "MetadataSurrogatePairDuplicate": {
+   "refused": "metadata_duplicate"
+  },
+  "MetadataTrailingData": {
+   "refused": "metadata_json"
+  },
+  "MetadataTwoSans": {
+   "refused": "metadata_schema"
+  },
+  "MetadataUnclosedObjects": {
+   "refused": "metadata_json"
+  },
+  "MissingAndEmptyMaterial": {
+   "refused": "material_set"
+  },
+  "MissingEku": {
+   "refused": "leaf_constraints"
+  },
+  "MissingKu": {
+   "refused": "leaf_constraints"
+  },
+  "MissingKuSanExtraDns": {
+   "refused": "leaf_constraints"
+  },
+  "MissingRootCertificate": {
+   "refused": "material_set"
+  },
+  "NameConstraints": {
+   "refused": "certificate_extension"
+  },
+  "NameConstraintsEmptyExcluded": {
+   "refused": "certificate_structure"
+  },
+  "NameConstraintsEmptyPermitted": {
+   "refused": "certificate_structure"
+  },
+  "NameConstraintsExcluded": {
+   "refused": "certificate_extension"
+  },
+  "NameConstraintsExcludedWildcard": {
+   "refused": "certificate_structure"
+  },
+  "NameConstraintsWildcard": {
+   "refused": "certificate_structure"
+  },
+  "NoCn": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "NotBeforeAt": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864300.0,
+     "renewalMarginAfterFixtureSeconds": 690540.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21900.0,
+     "renewalMarginAfterFixtureSeconds": 14000.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592300.0,
+     "renewalMarginAfterFixtureSeconds": 2072580.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "NotBeforeEarly": {
+   "refused": "certificate_validity"
+  },
+  "NotBeforeLate": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864299.999999,
+     "renewalMarginAfterFixtureSeconds": 690539.999999
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21899.999999,
+     "renewalMarginAfterFixtureSeconds": 13999.999999
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592299.999999,
+     "renewalMarginAfterFixtureSeconds": 2072579.999999
+    },
+    "schemaVersion": 1
+   }
+  },
+  "NullCn": {
+   "refused": "leaf_subject"
+  },
+  "Ocsp": {
+   "refused": "certificate_ocsp"
+  },
+  "OcspLeafForeignLeafKey": {
+   "refused": "certificate_ocsp"
+  },
+  "OtherName": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "OverflowRemaining": {
+   "refused": "fixture_clock"
+  },
+  "OversizedMetadata": {
+   "refused": "material_size"
+  },
+  "OversizedRootCertificate": {
+   "refused": "material_size"
+  },
+  "OversizedRootInvalidMetadata": {
+   "refused": "material_size"
+  },
+  "P521": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "PolicyConstraints": {
+   "refused": "certificate_extension"
+  },
+  "PolicyConstraintsEmpty": {
+   "refused": "certificate_structure"
+  },
+  "PolicyMappings": {
+   "refused": "certificate_extension"
+  },
+  "RegisteredIdLarge": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RegisteredIdZero": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RenamedMaterial": {
+   "refused": "material_set"
+  },
+  "RootAsIntermediate": {
+   "refused": "certificate_chain"
+  },
+  "RootCertificateAtBound": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RootCrlf": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RootExpiryAt": {
+   "refused": "certificate_validity"
+  },
+  "RootExpiryEarly": {
+   "refused": "certificate_renewal_window"
+  },
+  "RootExpiryLate": {
+   "refused": "certificate_validity"
+  },
+  "RootKeyIsLeafKey": {
+   "refused": "private_key_mismatch"
+  },
+  "RootLeadingSpace": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RootNoBc": {
+   "refused": "authority_constraints"
+  },
+  "RootNoBcOcspLeaf": {
+   "refused": "certificate_ocsp"
+  },
+  "RootNoCertSign": {
+   "refused": "authority_constraints"
+  },
+  "RootNotCa": {
+   "refused": "authority_constraints"
+  },
+  "RootPathZero": {
+   "refused": "authority_path_length"
+  },
+  "RootPathZeroIntermediateNotCa": {
+   "refused": "authority_path_length"
+  },
+  "RootRenewalAt": {
+   "refused": "certificate_renewal_window"
+  },
+  "RootRenewalEarly": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 685800.000001
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 9260.000001
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 10800.0,
+     "notAfter": "2050-01-01T02:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 7200.0,
+     "renewalMarginAfterFixtureSeconds": 1e-06
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RootRenewalExpiredLeaf": {
+   "refused": "certificate_renewal_window"
+  },
+  "RootRenewalLate": {
+   "refused": "certificate_renewal_window"
+  },
+  "RootSpaceInBody": {
+   "refused": "certificate_pem"
+  },
+  "RootTrailingSpace": {
+   "refused": "certificate_pem"
+  },
+  "RootVerticalTabs": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "RootYearZero": {
+   "refused": "certificate_structure"
+  },
+  "Rsa": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "SanEmail": {
+   "refused": "leaf_subject"
+  },
+  "SanExtraDns": {
+   "refused": "leaf_subject"
+  },
+  "SanExtraDnsForeignRootSigner": {
+   "refused": "leaf_subject"
+  },
+  "SanExtraDnsLeafCa": {
+   "refused": "leaf_subject"
+  },
+  "SanIp": {
+   "refused": "leaf_subject"
+  },
+  "SanNonAscii": {
+   "refused": "leaf_subject"
+  },
+  "SanUri": {
+   "refused": "leaf_subject"
+  },
+  "SanWildcard": {
+   "refused": "leaf_subject"
+  },
+  "SchemaAndChainCount": {
+   "refused": "metadata_schema"
+  },
+  "ShortIntermediate": {
+   "refused": "certificate_renewal_window"
+  },
+  "ShortLeaf": {
+   "refused": "certificate_validity"
+  },
+  "SubMicrosecondRemaining": {
+   "refused": "certificate_validity"
+  },
+  "TraditionalKeys": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "TrailingRootDer": {
+   "refused": "certificate_pem"
+  },
+  "TrailingRootText": {
+   "refused": "certificate_pem"
+  },
+  "TwelveHourLeaf": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 43200.0,
+     "notAfter": "2050-01-01T11:59:50+00:00",
+     "notBefore": "2049-12-31T23:59:50+00:00",
+     "remainingSeconds": 43190.0,
+     "renewalMarginAfterFixtureSeconds": 28190.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "TwoCommonNames": {
+   "refused": "leaf_subject"
+  },
+  "UnknownCritical": {
+   "refused": "certificate_extension"
+  },
+  "UnknownNoncritical": {
+   "passed": {
+    "analysis": "retained-materials-only",
+    "chainCertificateCount": 2,
+    "intermediate": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 865800.0,
+     "notAfter": "2050-01-11T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:30:00+00:00",
+     "remainingSeconds": 864000.0,
+     "renewalMarginAfterFixtureSeconds": 690240.0
+    },
+    "keys": [
+     "analysis",
+     "chainCertificateCount",
+     "cryptographyVersion",
+     "intermediate",
+     "leaf",
+     "metadataIssuerDataNull",
+     "metadataSansCount",
+     "name",
+     "ocspUriCount",
+     "root",
+     "schemaVersion",
+     "sslVersion"
+    ],
+    "leaf": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 21900.0,
+     "notAfter": "2050-01-01T06:00:00+00:00",
+     "notBefore": "2049-12-31T23:55:00+00:00",
+     "remainingSeconds": 21600.0,
+     "renewalMarginAfterFixtureSeconds": 13700.0
+    },
+    "metadataIssuerDataNull": true,
+    "metadataSansCount": 1,
+    "name": "maintain.localhost",
+    "ocspUriCount": 0,
+    "root": {
+     "keys": [
+      "certificateSha256",
+      "lifetimeSeconds",
+      "notAfter",
+      "notBefore",
+      "publicKeySha256",
+      "remainingSeconds",
+      "renewalMarginAfterFixtureSeconds"
+     ],
+     "lifetimeSeconds": 2595600.0,
+     "notAfter": "2050-01-31T00:00:00+00:00",
+     "notBefore": "2049-12-31T23:00:00+00:00",
+     "remainingSeconds": 2592000.0,
+     "renewalMarginAfterFixtureSeconds": 2072280.0
+    },
+    "schemaVersion": 1
+   }
+  },
+  "Unsupported": {
+   "refused": "certificate_structure"
+  },
+  "UnsupportedAndOcsp": {
+   "refused": "certificate_extension"
+  },
+  "WrongCn": {
+   "refused": "leaf_subject"
+  },
+  "WrongCnClientAuthOnly": {
+   "refused": "leaf_subject"
+  },
+  "WrongIssuer": {
+   "refused": "certificate_signature"
+  },
+  "WrongName": {
+   "refused": "leaf_subject"
+  },
+  "WrongSignature": {
+   "refused": "certificate_signature"
+  },
+  "ZeroRemaining": {
+   "refused": "fixture_clock"
+  },
+  "ZeroRemainingMissingRoot": {
+   "refused": "fixture_clock"
+  },
+  "ZeroRemainingOversizedRoot": {
+   "refused": "fixture_clock"
+  }
+ }
+}
