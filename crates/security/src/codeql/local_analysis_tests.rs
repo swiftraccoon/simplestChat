@@ -41,6 +41,59 @@ fn ported_events(case: &Document) -> Document {
     Document::List(items(case, "events").iter().map(ported).collect())
 }
 
+/// The policies, by case and evidence, whose fake helper cannot keep its
+/// log: their recorded tree has no `fake` directory, so the shell's own
+/// redirection into `fake/helper.log` fails and the shell says so on the
+/// step's standard error. Those words are the host shell's, not the gate's
+/// or the reference's. The recordings hold bash's, the recorder's `/bin/sh`:
+/// `line 21: <log>: No such file or directory`; Linux's `/bin/sh` is dash,
+/// which says `17: cannot create <log>: Directory nonexistent`.
+const UNLOGGED: [(&str, &str); 6] = [
+    ("a passing policy", "01-codeql-policy-rust-security.stderr"),
+    (
+        "a passing advisory policy",
+        "01-codeql-policy-python-quality-advisory.stderr",
+    ),
+    (
+        "a passing vendor scan",
+        "01-codeql-policy-python-security.stderr",
+    ),
+    (
+        "a passing native policy",
+        "01-codeql-policy-c-cpp-security.stderr",
+    ),
+    (
+        "a passing native advisory policy",
+        "01-codeql-policy-c-cpp-quality-advisory.stderr",
+    ),
+    (
+        "a native policy of a first-party scan",
+        "01-codeql-policy-c-cpp-security.stderr",
+    ),
+];
+
+/// The evidence `listing` of the case `name`, made here or recorded, with
+/// the text of each standard error that [`UNLOGGED`] names for the case put
+/// aside as the shell's words; its kind and mode and every other entry are
+/// kept as they are. Panics when such a standard error is missing or its
+/// text is not exactly one line from `<place>/bin/helper: ` that names
+/// `<place>/fake/helper.log`.
+fn unworded(name: &str, listing: &Document) -> Document {
+    let mut listing = listing.clone();
+    for (_, entry) in UNLOGGED.iter().filter(|(held, _)| *held == name) {
+        let mut file = listing.get(entry).cloned().expect("a standard error");
+        let said = file.get("text").and_then(Document::text).expect("text");
+        let line = said.strip_prefix("<place>/bin/helper: ");
+        let line = line.and_then(|line| line.strip_suffix('\n'));
+        let line = line.filter(|line| !line.contains('\n'));
+        let about = line.is_some_and(|line| line.contains("<place>/fake/helper.log"));
+        assert!(about, "{name}: {entry}: {said:?}");
+        file.put("text", "<the shell's words>".into());
+        listing.put(entry, file);
+    }
+    listing
+}
+
 #[test]
 fn every_recorded_native_build_is_traced_alike() {
     let recorded = recording(RECORDED);
@@ -166,6 +219,7 @@ fn every_recorded_policy_is_enforced_alike() {
     let recorded = recording(RECORDED);
     let revision = text(&recorded, "revision");
     let mut tally = Tally::default();
+    let mut unlogged = 0;
     for case in items(&recorded, "policies") {
         let name = text(case, "name");
         let scratch = placed(case.get("tree").expect("a tree"), None, None);
@@ -215,7 +269,9 @@ fn every_recorded_policy_is_enforced_alike() {
             "{name}"
         );
         let left = listing(&place.join("out"), place);
-        same_listing(name, &left, case.get("output").expect("an output"), &[]);
+        let output = case.get("output").expect("an output");
+        same_listing(name, &unworded(name, &left), &unworded(name, output), &[]);
+        unlogged += UNLOGGED.iter().filter(|(held, _)| *held == name).count();
     }
     let expected = Tally {
         held: 6,
@@ -225,6 +281,7 @@ fn every_recorded_policy_is_enforced_alike() {
         reworded: 0,
     };
     assert_eq!(tally, expected);
+    assert_eq!(unlogged, UNLOGGED.len());
 }
 
 #[test]

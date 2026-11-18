@@ -172,7 +172,11 @@ pub(crate) fn encoded(data: &[u8]) -> String {
 
 /// Every entry below `root` as the recorder listed it: its kind, a small
 /// file's text or bytes and a larger one's size, and the mode of each of
-/// `moded`.
+/// `moded` that is no link. The mode of a link is the host's, not the
+/// reference's: a Mac gives a new link what its creator's mask leaves of
+/// 0777 (0755 in the recordings), Linux gives every link 0777, and neither
+/// looks at it when the link is followed. [`without_link_modes`] puts a
+/// recorded listing the same way.
 pub(crate) fn listed(root: &Path, place: &Path, moded: &[&str]) -> Document {
     let mut found = Vec::new();
     let mut pending = vec![root.to_path_buf()];
@@ -209,7 +213,7 @@ pub(crate) fn listed(root: &Path, place: &Path, moded: &[&str]) -> Document {
                     }
                 }
             }
-            if moded.contains(&relative.as_str()) {
+            if moded.contains(&relative.as_str()) && !metadata.file_type().is_symlink() {
                 let mode = u64::from(metadata.permissions().mode() & 0o777);
                 fields.push(("mode".to_owned(), mode.into()));
             }
@@ -217,6 +221,23 @@ pub(crate) fn listed(root: &Path, place: &Path, moded: &[&str]) -> Document {
         }
     }
     Document::Record(found).sorted()
+}
+
+/// The recorded listing `listing` as [`listed`] lists a place: in the
+/// order of its names, with no mode for an entry whose kind is `link` and
+/// every other field kept. Anything but a record of entries is answered as
+/// it is; an entry that is no record panics.
+pub(crate) fn without_link_modes(listing: &Document) -> Document {
+    let Some(entries) = listing.fields() else {
+        return listing.clone();
+    };
+    let entries = entries.iter().map(|(name, entry)| {
+        let link = entry.get("kind").and_then(Document::text) == Some("link");
+        let fields = entry.fields().expect("an entry").iter();
+        let kept = fields.filter(|(field, _)| !link || field != "mode");
+        (name.clone(), Document::Record(kept.cloned().collect()))
+    });
+    Document::Record(entries.collect()).sorted()
 }
 
 /// The recording `bytes`.

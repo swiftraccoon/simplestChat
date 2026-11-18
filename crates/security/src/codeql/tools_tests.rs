@@ -6,7 +6,9 @@ use super::{
     Field, Host, LANGUAGES, archive_digest, install, language_pin, pin, scalar, suite, verify,
 };
 use crate::{
-    codeql::tests::{Tally, items, listed, planted, recording, scrubbed, text, whole},
+    codeql::tests::{
+        Tally, items, listed, planted, recording, scrubbed, text, whole, without_link_modes,
+    },
     context::{Context, Limits},
     document::Document,
     scratch::Scratch,
@@ -256,7 +258,7 @@ fn every_recorded_verification_is_judged_alike() {
         let moded = ["tmp", "config", "cache", "home"];
         assert_eq!(
             listed(&output, place, &moded),
-            case.get("output").cloned().expect("an output").sorted(),
+            without_link_modes(case.get("output").expect("an output")),
             "{name}"
         );
         assert_eq!(
@@ -322,13 +324,13 @@ fn every_recorded_installation_is_made_alike() {
         let cache = listed(&place.join(".cache"), place, &moded);
         assert_eq!(
             cache,
-            case.get("cache").cloned().expect("a cache").sorted(),
+            without_link_modes(case.get("cache").expect("a cache")),
             "{name}"
         );
         let output_listed = listed(&output, place, &[]);
         assert_eq!(
             output_listed,
-            case.get("output").cloned().expect("an output").sorted(),
+            without_link_modes(case.get("output").expect("an output")),
             "{name}"
         );
         let logs = case.get("logs").expect("logs");
@@ -412,13 +414,13 @@ fn every_recorded_tools_command_answers_alike() {
         };
         assert_eq!(
             shown,
-            case.get("output").cloned().expect("an output").sorted(),
+            without_link_modes(case.get("output").expect("an output")),
             "{name}"
         );
         let cache = listed(&place.join(".cache"), place, &[]);
         assert_eq!(
             cache,
-            case.get("cache").cloned().expect("a cache").sorted(),
+            without_link_modes(case.get("cache").expect("a cache")),
             "{name}"
         );
         let mode = output.symlink_metadata().ok().map(|held| {

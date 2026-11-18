@@ -111,6 +111,16 @@ const REWORDED: [(&str, &str); 2] = [
     ),
 ];
 
+/// The cases of a name longer than either host opens, each with the
+/// directory it is below, which is made for it. Their recorded tree holds
+/// nothing. A Mac refuses the whole path as too long, past its bound of
+/// 1024 bytes for a path, before it looks at any directory; Linux, whose
+/// bound is 4096, looks at each directory in turn and would refuse the path
+/// because that directory is missing. With the directory made, both hosts
+/// meet the name itself, past the bound of 255 bytes either has for one
+/// name, and refuse it as too long, which is what the recording says.
+const OVERLONG: [(&str, &str); 1] = [("a name of 1024 characters", "a")];
+
 /// A fresh place holding the tree of `case`.
 fn placed(case: &Document) -> Scratch {
     let scratch = Scratch::new("codeql-sources");
@@ -122,9 +132,15 @@ fn placed(case: &Document) -> Scratch {
 fn every_recorded_committed_file_is_read_alike() {
     let recorded = recording(RECORDED);
     let mut tally = Tally::default();
+    let mut overlong = 0;
     for case in items(&recorded, "tracked") {
         let scratch = placed(case);
         let place = &scratch.0;
+        let name = text(case, "name");
+        if let Some((_, directory)) = OVERLONG.iter().find(|(held, _)| *held == name) {
+            std::fs::create_dir(place.join(directory)).expect("the directory");
+            overlong += 1;
+        }
         let root = PathBuf::from(text(case, "root").replace("<place>", &place.to_string_lossy()));
         let git = Committed::new(&root, text(&recorded, "revision"), case, place);
         let limit = case.get("limit").and_then(Document::whole);
@@ -145,12 +161,7 @@ fn every_recorded_committed_file_is_read_alike() {
             ])
         });
         tally.judge(&reworded(case), read, &raised, &[]);
-        assert_eq!(
-            git.taken(),
-            *case.get("asked").expect("asked"),
-            "{}",
-            text(case, "name")
-        );
+        assert_eq!(git.taken(), *case.get("asked").expect("asked"), "{name}");
     }
     let expected = Tally {
         held: 4,
@@ -159,6 +170,7 @@ fn every_recorded_committed_file_is_read_alike() {
         stricter: 0,
     };
     assert_eq!(tally, expected);
+    assert_eq!(overlong, OVERLONG.len());
 }
 
 /// `case` with the vendor verifier's own words where `REWORDED` names it.

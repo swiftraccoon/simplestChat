@@ -285,8 +285,13 @@ pub(crate) fn same_mode(there: i128, here: i128) -> bool {
     here == there || (there & 0o077 != 0 && here == there & 0o700)
 }
 
-/// Hold the listing `here` to the recorded `there`, entry by entry, each
-/// entry's mode by [`same_mode`]; the names of `skipped` are not compared.
+/// Hold the listing `here` to the recorded `there`, entry by entry, the
+/// mode of each file and directory by [`same_mode`]; the names of `skipped`
+/// are not compared. A link is held to being a link, but its own mode is
+/// not compared: that is the host's, not the reference's. A Mac gives a new
+/// link what its creator's mask leaves of 0777 (0755 in the recordings),
+/// Linux gives every link 0777, and neither looks at it when the link is
+/// followed. Panics, naming the case and the entry, at the first difference.
 pub(crate) fn same_listing(name: &str, here: &Document, there: &Document, skipped: &[&str]) {
     let kept = |listing: &Document| -> Vec<(String, Document)> {
         let fields = listing.fields().unwrap_or_default();
@@ -311,6 +316,9 @@ pub(crate) fn same_listing(name: &str, here: &Document, there: &Document, skippe
             )
         };
         assert_eq!(without(made), without(recorded), "{name}: {entry}");
+        if made.get("kind").and_then(Document::text) == Some("link") {
+            continue;
+        }
         let mode = |value: &Document| value.get("mode").and_then(Document::whole).expect("a mode");
         assert!(
             same_mode(mode(recorded), mode(made)),
