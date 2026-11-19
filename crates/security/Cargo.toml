@@ -31,15 +31,15 @@ default = ["image"]
 image = ["dep:signal-hook", "dep:simplestchat-ops"]
 
 [dependencies]
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 lzma-rs = "=0.3.0"
 rawzip = "=0.5.2"
 rustix = { version = "1.1.5", default-features = false, features = ["fs", "process", "std", "system"] }
 serde = "1.0.229"
-serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "=2.1.1", default-features = false, features = ["deserialize"] }
 serde_json = "1.0.151"
 sha2 = "0.11.0"
-signal-hook = { version = "=0.4.5", default-features = false, optional = true }
+signal-hook = { version = "=0.4.6", default-features = false, optional = true }
 simplestchat-ops = { path = "../../ops", default-features = false, optional = true }
 tar = { version = "=0.4.46", default-features = false }
-toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
+toml = { version = "=1.2.1", default-features = false, features = ["parse", "serde", "std"] }
