@@ -1,6 +1,7 @@
 //! Fixed-plan and owned path fixtures; no database/container/browser work.
 
 use super::*;
+use std::collections::BTreeMap;
 
 struct Fake {
     commands: Vec<Command>,
@@ -26,29 +27,20 @@ impl Executor for Fake {
     }
 }
 
+/// The captured environment of a check whose restore runs in containers.
+fn containers() -> Environment {
+    Environment::from([
+        (OsString::from("PATH"), OsString::from("/usr/bin:/bin")),
+        (OsString::from(CONTAINER_SELECTOR), OsString::from("1")),
+    ])
+}
+
 #[tokio::test]
 async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery() {
     let root =
         std::env::temp_dir().join(format!("database check $(literal) {}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
-    let environment = Environment::from([
-        (OsString::from("PATH"), OsString::from("/usr/bin:/bin")),
-        (OsString::from("RESTORE_CONTAINER_E2E"), OsString::from("1")),
-    ]);
-    let suite = |pattern: &str| {
-        let fixed = [
-            "python",
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-p",
-        ];
-        let mut command = fixed.map(str::to_owned).to_vec();
-        command.extend([pattern.to_owned(), "-v".to_owned()]);
-        command
-    };
+    let environment = containers();
     let monitoring = [
         "cargo",
         "test",
@@ -64,6 +56,17 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
         "monitor::database_tests::external_history_keeps_gaps_privacy_and_retention_through_partial_recovery",
         "monitor::database_tests::incident_lifecycle_replay_privileges_and_retention",
     ];
+    // The same owned selection, naming the restore check's tests.
+    let mut restore: Vec<String> = monitoring[..10].iter().map(ToString::to_string).collect();
+    restore.extend(
+        [
+            "a_pre_upgrade_backup_verifies_against_its_own_recorded_ledger",
+            "a_current_backup_keeps_incidents_and_refuses_privacy_and_schema_drift",
+            "a_truncated_backup_never_verifies",
+            "a_real_container_of_the_pinned_image_verifies_and_refuses",
+        ]
+        .map(|name| format!("release::attestation::restore::database_tests::{name}")),
+    );
     let migration = [
         "cargo",
         "test",
@@ -78,18 +81,10 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
         "migrate::snapshot::database_tests::only_the_lossless_enum_cast_relocation_is_made_canonical",
         "migrate::snapshot::database_tests::a_real_restore_keeps_rows_partitions_grants_and_the_schema_digest",
     ];
-    for (check, command, selected) in [
-        (
-            Check::Monitoring,
-            monitoring.map(str::to_owned).to_vec(),
-            true,
-        ),
-        (Check::Restore, suite("test_restore_database.py"), false),
-        (
-            Check::Migration,
-            migration.map(str::to_owned).to_vec(),
-            true,
-        ),
+    for (check, command) in [
+        (Check::Monitoring, monitoring.map(str::to_owned).to_vec()),
+        (Check::Restore, restore),
+        (Check::Migration, migration.map(str::to_owned).to_vec()),
     ] {
         assert_eq!(check.command(), command);
         let mut owned = environment.clone();
@@ -97,13 +92,14 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
         // Each check selects only its own tests.
         for (other, name) in [
             (Check::Monitoring, "MONITORING_DATABASE_CHECK"),
+            (Check::Restore, "RESTORE_DATABASE_CHECK"),
             (Check::Migration, "MIGRATION_DATABASE_CHECK"),
         ] {
             let selector = owned.get(OsStr::new(name));
             let selector = selector.map(|value| value.to_str().unwrap());
             assert_eq!(selector, (check == other).then_some("1"), "{check:?}");
         }
-        assert_eq!(owned.len(), environment.len() + usize::from(selected));
+        assert_eq!(owned.len(), environment.len() + 1);
         let mut executor = Fake {
             commands: vec![],
             output: format!("{}\n", root.display()).into_bytes(),
@@ -111,8 +107,9 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
             clean: true,
         };
         let result = prepare(check, &environment, &mut executor).await.unwrap();
+        // The container selector reaches the tests in the check's cluster.
         assert_eq!(
-            result.get(OsStr::new("RESTORE_CONTAINER_E2E")),
+            result.get(OsStr::new(CONTAINER_SELECTOR)),
             Some(&OsString::from("1"))
         );
         assert_eq!(
@@ -120,13 +117,11 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
             if check == Check::Restore { 2 } else { 1 }
         );
         if check == Check::Restore {
-            assert_eq!(executor.commands[0].program, Program::Docker);
-            assert_eq!(
-                executor.commands[0].arguments,
-                ["pull", "docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650"].map(OsString::from)
-            );
-            assert!(executor.commands[0].capture.is_none());
-            assert_eq!(executor.commands[0].timeout, Duration::from_secs(600));
+            let pull = &executor.commands[0];
+            assert_eq!(pull.program, Program::Docker);
+            assert_eq!(pull.arguments, ["pull", RESTORE_IMAGE].map(OsString::from));
+            assert!(pull.capture.is_none());
+            assert_eq!(pull.timeout, Duration::from_secs(600));
         }
         let command = executor.commands.last().unwrap();
         assert_eq!(command.program, Program::PgConfig);
@@ -141,6 +136,29 @@ async fn every_check_has_its_exact_command_and_restore_pull_precedes_discovery()
     std::fs::remove_dir(root).unwrap();
 }
 
+/// Without the container selector, or with another value, the restore check
+/// pulls nothing and runs its cluster tests only.
+#[tokio::test]
+async fn an_unselected_restore_pulls_nothing() {
+    for value in [None, Some("0"), Some("true")] {
+        let mut environment = Environment::new();
+        if let Some(value) = value {
+            environment.insert(CONTAINER_SELECTOR.into(), value.into());
+        }
+        let mut executor = Fake {
+            commands: vec![],
+            output: b"/".to_vec(),
+            fail: None,
+            clean: true,
+        };
+        prepare(Check::Restore, &environment, &mut executor)
+            .await
+            .unwrap();
+        let programs: Vec<_> = executor.commands.iter().map(|c| c.program).collect();
+        assert_eq!(programs, [Program::PgConfig], "{value:?}");
+    }
+}
+
 #[tokio::test]
 async fn preparation_failures_preserve_status_and_never_continue() {
     for code in [23, 124, 130, 143, 127] {
@@ -151,7 +169,7 @@ async fn preparation_failures_preserve_status_and_never_continue() {
             clean: true,
         };
         assert_eq!(
-            prepare(Check::Restore, &Environment::new(), &mut executor)
+            prepare(Check::Restore, &containers(), &mut executor)
                 .await
                 .unwrap_err()
                 .code,
@@ -159,6 +177,45 @@ async fn preparation_failures_preserve_status_and_never_continue() {
         );
         assert_eq!(executor.commands.len(), 1);
     }
+}
+
+#[tokio::test]
+async fn failed_restore_discovery_does_not_hide_its_status_after_successful_pull() {
+    let mut executor = Fake {
+        commands: vec![],
+        output: vec![],
+        fail: Some((2, 37)),
+        clean: true,
+    };
+    assert_eq!(
+        prepare(Check::Restore, &containers(), &mut executor)
+            .await
+            .unwrap_err()
+            .code,
+        37
+    );
+    assert_eq!(executor.commands.len(), 2);
+    assert_eq!(executor.commands[0].program, Program::Docker);
+    assert_eq!(executor.commands[1].program, Program::PgConfig);
+}
+
+/// The pulled image is the one the deployment runs, read from its group
+/// variables, and the Ops tests select their container mode by the same
+/// variable this check reads.
+#[test]
+fn the_pinned_image_and_container_selector_are_the_deployments_and_the_tests() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let variables = root.join("ops/ansible/group_vars/benchmark_hosts.yml");
+    let variables: BTreeMap<String, serde_json::Value> =
+        serde_saphyr::from_slice(&std::fs::read(variables).unwrap()).unwrap();
+    assert_eq!(variables["scpub_postgres_image"], RESTORE_IMAGE);
+    let tests = root.join("ops/src/release/attestation/restore/container_tests.rs");
+    let tests = std::fs::read_to_string(tests).unwrap();
+    let declared = format!("pub(super) const SELECTOR: &str = \"{CONTAINER_SELECTOR}\";");
+    assert_eq!(tests.matches(&declared).count(), 1);
 }
 
 #[test]
@@ -334,26 +391,6 @@ async fn unproven_cleanup_and_late_cancellation_fence_the_harness_handoff() {
     assert_eq!(native.into_signals().await.err().unwrap().code, 143);
 }
 
-#[tokio::test]
-async fn failed_restore_discovery_does_not_hide_its_status_after_successful_pull() {
-    let mut executor = Fake {
-        commands: vec![],
-        output: vec![],
-        fail: Some((2, 37)),
-        clean: true,
-    };
-    assert_eq!(
-        prepare(Check::Restore, &Environment::new(), &mut executor)
-            .await
-            .unwrap_err()
-            .code,
-        37
-    );
-    assert_eq!(executor.commands.len(), 2);
-    assert_eq!(executor.commands[0].program, Program::Docker);
-    assert_eq!(executor.commands[1].program, Program::PgConfig);
-}
-
 /// Each owned check names every database test of its module, exactly: a
 /// test missing from the list would never run, and a name that matched
 /// nothing would be filtered out and the check would pass having run
@@ -370,6 +407,13 @@ fn the_owned_checks_name_exactly_their_database_tests() {
             "monitor::database_tests",
             "MONITORING_DATABASE_CHECK",
             3,
+        ),
+        (
+            Check::Restore,
+            "ops/src/release/attestation/restore/database_tests.rs",
+            "release::attestation::restore::database_tests",
+            "RESTORE_DATABASE_CHECK",
+            4,
         ),
         (
             Check::Migration,

@@ -1,9 +1,11 @@
 //! Fixed disposable PostgreSQL checks with an explicit captured environment.
 //!
-//! The monitoring statements and the migration snapshot are tested by the Ops
-//! crate beside the code that issues them; the restore suite is still Python.
-//! Preparation owns only its CLI groups; the same PostgreSQL harness owns the
-//! new cluster.
+//! The monitoring statements, the release backup verification and the
+//! migration snapshot are tested by the Ops crate beside the code that issues
+//! them. With `RESTORE_CONTAINER_CHECK=1` the restore check also verifies
+//! inside real containers of the pinned production PostgreSQL image, which
+//! preparation pulls first. Preparation owns only its CLI groups; the same
+//! PostgreSQL harness owns the new cluster.
 
 use super::{
     command::{Command, Program},
@@ -27,7 +29,14 @@ mod tests;
 
 const USAGE: &str = "usage: cargo run --locked -q -p simplestchat-ci -- \
                      database-check monitoring|restore|migration";
-const RESTORE_IMAGE: &str = "docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650";
+/// The production PostgreSQL image, `scpub_postgres_image` of the deployment.
+const RESTORE_IMAGE: &str = concat!(
+    "docker.io/library/postgres:18.6-bookworm@sha256:",
+    "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650",
+);
+/// Selects the restore check's real-container mode, for which preparation
+/// pulls `RESTORE_IMAGE`.
+const CONTAINER_SELECTOR: &str = "RESTORE_CONTAINER_CHECK";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Check {
@@ -48,20 +57,6 @@ impl Check {
         }
     }
     fn command(self) -> Vec<String> {
-        let suite = |pattern: &str| {
-            let fixed = [
-                "python",
-                "-m",
-                "unittest",
-                "discover",
-                "-s",
-                "ops/ansible/tests",
-                "-p",
-                pattern,
-                "-v",
-            ];
-            fixed.map(str::to_owned).to_vec()
-        };
         // These tests live in the Ops crate beside the code that issues the
         // statements. Each is named exactly: a filter that matched nothing
         // would pass having run nothing.
@@ -92,7 +87,15 @@ impl Check {
                     "incident_lifecycle_replay_privileges_and_retention",
                 ],
             ),
-            Self::Restore => suite("test_restore_database.py"),
+            Self::Restore => owned(
+                "release::attestation::restore::database_tests",
+                &[
+                    "a_pre_upgrade_backup_verifies_against_its_own_recorded_ledger",
+                    "a_current_backup_keeps_incidents_and_refuses_privacy_and_schema_drift",
+                    "a_truncated_backup_never_verifies",
+                    "a_real_container_of_the_pinned_image_verifies_and_refuses",
+                ],
+            ),
             Self::Migration => owned(
                 "migrate::snapshot::database_tests",
                 &[
@@ -106,8 +109,8 @@ impl Check {
     fn select(self, environment: &mut Environment) {
         let selector = match self {
             Self::Monitoring => "MONITORING_DATABASE_CHECK",
+            Self::Restore => "RESTORE_DATABASE_CHECK",
             Self::Migration => "MIGRATION_DATABASE_CHECK",
-            Self::Restore => return,
         };
         environment.insert(selector.into(), "1".into());
     }
@@ -146,13 +149,19 @@ fn postgres_path(output: &[u8], environment: &Environment) -> tooling::Result<En
     Ok(result)
 }
 
+/// Prepare `check`: pull the pinned image when the restore check runs in
+/// real containers, then find the PostgreSQL tools. Each command has its own
+/// outer bound; a failure keeps its status and nothing after it runs.
 async fn prepare(
     check: Check,
     environment: &Environment,
     executor: &mut impl Executor,
 ) -> tooling::Result<Environment> {
     executor.ready().await?;
-    if check == Check::Restore {
+    let containers = environment
+        .get(OsStr::new(CONTAINER_SELECTOR))
+        .is_some_and(|value| value == "1");
+    if check == Check::Restore && containers {
         let mut pull = Command::capture(Program::Docker, &["pull", RESTORE_IMAGE]);
         pull.capture = None;
         pull.timeout = Duration::from_secs(600);

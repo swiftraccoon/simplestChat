@@ -1,4 +1,8 @@
 //! Complete standalone release-backup restore verification on the fixed host.
+#[cfg(test)]
+mod container_tests;
+#[cfg(test)]
+mod database_tests;
 mod execution;
 mod options;
 mod policy;

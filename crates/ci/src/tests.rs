@@ -1361,7 +1361,7 @@ fn restore_test_and_registration_inputs_invalidate_existing_success_receipts() {
     let fixture = Fixture::recorded(name);
     let paths = [
         "ops/ansible/tests/test_restore_verify.py",
-        "ops/ansible/tests/test_restore_database.py",
+        "ops/src/release/attestation/restore/database_tests.rs",
         "xtask/src/ci/automation.rs",
         ".github/workflows/ci.yml",
     ];

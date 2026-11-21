@@ -902,7 +902,7 @@ const RESTORE_PATHS: [&str; 7] = [
     "ops/src/release/attestation/restore/tests.rs",
     "ops/tests/release_backup_cli.rs",
     "ops/ansible/tests/test_restore_verify.py",
-    "ops/ansible/tests/test_restore_database.py",
+    "ops/src/release/attestation/restore/database_tests.rs",
     "xtask/src/ci/automation.rs",
     ".github/workflows/ci.yml",
 ];

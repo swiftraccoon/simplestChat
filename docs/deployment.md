@@ -661,14 +661,17 @@ for scheduling; its dumps remain local and need a separate off-host copy policy.
 against an explicitly selected existing release attempt:
 
 ```sh
-sudo /usr/bin/python3 -E -B /usr/local/libexec/simplestchat-public/restore_verify.py \
-  release.REPLACE_WITH_RECORDED_ATTEMPT
+sudo /usr/local/libexec/simplestchat-public/simplestchat-ops release backup verify \
+  --release-attempt release.REPLACE_WITH_RECORDED_ATTEMPT \
+  --timeout-seconds 1200 --finalization-seconds 120
 ```
 
-The argument names a directory beneath `/srv/simplestchat-public/results`,
-containing `database-before.dump` and `outcome.json`. Its recorded SHA-256 must
+The attempt names a directory beneath `/srv/simplestchat-public/results`,
+containing `database-before.dump` and `outcome.json`. Both budgets are required:
+the finalization budget is positive and below the timeout, which is at most 1800
+seconds; 1200/120 is an example, not a default. Its recorded SHA-256 must
 match a private descriptor-based snapshot, and its release manifest must remain
-available. The helper takes the deployment workload lock, uses the running
+available. The command takes the deployment workload lock, uses the running
 PostgreSQL image by immutable local ID without pulling, and creates a unique
 disposable container with no network, published ports, host data/socket mounts,
 or attached application. It has a read-only root filesystem, no capabilities,
@@ -694,7 +697,7 @@ release manifest; it never infers the backup schema from the target release.
 The verifier currently accepts release attempts, not nightly dump paths.
 
 Only successful restore, verification, container removal and snapshot removal
-allow the helper to update
+allow the command to update
 `/var/lib/simplestchat-monitoring/restore-verified.timestamp`, clearing
 `RestoreEvidenceMissing` on the next collection. Never update it by hand or after
 an archive listing. Private command/error evidence and aggregate row counts remain

@@ -3322,8 +3322,11 @@ pass; actual runtime proof and any operational caller switch remain pending.
 
 The native test commands and scope are in the
 [testing guide](../docs/testing.md#native-standalone-restore-verification).
-Ordinary Ops testing includes `release_backup_cli`; actual database validation
-and authenticated caller cutover remain separate.
+Ordinary Ops testing includes `release_backup_cli`; `simplestchat-ci
+database-check restore` drives the operation over real archives in a disposable
+PostgreSQL cluster and, with `RESTORE_CONTAINER_CHECK=1` as CI runs it, in real
+containers of the pinned production PostgreSQL image. Authenticated caller
+cutover remains separate.
 
 ## Explicit prepared-host maintenance
 

@@ -1,4 +1,4 @@
-total 52329
+total 51934
 11	build/build-release.py
 241	build/ci_release_checks.py
 11	build/fetch-release.py
@@ -73,7 +73,6 @@ total 52329
 134	ops/ansible/tests/test_release_playbook.py
 439	ops/ansible/tests/test_release_preflight.py
 224	ops/ansible/tests/test_release_timing.py
-395	ops/ansible/tests/test_restore_database.py
 230	ops/ansible/tests/test_restore_verify.py
 116	ops/ansible/tests/test_runtime_components.py
 252	ops/ansible/tests/test_runtime_profile.py

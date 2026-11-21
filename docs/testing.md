@@ -760,30 +760,62 @@ CI's three controller database steps use a fixed typed selection:
 
 ```sh
 cargo run --locked -q -p simplestchat-ci -- database-check monitoring
-RESTORE_CONTAINER_E2E=1 cargo run --locked -q -p simplestchat-ci -- database-check restore
+RESTORE_CONTAINER_CHECK=1 cargo run --locked -q -p simplestchat-ci -- database-check restore
 cargo run --locked -q -p simplestchat-ci -- database-check migration
 ```
 
 The monitoring check runs the three tests in `ops/src/monitor/database_tests.rs`
 by their exact names (`cargo test -p simplestchat-ops --lib -- --ignored --exact`)
 with `MONITORING_DATABASE_CHECK=1`; without that selector, as in a workspace
-`--include-ignored` run, they return at once. The migration check runs the two
-tests in `ops/src/migrate/snapshot_database_tests.rs` the same way, selected by
+`--include-ignored` run, they return at once. The restore check runs the four
+tests in `ops/src/release/attestation/restore/database_tests.rs` the same way,
+selected by `RESTORE_DATABASE_CHECK=1`. Each makes a deployment's database in
+the cluster (the packaged migrations as `simplestchat_migrate`, the operational
+schema as `postgres`, the reviewed grants), archives it with that cluster's
+`pg_dump`, and verifies the archive with the operation `release backup verify`
+runs. Three tests verify in the cluster itself: a pre-upgrade backup against
+its own recorded ledger, a current backup with its incidents and counts, schema
+and privacy drift refused by `restore-verify.sql`, and truncated or altered
+archives refused. There the operation's container is a new database of the
+cluster and each tool the container would run is the installed one on that
+database, started by the operation's own process owner, so `restore-verify.sql`
+and `pg_amcheck` run on the cluster's PostgreSQL (16 from Ubuntu 24.04 in CI)
+and the container itself is not exercised; the two runtime roles are dropped
+before each verification, as a new container lacks them.
+
+With `RESTORE_CONTAINER_CHECK=1`, which CI sets on the step, preparation first
+pulls the digest-pinned PostgreSQL 18.6 image (`scpub_postgres_image` in
+`ops/ansible/group_vars/benchmark_hosts.yml`, which a test compares) with a
+600-second outer bound, and the fourth test verifies in real containers of it:
+the operation creates, runs and removes them through the installed Docker client
+on `/var/run/docker.sock`, unchanged, and only its question which image the live
+`simplestchat-public-postgres-1` container runs is answered, with the pulled
+image's ID. The current backup verifies on PostgreSQL 18.6 (the cluster's older
+`pg_dump` restored into the newer server, as a release restores an older
+backup), a widened grant is refused by `restore-verify.sql` and a truncated
+archive by `pg_restore`, all inside the image; the test checks the server
+version and the image the container was created from, and that no container
+with the operation's label and none of its volumes remain. The test's own guard
+removes only a container with the operation's label and name, and never prunes.
+Without the variable the fourth test returns at once and nothing is pulled, so
+the check runs on a machine without Docker. Each verification copies to
+`$RUNNER_TEMP/simplestchat-restore-evidence.*` only what may be published: the
+aggregate `restore.json` and `outcome.json`, every command's role, status and
+sizes, and the standard error of every command except `pg_restore` and
+`pg_amcheck`, whose errors can quote archive rows and appear only as their size
+and fixed phrases; no standard output is copied. A failed step uploads that
+directory for seven days. The migration check runs the two tests in
+`ops/src/migrate/snapshot_database_tests.rs` the same way, selected by
 `MIGRATION_DATABASE_CHECK=1`: the snapshot through a real client session, a
-real dump and restore, and the guarded owner rename. The restore check retains
-its Python test pattern. The restore step first pulls the
-same digest-pinned PostgreSQL 18.6 image and retains `RESTORE_CONTAINER_E2E=1` in
-the workflow. Discovery runs literal `pg_config --bindir` with a 30-second outer
-bound and 4096-byte stdout ceiling, admits one existing absolute directory, and
-prepends it using `join_paths`. The optional pull has a 600-second outer bound;
-the existing ten-minute automation-job deadline still applies. The environment
-is captured once and threaded into preparation, cluster configuration and the
-test child; no process-global environment is changed. Preparation transfers its
-registered signals only after CLI group cleanup, then awaits the same cluster
-owner directly without another Cargo build or nested harness. These checks do
-not replace the Python suites' container ownership. Fake tools and inert children
-verify the command/environment/cleanup boundary; hosted Linux PostgreSQL and
-container runtime cost remain unmeasured until that integration runs.
+real dump and restore, and the guarded owner rename. Discovery runs literal
+`pg_config --bindir` with a 30-second outer bound and 4096-byte stdout ceiling,
+admits one existing absolute directory, and prepends it using `join_paths`; the
+existing ten-minute automation-job deadline applies. The environment is captured
+once and threaded into preparation, cluster configuration and the test child; no
+process-global environment is changed. Preparation transfers its registered
+signals only after CLI group cleanup, then awaits the same cluster owner
+directly without another Cargo build or nested harness. Fake tools and inert
+children verify the command/environment/cleanup boundary.
 
 With PostgreSQL tools on `PATH`, use the owned bootstrap:
 
@@ -3046,9 +3078,15 @@ installation and invocation require their own runtime evidence.
 
 The complete `release backup verify` operation has native tests over actual
 private files, locking, retained snapshots and owned inert child processes with
-Docker/database replies. They do not establish authenticated musl distribution,
-a prepared-host public CLI run, actual PostgreSQL restore/amcheck or an
-operational caller switch. Run them with the actual CLI target:
+Docker/database replies. The
+[restore database check](#disposable-postgresql-and-browser-tests) drives the
+same operation over real archives restored into its owned cluster, with the real
+`restore-verify.sql` and `pg_amcheck`, and with `RESTORE_CONTAINER_CHECK=1`
+also inside real containers of the pinned PostgreSQL 18.6 image. Neither
+establishes authenticated musl distribution, a prepared-host public CLI run as
+root, the container's resource ceilings under load, or an operational caller
+switch.
+Run the inert tests with the actual CLI target:
 
 ```sh
 cargo test --locked -p simplestchat-ops --lib release::attestation::restore:: \
