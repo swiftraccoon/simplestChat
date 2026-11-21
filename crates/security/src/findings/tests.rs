@@ -1,7 +1,7 @@
 //! Replays of the recorded findings checks.
 //!
-//! `recorded_findings.json` holds what `build/security_findings.py` answered
-//! for zizmor and cargo-audit reports, dependency budgets, migration trees and
+//! `recorded_findings.json` holds what the reference in Python answered for
+//! zizmor and cargo-audit reports, dependency budgets, migration trees and
 //! gitleaks configurations. Where the reference failed with an exception of
 //! its interpreter, `named` gives the code here; `STRICTER` names the inputs
 //! it admitted and these checks refuse.

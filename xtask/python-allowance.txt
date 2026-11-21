@@ -1,4 +1,4 @@
-total 54290
+total 52329
 11	build/build-release.py
 241	build/ci_release_checks.py
 11	build/fetch-release.py
@@ -10,10 +10,6 @@ total 54290
 722	build/release_fetch_controller.py
 461	build/security_archive.py
 179	build/security_context.py
-584	build/security_elf.py
-215	build/security_findings.py
-185	build/security_policy.py
-27	build/security_source_scope.py
 512	build/security_tools.py
 1423	build/security_vm.py
 1020	build/security_vm_fetch.py
@@ -82,11 +78,7 @@ total 54290
 116	ops/ansible/tests/test_runtime_components.py
 252	ops/ansible/tests/test_runtime_profile.py
 281	ops/ansible/tests/test_security_archive.py
-95	ops/ansible/tests/test_security_ci.py
 58	ops/ansible/tests/test_security_context.py
-524	ops/ansible/tests/test_security_elf.py
-164	ops/ansible/tests/test_security_findings.py
-144	ops/ansible/tests/test_security_policy.py
 419	ops/ansible/tests/test_security_tools.py
 1040	ops/ansible/tests/test_security_vm.py
 320	ops/ansible/tests/test_security_vm_boot.py
@@ -105,7 +97,5 @@ total 54290
 523	ops/ansible/tests/test_security_vm_vps_guest.py
 75	ops/ansible/tests/test_support.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py
-6	typings/ansible/parsing/dataloader.pyi
 22	typings/ansible/plugins/callback/__init__.pyi
 3	typings/ansible/plugins/loader.pyi
-17	typings/ansible/template/__init__.pyi

@@ -1,8 +1,8 @@
 //! Replays of the recorded exception policy and source scope.
 //!
-//! `recorded_policy.json` holds what `build/security_policy.py` and
-//! `build/security_source_scope.py` answered for single review records, whole
-//! policy files, source names and automation markers. Where the reference
+//! `recorded_policy.json` holds what the reference in Python answered for
+//! single review records, whole policy files, source names and automation
+//! markers. Where the reference
 //! failed with an exception of its interpreter, `named` gives the code here.
 
 use super::{Date, Exception, parse, permitted, read};

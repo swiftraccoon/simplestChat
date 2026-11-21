@@ -1,5 +1,5 @@
 {
- "comment": "Recorded from the CI cache reference in Python before it was deleted, with the two helpers deleted with it already out of its closures; see the replays in tests.rs and reference_tests.rs.",
+ "comment": "Recorded from the CI cache reference in Python as it last was, with every file deleted since then out of its closures; see the replays in tests.rs and reference_tests.rs.",
  "system": "Darwin",
  "architecture": "arm64",
  "environment": {
@@ -24,7 +24,6 @@
    "build/native-security.Dockerfile",
    "build/pip-constraints.txt",
    "build/security_context.py",
-   "build/security_source_scope.py",
    "build/security_tools.py",
    "ops/ansible/files/bounded_process.py",
    "ops/ansible/files/release_json.py"
@@ -35,9 +34,6 @@
    "build/install-openssl.sh",
    "build/pip-constraints.txt",
    "build/security_context.py",
-   "build/security_findings.py",
-   "build/security_policy.py",
-   "build/security_source_scope.py",
    "build/security_tools.py",
    "ops/ansible/files/bounded_process.py",
    "ops/ansible/files/release_json.py",
@@ -2856,7 +2852,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2871,7 +2866,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -2886,7 +2881,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2901,7 +2895,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -2916,7 +2910,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2931,7 +2924,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -2946,7 +2939,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2961,7 +2953,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -2976,7 +2968,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2991,7 +2982,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3006,7 +2997,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3021,7 +3011,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3036,7 +3026,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3051,7 +3040,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3066,7 +3055,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3081,7 +3069,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3096,7 +3084,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3111,7 +3098,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3126,7 +3113,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3141,7 +3127,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3156,7 +3142,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3171,7 +3156,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3186,7 +3171,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3201,7 +3185,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3216,7 +3200,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3231,7 +3214,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3246,7 +3229,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3261,7 +3243,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3276,7 +3258,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3291,7 +3272,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3306,7 +3287,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3321,7 +3301,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3336,7 +3316,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3351,7 +3330,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3366,7 +3345,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3381,7 +3359,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3396,7 +3374,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3411,7 +3388,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3426,7 +3403,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3441,7 +3417,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3456,7 +3432,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3471,7 +3446,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3486,7 +3461,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3501,7 +3475,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3516,7 +3490,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3531,7 +3504,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3546,7 +3519,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3561,7 +3533,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3576,7 +3548,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3591,7 +3562,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3606,7 +3577,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3621,7 +3591,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3636,7 +3606,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3651,7 +3620,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3666,7 +3635,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3681,7 +3649,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3696,7 +3664,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3711,7 +3678,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3726,7 +3693,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3741,7 +3707,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3756,7 +3722,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3771,7 +3736,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3786,7 +3751,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3801,7 +3765,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3816,7 +3780,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3831,7 +3794,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3846,7 +3809,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3861,7 +3823,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-627c5d9181352a3e7b6ff33516ef936ebc3bf3b0244839711fac5960e20324ed"
+    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
    },
    {
     "operation": "key",
@@ -3876,7 +3838,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3891,7 +3852,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-c429ece6874a99a23ec0b63d087014e9116daac12eb4fb54a5e8bd38a16332c7"
+    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
    },
    {
     "operation": "key",
@@ -3906,7 +3867,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3921,7 +3881,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-e7c7a51316815e1a9ad40780904b013436b198d42b4b83871ae29353e7eb44d3"
+    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
    },
    {
     "operation": "key",
@@ -3936,7 +3896,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3951,7 +3910,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-2c6b16518716aae1a162d617f63c33bfee7fbfae63ba17a7c9989e3c9fb1c81c"
+    "key": "ci-verified-v1-native-asan-main-f38762aa6eda7de4bd49dbafeedaa83ad09cf3cfcf4b7845362a443b7b87b9d7"
    },
    {
     "operation": "key",
@@ -3966,7 +3925,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3981,7 +3939,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-984bc067a463286366dc55070cbe86e3139370546e8b755abbec5db450b7dee1"
+    "key": "ci-verified-v1-native-ubsan-main-b41205419a1989559739e9e9717c07295b95a76ff81cee7345184e9a5a50ce18"
    },
    {
     "operation": "key",
@@ -3996,7 +3954,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4011,7 +3968,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-c5e050c89a69611891a81ab3745f877d9c098566c25cb48188a329d4cf4b17f7"
+    "key": "ci-verified-v1-native-replay-main-0fb9ac413592bbdc2b9f543d7dbe7c3e44d65194028999cc8a7a6cc37d5322a3"
    },
    {
     "operation": "key",
@@ -4026,7 +3983,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4041,7 +3997,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-3171a8ef4140aaf593b34f9efea3d978a4f17e0634477953971adac562f50ace"
+    "key": "ci-verified-v1-native-asan-main-9c4ddb8f739c1ef82cca1dd846c6e5ac818fcea13e8d6ef31af9757967acaa9b"
    },
    {
     "operation": "key",
@@ -4056,7 +4012,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4071,7 +4026,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-7d0e944ff62d495a8b53a7c9334082b598906b8dfad3dc1a96667118201c5fa7"
+    "key": "ci-verified-v1-native-ubsan-main-a1cf36f0ceb82e4787aee9c4909d211ccbfc358370b9f2afa4d8b7f901cf5f43"
    },
    {
     "operation": "key",
@@ -4086,7 +4041,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4101,7 +4055,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-7c8d94924e7c5c4a1e996328f5c36dea4ad8c16f93923776347b26ac018f455c"
+    "key": "ci-verified-v1-native-replay-main-72f407bdda31a5007f69536f780ef0ab1b6f5425a5323afed8736bb15f94bcb4"
    },
    {
     "operation": "key",
@@ -4116,7 +4070,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4131,7 +4084,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-c3d05186d4a1a11070b74eb7cb467d9a708df627aa34ce162fd7bb93d9e23cd0"
+    "key": "ci-verified-v1-native-asan-main-327343d7554eedbe1d056a9183d1fd38b3dba42b1cc7c174f372d85d171be90e"
    },
    {
     "operation": "key",
@@ -4146,7 +4099,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4161,7 +4113,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-e4b769e8b401716a606cebb89090d4c3424799765f35f9178b22a7374e0c545b"
+    "key": "ci-verified-v1-native-ubsan-main-579335a2ed12801877105ac3bec72d67bf564ba5738eb971c7052d35e38077de"
    },
    {
     "operation": "key",
@@ -4176,7 +4128,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4191,7 +4142,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-2614d70f5dfc8ee61b16c88b3a4a16c5dfe6c222914901f1966b4af8f2d3e4f9"
+    "key": "ci-verified-v1-native-replay-main-2e374a0d8dafafcada111d5adca438fe987e31939e43e5b78bf254c9755c80ba"
    },
    {
     "operation": "key",
@@ -4206,7 +4157,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4221,7 +4171,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-14b9860d934b2614c02a3de7ccf0317fc1b2e7fd1ac0f153bf0da3d391f948e9"
+    "key": "ci-verified-v1-native-asan-main-b5b754c055936166d8c10b4d420487d62671043769995bd3b7d0a937ec4b3510"
    },
    {
     "operation": "key",
@@ -4236,7 +4186,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4251,7 +4200,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-f2dc5095e9d448263779702ddb3b659e88666d005902a1a6e07aafa08b9404be"
+    "key": "ci-verified-v1-native-ubsan-main-8ab34b89ad13b546c4b6c521aca6b8b9d1e13a1a41f4af1c656c8b332f117255"
    },
    {
     "operation": "key",
@@ -4266,7 +4215,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4281,7 +4229,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-2e550c3e7a2393fe7b192c8535f0c901049ac640474221f4c012596154e7534b"
+    "key": "ci-verified-v1-native-replay-main-c7ca59cc6bcb10a14f5f2db6d3a0b2258b77d0f8b767eb2f4f8ce4d22220ea06"
    },
    {
     "operation": "key",
@@ -4296,7 +4244,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4311,7 +4258,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-f5761cb02ba23132f169d42768527222aef6ceeb4459069f6527afb16f05e66e"
+    "key": "ci-verified-v1-native-asan-main-fa04605e343267b85ecdd7cebb6c2142ad886da9499d2720ecc4d8f81d0f22d1"
    },
    {
     "operation": "key",
@@ -4326,7 +4273,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4341,7 +4287,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-087407bed440c097b60c83f3a5dbadebb9626c5e69c99cfbabad595f21113e63"
+    "key": "ci-verified-v1-native-ubsan-main-6a105ec0f51a7f0c3c2271478c88035cfedd1f170e30b3a0e5ad8566e2aea41a"
    },
    {
     "operation": "key",
@@ -4356,7 +4302,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4371,7 +4316,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-9586c669c6698263b0672ef21a1c32221bfd1b89e77458dec65c528e42356cce"
+    "key": "ci-verified-v1-native-replay-main-4d9304ab08704291a6eafe706e3bbcba93b4836fe3e38c641c8927985bf73016"
    },
    {
     "operation": "key",
@@ -4386,7 +4331,6 @@
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4401,7 +4345,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-028042386c5039dcbc29ab7021173cf5958c5bf48d51897c9563ca97d9c5c9d7"
+    "key": "ci-verified-v1-native-asan-main-8daf47a7e4f7e3eecc2012e8b311388e1a4977731b73f1c5744fbb9d9bf9d596"
    },
    {
     "operation": "key",
@@ -4416,7 +4360,6 @@
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4431,7 +4374,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-187b2773f8dd93b6e90053718fcd77fd00bb10bda69dea3d06a9f787ca4b33fe"
+    "key": "ci-verified-v1-native-ubsan-main-e8b9a6d81b76e7b6651397b3ad120e0fb2ab0b4ee63583e82af51e07ae1452f5"
    },
    {
     "operation": "key",
@@ -4446,7 +4389,6 @@
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4461,7 +4403,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-8b0fcadd53cbf47565c018c6c6c9c5d8cf163cd71476fdeca30c49621e59c905"
+    "key": "ci-verified-v1-native-replay-main-f052a56df13984e024702a3dce24b2da6547c49c7c0cd548e05ecc85114422b1"
    },
    {
     "operation": "key",
@@ -4476,7 +4418,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4491,7 +4432,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-da18a33d8e62e59e5f124aba7a414d1401d7b04d6f9cb2ffd2ca621c0c0fae55"
+    "key": "ci-verified-v1-native-asan-main-6dc516820da3d04fd7cafab261060bc97724f59971bbc0055673449614cbf57c"
    },
    {
     "operation": "key",
@@ -4506,7 +4447,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4521,7 +4461,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-f5a8717b235addc61e6522e81c51421996bca4bf6dd43665098352e8d77b9e86"
+    "key": "ci-verified-v1-native-ubsan-main-d236c7b23a215719afb4a0211bfa8c42c6b9b67ae916d89e502442246e036018"
    },
    {
     "operation": "key",
@@ -4536,7 +4476,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4551,7 +4490,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-4d85ba7c5ec393cbe4ce541407daf9f01481bef6eae6641ccfb8f45685d1d56e"
+    "key": "ci-verified-v1-native-replay-main-048b9671034949a9ed81ff557a59afe2b3f57d89c85c389a24401beaa0cd0af7"
    },
    {
     "operation": "key",
@@ -4566,7 +4505,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4581,7 +4519,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-bd6931081858727e2e14cc0a932a5648705c54c11e8be8a1e43140a60156933a"
+    "key": "ci-verified-v1-native-asan-main-a294bc04f9a4a677632fe03118786f90f0cc39c41a3387669bedebeba1dcee52"
    },
    {
     "operation": "key",
@@ -4596,7 +4534,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4611,7 +4548,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-f13997e95e64283d04dedef2451afbbb6124d56725b819603e0d4a11c38bce1e"
+    "key": "ci-verified-v1-native-ubsan-main-b4ae14703797501e3a85ee5bb64a80c77c06f91d694a80267fbc1eb06cdf9f41"
    },
    {
     "operation": "key",
@@ -4626,7 +4563,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4641,7 +4577,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-558c009f970c84557f29734fc5baab1b4904fac3a77d06077286e3ba6a4f26d3"
+    "key": "ci-verified-v1-native-replay-main-f9f38ea8f5d64806538c68448a5046e81b6d44d3d98a1691b4961ee117726a5f"
    },
    {
     "operation": "key",
@@ -4656,97 +4592,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-asan-main-10eec7107fd9141e205eb97808ab7b3afa9eb6649b99717d93db31afaef6c526"
-   },
-   {
-    "operation": "key",
-    "scope": "native-ubsan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-ubsan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-ubsan-main-5500fad9d0a5ed101df1b02bc6e5845ef1125584df6417ffef159e02ff57921e"
-   },
-   {
-    "operation": "key",
-    "scope": "native-replay",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-replay\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-replay-main-6358df4ce9c8ed9430ce8e3f260e94ee4e4000845495fdabacb0918d14f1c8cb"
-   },
-   {
-    "operation": "key",
-    "scope": "native-asan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-asan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4761,7 +4606,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-079616da98ddf70f58b402330051bab74c5603d65755daa405c327ebf60589ce"
+    "key": "ci-verified-v1-native-asan-main-bd389b3b27b7ab1379b4fdba09a98830074a2fef6c8fd64bb5a41c389cb73559"
    },
    {
     "operation": "key",
@@ -4776,7 +4621,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4791,7 +4635,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-665cef631b5f8c7f484c5c4aa1cd01ae858feb4dca22c6ef17e45ff53081b6ea"
+    "key": "ci-verified-v1-native-ubsan-main-1aafd003c3966c2214c30ec2e613febb5d325e1feeaa09e9d43522a8285fc3c8"
    },
    {
     "operation": "key",
@@ -4806,7 +4650,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4821,7 +4664,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-11a8cc18a66f58712f6d3c80f6886a83220eb5e5cb9f5c0ea020938bc7b5557d"
+    "key": "ci-verified-v1-native-replay-main-e6dfaa1737361aea804a879c0f938a888d3a56539d66121d2263e5106ac98078"
    },
    {
     "operation": "key",
@@ -4836,7 +4679,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4851,7 +4693,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-35ae5a9b6b4d73dddace62afeb0ac9e21b5377c8d9ba6a4bc824035445d959e3"
+    "key": "ci-verified-v1-native-asan-main-a8dc04b99ee1cb7c6e72b196bd5c47c67d29c09985720f20f8f9399fe59bad1e"
    },
    {
     "operation": "key",
@@ -4866,7 +4708,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4881,7 +4722,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-0467a1804a0aab4feb7d3ba2df2af54e624e9f68a05ccd9f4dc6ed6d0d553f78"
+    "key": "ci-verified-v1-native-ubsan-main-16d9b9d986bdff68203e205ee8d633c9ca479e7e59c3b88e003f1cd21f1d0b99"
    },
    {
     "operation": "key",
@@ -4896,7 +4737,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4911,7 +4751,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-c534987632d617a51f85a2e93996a0623b677d0c78403b7dc8e6bcec040edd08"
+    "key": "ci-verified-v1-native-replay-main-cb0e99fa7a97985e896fd71685b284a218639a376eb360ecdf236d6b0c9282ba"
    },
    {
     "operation": "key",
@@ -4926,7 +4766,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -4941,7 +4780,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-fb0d999cd97a29f3af04a5ef5fd9de87d6e64b053b40ae2674376e21a9342b69"
+    "key": "ci-verified-v1-native-asan-main-5f3904fc0673dcff6ab820cb4ba0798f147129ccc062388cd0a1d5d3cd4958b9"
    },
    {
     "operation": "key",
@@ -4956,7 +4795,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -4971,7 +4809,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-7b005985cff3b63c3f354d94e53dd7c8f4feb7ac36384769049fd03e94772d84"
+    "key": "ci-verified-v1-native-ubsan-main-5df99a2c1629ebb9c9682a16ccc61f12b951322fc503d1ec92ac5cda441d20b5"
    },
    {
     "operation": "key",
@@ -4986,7 +4824,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -5001,7 +4838,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-48b38f49b61357de278da0d5a9c8d2b227c735adfab0ae5b031ca50004aa1d0d"
+    "key": "ci-verified-v1-native-replay-main-61c43c3d0937dd086b1ca71e01ffdd8205c0d9709c12dbbc6b13f3ef9fb3094c"
    },
    {
     "operation": "key",
@@ -5016,7 +4853,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5031,7 +4867,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-53c8232bade0c2c2625b1f6760c7cb77b04dda786b8eee3bd18dcb9444f65630"
+    "key": "ci-verified-v1-native-asan-main-60526cb72cfecff0ef34bbaa55580527b70adc3233efb195a063b5b54ca0fd95"
    },
    {
     "operation": "key",
@@ -5046,7 +4882,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5061,7 +4896,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-ab41424920e4c0b8e032b63002e32ce790fd4b056c269203160979e8f9d5fb45"
+    "key": "ci-verified-v1-native-ubsan-main-41915b92f2974fd252d21709114527f4bbe292278a68a11ec4d387ee089fb208"
    },
    {
     "operation": "key",
@@ -5076,7 +4911,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5091,7 +4925,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-367df48a0e4ca3d9afc98701bdc42ea9823caa90ee8328830a211715d82fdebe"
+    "key": "ci-verified-v1-native-replay-main-86775f08e8b0886ec5b563c0e368878416bb484fee1339b80e5c1e8c4bf65290"
    },
    {
     "operation": "key",
@@ -5106,7 +4940,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5121,7 +4954,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-010b2234d05ca75e0796bc749890cc8c1354fd930a4b0e66b48456cd0b608297"
+    "key": "ci-verified-v1-native-asan-main-47862cc57f4e5f8652398ac90580921ba533ec983afbf84bb68d1356fb7ab563"
    },
    {
     "operation": "key",
@@ -5136,7 +4969,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5151,7 +4983,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-8fb01467230d6aaaeba567ea7f4702213699f6a6b2877af0dab5c590353f1a1e"
+    "key": "ci-verified-v1-native-ubsan-main-dffe42366f1cf1e14a34a3b13337bcfd3b1185edabeae28b8258d93fd4b93646"
    },
    {
     "operation": "key",
@@ -5166,7 +4998,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5181,7 +5012,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-0bcf2723f8e0477c0c63f4cc059f43b04919c70470c03b6bbf87e878f9ca5d61"
+    "key": "ci-verified-v1-native-replay-main-f725ba09590e0270c83f93dbadeebd4628643f81fe841a5c5f4c0b6b3c602a9e"
    },
    {
     "operation": "key",
@@ -5196,7 +5027,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5211,7 +5041,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-0a662961349da6a808b2b447922832725e9827eea1063650ca1dace574799b01"
+    "key": "ci-verified-v1-native-asan-main-6ad2763abe75677e30c3809f3610cd09486836eac62e57c215793ca708dc1dff"
    },
    {
     "operation": "key",
@@ -5226,7 +5056,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5241,7 +5070,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-12810deb7ba63960757550721236fa43b7cbc9b2316865ece8b376dc5d499d60"
+    "key": "ci-verified-v1-native-ubsan-main-4d3d504ef61fc5b4619759a99ff48a46afe5e0ccf12442b6cfc60e2b90feea82"
    },
    {
     "operation": "key",
@@ -5256,7 +5085,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5271,7 +5099,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-24d69d27b2c5807f6472031a85a31fa90684543bf0f451b3beb7dc063e078f69"
+    "key": "ci-verified-v1-native-replay-main-27d403a1c09b61bc56c4a6274ac5fb3da1cdf892fc7d191db5c46ebe4d53bdc2"
    },
    {
     "operation": "key",
@@ -5286,7 +5114,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5301,7 +5128,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-3e25cb466ee74ed0be9a082131c56a42fbf2e0bf6e6240e67fea6f36e4545b89"
+    "key": "ci-verified-v1-native-asan-main-197a16ff03b09443af193833c8c6bff2de08b44cc55a6e3cdeb156c920acd613"
    },
    {
     "operation": "key",
@@ -5316,7 +5143,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5331,7 +5157,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-9c6c06e85356ee773b302aa6527e83510d95372d3de2d1623b8e8b4cb700073d"
+    "key": "ci-verified-v1-native-ubsan-main-22c3f25b2f5e0270a71e5fbf053dcd7fa20558aa970c7b4eea1ed4b84797f259"
    },
    {
     "operation": "key",
@@ -5346,7 +5172,6 @@
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_source_scope.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5361,7 +5186,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-33d66ffd390ef4ee7429e287494a507b466d40dd19acde17267bb7f553bb7743"
+    "key": "ci-verified-v1-native-replay-main-03eca86f69fd8dc71fb99959c3a5976fa5597b74a3d0b8131cc2490333d2a449"
    }
   ],
   "codeql_review_data_changes_do_not_invalidate_evaluated_databases": [
@@ -5751,167 +5576,152 @@
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-a5055507ef86876572440002d0af1964e438e257423efb2777a4abcf8a62a92f"
+    "key": "ci-verified-v1-codeql-rust-main-7370d6c9998390f18114b70fcab04a0bdb117823dadcf95cd22297d298a69dfe"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-4f745b127a199a53019fac4f107146bc931d7f144da6e7448175764a096af024"
+    "key": "ci-verified-v1-codeql-rust-main-89a8fcafdcebfbed55f1a197da3f4107c8336a849ad3f46cb55ca190bd1ad15c"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-4b20db52b6a7502a69e46504efe32f644ddf750fab797856ceae712f5a2fcc87"
+    "key": "ci-verified-v1-codeql-rust-main-6ca03bd64ce18d58529b70427c6265671c5f6e2ab037a224a5fb5d642fad0549"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-03de3a9ebd7a98c76bfd501bf5b4609eba97dc86992bc7ea637583d4421a25f6"
+    "key": "ci-verified-v1-codeql-rust-main-6a49e6ced01998b3c9bb55cd40aa857e37a5dae68bdb60ab82c612d4f09baf2a"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-9b9595d15759c96a92ec60f9140e037e0a48aa50b607b6c21774df9398dc6b21"
+    "key": "ci-verified-v1-codeql-rust-main-44bc293b7899fb0ca9a2f4207887354593ee48d361c8211c606ef0d1cea6d036"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-477506d658395505e0eb013f23c0f9d3791ced06822b55b2ba839296a0bded8c"
+    "key": "ci-verified-v1-codeql-rust-main-77260de54bfa1323fc3e4db65f9416d2785e24ae36c7fc8f6bfe5edcfcbc8f4d"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-c996816dc6c081c7891f17da52d9af20c56dcb704ae1582bf239b915a6884e77"
+    "key": "ci-verified-v1-codeql-rust-main-3ca37358a1dccbfea9a49d66404f289a6ee692979c11eb6d8b4e084e36b1d5da"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-9773d9b4945de5cf2e84bd90980c33ace867acdd5bdc6f013e38cc2608318473"
+    "key": "ci-verified-v1-codeql-rust-main-b0929f04d508296677c980226c2f80ec2a4196d8b062dcec5059837c62ae5356"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-f76cd56dd33d3a7bacb01f95cd27aa73edb8b1009a5befbad10b1a0a9513be5e"
+    "key": "ci-verified-v1-codeql-rust-main-3e05094114855258f6ff2031c4ca827bf971d122280433a098d84074daedfbed"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-722000d3366236786f0c0bcc2e6b8515ea2463fae00f32d94dfefb88f9d5f14e"
+    "key": "ci-verified-v1-codeql-rust-main-adb30028a399bbf5267ad2ddcbf3e2bebeaf691915f0a69c76eb4d665134fb92"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-0c9c0a36c4b28db93093eef9ac614abcd8a1ee6eb4038e48cf03fc2852ab8948"
+    "key": "ci-verified-v1-codeql-rust-main-40bb39f491fffcf34867dcca62b6b818fc47a5a74bb4c291e44a13641b9e9cb8"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-f76f101b4edc38dfd37399c7ab2881bdf01c2a6da24212454d91b93d40b02efc"
+    "key": "ci-verified-v1-codeql-rust-main-8ef27c7fd580eaab0062609dae5d3935b455650798b25e871521d548d1fb3235"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-ced5a0bbd7f4528e3d216adecedbde8f4629de0c11e758d756dde0548789efad"
+    "key": "ci-verified-v1-codeql-rust-main-90113f3f861afcefd0a75aefb31c45892ed596bb4d83834b2c73f824bd49f785"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-545a79dc27acf5158fb39cb98a0d036944e75cdddf49ffb63136a1a7ebe1d0fc"
+    "key": "ci-verified-v1-codeql-rust-main-09d1e022464bcd899fb1bb17c7cf040574d66868ab5a961539902e420c8ed188"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-b9cb702174b51f59d4f0591e3fa37b904598f086f86a8746364613b61a3fb5d1"
+    "key": "ci-verified-v1-codeql-rust-main-76d4a734285e3216da79b822c3fd3f13e15df6b436c33c405a5483ed568301b9"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-7d1c00d7a94ac788d12b02112d777963b2067254597d5aca5f00dbc5bf2a2612"
+    "key": "ci-verified-v1-codeql-rust-main-a647a6085b3521ce8905407d2f986468352cff18b082a046def8e8a56d09741e"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-bba4217df4e1f5758c9a72e1642db4f1846b1f3b3cf3931a111b37f5edc1f3f2"
+    "key": "ci-verified-v1-codeql-rust-main-a47f96371c3d56012e0d33bb138c07b3942cd5aadaf8204472582a5137a4f0d9"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-ea859d125d1a72190f95c17cf1c7aca1dfa8eb2257ae14952e7058ae17173af3"
+    "key": "ci-verified-v1-codeql-rust-main-d0b06e07cae40ce1fd46193fffc446b7c807f7a8e7d7f822f6abeb657309b028"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-2523a903743b03694feaa1eb6c10e88c23f5bd783d7a17ed1a6d4942976075cd"
+    "key": "ci-verified-v1-codeql-rust-main-440a8400df05f16d6ecbec490357c57aedcfb22cfeb2a2db9960d270b507e843"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-2ef635b4007b1f90e76ad6a8477e88c1acfb98c8b4f295acc0fb76e48c77dce1"
+    "key": "ci-verified-v1-codeql-rust-main-387812619f4764777d76e01c2461d132ed89b91168c3653c01b97c7c3238e1df"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-685864eb840a8aa4df14dbdec8bc893438b11283c406e58e979fe01e9c1fff70"
+    "key": "ci-verified-v1-codeql-rust-main-b4c8c3dfc26811d68fe9d3ba90fa39c6e6839bce698334476d87c0c4b3b34a62"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-a6e76a5834963c8d8b0adc3c85346c67ea85c22fd143dbd1566bc8f95065c6bf"
+    "key": "ci-verified-v1-codeql-rust-main-2a71e4d8bfc06958a46b7023a6f68c5939bcbfac4be2c871460cf9cf0d81587b"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-e3d5c4e5005791ce1028f5e26e8a4e6a8699c4ac2a3b5433ae125398eb2dfe85"
+    "key": "ci-verified-v1-codeql-rust-main-970f46434b5c4dcae87798a9183ef2dc7159826d5de0537126fe12256d461e01"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-aa7c1c690dd378c3ee6226bc55780ed2dc5fe1abab538b0d4d3283feb00a8ebb"
+    "key": "ci-verified-v1-codeql-rust-main-d9ae00cd243684412100bc840b9ce9d6a98b5f9c159e51b427b29e04b5c5b18e"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-95a7e3b9510f349051aae89ecf2019524f04697aa0e1d06d2e59689b2dbdf594"
+    "key": "ci-verified-v1-codeql-rust-main-ffb23a96f78aecb71136106b096eb3b25d9a7ce983ae4d3a1ec77762cb6681c9"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-d8d24dd188c44919a1571056894b707e9a3a3f83e4810c73fa44d09547f93817"
+    "key": "ci-verified-v1-codeql-rust-main-21288e7045b4e3c03f5ac48cc97ded928e2c76776be02866f46031582e8219fd"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-63f11fe95ba8e0863555e8a5dea322431db89969d9e791a96f31c3ae212ffe41"
+    "key": "ci-verified-v1-codeql-rust-main-8f9d712d0240c991ea119f59a5aee54138c6ade60ff1126d0e73e9060a7225c5"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-a066b9457728801a50834671f2357188ec4f3815b25060db554557f766a88e6d"
+    "key": "ci-verified-v1-codeql-rust-main-02a30ef903f2dee9729743cd6148c8d777618acce744a5986681dddcbf2cf796"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-2377cdee32eec8a9bdc992fcf9d00c6b197c1399de70f56f4a407a9db014c3d5"
+    "key": "ci-verified-v1-codeql-rust-main-240fc3c2e2b28db04095348250c12e16ff62072600533f1fc4b62763af0702ff"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-ad83850bad64a7f7281e63b0a41a94a0fbd66436f76da9d4e9a6e308ec69ecd2"
-   },
-   {
-    "operation": "key",
-    "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-06a92747871039ee6759509e65bff84e20fb5dce3f65593565d67c073adfa8d1"
-   },
-   {
-    "operation": "key",
-    "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-6dfac6b3233b417eac2a8e59752d1f3eea697107528560c33b2cb9b6690f4bf0"
-   },
-   {
-    "operation": "key",
-    "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-2daf20d7bcb222275c0539f072cdce69343cbd475eeeadef40de2301b0ee843d"
+    "key": "ci-verified-v1-codeql-rust-main-6acf8bb8f7b930a040112709e434f68530b63e3a789f281dc7fa12301d09e63e"
    }
   ],
   "rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling": [

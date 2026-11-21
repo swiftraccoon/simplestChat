@@ -28,10 +28,10 @@ const FIXTURE_FILES: [&str; 12] = [
 ];
 
 /// What the deleted CI cache reference in Python answered for the fixtures of these
-/// tests and of `reference_tests.rs`, recorded from it before it was removed,
-/// with the two deleted helpers already out of its closures as they are out
-/// of Rust's. Each tape is named after the test that replays it and holds,
-/// in order, every answer that test compares with. The fixtures were built
+/// tests and of `reference_tests.rs`, recorded from it as it last was, with
+/// every file deleted since then out of its closures as it is out of Rust's.
+/// Each tape is named after the test that replays it and holds, in order,
+/// every answer that test compares with. The fixtures were built
 /// as `Fixture::recorded` builds them, in the recorded environment, on the
 /// recorded system and machine and with the recorded workflow. Where the
 /// reference hashed its checkout's own path the recording says `<root>`;

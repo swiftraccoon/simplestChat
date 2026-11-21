@@ -29,8 +29,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 import security_vm as vm
 import security_vm_qmp as qmp
 from release_artifact import Manifest
-from security_findings import object_value
 from security_tools import ToolError
+from security_vm_qmp import object_value
 
 # isort: split
 # The security modules install the canonical standalone operations-helper directory.

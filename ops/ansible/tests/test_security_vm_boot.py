@@ -15,8 +15,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 
 import security_vm as vm
-from security_findings import object_value
 from security_tools import ToolError
+from security_vm_qmp import object_value
 from test_security_vm import (
     REVISION,
     FixtureObserver,

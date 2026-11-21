@@ -337,7 +337,7 @@ fn native_suites_bind_each_helper_and_ignore_unrelated_review_changes() {
         }
         fixture.write(name, b"original\n");
     }
-    assert_eq!(fixture.replayed(), [84, 84, 0]);
+    assert_eq!(fixture.replayed(), [81, 81, 0]);
 }
 
 /// From `test_codeql_review_data_changes_do_not_invalidate_evaluated_databases`:
@@ -433,7 +433,7 @@ fn rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs() {
     }
     fixture.git(&["update-index", "--chmod=+x", "new_target/module.rs"]);
     assert_ne!(fixture.key(Scope::CodeqlRust), key);
-    assert_eq!(fixture.replayed(), [33, 0, 0]);
+    assert_eq!(fixture.replayed(), [30, 0, 0]);
 }
 
 /// From `test_rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling`:
@@ -740,7 +740,7 @@ fn backend_closure_preserves_build_inputs_without_operational_invalidations() {
     let unrelated = [
         "README.md",
         "docs/testing.md",
-        "ops/ansible/tests/test_security_ci.py",
+        "ops/ansible/tests/test_public_templates.py",
         "ops/ansible/files/release_public.py",
         "security/exceptions.json",
         "web/e2e/package-lock.json",
