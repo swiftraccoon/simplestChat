@@ -344,6 +344,9 @@ crates/ci/src/audit_rust/**
 !crates/ci/src/release_checks/
 crates/ci/src/release_checks/**
 !crates/ci/src/release_checks/*.rs
+!crates/ci/src/release_checks/fixture/
+crates/ci/src/release_checks/fixture/**
+!crates/ci/src/release_checks/fixture/*.rs
 !crates/ci/src/image_cache/
 crates/ci/src/image_cache/**
 !crates/ci/src/image_cache/*.rs

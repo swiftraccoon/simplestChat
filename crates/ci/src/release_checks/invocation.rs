@@ -1,4 +1,4 @@
-//! The fixed coordinator retains its original phase-tail dispatch fence.
+//! The root fixture's `sudo` retains its original phase-tail dispatch fence.
 
 use super::plan::Context;
 use crate::command::{Command, Program};
@@ -48,7 +48,7 @@ impl Invocation {
         deadline: Instant,
         reserve: Duration,
     ) -> Result<Arc<Self>> {
-        if command.program != Program::Python
+        if command.program != Program::Sudo
             || command.timeout != Duration::from_secs(850)
             || command.grace != Duration::from_secs(200)
             || command.capture.is_some()
@@ -83,7 +83,7 @@ impl Invocation {
             || command.cleanup
             || command.stdout.is_some()
             || command.stdin.is_some()
-            || command.separate_logs.is_some()
+            || command.separate_logs.is_none()
             || command.combined_log.is_some()
         {
             self.invalid.store(true, Ordering::SeqCst);

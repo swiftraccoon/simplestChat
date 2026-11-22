@@ -9,7 +9,7 @@ use std::process::ExitCode;
 #[cfg(test)]
 mod maintenance_caller_tests;
 #[cfg(test)]
-mod pins;
+pub(crate) mod pins;
 #[cfg(test)]
 mod workflow_contract_tests;
 #[cfg(test)]

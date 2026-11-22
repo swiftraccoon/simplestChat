@@ -67,32 +67,8 @@ fn the_barrier_serves_exactly_the_inspection_the_native_deploy_issues() {
 
 #[test]
 fn deploy_admits_the_actual_frozen_postgres_profile_and_refuses_other_images() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../build/release_container_harness.py"
-    ));
-    // Read only the frozen two-literal selection, never execute the reference module.
-    let block = source
-        .split_once("\nPOSTGRES = (\n")
-        .unwrap()
-        .1
-        .split_once("\n)\n")
-        .unwrap()
-        .0;
-    let selected = block
-        .lines()
-        .map(|line| {
-            let literal = line.trim();
-            literal
-                .strip_prefix("+ ")
-                .unwrap_or(literal)
-                .strip_prefix('"')
-                .unwrap()
-                .strip_suffix('"')
-                .unwrap()
-        })
-        .collect::<String>();
-    assert_eq!(selected, fixture_scalar("scpub_postgres_image"));
+    // The deployment's own selection; the CI release fixture pins the same one.
+    let selected = fixture_scalar("scpub_postgres_image");
     assert_eq!(selected, protocol::POSTGRES_IMAGE);
     let value = request();
     assert_eq!(value["postgresImage"], selected);

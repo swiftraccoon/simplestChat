@@ -96,6 +96,8 @@ Commands:
   audit-rust    Install verified audit tooling and apply the advisory policy.
   release-checks --http-policy-binary ABSOLUTE_FEATURE_BINARY
                 Discover Chromium and run the disposable release checks.
+  release-fixture --disposable-host [OPTIONS]
+                The root app-only release fixture that release-checks starts.
   release-http-policy
                 Check only the owned loopback fixture; needs a binary built with
                 --features release-http-policy (see release-http-policy --help).
@@ -504,6 +506,12 @@ pub fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         .is_some_and(|argument| argument == "release-checks")
     {
         return release_checks::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "release-fixture")
+    {
+        return release_checks::run_fixture(root, &arguments[1..]);
     }
     if arguments
         .first()

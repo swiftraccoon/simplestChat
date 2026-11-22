@@ -4,7 +4,7 @@
 //! same way and compares the same text. `public_recorded_release` is not
 //! carried over; it pins the public playbook's recorded-release guard.
 
-mod ansible;
+pub(crate) mod ansible;
 mod backups;
 mod benchmark_automation;
 mod browser_assets;

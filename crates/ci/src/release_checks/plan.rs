@@ -1,4 +1,5 @@
-//! One fixed discovery expression and the reference coordinator's exact inputs.
+//! One fixed discovery expression, the root release fixture and the scanner
+//! download that overlaps it.
 
 use crate::{
     command::{Command, Program},
@@ -16,15 +17,21 @@ use std::{
 
 pub(super) const BUDGET: Duration = Duration::from_secs(1140);
 // 850 body + 200 cooperative TERM + 20 Native settlement + 10 final fences.
-const COORDINATOR_BODY: Duration = Duration::from_secs(850);
+const FIXTURE_BODY: Duration = Duration::from_secs(850);
 const GRACE: Duration = Duration::from_secs(200);
 const FINAL: Duration = Duration::from_secs(30);
-const COORDINATOR_TAIL: Duration = Duration::from_secs(1080);
+const FIXTURE_TAIL: Duration = Duration::from_secs(1080);
+/// The scanner download's own bound, inside the fixture's.
+const SCANNER_BODY: Duration = Duration::from_secs(300);
+/// Each overlapped command's retained stdout and stderr.
+pub(super) const MAX_LOG: u64 = 1024 * 1024;
 pub(super) const EXPRESSION: &str = concat!(
     "process.stdout.write(require(",
     "\"./web/e2e/node_modules/playwright\"",
     ").chromium.executablePath())",
 );
+/// The three image scanners the later image check reads from `tools`.
+const SCANNERS: [&str; 3] = ["syft", "grype", "gitleaks"];
 
 pub(super) struct Context {
     pub root: PathBuf,
@@ -71,6 +78,10 @@ impl Context {
             http_policy: http_policy.into(),
         })
     }
+    /// The private directory of the overlapped commands' logs and summary.
+    pub(super) fn output(&self) -> PathBuf {
+        self.temporary.join("release-checks")
+    }
 }
 fn remaining(deadline: Instant, reserve: Duration) -> Result<Duration> {
     deadline
@@ -85,7 +96,7 @@ pub(super) fn fence(deadline: Instant) -> Result<()> {
 pub(super) fn discover(node: Arc<Executable>, deadline: Instant) -> Result<Command> {
     let mut command = Command::capture(Program::Node, &["-e", EXPRESSION]);
     command.node = Some(node);
-    let left = remaining(deadline, COORDINATOR_TAIL + Duration::from_secs(25))?;
+    let left = remaining(deadline, FIXTURE_TAIL + Duration::from_secs(25))?;
     if left < Duration::from_secs(30) {
         return Err(Failure::new(124, "Release-check budget exhausted."));
     }
@@ -93,48 +104,77 @@ pub(super) fn discover(node: Arc<Executable>, deadline: Instant) -> Result<Comma
     command.capture = Some(4096);
     Ok(command)
 }
-pub(super) fn coordinator(
+/// The fixture as root through the selected `sudo`: this same feature
+/// binary, the explicit browser tools, the image under test, its new output
+/// directory and the controller environment's Ansible.
+pub(super) fn fixture(
     context: &Context,
-    node: &Path,
-    chromium: &Path,
-    http_policy: &Path,
-    python: Arc<Executable>,
+    tools: [&Path; 3],
+    sudo: Arc<Executable>,
     deadline: Instant,
 ) -> Result<Command> {
-    let mut command = Command::capture(
-        Program::Python,
-        &["-B", "build/ci_release_checks.py", "--controller"],
-    );
-    command.arguments.extend([
-        context
-            .temporary
-            .join("release-container-controller/bin/python")
-            .into_os_string(),
+    let [node, chromium, http_policy] = tools;
+    let mut command = Command::capture(Program::Sudo, &[]);
+    command.arguments = vec![
+        http_policy.as_os_str().to_owned(),
+        "release-fixture".into(),
+        "--disposable-host".into(),
+        "--image".into(),
+        context.image.clone().into(),
+        "--output".into(),
+        context.temporary.join("release-container").into_os_string(),
         "--node".into(),
         node.as_os_str().to_owned(),
         "--chromium".into(),
         chromium.as_os_str().to_owned(),
         "--http-policy-binary".into(),
         http_policy.as_os_str().to_owned(),
-        "--image".into(),
-        context.image.clone().into(),
-        "--fixture-output".into(),
-        context.temporary.join("release-container").into_os_string(),
-        "--output".into(),
-        context.temporary.join("release-checks").into_os_string(),
-    ]);
+        "--ansible".into(),
+        context
+            .temporary
+            .join("release-container-controller/bin/ansible-playbook")
+            .into_os_string(),
+    ];
     command.capture = None;
-    if remaining(deadline, GRACE + FINAL)? < COORDINATOR_BODY {
+    if remaining(deadline, GRACE + FINAL)? < FIXTURE_BODY {
         return Err(Failure::new(124, "Release-check budget exhausted."));
     }
-    command.timeout = COORDINATOR_BODY;
+    command.timeout = FIXTURE_BODY;
     command.grace = GRACE;
     command.release_checks = Some(super::invocation::Invocation::new(
         context,
-        python,
+        sudo,
         &command,
         deadline,
-        COORDINATOR_TAIL,
+        FIXTURE_TAIL,
     )?);
+    Ok(command)
+}
+/// The download-only scanner installer for the later image check: the
+/// checksum-pinned Linux AMD64 tools into `release-checks/tools`.
+pub(super) fn scanner(context: &Context, deadline: Instant) -> Result<Command> {
+    let mut arguments = vec![
+        "run",
+        "--locked",
+        "-q",
+        "-p",
+        "simplestchat-security",
+        "--",
+        "tools",
+        "install",
+        "--tools",
+    ];
+    arguments.extend(SCANNERS);
+    arguments.extend(["--platform", "linux-x86_64", "--directory"]);
+    let mut command = Command::capture(Program::Cargo, &arguments);
+    command
+        .arguments
+        .push(context.output().join("tools").into_os_string());
+    command.capture = None;
+    if remaining(deadline, GRACE + FINAL)? < SCANNER_BODY {
+        return Err(Failure::new(124, "Release-check budget exhausted."));
+    }
+    command.timeout = SCANNER_BODY;
+    command.grace = Duration::from_secs(5);
     Ok(command)
 }

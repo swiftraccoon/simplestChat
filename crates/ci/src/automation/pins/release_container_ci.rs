@@ -13,7 +13,6 @@ const PREPARE_START: &str = "Start the isolated release-container controller bui
 const INTEGRATION: &str = "App-only release and rollback on a disposable host";
 const CONTROLLER: &str = "Prepare the source-built native release controller";
 const INSTALLED: &str = "Install the source-built Ops executable where a prepared host keeps it";
-const HARNESS: &str = "build/release_container_harness.py";
 const ROLLOVER_SCRIPT: &str = "web/e2e/release-assets.cjs";
 const RETENTION: &str = "Preserve sanitized release-container report";
 const LOCAL_DIAGNOSTICS: &str = "Preserve private local release-container diagnostics";
@@ -136,8 +135,8 @@ fn fresh_host_and_job_deadline_include_the_existing_build() {
 /// The release integration runs the Ops executable this job built, by the
 /// path a signed release installs it at on a prepared host: root's, mode
 /// 0755, installed once, unconditionally, after it is built and before the
-/// integration. The harness names that path and no interpreter-run release
-/// helper.
+/// integration. The fixture's own tests pin that it runs this path; the
+/// browser check's two deployments run it too, and no interpreter.
 #[test]
 fn the_release_integration_runs_the_installed_source_built_ops_executable() {
     let deployment = Deployment::read();
@@ -162,26 +161,6 @@ fn the_release_integration_runs_the_installed_source_built_ops_executable() {
         installed,
         &["if", "continue-on-error", "env", "shell"]
     ));
-    let harness = checkout_file(HARNESS);
-    let path = "OPS = \"/usr/local/libexec/simplestchat-public/simplestchat-ops\"\n";
-    assert_eq!(harness.matches(path).count(), 1);
-    // Staging admits a whole budget of at most 600 seconds; a deployment
-    // needs more than the time it reserves for its one rollback.
-    for line in [
-        "FINAL = (\"--finalization-seconds\", \"60\")\n",
-        "        budget = \"600\" if action == \"stage\" else \"900\"",
-        "        argv = [OPS, \"release\", action, \"--revision\", candidate[\"revision\"], ",
-        "candidate[\"revision\"], \"--timeout-seconds\"]\n",
-        "self.commands.run([*argv, budget, *FINAL], timeout=240, success=False)\n",
-    ] {
-        assert_eq!(harness.matches(line).count(), 1, "{line}");
-    }
-    assert!(!harness.contains("release-public.py"));
-    // The proxy's configuration is root's and readable, as a prepared host
-    // keeps it: the deployment admits no other owner for that file.
-    let proxy = "        (CONFIG / \"Caddyfile\").chmod(0o644)";
-    assert_eq!(harness.matches(proxy).count(), 1);
-    assert!(!harness.contains("os.chown(CONFIG / \"Caddyfile\""));
     // The browser check's own two deployments are the same executable.
     let script = checkout_file(ROLLOVER_SCRIPT);
     for line in [

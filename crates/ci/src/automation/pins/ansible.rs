@@ -22,7 +22,7 @@ pub(super) fn root() -> PathBuf {
 /// One Ansible program: the checkout's controller environment when it exists,
 /// otherwise the first match on `PATH`, which is where the hosted test job
 /// installs the pinned controller requirements.
-pub(super) fn ansible_tool(name: &str) -> PathBuf {
+pub(crate) fn ansible_tool(name: &str) -> PathBuf {
     let local = root().join("ops/ansible/.venv/bin").join(name);
     if local.is_file() {
         return local;

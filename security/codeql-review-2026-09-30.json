@@ -609,7 +609,7 @@
       "number": 27,
       "severity": "high",
       "state": "open",
-      "disposition": "false-positive",
+      "disposition": "retired",
       "rationale": "The unchanged StrictUndefined Jinja Environment renders tracked local dotenv, SQL, Compose and PostgreSQL configuration, never HTML. The retained-asset capability receipt is JSON serialization outside Jinja; new browser fixture HTML is separately generated from bounded synthetic revision and content-hash values. Outputs remain exclusive mode 0600 files in the owned fixture. HTML escaping would corrupt these configuration formats. Re-reviewed against fresh local CodeQL 2.27.1 security analysis of 27d3f03044fd041fa9f58a66d0a162942a0c48c1 (all 50 Python queries), retaining the original scope and expiry.",
       "observedRevision": "b5b07c208b58828a7c2a0da6c85b7162269006c1",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/27",

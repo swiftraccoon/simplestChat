@@ -1489,31 +1489,39 @@ Playwright Chromium-path expression. Ordinary Node/Chromium symlinks resolve
 once to canonical nonempty regular executables. Metadata snapshots impose no
 executable-size ceiling and do not claim descriptor execution or exclusion of a
 same-UID writer. Discovery has a 30-second body, 5-second TERM grace, 20-second
-settlement allowance and 4096-byte stdout cap. Node, Chromium, selected Python
-and the feature checker are retained and checked through coordinator settlement,
-then explicitly closed. A coordinator-only capability checks the original
-remaining-tail deadline again at Native's final pre-spawn boundary.
+settlement allowance and 4096-byte stdout cap. Node, Chromium, the selected
+`sudo` and the feature checker are retained and checked until both overlapped
+commands settle, then explicitly closed. A fixture-only capability checks the
+original remaining-tail deadline again at Native's final pre-spawn boundary.
 
-The Python coordinator retains its parallel scanner-download and release-fixture
-policy, original image/output inputs, private output and status. Both caller forms
-require `--http-policy-binary ABSOLUTE_FEATURE_BINARY`; there is no Python checker
-fallback, implicit unfeatured binary or runtime Cargo build. For manual use, build
-`cargo build --locked -p simplestchat-ci --features release-http-policy --bin simplestchat-ci`,
-then
-pass the resulting absolute path to `build/test-release-container.py` alongside
-its existing required flags. A caller retains and rechecks the original checker
-file/path before and after its child settles, with explicit all-attempt close.
+The step then runs two owned process groups at once, each with its own Native
+owner and signal registration: the root fixture,
+`sudo FEATURE_BINARY release-fixture --disposable-host --image ID --output
+"$RUNNER_TEMP/release-container" --node NODE --chromium CHROMIUM
+--http-policy-binary FEATURE_BINARY --ansible
+"$RUNNER_TEMP/release-container-controller/bin/ansible-playbook"`, and the
+download-only scanner installer, `cargo run --locked -q -p simplestchat-security
+-- tools install --tools syft grype gitleaks --platform linux-x86_64 --directory
+"$RUNNER_TEMP/release-checks/tools"`, which the later image scan reads. Neither
+uses the other's engine or files. Each keeps its own status: one ordinary failure
+neither stops nor hides the other, and the step passes only when both passed.
+Their stdout and stderr go to private 0600 files under the new 0700
+`$RUNNER_TEMP/release-checks`, beside `summary.json` with each command's status
+or fixed runner failure and its seconds; the step prints the same lines.
+Both caller forms require `--http-policy-binary ABSOLUTE_FEATURE_BINARY`; there
+is no implicit unfeatured binary or runtime Cargo build of the checker.
 
-The wrapper admits one 1140-second entry: discovery 55 + coordinator body 850 +
-TERM 200 + Native settlement 20 + final fences 10 =1135, leaving five seconds of
-scheduling slack. The coordinator gives only its fixture task an 850-second body
-and 180-second TERM grace; scanner defaults remain unchanged. The fixture has a
-660-second work alarm, checker TERM 60 plus its existing five-second reap,
-100-second cleanup window and ten-second publication allowance: nominal 835,
-within the fixture's 850-second body. Repeated external signals latch during
-awaited child finalizers. Cleanup commands reserve their own body/TERM/reap inside
-one original 100-second monotonic deadline; known failures survive late clocks.
-These are scheduling allowances, not OS/reaping or cold-build guarantees.
+The wrapper admits one 1140-second entry: discovery 55 + fixture body 850 +
+TERM 200 + Native settlement 20 + final fences 10 = 1135, leaving five seconds of
+scheduling slack. The scanner download has a 300-second body and five-second TERM
+grace inside the same window. The fixture has a 660-second work deadline,
+checker TERM 60 plus its five-second reap, a 100-second cleanup window and ten
+seconds for publication: nominal 835, within its 850-second body. A signal or the
+work deadline stops the running command (TERM, its grace, then a group KILL and
+reap) and ends the work; during cleanup a signal is only latched, and cleanup
+commands each reserve their own grace and reap inside one original 100-second
+monotonic deadline. A latched signal still fails the run. These are scheduling
+allowances, not OS/reaping or cold-build guarantees.
 
 The opt-in `simplestchat-ci release-http-policy` owns the complete original passive
 response check. It requires Linux/root and only the original five flags:
@@ -1565,38 +1573,39 @@ explicit-close gates. Client/runtime Drop is not an observed internal socket,
 TLS-task or descriptor close receipt. No remote, browser-Origin, application,
 live TLS or privileged Docker interoperability is proved by this source port.
 
-The original Python checker, fifteen tests, harness and complete local import
-closure are retained byte-for-byte, with compiled and current-file byte/stamp
-pins checked before every reference subprocess. An offline oracle executes the actual fifteen
-tests and original selected predicates with an audit hook denying process and
-socket creation; unused YAML/template import APIs are fail-on-use sentinels.
+The checker's policy matrices are compared with the answers the retired Python
+checker gave for them, recorded in
+`crates/ci/src/release_http_policy/recorded_reference.json` before its removal.
 Rust comparisons preserve recursive duplicate/nonfinite refusal, integer/float
-identity and raw-byte bounds with Python's BOM and UTF16/32 JSON detection.
-The bounded JSON domain requires Unicode scalar strings/keys and depth below 128;
-Python's lone-surrogate and deeper irrelevant-label inputs are named refusals.
-Unicode decimal/header-whitespace fixtures use the pinned Python 3.14/Unicode 16
-profile. Owned fake HTTP/clock/file/controller cases and actual inert selected
-processes cover cancellation, timeout, overflow, original-seal mutation and
-all-attempt retirement. They never contact a Docker daemon or TLS endpoint.
+identity and raw-byte bounds. Owned fake HTTP/clock/file/controller cases and
+actual inert selected processes cover cancellation, timeout, overflow,
+original-seal mutation and all-attempt retirement. They never contact a Docker
+daemon or TLS endpoint.
 
-CI also runs `build/test-release-container.py` against that existing production
+The root `simplestchat-ci release-fixture` runs against that existing production
 image, using the public deployment templates and the Ops executable the same job
 built, installed where a signed release puts it on a prepared host
-(`/usr/local/libexec/simplestchat-public/simplestchat-ops`). Every stage and
+(`/usr/local/libexec/simplestchat-public/simplestchat-ops`). It refuses a host that
+is not Linux AMD64/ARM64 as root, any existing service or benchmark path, any
+existing container or project network, missing tooling, an occupied fixture port
+and less than 4 GiB free under `/srv`. It derives three fixture releases from the
+checked image (a baseline without the version endpoint, a candidate and a
+candidate whose server exits 42 at once), renders the deployment templates with
+the controller environment's `ansible-playbook` and the same template module a
+deployment uses, and makes only anchored fixture edits to the rendered text:
+ownership labels, loopback-only publication, the fixture certificate and the
+explicit proxy origin; an anchor that no longer occurs exactly refuses the run.
+The browser asset store is initialized by `simplestchat-ops release assets
+initialize --revision`, and each exported release archive is accepted by
+`simplestchat-ops release archive` before any release runs. Every stage and
 deployment of the check is `simplestchat-ops release stage|deploy` by that path.
-It checks a successful replacement, failed candidate startup and rollback while
-requiring PostgreSQL and Caddy to stay running. One case still calls the Python
-release helper in process: the same-image restart with the relay's settings.
+It checks a successful replacement and a failed candidate startup with its single
+rollback, each staged first without changing the selection or any running
+service, while requiring PostgreSQL and Caddy to stay the same containers, the
+durable database marker to survive and each release's own backup to carry its
+recorded digest and the expected tables.
 
-The same hosted fixture holds two Chromium documents across upgrade and rollback.
-Each first imports its edition-specific deferred chunk only after the selected
-backend no longer has it. The check requires direct backend 404s, successful
-proxy delivery, uncached HTML and revision metadata after every image change,
-unchanged document identities and zero capture calls. The fixture uses synthetic
-public chunks with the production binary and pinned proxy; it does not run a
-historical application or proxy binary.
-
-After fixture readiness, the harness also checks five fixed anonymous HTTPS
+After fixture readiness, the fixture also checks five fixed anonymous HTTPS
 responses for proxy headers/CSP, public JSON cache policy, absent cookies,
 missing-authorization rejection, private endpoint omission and bounded content.
 It verifies fixture ownership and the local CA and sends no account or chat
@@ -1658,36 +1667,51 @@ Actual CLI exit zero remains necessary. Source and inert publication checks do
 not qualify hosted or production execution.
 
 Run it only as root on a fresh, disposable Linux AMD64 or ARM64 host with a local
-Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,
-`update-ca-certificates`, and the
-[controller Python environment](../ops/ansible/README.md). The production image
-remains Linux/AMD64; an ARM64 fixture host needs AMD64 emulation. Use the CI-pinned
-Node/npm installation, install `web/e2e` with `npm ci --ignore-scripts`, and install
-its pinned Chromium with `npm --prefix web/e2e exec -- playwright install --with-deps chromium`.
+Docker Engine (API 1.48+), Compose, Buildx with the default `docker` driver,
+OpenSSL, curl, `nsenter`, `update-ca-certificates`, a `C.UTF-8` locale and the
+[controller environment](../ops/ansible/README.md), whose `ansible-playbook`
+renders the templates. The production image remains Linux/AMD64; an ARM64
+fixture host needs AMD64 emulation. Use the CI-pinned Node/npm installation,
+install `web/e2e` with `npm ci --ignore-scripts`, and install its pinned Chromium
+with `npm --prefix web/e2e exec -- playwright install --with-deps chromium`.
 Build the Ops executable and install it at its production path first, then pass
-both browser paths explicitly across `sudo`:
+the tool paths explicitly across `sudo`:
 
 ```sh
 cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops
 sudo install -D -o root -g root -m 0755 target/release/simplestchat-ops \
   /usr/local/libexec/simplestchat-public/simplestchat-ops
+cargo build --locked -p simplestchat-ci --features release-http-policy --bin simplestchat-ci
+release_ci="$PWD/target/debug/simplestchat-ci"
 release_node="$(command -v node)"
 release_chromium="$(node -e 'process.stdout.write(require("./web/e2e/node_modules/playwright").chromium.executablePath())')"
-sudo ops/ansible/.venv/bin/python -B build/test-release-container.py \
-  --disposable-host --image simplestchat-ci:production \
-  --node "$release_node" --chromium "$release_chromium" \
-  --output /tmp/simplestchat-release-check
+sudo "$release_ci" release-fixture --disposable-host --image simplestchat-ci:production \
+  --output /tmp/simplestchat-release-check --node "$release_node" \
+  --chromium "$release_chromium" --http-policy-binary "$release_ci" \
+  --ansible "$PWD/ops/ansible/.venv/bin/ansible-playbook"
 ```
 
-The output directory must be new. The helper refuses existing public deployment
+The output directory must be new. The fixture refuses existing public deployment
 paths/containers and occupied fixture ports. It creates private deployment
 fixtures and installs a local test certificate authority; do not use a workstation
 or deployed VPS. Verified owned containers are removed on normal completion;
-an interrupted command leaves uncertain resources untouched and reports failed
-cleanup. Private fixture files and derived test images remain until the disposable
-host is destroyed. CI uploads only sanitized `report.json`,
-never private logs, credentials or database dumps. This does not reboot a host,
-exercise real users/media or establish production outage duration.
+an interrupted or timed-out command leaves every resource untouched and reports
+`CommandSettlementUnconfirmed`. Private fixture files, per-command records
+(`private/command-NNN.json` with its `.stdout` and `.stderr`) and derived test
+images remain until the disposable host is destroyed. CI uploads only the
+sanitized `report.json`, never private logs, credentials or database dumps. It
+names the phase reached (`preflight`, `bootstrap`, `browser_asset_rollover`,
+`stage_candidate`, `deploy_candidate`, `stage_failed`, `deploy_failed`,
+`complete`), the fixed failure text, the last command started and the last one
+that failed, each by number, fixed operation name and bound or status, each
+release attempt's fixed outcome fields, the browser helper's fixed failure stage,
+the failed release's verified validator state, the cases that passed and how
+cleanup ended. Its own tests run whole fixture runs against an owned model of the
+engine and host, fail every work command in turn, and replay answers recorded
+from the retired Python fixture in
+`crates/ci/src/release_checks/fixture/recorded_reference.json`; they start no
+engine, browser or network request. This does not reboot a host, exercise real
+users/media, the managed TURN relay or establish production outage duration.
 
 Rust linting, native/PostgreSQL tests, the memoized native DTLS check and three
 browser suite groups (accounts, media, stress) run as parallel CI jobs. Their

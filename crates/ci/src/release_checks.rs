@@ -1,7 +1,9 @@
-//! Fixed browser discovery and the unchanged isolated release coordinator.
+//! Fixed browser discovery, then the disposable release fixture as root beside
+//! the scanner download.
 
 mod execute;
 mod files;
+mod fixture;
 pub(super) mod invocation;
 mod plan;
 #[cfg(test)]
@@ -39,7 +41,8 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
             .map_err(|_| files::failure("Release-check runtime unavailable."))?;
         runtime.block_on(async {
             let mut native = Native::new(&context.root, &context.environment, Signals::new()?);
-            execute::execute(&context, &mut native).await
+            let mut scanner = Native::new(&context.root, &context.environment, Signals::new()?);
+            execute::execute(&context, &mut native, &mut scanner).await
         })
     })();
     match result {
@@ -49,4 +52,9 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
             Ok(ExitCode::from(error.code))
         }
     }
+}
+
+/// `release-fixture`: the root fixture `release-checks` starts through `sudo`.
+pub(super) fn run_fixture(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {
+    fixture::run(root, arguments)
 }

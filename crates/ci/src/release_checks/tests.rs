@@ -1,4 +1,5 @@
-//! Fixed-plan, read-only filesystem and inert owned-process coverage.
+//! Fixed-plan, private-output and inert owned-process coverage of the
+//! overlapped release fixture and scanner download.
 
 use super::{
     execute, files,
@@ -28,6 +29,7 @@ struct Fixture {
     context: Context,
     node: PathBuf,
     chromium: PathBuf,
+    sudo: PathBuf,
 }
 impl Fixture {
     fn new() -> Self {
@@ -45,7 +47,9 @@ impl Fixture {
         fs::create_dir(&bin).unwrap();
         let node = bin.join("node");
         executable(&node, b"fixture Node");
-        executable(&bin.join("python3"), b"inert Python");
+        let sudo = bin.join("sudo");
+        executable(&sudo, b"inert sudo");
+        executable(&bin.join("cargo"), b"inert cargo");
         let chromium = root.join("browser with spaces");
         executable(&chromium, b"fixture Chromium");
         let environment = [
@@ -68,6 +72,7 @@ impl Fixture {
             context,
             node,
             chromium,
+            sudo,
         }
     }
 }
@@ -106,31 +111,43 @@ impl Executor for Fake<'_> {
         self.mode != "unclean"
     }
     async fn run(&mut self, mut request: Command) -> Result<Vec<u8>> {
-        let node = request.program == Program::Node;
-        if node {
-            let proof = request.node.take().unwrap();
-            assert_eq!(
-                proof.validate().unwrap(),
-                self.fixture.node.canonicalize().unwrap()
-            );
-            drop(proof);
-            assert_eq!(request.capture, Some(4096));
-        } else {
-            assert_eq!(request.program, Program::Python);
-            let proof = request.release_checks.take().unwrap();
-            proof.begin(&request).unwrap();
-            proof.validate(request.program, &request.arguments).unwrap();
-            drop(proof);
-            assert!(request.capture.is_none());
+        let program = request.program;
+        match program {
+            Program::Node => {
+                let proof = request.node.take().unwrap();
+                assert_eq!(
+                    proof.validate().unwrap(),
+                    self.fixture.node.canonicalize().unwrap()
+                );
+                drop(proof);
+                assert_eq!(request.capture, Some(4096));
+            }
+            Program::Sudo => {
+                let proof = request.release_checks.take().unwrap();
+                proof.begin(&request).unwrap();
+                assert_eq!(
+                    proof.validate(request.program, &request.arguments).unwrap(),
+                    self.fixture.sudo
+                );
+                drop(proof);
+                assert!(request.capture.is_none() && request.separate_logs.is_some());
+            }
+            _ => {
+                assert_eq!(program, Program::Cargo);
+                assert!(request.release_checks.is_none() && request.separate_logs.is_some());
+            }
         }
+        request.separate_logs = None;
         self.commands.push(request);
-        if (node && self.mode == "node_failure") || (!node && self.mode == "coordinator_failure") {
-            return Err(Failure::new(
-                if node { 42 } else { 17 },
-                "Fixed fixture failure.",
-            ));
+        let failed = match program {
+            Program::Node => (self.mode == "node_failure").then_some(42),
+            Program::Sudo => matches!(self.mode, "fixture_failure" | "both_failure").then_some(17),
+            _ => matches!(self.mode, "scanner_failure" | "both_failure").then_some(23),
+        };
+        if let Some(code) = failed {
+            return Err(Failure::child_exit(code));
         }
-        if node {
+        if program == Program::Node {
             let bytes = match self.mode {
                 "relative" => b"browser".to_vec(),
                 "newline" => format!("{}\n", self.fixture.chromium.display()).into_bytes(),
@@ -150,14 +167,14 @@ impl Executor for Fake<'_> {
             }
             Ok(bytes)
         } else {
-            if self.mode == "checker_changed" {
+            if self.mode == "checker_changed" && program == Program::Sudo {
                 fs::write(
                     &self.fixture.context.http_policy,
                     b"replacement feature binary",
                 )
                 .unwrap();
             }
-            if self.mode == "browser_changed" {
+            if self.mode == "browser_changed" && program == Program::Sudo {
                 fs::write(&self.fixture.chromium, b"replaced Chromium").unwrap();
             }
             Ok(vec![])
@@ -165,13 +182,26 @@ impl Executor for Fake<'_> {
     }
 }
 
-#[tokio::test]
-async fn exact_discovery_and_coordinator_arguments_keep_one_budget_and_inherited_output() {
+fn run(f: &Fixture, mode: &'static str) -> (Result<()>, Vec<Command>) {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let mut fake = Fake::new(f, mode);
+    let mut scanner = Fake::new(f, mode);
+    let result = runtime.block_on(execute::execute(&f.context, &mut fake, &mut scanner));
+    let mut commands = fake.commands;
+    commands.extend(scanner.commands);
+    (result, commands)
+}
+
+#[test]
+fn exact_discovery_fixture_and_scanner_arguments_keep_one_budget_and_private_logs() {
     let f = Fixture::new();
-    let mut fake = Fake::new(&f, "");
-    execute::execute(&f.context, &mut fake).await.unwrap();
-    assert_eq!(fake.commands.len(), 2);
-    assert_eq!(fake.commands[0].arguments, ["-e", plan::EXPRESSION]);
+    let (result, commands) = run(&f, "");
+    result.unwrap();
+    assert_eq!(commands.len(), 3);
+    assert_eq!(commands[0].arguments, ["-e", plan::EXPRESSION]);
     assert_eq!(
         plan::EXPRESSION,
         concat!(
@@ -179,67 +209,123 @@ async fn exact_discovery_and_coordinator_arguments_keep_one_budget_and_inherited
             "playwright\").chromium.executablePath())",
         )
     );
+    let temporary = &f.context.temporary;
     assert_eq!(
-        fake.commands[1].arguments,
+        commands[1].arguments,
         vec![
-            "-B".into(),
-            "build/ci_release_checks.py".into(),
-            "--controller".into(),
-            f.context
-                .temporary
-                .join("release-container-controller/bin/python")
-                .into_os_string(),
+            f.context.http_policy.clone().into_os_string(),
+            "release-fixture".into(),
+            "--disposable-host".into(),
+            "--image".into(),
+            f.context.image.clone().into(),
+            "--output".into(),
+            temporary.join("release-container").into_os_string(),
             "--node".into(),
             f.node.canonicalize().unwrap().into_os_string(),
             "--chromium".into(),
             f.chromium.canonicalize().unwrap().into_os_string(),
             "--http-policy-binary".into(),
             f.context.http_policy.clone().into_os_string(),
-            "--image".into(),
-            f.context.image.clone().into(),
-            "--fixture-output".into(),
-            f.context
-                .temporary
-                .join("release-container")
+            "--ansible".into(),
+            temporary
+                .join("release-container-controller/bin/ansible-playbook")
                 .into_os_string(),
-            "--output".into(),
-            f.context.temporary.join("release-checks").into_os_string()
         ]
     );
+    let output = temporary.join("release-checks");
+    let mut scanner: Vec<std::ffi::OsString> = [
+        "run",
+        "--locked",
+        "-q",
+        "-p",
+        "simplestchat-security",
+        "--",
+        "tools",
+        "install",
+        "--tools",
+        "syft",
+        "grype",
+        "gitleaks",
+        "--platform",
+        "linux-x86_64",
+        "--directory",
+    ]
+    .map(Into::into)
+    .into();
+    scanner.push(output.join("tools").into_os_string());
+    assert_eq!(commands[2].arguments, scanner);
     assert_eq!(plan::BUDGET, Duration::from_secs(1140));
-    assert!(fake.commands[0].timeout <= Duration::from_secs(30));
-    assert_eq!(fake.commands[1].timeout, Duration::from_secs(850));
-    assert_eq!(fake.commands[1].grace, Duration::from_secs(200));
-    assert!(
-        !f.context.temporary.join("release-checks").exists(),
-        "only coordinator creates its output"
-    );
+    assert!(commands[0].timeout <= Duration::from_secs(30));
+    assert_eq!(commands[1].timeout, Duration::from_secs(850));
+    assert_eq!(commands[1].grace, Duration::from_secs(200));
+    assert_eq!(commands[2].timeout, Duration::from_secs(300));
+    assert_eq!(commands[2].grace, Duration::from_secs(5));
+    let mode = |path: &Path| {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    };
+    assert_eq!(mode(&output), 0o700);
+    for name in [
+        "summary.json",
+        "release-fixture.stdout",
+        "release-fixture.stderr",
+        "scanner-tools.stdout",
+        "scanner-tools.stderr",
+    ] {
+        assert_eq!(mode(&output.join(name)), 0o600, "{name}");
+    }
+    let summary: serde_json::Value =
+        serde_json::from_slice(&fs::read(output.join("summary.json")).unwrap()).unwrap();
+    assert_eq!(summary["passed"], true);
+    assert_eq!(summary["checks"][0]["name"], "release-fixture");
+    assert_eq!(summary["checks"][1]["name"], "scanner-tools");
+    assert_eq!(summary["checks"][1]["status"], 0);
 }
 
-#[tokio::test]
-async fn discovery_or_coordinator_failures_keep_status_and_never_start_a_later_stage() {
-    for (mode, code, count) in [
-        ("node_failure", 42, 1),
-        ("coordinator_failure", 17, 2),
-        ("cancelled", 143, 0),
-        ("unclean", 1, 2),
+#[test]
+fn each_overlapped_failure_keeps_its_own_status_and_never_hides_the_other() {
+    for (mode, code, count, passed) in [
+        ("node_failure", 42, 1, None),
+        ("fixture_failure", 17, 3, Some([Some(17), Some(0)])),
+        ("scanner_failure", 23, 3, Some([Some(0), Some(23)])),
+        ("both_failure", 17, 3, Some([Some(17), Some(23)])),
+        ("cancelled", 143, 0, None),
+        ("unclean", 1, 3, Some([Some(0), Some(0)])),
     ] {
         let f = Fixture::new();
-        let mut fake = Fake::new(&f, mode);
-        assert_eq!(
-            execute::execute(&f.context, &mut fake)
-                .await
-                .unwrap_err()
-                .code,
-            code,
-            "{mode}"
-        );
-        assert_eq!(fake.commands.len(), count, "{mode}");
+        let (result, commands) = run(&f, mode);
+        assert_eq!(result.unwrap_err().code, code, "{mode}");
+        assert_eq!(commands.len(), count, "{mode}");
+        let summary = f.context.temporary.join("release-checks/summary.json");
+        match passed {
+            Some(statuses) => {
+                let summary: serde_json::Value =
+                    serde_json::from_slice(&fs::read(summary).unwrap()).unwrap();
+                assert_eq!(summary["passed"], statuses == [Some(0), Some(0)], "{mode}");
+                for (index, status) in statuses.iter().enumerate() {
+                    assert_eq!(
+                        summary["checks"][index]["status"],
+                        serde_json::json!(status),
+                        "{mode}"
+                    );
+                }
+            }
+            None => assert!(!summary.exists(), "{mode}"),
+        }
     }
 }
 
-#[tokio::test]
-async fn invalid_returned_paths_and_tool_mutation_refuse_success_without_echoing_input() {
+#[test]
+fn an_existing_output_directory_refuses_before_either_command_starts() {
+    let f = Fixture::new();
+    fs::create_dir(f.context.temporary.join("release-checks")).unwrap();
+    let (result, commands) = run(&f, "");
+    assert!(result.is_err());
+    assert_eq!(commands.len(), 1);
+}
+
+#[test]
+fn invalid_returned_paths_and_tool_mutation_refuse_success_without_echoing_input() {
     for mode in [
         "relative",
         "newline",
@@ -252,13 +338,13 @@ async fn invalid_returned_paths_and_tool_mutation_refuse_success_without_echoing
         "checker_changed",
     ] {
         let f = Fixture::new();
-        let mut fake = Fake::new(&f, mode);
-        let error = execute::execute(&f.context, &mut fake).await.unwrap_err();
+        let (result, commands) = run(&f, mode);
+        let error = result.unwrap_err();
         assert!(!error.message.contains(f.root.to_str().unwrap()));
         assert_eq!(
-            fake.commands.len(),
+            commands.len(),
             if matches!(mode, "browser_changed" | "checker_changed") {
-                2
+                3
             } else {
                 1
             },

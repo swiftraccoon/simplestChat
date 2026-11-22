@@ -1,12 +1,17 @@
 //! Release-check selections over retained executable identities: the first
 //! PATH Node and the discovered Chromium, whose received path never appears
-//! in diagnostics.
+//! in diagnostics; and the step's own private output files.
 
 use simplestchat_toolkit::{
     executable::{self, Executable, MAX_PATH, invalid},
     tooling::{Environment, Failure, Result},
 };
-use std::path::Path;
+use std::{
+    fs::File,
+    io::Write,
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
+    path::Path,
+};
 
 pub(super) fn failure(message: &str) -> Failure {
     Failure::new(1, message)
@@ -15,6 +20,30 @@ pub(super) fn failure(message: &str) -> Failure {
 /// Match the shell's first executable PATH candidate; no ambient PATH fallback.
 pub(super) fn node(root: &Path, environment: &Environment) -> Result<Executable> {
     executable::select(root, environment, std::ffi::OsStr::new("node"))
+}
+
+/// Create the new private directory `path`, refusing any existing entry.
+pub(super) fn private_directory(path: &Path) -> std::io::Result<()> {
+    std::fs::DirBuilder::new().mode(0o700).create(path)?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+}
+
+/// Create `path` as a new empty file of mode 0600.
+pub(super) fn create_private(path: &Path) -> std::io::Result<File> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    Ok(file)
+}
+
+/// Create `path` with exactly `bytes` and a final newline.
+pub(super) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut file = create_private(path)?;
+    file.write_all(bytes)?;
+    file.write_all(b"\n")
 }
 
 pub(super) fn chromium(bytes: &[u8]) -> Result<Executable> {

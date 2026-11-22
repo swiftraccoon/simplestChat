@@ -1,11 +1,8 @@
-total 32353
+total 27485
 11	build/build-release.py
-241	build/ci_release_checks.py
 11	build/fetch-release.py
 407	build/release_attestation.py
 747	build/release_build.py
-267	build/release_container_fixture.py
-1678	build/release_container_harness.py
 599	build/release_deploy.py
 722	build/release_fetch_controller.py
 461	build/security_archive.py
@@ -15,7 +12,6 @@ total 32353
 1124	build/security_vm_guest.py
 259	build/security_vm_qmp.py
 100	build/security_vm_release.py
-12	build/test-release-container.py
 93	build/verify-release.py
 772	build/vps_ops_bootstrap.py
 241	ops/ansible/callback_plugins/release_timing.py
@@ -37,7 +33,6 @@ total 32353
 188	ops/ansible/files/runtime_profile.py
 344	ops/ansible/tests/test_bounded_process.py
 188	ops/ansible/tests/test_browser_assets_command.py
-276	ops/ansible/tests/test_ci_release_checks.py
 675	ops/ansible/tests/test_deploy_controller.py
 267	ops/ansible/tests/test_force_release.py
 78	ops/ansible/tests/test_migration_prepare.py
@@ -48,9 +43,6 @@ total 32353
 306	ops/ansible/tests/test_release_assets.py
 400	ops/ansible/tests/test_release_attestation.py
 1131	ops/ansible/tests/test_release_build.py
-400	ops/ansible/tests/test_release_container_fixture.py
-1901	ops/ansible/tests/test_release_container_harness.py
-93	ops/ansible/tests/test_release_container_policy.py
 893	ops/ansible/tests/test_release_fetch.py
 924	ops/ansible/tests/test_release_fetch_controller.py
 317	ops/ansible/tests/test_release_json.py
