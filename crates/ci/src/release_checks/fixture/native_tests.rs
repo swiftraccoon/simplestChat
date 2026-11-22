@@ -231,7 +231,9 @@ fn input_and_one_inherited_descriptor_reach_the_child_and_nothing_else_starts() 
         assert_eq!(owned.commands.text(request).await.unwrap(), "from input");
         let descriptor = std::os::fd::OwnedFd::from(fs::File::open(&held).unwrap());
         let number = std::os::fd::AsRawFd::as_raw_fd(&descriptor);
-        let mut request = shell(&format!("cat <&{number}"));
+        // The child names the descriptor by path, as the readiness probe does:
+        // a redirection such as `<&N` takes only one digit in dash.
+        let mut request = shell(&format!("cat /dev/fd/{number}"));
         request.inherit = Some(descriptor);
         assert_eq!(owned.commands.text(request).await.unwrap(), "held open");
         let link = owned.scratch.0.join("link");
