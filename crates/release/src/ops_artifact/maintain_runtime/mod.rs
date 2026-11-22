@@ -1,5 +1,6 @@
 //! Rust outer keeper for the native guest and frozen installation comparisons.
 
+mod ansible;
 mod auth;
 mod catalog;
 mod control;
@@ -9,9 +10,15 @@ mod deploy_options;
 mod deploy_projection;
 #[cfg(test)]
 mod deploy_workflow_tests;
+mod evidence;
 mod execute;
 mod files;
 mod host_projection;
+mod infrastructure;
+#[cfg(test)]
+mod infrastructure_oracle_tests;
+#[cfg(test)]
+mod infrastructure_tests;
 #[cfg(test)]
 mod install_tests;
 mod options;
@@ -33,16 +40,47 @@ pub(super) fn run_host(arguments: &[String]) -> std::process::ExitCode {
 pub(super) fn run_deploy(arguments: &[String]) -> std::process::ExitCode {
     run_for(arguments, options::Purpose::Deploy)
 }
+/// The scheduled infrastructure job, full or (`--boot-only`) boot scope.
+pub(super) fn run_infrastructure(arguments: &[String]) -> std::process::ExitCode {
+    let purpose = if arguments.iter().any(|word| word == "--boot-only") {
+        options::Purpose::Boot
+    } else {
+        options::Purpose::Infrastructure
+    };
+    run_for(arguments, purpose)
+}
 enum Selection {
     Maintenance(options::Options),
     Deploy(deploy_options::DeployOptions),
+    Infrastructure(infrastructure::Request),
 }
 impl Selection {
-    fn options(&self) -> &options::Options {
+    fn output(&self) -> &std::path::Path {
         match self {
-            Self::Maintenance(options) => options,
-            Self::Deploy(options) => &options.common,
+            Self::Maintenance(options) => &options.output,
+            Self::Deploy(options) => &options.common.output,
+            Self::Infrastructure(request) => &request.output,
         }
+    }
+    fn scenario(&self) -> &str {
+        match self {
+            Self::Maintenance(options) => &options.scenario,
+            Self::Deploy(options) => &options.common.scenario,
+            Self::Infrastructure(request) => request.purpose.cases()[0],
+        }
+    }
+}
+/// Mark `report` failed by `error`, recorded after the flow concluded it:
+/// nothing it claimed passes or validates any longer, and an unnamed failure
+/// is the finalization's.
+fn failed_after(report: &mut serde_json::Value, error: Error) {
+    report["passed"] = false.into();
+    if report.get("fullDeploymentValidated").is_some() {
+        report["fullDeploymentValidated"] = false.into();
+    }
+    report["failureKind"] = error.kind().into();
+    if report["failure"].is_null() {
+        report["failure"] = "finalization".into();
     }
 }
 fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::ExitCode {
@@ -57,6 +95,10 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
         }
         options::Purpose::Deploy => deploy_options::DeployOptions::parse(arguments)
             .map(|value| value.map(Selection::Deploy)),
+        options::Purpose::Infrastructure | options::Purpose::Boot => {
+            infrastructure::Request::parse(arguments)
+                .map(|value| value.map(Selection::Infrastructure))
+        }
     };
     let selection = match parsed {
         Ok(None) => {
@@ -69,7 +111,6 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
             return std::process::ExitCode::from(2);
         }
     };
-    let options = selection.options();
     let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
     let mut control = match control::Control::for_purpose(started, purpose) {
         Ok(value) => value,
@@ -91,6 +132,9 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
                 Selection::Deploy(options) => {
                     runtime.block_on(deploy_execute::run(options, &mut control))
                 }
+                Selection::Infrastructure(request) => {
+                    runtime.block_on(infrastructure::run(request, &mut control))
+                }
             };
             drop(runtime);
             report
@@ -100,7 +144,7 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
             control.settle();
             serde_json::json!({"schemaVersion":2,
                 "scope":purpose.summary_scope(),
-                "scenario":options.scenario,"passed":false,"failure":"runtime",
+                "scenario":selection.scenario(),"passed":false,"failure":"runtime",
                 "failureKind":"io","cleanupPassed":false,"preparationQemu":null})
         }
     };
@@ -109,19 +153,19 @@ fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::Exi
         control.record(error);
     }
     if let Some(error) = control.first {
-        report["passed"] = false.into();
-        report["failureKind"] = error.kind().into();
-        if report["failure"].is_null() {
-            report["failure"] = "finalization".into();
-        }
+        failed_after(&mut report, error);
     }
     let published = (|| {
         let bytes = auth::encoded(&report)?;
         if bytes.len() > 131072 {
             return Err(Error::Refused);
         }
-        if options.output.is_dir() {
-            files::write(&options.output.join("summary.json"), &bytes, &mut control)?;
+        if selection.output().is_dir() {
+            files::write(
+                &selection.output().join("summary.json"),
+                &bytes,
+                &mut control,
+            )?;
         }
         control.check()?;
         let mut output = std::io::stdout().lock();

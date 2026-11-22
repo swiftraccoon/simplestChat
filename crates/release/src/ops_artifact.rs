@@ -64,7 +64,8 @@ simplestchat-release ops-artifact maintain-host-runtime --run-id N --run-attempt
 --output ABS\n\
 simplestchat-release ops-artifact deploy-runtime --run-id N --run-attempt N --artifact-id N \
 --server-artifact-id N --previous-revision SHA --previous-run-id N \
---previous-run-attempt N --previous-artifact-id N --output ABS";
+--previous-run-attempt N --previous-artifact-id N --output ABS\n\
+simplestchat-release ops-artifact infrastructure-runtime [--boot-only] --output ABS";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
     if let Some((operation, arguments)) = arguments.split_first()
@@ -81,6 +82,11 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         && operation == "maintain-host-runtime"
     {
         return Ok(maintain_runtime::run_host(arguments));
+    }
+    if let Some((operation, arguments)) = arguments.split_first()
+        && operation == "infrastructure-runtime"
+    {
+        return Ok(maintain_runtime::run_infrastructure(arguments));
     }
     if let Some((operation, arguments)) = arguments.split_first()
         && operation == "export"

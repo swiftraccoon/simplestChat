@@ -15,6 +15,8 @@ pub mod verify;
 
 pub mod fetch;
 
+pub mod infrastructure;
+
 pub mod ledger;
 
 pub mod receive;

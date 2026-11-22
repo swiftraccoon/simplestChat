@@ -11,6 +11,7 @@ pub(super) use session::Session;
 use super::{
     Error, Result,
     control::Control,
+    evidence,
     files::{self, Original},
     process::Runner,
 };
@@ -44,18 +45,18 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const IMAGE_MAX: u64 = 2 * GIB;
 const STREAM_MAX: usize = 2 * 1024 * 1024;
 const POLL: Duration = Duration::from_millis(100);
+/// The first standard error bytes a failed startup's evidence projects.
+const STDERR_PREFIX: usize = 8192;
 
-fn watchdog_seconds_for(
+pub(super) fn watchdog_seconds_for(
     purpose: super::options::Purpose,
     end: Instant,
     now: Instant,
 ) -> Result<u64> {
-    let maximum = match purpose {
-        super::options::Purpose::Prerequisite => 1800,
-        super::options::Purpose::Host => 3780,
-        super::options::Purpose::Deploy => 4500,
-    };
-    let seconds = end.saturating_duration_since(now).as_secs().min(maximum);
+    let seconds = end
+        .saturating_duration_since(now)
+        .as_secs()
+        .min(purpose.watchdog());
     if seconds == 0 {
         Err(Error::Deadline)
     } else {
@@ -191,7 +192,8 @@ pub(super) fn preflight(work: &Path, control: &mut Control) -> Result<()> {
     control.check()
 }
 
-fn pin(data: &[u8]) -> Result<(String, String)> {
+/// The reviewed Debian image's URL and SHA-512 from its pin file.
+pub(super) fn pin(data: &[u8]) -> Result<(String, String)> {
     let row = super::decode(data)?;
     let object = row.as_object().ok_or(Error::Refused)?;
     let expected = [
@@ -232,6 +234,43 @@ fn pin(data: &[u8]) -> Result<(String, String)> {
         return Err(Error::Refused);
     }
     Ok((url.into(), digest.into()))
+}
+
+/// The cloud-init seed of one run: `user-data` with only the fixture's own
+/// host key pair, its locked `fixture` user with the client key and the
+/// run's root-only marker; `meta-data`; and the one `known_hosts` line that
+/// pins the guest's host key on its loopback port. Either public key that is
+/// not a generated `vm-fixture` Ed25519 key is refused.
+pub(super) fn seed(
+    run_id: &str,
+    port: u16,
+    client: &[u8],
+    host: &[u8],
+    private: &[u8],
+) -> Result<[Vec<u8>; 3]> {
+    let key = regex::Regex::new("^ssh-ed25519 [A-Za-z0-9+/=]+ vm-fixture$")
+        .map_err(|_| Error::Refused)?;
+    let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).map_err(|_| Error::Refused);
+    let (client, host, private) = (text(client)?, text(host)?, text(private)?);
+    let (client, host) = (client.trim(), host.trim());
+    if !key.is_match(client) || !key.is_match(host) {
+        return Err(Error::Refused);
+    }
+    let config = json!({"hostname":"simplestchat-fixture",
+        "ssh_pwauth":false,"disable_root":true,
+        "ssh_keys":{"ed25519_private":private,"ed25519_public":host},
+        "users":[{"name":"fixture","lock_passwd":true,"shell":"/bin/bash",
+            "sudo":["ALL=(ALL) NOPASSWD:ALL"],"ssh_authorized_keys":[client]}],
+        "write_files":[{"path":"/etc/simplestchat-vm-fixture",
+            "owner":"root:root",
+            "permissions":"0600","content":format!("{run_id}\n")}]});
+    let mut user = b"#cloud-config\n".to_vec();
+    user.extend(serde_json::to_vec(&config).map_err(|_| Error::Input)?);
+    user.push(b'\n');
+    let meta = json!({"instance-id":run_id,"local-hostname":"simplestchat-fixture"});
+    let meta = serde_json::to_vec(&meta).map_err(|_| Error::Input)?;
+    let known = format!("[127.0.0.1]:{port} {host}\n").into_bytes();
+    Ok([user, meta, known])
 }
 
 fn verify_cloud(original: &Original, expected: &str, control: &mut Control) -> Result<()> {
@@ -539,6 +578,9 @@ impl StartupProfile {
 struct StderrObservation {
     class: StderrClass,
     sha256: String,
+    bytes: u64,
+    prefix: usize,
+    projection: Value,
 }
 
 #[derive(Clone, Copy)]
@@ -557,6 +599,7 @@ struct ReaderFacts {
     completed: bool,
     uncertain: bool,
     stderr: Option<StderrObservation>,
+    serial: evidence::Serial,
 }
 impl ReaderFacts {
     fn fail(
@@ -586,12 +629,17 @@ struct ReaderOwned {
     logs: [Option<File>; 2],
 }
 impl ReaderOwned {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one bounded read of both owned streams under the epoch's flags"
+    )]
     fn pump(
         &mut self,
         facts: &mut ReaderFacts,
         failure: &Arc<Mutex<Option<Error>>>,
         health: &AtomicBool,
         closing: &AtomicBool,
+        authenticated: &AtomicBool,
         limits: [usize; 2],
         end: Instant,
     ) -> Result<bool> {
@@ -622,6 +670,10 @@ impl ReaderOwned {
                         facts.fail(ReaderFault::UnexpectedEof, failure, health);
                     }
                     return Ok(());
+                }
+                // Serial output is boot evidence only until SSH authenticates.
+                if index == 0 && !authenticated.load(Ordering::SeqCst) {
+                    facts.serial.observe(&block[..count]);
                 }
                 let output = self.logs[index].as_mut().ok_or(Error::Close)?;
                 let mut written = 0;
@@ -686,19 +738,23 @@ impl ReaderOwned {
             }
             offset += count as u64;
             hash.update(&block[..count]);
-            if before.len() <= 8192 {
-                prefix.extend_from_slice(&block[..count]);
-            }
+            let room = STDERR_PREFIX.saturating_sub(prefix.len());
+            prefix.extend_from_slice(&block[..count.min(room)]);
         }
         if !files::same(&before, &file.metadata().map_err(|_| Error::Io)?) {
             return Err(Error::Changed);
         }
         live(end)?;
+        let whole = before.len() <= STDERR_PREFIX as u64;
         Ok(StderrObservation {
             class: profile
+                .filter(|_| whole)
                 .map(|profile| profile.classify(&prefix))
                 .unwrap_or(StderrClass::Unclassified),
             sha256: files::hex(&hash.finalize()),
+            bytes: before.len(),
+            prefix: prefix.len(),
+            projection: evidence::startup_errors(&prefix),
         })
     }
     fn finish(&mut self, facts: &mut ReaderFacts, failure: &Arc<Mutex<Option<Error>>>) {
@@ -755,6 +811,7 @@ pub(super) struct Vm {
     authenticated: Arc<AtomicBool>,
     startup_profile: Option<StartupProfile>,
     cloud_init: bool,
+    cloud_report: Option<Value>,
     first: Option<Error>,
     status: Option<i32>,
     retired: bool,
@@ -792,6 +849,7 @@ impl Vm {
             authenticated: Arc::new(AtomicBool::new(false)),
             startup_profile: None,
             cloud_init: false,
+            cloud_report: None,
             first: None,
             status: None,
             retired: false,
@@ -799,12 +857,16 @@ impl Vm {
             closed: false,
         }
     }
+    /// Prepare, launch and boot one guest into `slot`. A failed preparation
+    /// is finalized before it returns and stays in `slot`, so its caller keeps
+    /// the epoch's diagnostics.
     pub async fn create(
+        slot: &mut Option<Self>,
         runner: &mut Runner,
         control: &mut Control,
         work: &Path,
         run_id: &str,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         if control.settling {
             return Err(Error::Refused);
         }
@@ -844,7 +906,13 @@ impl Vm {
         let port = selected?;
         closed?;
         control.check()?;
-        let mut vm = Self::epoch(work.into(), port, control.end(), run_id.into(), false);
+        let vm = slot.insert(Self::epoch(
+            work.into(),
+            port,
+            control.end(),
+            run_id.into(),
+            false,
+        ));
         let result = vm.prepare(runner, control, run_id).await;
         if let Err(error) = result {
             let observed = *vm
@@ -859,7 +927,11 @@ impl Vm {
             }
             return Err(error);
         }
-        Ok(vm)
+        Ok(())
+    }
+    /// Whether this epoch started its QEMU child.
+    pub fn launched(&self) -> bool {
+        self.group.is_some()
     }
     fn hold(&mut self, name: &str, maximum: u64, control: &mut Control) -> Result<usize> {
         let original = Original::open(&self.work.join(name), maximum, control)?;
@@ -986,43 +1058,13 @@ impl Vm {
                 .ok_or(Error::Refused)?
                 .data(8192, control)
         };
-        let key = regex::Regex::new("^ssh-ed25519 [A-Za-z0-9+/=]+ vm-fixture$")
-            .map_err(|_| Error::Refused)?;
-        let client = String::from_utf8(read("client.pub", &self.originals, control)?)
-            .map_err(|_| Error::Refused)?;
-        let host = String::from_utf8(read("host.pub", &self.originals, control)?)
-            .map_err(|_| Error::Refused)?;
-        let client = client.trim();
-        let host = host.trim();
-        if !key.is_match(client) || !key.is_match(host) {
-            return Err(Error::Refused);
-        }
-        let private = String::from_utf8(read("host", &self.originals, control)?)
-            .map_err(|_| Error::Refused)?;
-        let config = json!({"hostname":"simplestchat-fixture",
-            "ssh_pwauth":false,"disable_root":true,
-            "ssh_keys":{"ed25519_private":private,"ed25519_public":host},
-            "users":[{"name":"fixture","lock_passwd":true,"shell":"/bin/bash",
-                "sudo":["ALL=(ALL) NOPASSWD:ALL"],"ssh_authorized_keys":[client]}],
-            "write_files":[{"path":"/etc/simplestchat-vm-fixture",
-                "owner":"root:root",
-                "permissions":"0600","content":format!("{run_id}\n")}]});
-        let mut user = b"#cloud-config\n".to_vec();
-        user.extend(serde_json::to_vec(&config).map_err(|_| Error::Input)?);
-        user.push(b'\n');
+        let client = read("client.pub", &self.originals, control)?;
+        let host = read("host.pub", &self.originals, control)?;
+        let private = read("host", &self.originals, control)?;
+        let [user, meta, known] = seed(run_id, self.port, &client, &host, &private)?;
         files::write(&self.work.join("user-data"), &user, control)?;
-        files::write(
-            &self.work.join("meta-data"),
-            &serde_json::to_vec(&json!({
-            "instance-id":run_id,"local-hostname":"simplestchat-fixture"}))
-            .map_err(|_| Error::Input)?,
-            control,
-        )?;
-        files::write(
-            &self.work.join("known_hosts"),
-            format!("[127.0.0.1]:{} {host}\n", self.port).as_bytes(),
-            control,
-        )?;
+        files::write(&self.work.join("meta-data"), &meta, control)?;
+        files::write(&self.work.join("known_hosts"), &known, control)?;
         for name in ["user-data", "meta-data", "known_hosts"] {
             self.hold(name, 16384, control)?;
         }
@@ -1388,7 +1430,12 @@ impl Vm {
                 &[0, 1, 2],
             )
             .await?;
-        self.cloud_init = cloud_passed(&result.stdout, result.status)?;
+        let projected = evidence::cloud_status(&result.stdout, result.status);
+        self.cloud_report = Some(match &projected {
+            Ok(projection) => projection.clone(),
+            Err(code) => json!({"exitStatus":result.status,"parsed":false,"failure":code}),
+        });
+        self.cloud_init = projected.is_ok_and(|projection| projection["passed"] == true);
         if !self.cloud_init {
             return Err(Error::Refused);
         }
@@ -1422,7 +1469,7 @@ fn qemu_arguments(
     clippy::too_many_arguments,
     reason = "The closed purpose selects its own existing fixed QEMU profile"
 )]
-fn qemu_arguments_for(
+pub(super) fn qemu_arguments_for(
     purpose: super::options::Purpose,
     work: &Path,
     port: u16,
@@ -1433,12 +1480,7 @@ fn qemu_arguments_for(
     seconds: u64,
 ) -> Result<Vec<OsString>> {
     if port < 1024
-        || !(1..=match purpose {
-            super::options::Purpose::Prerequisite => 1800,
-            super::options::Purpose::Host => 3780,
-            super::options::Purpose::Deploy => 4500,
-        })
-            .contains(&seconds)
+        || !(1..=purpose.watchdog()).contains(&seconds)
         || !files::safe_path(work)
         || run_id.len() != 32
         || !run_id
@@ -1565,7 +1607,15 @@ impl Vm {
                     let complete = {
                         let mut owned = owned.lock().map_err(|_| Error::Io)?;
                         let mut facts = facts.lock().map_err(|_| Error::Io)?;
-                        owned.pump(&mut facts, &failure, &health, &closing, limits, end)?
+                        owned.pump(
+                            &mut facts,
+                            &failure,
+                            &health,
+                            &closing,
+                            &authenticated,
+                            limits,
+                            end,
+                        )?
                     };
                     if complete {
                         return live(end);
@@ -1847,7 +1897,9 @@ impl Vm {
         {
             return None;
         }
-        let status = self.status.filter(|value| *value != 0)?;
+        // A clean exit before SSH is a failed startup too: a guest reset
+        // that QEMU turned into a shutdown exits zero.
+        let status = self.status?;
         let data = self.facts.lock().ok()?;
         if data.uncertain
             || !data.joined
@@ -1860,7 +1912,10 @@ impl Vm {
         Some(
             json!({"epoch":if self.restricted {"restricted"} else {"preparation"},
             "rawStatus":status,"stderrClass":stderr.class.name(),
-            "stderrSha256":stderr.sha256}),
+            "stderrSha256":stderr.sha256,"stderrBytes":stderr.bytes,
+            "prefixBytes":stderr.prefix,
+            "truncated":stderr.bytes > stderr.prefix as u64,
+            "stderr":stderr.projection,"serial":data.serial.to_json()}),
         )
     }
     pub fn diagnostics(&self) -> Value {
@@ -1878,85 +1933,10 @@ impl Vm {
             "stdoutBytes":data.bytes[0],"stderrBytes":data.bytes[1],
             "stdoutEof":data.eof[0],"stderrEof":data.eof[1],
             "allReturnedPipesAndLogsClosed":data.closed.iter().all(|v|*v),
-            "qmp":qmp,"closeReturned":self.closed&&self.first.is_none()
+            "qmp":qmp,"cloudInit":self.cloud_report,
+            "closeReturned":self.closed&&self.first.is_none()
                 &&self.failure.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none()})
     }
-}
-
-fn cloud_errors(row: &Value) -> Result<bool> {
-    let errors = row["errors"].as_array().ok_or(Error::Refused)?;
-    let recoverable = row["recoverable_errors"]
-        .as_object()
-        .ok_or(Error::Refused)?;
-    if recoverable.len() + 1 > 17 {
-        return Err(Error::Refused);
-    }
-    let mut count = 0;
-    for group in std::iter::once(errors).chain(
-        recoverable
-            .values()
-            .map(|v| v.as_array())
-            .collect::<Option<Vec<_>>>()
-            .ok_or(Error::Refused)?,
-    ) {
-        if group.len() > 128 {
-            return Err(Error::Refused);
-        }
-        for value in group {
-            let message = value.as_str().ok_or(Error::Refused)?;
-            if message.chars().count() > 4096 {
-                return Err(Error::Refused);
-            }
-            count += 1;
-        }
-    }
-    if count > 512 {
-        return Err(Error::Refused);
-    }
-    Ok(count == 0)
-}
-fn cloud_passed(bytes: &[u8], status: i32) -> Result<bool> {
-    if bytes.len() > 65536 {
-        return Err(Error::Refused);
-    }
-    let row = super::decode(bytes)?;
-    let running = ["not started", "running", "done", "disabled"];
-    let label = row["status"].as_str().ok_or(Error::Refused)?;
-    let extended = row["extended_status"].as_str().ok_or(Error::Refused)?;
-    if !running.contains(&label) && label != "error" {
-        return Err(Error::Refused);
-    }
-    if !running.contains(&extended)
-        && !matches!(extended, "degraded done" | "degraded running")
-        && !running
-            .iter()
-            .any(|name| extended == format!("error - {name}"))
-    {
-        return Err(Error::Refused);
-    }
-    let stages = ["init-local", "init", "modules-config", "modules-final"];
-    if row.get("stage").is_none()
-        || (!row["stage"].is_null()
-            && row["stage"]
-                .as_str()
-                .is_none_or(|value| !stages.contains(&value)))
-    {
-        return Err(Error::Refused);
-    }
-    let mut healthy = cloud_errors(&row)?;
-    let mut count = 0;
-    for stage in stages {
-        if let Some(value) = row.get(stage) {
-            healthy &= cloud_errors(value)?;
-            count += 1;
-        }
-    }
-    Ok(status == 0
-        && label == "done"
-        && extended == "done"
-        && row["stage"].is_null()
-        && count == 4
-        && healthy)
 }
 
 #[cfg(test)]
@@ -2039,6 +2019,7 @@ mod tests {
                     &self.vm.failure,
                     &self.vm.health,
                     &self.vm.closing,
+                    &self.vm.authenticated,
                     limits,
                     self.vm.end,
                 )
@@ -2261,7 +2242,12 @@ mod tests {
             assert_eq!(complete, Ok(true));
             assert_eq!(first, None);
             assert!(before_ssh.is_some());
-            assert!(zero.is_none() && unknown.is_none() && admitted.is_none());
+            // A clean exit before SSH is still a failed startup and is described.
+            let zero = zero.unwrap();
+            assert_eq!(zero["rawStatus"], 0);
+            assert_eq!(zero["serial"]["milestones"], json!([]));
+            assert_eq!(zero["stderr"], json!({"messages": [], "withheldLines": 0}));
+            assert!(unknown.is_none() && admitted.is_none());
         }
 
         #[test]
@@ -2476,6 +2462,34 @@ mod tests {
             assert!(pin(changed.as_bytes()).is_err());
         }
     }
+    /// The cloud image is admitted only while its held bytes hash to the
+    /// pinned SHA-512; one changed byte is a changed image.
+    #[test]
+    fn the_cloud_image_must_hash_to_its_pin() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir()
+            .canonicalize()
+            .unwrap()
+            .join(format!("maintain-cloud-image-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        let image = root.join("base.qcow2");
+        fs::write(&image, b"cloud image fixture").unwrap();
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut original = Original::open(&image, IMAGE_MAX, &mut control).unwrap();
+        let pinned = files::hex(&Sha512::digest(b"cloud image fixture"));
+        let other = files::hex(&Sha512::digest(b"cloud image fixturf"));
+        let admitted = verify_cloud(&original, &pinned, &mut control);
+        let changed = verify_cloud(&original, &other, &mut control);
+        let finished = original.finish(&mut control);
+        control.settle();
+        let settled = control.finish();
+        let removed = fs::remove_dir_all(&root);
+        assert_eq!(admitted, Ok(()));
+        assert_eq!(changed, Err(Error::Changed));
+        assert_eq!((finished, settled), (Ok(()), Ok(())));
+        assert!(removed.is_ok());
+    }
     #[test]
     fn ssh_is_single_fixed_loopback_destination_without_ambient_policy() {
         let args =
@@ -2614,24 +2628,18 @@ mod tests {
         let mut row = json!({"status":"done","extended_status":"done","stage":null,
             "errors":[],"recoverable_errors":{},"init-local":clean,"init":clean,
             "modules-config":clean,"modules-final":clean});
-        assert_eq!(
-            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
-            Ok(true)
-        );
-        assert_eq!(
-            cloud_passed(&serde_json::to_vec(&row).unwrap(), 2),
-            Ok(false)
-        );
+        let passed = |row: &Value, status| {
+            evidence::cloud_status(&serde_json::to_vec(row).unwrap(), status)
+                .map(|projection| projection["passed"] == true)
+        };
+        assert_eq!(passed(&row, 0), Ok(true));
+        assert_eq!(passed(&row, 2), Ok(false));
         row["modules-final"]["errors"] = json!(["INERT_SECRET"]);
-        assert_eq!(
-            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
-            Ok(false)
-        );
+        assert_eq!(passed(&row, 0), Ok(false));
+        let projection = evidence::cloud_status(&serde_json::to_vec(&row).unwrap(), 0).unwrap();
+        assert!(!projection.to_string().contains("INERT_SECRET"));
         row.as_object_mut().unwrap().remove("stage");
-        assert_eq!(
-            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
-            Err(Error::Refused)
-        );
+        assert_eq!(passed(&row, 0), Err("vm_cloud_init_stage"));
     }
 }
 

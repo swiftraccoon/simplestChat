@@ -16,7 +16,7 @@ const RESPONSE: usize = 4 * 1024 * 1024;
 const RECORD: usize = 64 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Revision(String);
+pub(crate) struct Revision(String);
 impl Revision {
     pub fn as_str(&self) -> &str {
         &self.0
@@ -32,39 +32,39 @@ impl Revision {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct RunId(u64);
+pub(crate) struct RunId(u64);
 impl RunId {
     pub fn get(self) -> u64 {
         self.0
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Attempt(u64);
+pub(crate) struct Attempt(u64);
 impl Attempt {
     pub fn get(self) -> u64 {
         self.0
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct ArtifactId(u64);
+pub(crate) struct ArtifactId(u64);
 impl ArtifactId {
     pub fn get(self) -> u64 {
         self.0
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Run {
+pub(crate) struct Run {
     pub id: RunId,
     pub attempt: Attempt,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Artifact {
+pub(crate) struct Artifact {
     pub id: ArtifactId,
     pub zip_bytes: u64,
     pub zip_sha256: String,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ArtifactKind {
+pub(crate) enum ArtifactKind {
     Application,
     Ops,
 }
@@ -86,7 +86,7 @@ impl ArtifactKind {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum RunProgress {
+pub(crate) enum RunProgress {
     Pending,
     Success,
 }
@@ -222,7 +222,7 @@ struct Runs {
 }
 
 /// Reject missing, ambiguous or truncated listings; never choose an older success.
-pub(super) fn runs(bytes: &[u8], revision: &Revision) -> Result<Run> {
+pub(crate) fn runs(bytes: &[u8], revision: &Revision) -> Result<Run> {
     let listing: Runs = decode(bytes, RESPONSE)?;
     if listing.total_count != 1 || listing.workflow_runs.len() != 1 {
         return Err(refusal("ci_missing_or_ambiguous"));
@@ -234,7 +234,7 @@ pub(super) fn runs(bytes: &[u8], revision: &Revision) -> Result<Run> {
 }
 
 /// Every poll belongs to the original run AND attempt, including pending polls.
-pub(super) fn run(bytes: &[u8], revision: &Revision, selected: &Run) -> Result<RunProgress> {
+pub(crate) fn run(bytes: &[u8], revision: &Revision, selected: &Run) -> Result<RunProgress> {
     let record: RunRecord = decode(bytes, RECORD)?;
     if record.identity(revision)? != *selected {
         return Err(refusal("ci_identity_mismatch"));
@@ -268,7 +268,7 @@ struct Artifacts {
 
 /// API metadata bounds candidate transport bytes, not the payload's attempt.
 /// The existing application/Ops authenticators must prove that latter join.
-pub(super) fn artifact(
+pub(crate) fn artifact(
     bytes: &[u8],
     revision: &Revision,
     selected: &Run,

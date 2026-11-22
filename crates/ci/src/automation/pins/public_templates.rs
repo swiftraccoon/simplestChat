@@ -140,6 +140,139 @@ fn strings(list: &Value) -> Vec<&str> {
         .collect()
 }
 
+/// The provisioned Compose release: the upstream part of the host's
+/// `docker-compose-plugin` package version.
+fn provisioned_compose() -> String {
+    let defaults = document("ops/ansible/group_vars/benchmark_hosts.yml");
+    let package = defaults["scbench_docker_compose_version"].as_str().unwrap();
+    package.split_once('-').unwrap().0.to_owned()
+}
+
+/// The provisioned Compose renderer on `PATH`, as a standalone binary or as
+/// the Docker CLI plugin, asked for its version under `environment`.
+fn compose_renderer(environment: &[(&str, String)]) -> Option<Vec<std::path::PathBuf>> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let found = |name: &str| {
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(name))
+            .find(|candidate| candidate.is_file())
+    };
+    let mut candidates = Vec::new();
+    if let Some(standalone) = found("docker-compose") {
+        candidates.push(vec![standalone]);
+    }
+    if let Some(docker) = found("docker") {
+        candidates.push(vec![docker, "compose".into()]);
+    }
+    let expected = provisioned_compose();
+    candidates.into_iter().find(|command| {
+        let output = std::process::Command::new(&command[0])
+            .args(&command[1..])
+            .args(["version", "--short"])
+            .env_clear()
+            .envs(
+                environment
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str())),
+            )
+            .output();
+        output.is_ok_and(|output| {
+            output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == expected
+        })
+    })
+}
+
+/// The disposable guest's snapshot checks the Compose model the provisioned
+/// renderer makes of the real templates: rendered as the fixture's inventory
+/// renders them, `config --format json` with the maintenance profile and no
+/// engine, and the guest's own check of the project, its four services and
+/// each one's isolation and bounds. The memory limits arrive as the decimal
+/// byte strings the check requires. Without the provisioned Compose the case
+/// is skipped, unless `VM_COMPOSE_REQUIRED=1` (the deployment job) requires it.
+#[test]
+fn the_provisioned_compose_model_of_the_templates_passes_the_guest_checks() {
+    let scratch = super::ansible::Scratch::new();
+    let directory = scratch.path().canonicalize().unwrap();
+    let environment = [
+        ("PATH", "/usr/bin:/bin".to_owned()),
+        ("HOME", directory.to_str().unwrap().to_owned()),
+        ("LC_ALL", "C".to_owned()),
+        // No engine exists at this private path; config stays daemon-free.
+        (
+            "DOCKER_HOST",
+            format!("unix://{}", directory.join("absent.sock").display()),
+        ),
+    ];
+    let Some(renderer) = compose_renderer(&environment) else {
+        let required = std::env::var("VM_COMPOSE_REQUIRED").is_ok_and(|value| value == "1");
+        assert!(
+            !required,
+            "the provisioned Compose is required for this check"
+        );
+        eprintln!(
+            "skipped: the provisioned Compose {} is absent",
+            provisioned_compose()
+        );
+        return;
+    };
+    let overrides = json!({
+        "scpub_config": directory,
+        "scpub_root": directory.join("data"),
+        "scpub_domain": "vm-fixture.test",
+        "scpub_webauthn_rp_id": "vm-fixture.test",
+        "scpub_announce_ip": "127.0.0.1",
+        "scpub_announce_ipv6": "",
+        "scpub_media_workers": 1,
+        "scpub_app_cpus": 1,
+        "scpub_app_memory_mib": 1024,
+        "scpub_postgres_memory_mib": 1024,
+        "scpub_postgres_shared_buffers_mib": 256,
+    });
+    let templates = [
+        (COMPOSE, "compose.public.yml"),
+        (APP, "app.env"),
+        (MIGRATION, "migration.env"),
+        (PROXY, "proxy.env"),
+    ];
+    let names: Vec<&str> = templates.iter().map(|(template, _)| *template).collect();
+    let rendered = render_with(&names, &host(&overrides));
+    for (template, name) in templates {
+        std::fs::write(directory.join(name), format!("{}\n", rendered[template])).unwrap();
+    }
+    std::fs::write(
+        directory.join("compose.base.yml"),
+        checkout_file("docker-compose.yml"),
+    )
+    .unwrap();
+    let output = std::process::Command::new(&renderer[0])
+        .args(&renderer[1..])
+        .arg("--env-file")
+        .arg(directory.join("app.env"))
+        .arg("-f")
+        .arg(directory.join("compose.public.yml"))
+        .args(["--profile", "maintenance", "config", "--format", "json"])
+        .current_dir(&directory)
+        .env_clear()
+        .envs(
+            environment
+                .iter()
+                .map(|(name, value)| (*name, value.as_str())),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let checked = simplestchat_ops::release::infrastructure::compose_model(&output.stdout);
+    assert_eq!(checked, Ok(4), "{checked:?}");
+    let model: Value = serde_json::from_slice(&output.stdout).unwrap();
+    for name in ["simplestchat", "migrate", "postgres"] {
+        assert_eq!(model["services"][name]["mem_limit"], "1073741824", "{name}");
+    }
+}
+
 /// From `test_database_logs_omit_bound_values_in_slow_and_error_paths`.
 #[test]
 fn database_logs_omit_bound_values_in_slow_and_error_paths() {

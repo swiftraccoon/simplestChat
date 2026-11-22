@@ -768,6 +768,27 @@ fn outward_failure_is_one_and_only_actual_outer_signals_use_signal_status() {
     assert_eq!(outward_status(130, false), 130);
     assert_eq!(outward_status(143, false), 143);
 }
+/// A failure recorded after a flow concluded its summary withdraws every
+/// claim: not passed, no validated deployment, the kind named, and the
+/// finalization blamed unless a step already was.
+#[test]
+fn a_late_failure_withdraws_the_summarys_pass_and_validation() {
+    let mut report = serde_json::json!({"passed":true,"fullDeploymentValidated":true,
+        "failure":null,"failureKind":null});
+    failed_after(&mut report, Error::Io);
+    assert_eq!(
+        report,
+        serde_json::json!({"passed":false,"fullDeploymentValidated":false,
+            "failure":"finalization","failureKind":"io"})
+    );
+    let mut report = serde_json::json!({"passed":true,"failure":"boot"});
+    failed_after(&mut report, Error::Deadline);
+    assert_eq!(
+        report,
+        serde_json::json!({"passed":false,"failure":"boot","failureKind":"deadline"})
+    );
+}
+
 #[test]
 fn every_purpose_reads_sources_the_checkout_holds_and_deploy_adds_only_its_two() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

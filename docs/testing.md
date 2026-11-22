@@ -2188,7 +2188,17 @@ the separate oracle for noncanonical ISO extensions follows the maintained
 Python 3.14 reference and runs only on compatible interpreters.
 
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
-are additional tiers, not part of the required push gate.
+are additional tiers, not part of the required push gate. The daily
+[disposable deployment validation](../security/vm/README.md) is one too: its Rust
+controller and the guest checks of the signed Ops executable are tested inert by
+`cargo test --locked -p simplestchat-release --bin simplestchat-release --
+infrastructure` and `cargo test --locked -p simplestchat-ops --features
+maintain-guest --lib -- infrastructure` (scripted commands, a scratch guest tree,
+and the retired Python controller's and checker's recorded answers), and the
+deployment job requires the guest's Compose check against the provisioned
+Compose's model of the real templates
+(`automation::pins::public_templates::the_provisioned_compose_model_of_the_templates_passes_the_guest_checks`,
+with `VM_COMPOSE_REQUIRED=1`). Only the workflow's own run boots a guest.
 
 Verified successes for Rust checks are reused
 only when their exact input key and private receipt match. Keys bind file modes,

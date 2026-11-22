@@ -1146,12 +1146,17 @@ jobs:
         env:
           VM_COMPOSE_REQUIRED: "1"
         run: |
-          "${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover \
-            -s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
           # The job's pinned prefixes belong to other native builds. This optional
           # host TLS owner uses the installed headers in a separate target tree.
+          # The guest's Compose check renders with the controller environment's Ansible.
+          env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
+            -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
+            PATH="${RUNNER_TEMP}/release-container-controller/bin:${PATH}" \
+            cargo test --locked -q -p simplestchat-ci --features release-http-policy --lib \
+              --target-dir "$RUNNER_TEMP/release-http-policy-build" -- --exact \
+              automation::pins::public_templates::the_provisioned_compose_model_of_the_templates_passes_the_guest_checks
           env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
             -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
             cargo build --locked -p simplestchat-ci --features release-http-policy \

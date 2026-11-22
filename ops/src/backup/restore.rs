@@ -32,7 +32,7 @@ const BOUNDED: [&str; 3] = ["timeout", "--signal=TERM", "--kill-after=2s"];
 /// Explicit resource ceilings of the disposable database; exceeding them
 /// fails the drill.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Limits {
+pub(crate) struct Limits {
     pub memory_mib: i64,
     pub data_mib: i64,
 }
@@ -219,7 +219,7 @@ pub(super) fn cleanup(
 /// What one verification did; rewritten in the attempt as it proceeds, so an
 /// interrupted one still names the container it may have left.
 #[derive(serde::Serialize)]
-pub(super) struct Report {
+pub(crate) struct Report {
     pub container: String,
     #[serde(rename = "containerId")]
     pub container_id: String,
@@ -341,7 +341,7 @@ fn restored(
 /// `image`, validate it and destroy the database. The report says whether
 /// each of verification and cleanup passed; a failure of either is returned
 /// only after the cleanup was attempted and the report rewritten.
-pub(super) fn verify(
+pub(crate) fn verify(
     runner: &mut Evidence<'_>,
     clock: &dyn Clock,
     image: &str,

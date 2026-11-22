@@ -39,6 +39,21 @@ impl Profile {
                 // Both native1800 envelopes and the original observation120.
                 debt: Duration::from_secs(3720),
             },
+            // Selection and authentication within the acquisition's twenty
+            // minutes; the guest work keeps at least its thirty.
+            Purpose::Infrastructure => Self {
+                whole: Duration::from_secs(3240),
+                finalization: Duration::from_secs(120),
+                setup: Duration::from_secs(1200),
+                debt: Duration::from_secs(1800),
+            },
+            // Boot diagnosis has no setup phase of its own.
+            Purpose::Boot => Self {
+                whole: Duration::from_secs(1920),
+                finalization: Duration::from_secs(120),
+                setup: Duration::from_secs(1800),
+                debt: Duration::ZERO,
+            },
         }
     }
 }
@@ -98,6 +113,7 @@ impl Control {
             Purpose::Prerequisite => DEBT,
             Purpose::Host => Duration::from_secs(1920),
             Purpose::Deploy => Duration::from_secs(3720),
+            Purpose::Infrastructure | Purpose::Boot => self.profile.debt,
         }
     }
     pub fn body_end(&self) -> Instant {

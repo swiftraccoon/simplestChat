@@ -19,7 +19,7 @@ use std::{
             process::{CommandExt, ExitStatusExt},
         },
     },
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
         Arc, Mutex,
@@ -30,6 +30,8 @@ use std::{
 
 const CAPTURE: usize = 2 * 1024 * 1024;
 const MAX_COMMANDS: usize = 64;
+/// The infrastructure job's CI-selection polls, beyond its guest commands.
+const SELECTION_POLLS: usize = 32;
 const TOOLS: &[&str] = &[
     "gh",
     "curl",
@@ -97,43 +99,19 @@ pub(super) struct Runner {
     private_directory: Option<Directory>,
     private_links: BTreeMap<String, Metadata>,
     work_owner: Option<Work>,
+    budget: usize,
+    calls: Vec<(String, Option<i32>)>,
 }
 impl Runner {
     pub fn new(root: PathBuf, output: PathBuf, control: &mut Control) -> Result<Self> {
         control.check()?;
         let local = output.join("ansible-local");
-        // Ansible requires a UTF-8 locale even when Python enables UTF-8 mode.
-        let locale = if cfg!(target_os = "linux") {
-            "C.UTF-8"
-        } else {
-            "en_US.UTF-8"
-        };
-        let mut env = BTreeMap::from([
-            ("PATH".into(), std::env::var_os("PATH").ok_or(Error::Input)?),
-            ("HOME".into(), output.as_os_str().into()),
-            ("LANG".into(), locale.into()),
-            ("LC_ALL".into(), locale.into()),
-            (
-                "ANSIBLE_CONFIG".into(),
-                root.join("ops/ansible/ansible.cfg").into_os_string(),
-            ),
-            ("ANSIBLE_LOCAL_TEMP".into(), local.as_os_str().into()),
-            ("ANSIBLE_NOCOLOR".into(), "1".into()),
-            ("ANSIBLE_STDOUT_CALLBACK".into(), "default".into()),
-            ("ANSIBLE_LOAD_CALLBACK_PLUGINS".into(), "0".into()),
-        ]);
-        if let Some(value) = std::env::var_os("RUNNER_TRACKING_ID") {
-            let text = value.to_str().ok_or(Error::Input)?;
-            if text.is_empty()
-                || text.len() > 128
-                || !text
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
-            {
-                return Err(Error::Input);
-            }
-            env.insert("RUNNER_TRACKING_ID".into(), value);
-        }
+        let env = environment(
+            &root,
+            &output,
+            std::env::var_os("PATH"),
+            std::env::var_os("RUNNER_TRACKING_ID"),
+        )?;
         let work_owner = Work::create(&output, control)?;
         let work = work_owner.path.clone();
         let mut value = Self {
@@ -149,6 +127,11 @@ impl Runner {
             private_directory: None,
             private_links: BTreeMap::new(),
             work_owner: Some(work_owner),
+            budget: match control.purpose() {
+                super::options::Purpose::Infrastructure => MAX_COMMANDS + SELECTION_POLLS,
+                _ => MAX_COMMANDS,
+            },
+            calls: Vec::new(),
         };
         let admitted = (|| {
             fs::create_dir(&local).map_err(|_| Error::Io)?;
@@ -200,6 +183,11 @@ impl Runner {
             return Err(error);
         }
         Ok(value)
+    }
+    /// Every command started so far, by role, with its exit status once one
+    /// was observed (a signal as its negative number).
+    pub fn calls(&self) -> &[(String, Option<i32>)] {
+        &self.calls
     }
     pub fn set_guest_health(&mut self, value: Arc<AtomicBool>, failure: Arc<Mutex<Option<Error>>>) {
         self.guest_health = Some(value);
@@ -401,10 +389,12 @@ impl Runner {
             environment,
         } = call;
         self.check(control)?;
-        if self.count >= MAX_COMMANDS {
+        if self.count >= self.budget {
             return Err(Error::Refused);
         }
         self.count += 1;
+        let call = self.calls.len();
+        self.calls.push((role.to_owned(), None));
         let mut logs = Vec::new();
         let mut pipes: Vec<File> = Vec::new();
         let mut group: Option<Group> = None;
@@ -505,6 +495,7 @@ impl Runner {
                         .code()
                         .unwrap_or_else(|| -status.signal().unwrap_or(0));
                     raw = Some(value);
+                    self.calls[call].1 = raw;
                     if !accepted.contains(&value) {
                         first.get_or_insert(Error::Child(value));
                         control.record(Error::Child(value));
@@ -583,6 +574,51 @@ fn link_check(
     }
     control.check()
 }
+/// The whole environment of every command: `path`, a private home, a UTF-8
+/// locale and Ansible's fixed configuration without ambient callbacks, plus
+/// the runner's job-cleanup identity when it is a plain token; nothing else of
+/// the caller's environment, no credential among it.
+fn environment(
+    root: &Path,
+    output: &Path,
+    path: Option<OsString>,
+    tracking: Option<OsString>,
+) -> Result<BTreeMap<OsString, OsString>> {
+    let local = output.join("ansible-local");
+    // Ansible requires a UTF-8 locale even when Python enables UTF-8 mode.
+    let locale = if cfg!(target_os = "linux") {
+        "C.UTF-8"
+    } else {
+        "en_US.UTF-8"
+    };
+    let mut env = BTreeMap::from([
+        ("PATH".into(), path.ok_or(Error::Input)?),
+        ("HOME".into(), output.as_os_str().into()),
+        ("LANG".into(), locale.into()),
+        ("LC_ALL".into(), locale.into()),
+        (
+            "ANSIBLE_CONFIG".into(),
+            root.join("ops/ansible/ansible.cfg").into_os_string(),
+        ),
+        ("ANSIBLE_LOCAL_TEMP".into(), local.as_os_str().into()),
+        ("ANSIBLE_NOCOLOR".into(), "1".into()),
+        ("ANSIBLE_STDOUT_CALLBACK".into(), "default".into()),
+        ("ANSIBLE_LOAD_CALLBACK_PLUGINS".into(), "0".into()),
+    ]);
+    if let Some(value) = tracking {
+        let text = value.to_str().ok_or(Error::Input)?;
+        if text.is_empty()
+            || text.len() > 128
+            || !text
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+        {
+            return Err(Error::Input);
+        }
+        env.insert("RUNNER_TRACKING_ID".into(), value);
+    }
+    Ok(env)
+}
 struct Call<'a> {
     role: &'a str,
     tool: &'a str,
@@ -605,6 +641,45 @@ fn lookup(name: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Commands see only the fixed environment: no credential, agent socket
+    /// or Ansible log path of the caller, callbacks off, and the runner's
+    /// cleanup identity only as a plain token.
+    #[test]
+    fn commands_get_only_the_fixed_environment_and_a_plain_cleanup_identity() {
+        let root = Path::new("/checkout");
+        let output = Path::new("/output");
+        let env = environment(root, output, Some("/bin".into()), Some("job-1_a".into())).unwrap();
+        let names: Vec<&str> = env.keys().map(|name| name.to_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                "ANSIBLE_CONFIG",
+                "ANSIBLE_LOAD_CALLBACK_PLUGINS",
+                "ANSIBLE_LOCAL_TEMP",
+                "ANSIBLE_NOCOLOR",
+                "ANSIBLE_STDOUT_CALLBACK",
+                "HOME",
+                "LANG",
+                "LC_ALL",
+                "PATH",
+                "RUNNER_TRACKING_ID",
+            ]
+        );
+        let value = |name: &str| env[&OsString::from(name)].to_str().unwrap().to_owned();
+        assert_eq!(value("ANSIBLE_CONFIG"), "/checkout/ops/ansible/ansible.cfg");
+        assert_eq!(value("ANSIBLE_LOCAL_TEMP"), "/output/ansible-local");
+        assert_eq!(value("ANSIBLE_LOAD_CALLBACK_PLUGINS"), "0");
+        assert_eq!(value("ANSIBLE_STDOUT_CALLBACK"), "default");
+        assert_eq!(value("HOME"), "/output");
+        assert_eq!(value("RUNNER_TRACKING_ID"), "job-1_a");
+        let untracked = environment(root, output, Some("/bin".into()), None).unwrap();
+        assert!(!untracked.contains_key(&OsString::from("RUNNER_TRACKING_ID")));
+        for tracking in ["", "a b", "a;b", &"a".repeat(129)] {
+            let refused = environment(root, output, Some("/bin".into()), Some(tracking.into()));
+            assert_eq!(refused, Err(Error::Input));
+        }
+        assert_eq!(environment(root, output, None, None), Err(Error::Input));
+    }
     #[test]
     fn the_retained_controller_is_this_binary_in_the_default_debug_directory() {
         assert_eq!(CONTROLLER, concat!("target/debug/", env!("CARGO_BIN_NAME")));

@@ -1655,6 +1655,32 @@ handles GitHub's archive redirect; its normal redirect and trust-provider policy
 remains part of the selected client trust boundary. This operation authenticates
 retained bytes. It does not execute a candidate or install or replace a host tool.
 
+## Disposable guest checks
+
+The distributed artifact (feature `maintain-guest`) carries the scheduled
+infrastructure job's guest role:
+
+```sh
+simplestchat-ops release infrastructure-guest snapshot|database|backup-restore --run-id RUN
+```
+
+It runs only as root on Linux x86_64 Debian 13 under QEMU, inside the guest whose
+cloud-init marker and staged selection name `RUN`, as the installed executable
+itself, with the root Docker socket present; anything else is refused before any
+command. `snapshot` checks the protected configuration and the effective Compose
+model after each `public.yml` run and requires the second run to have changed
+nothing; `database` migrates a new database with the staged release's real
+migrator, adds fixed synthetic rows and starts the application; `backup-restore`
+takes one backup through the installed units and restores it in the isolated
+verifier. Each prints one receipt line: `passed: true` with aggregate fields, or
+`passed: false` with four fixed labels of the failed check (exit 1). A syntax
+error exits 2; a malformed run id exits 1 with no receipt. Command output stays in
+numbered private files of a fresh attempt directory in the fixture root. The
+labels, the receipt contract and every decision are in
+`ops/src/release/infrastructure.rs` and `infrastructure/{model,policy}.rs`; the
+controller admits receipts with the same module's `admit`. See the
+[disposable deployment validation](../security/vm/README.md).
+
 ## Debian installation
 
 A real host receives the signed executable only through
@@ -1662,10 +1688,12 @@ A real host receives the signed executable only through
 and `migration-prepare.yml` import: the controller's `ops-artifact export`
 authenticates the artifact, the host receives the three-member tar and the
 installer request, and the authenticated candidate runs `distribution install`
-or `distribution upgrade` on itself. The three manual KVM runtime workflows
-deliver into their disposable Debian 13 guest through the same tasks file
-(`ops/ansible/security-vm-ops-install.yml`); see the testing guide's
-[maintenance prerequisite section](../docs/testing.md#optional-maintenance-prerequisite-experiments).
+or `distribution upgrade` on itself. The three manual KVM runtime workflows and
+the scheduled infrastructure job deliver into their disposable Debian 13 guest
+through the same tasks file (`ops/ansible/security-vm-ops-install.yml`); see the
+testing guide's
+[maintenance prerequisite section](../docs/testing.md#optional-maintenance-prerequisite-experiments)
+and the [disposable deployment validation](../security/vm/README.md).
 
 The binary's separate host entry is:
 
@@ -1860,8 +1888,7 @@ leaves the journal unfinished for that reason.
 The Python helper's answers for 56 invocations are recorded in
 `ops/src/backup/recorded_nightly.json`, and the tests reproduce each one's
 commands, archives, receipts and journal. `backup_public.py` itself stays in
-the tree, frozen, until the migration cutover and the infrastructure proof's
-guest stop importing it.
+the tree, frozen, until the migration cutover stops copying it.
 
 ## Offsite upload and restore drill
 

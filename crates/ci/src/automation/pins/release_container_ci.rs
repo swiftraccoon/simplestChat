@@ -342,21 +342,32 @@ fn buildx_is_verified_before_the_production_build_on_both_ci_paths() {
     assert!(!checkout_file("build/ci-local-docker.sh").contains("buildx"));
 }
 
-/// From `test_guest_compose_contract_runs_with_required_pinned_renderer`: the
-/// JSON contract regression cannot silently skip in production-image CI, and
-/// the existing job deadline bounds cold feature builds.
+/// The guest's Compose check runs on the provisioned renderer and the
+/// controller environment's Ansible and cannot silently skip in
+/// production-image CI; the existing job deadline bounds cold feature builds.
 #[test]
 fn guest_compose_contract_runs_with_required_pinned_renderer() {
     let deployment = Deployment::read();
     let step = deployment.step(GUEST);
     assert!(lacks(step, &["if", "continue-on-error", "timeout-minutes"]));
     assert_eq!(step["env"]["VM_COMPOSE_REQUIRED"], "1");
-    for text in [
-        "\"${RUNNER_TEMP}/release-container-controller/bin/python\" -B -m unittest discover",
-        "-s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v",
-    ] {
-        assert!(run(step).contains(text), "{text}");
-    }
+    let script = run(step).replace("\\\n", " ");
+    let script = script.split_whitespace().collect::<Vec<_>>().join(" ");
+    let command = "PATH=\"${RUNNER_TEMP}/release-container-controller/bin:${PATH}\" \
+         cargo test --locked -q -p simplestchat-ci --features release-http-policy --lib \
+         --target-dir \"$RUNNER_TEMP/release-http-policy-build\" -- --exact \
+         automation::pins::public_templates::\
+         the_provisioned_compose_model_of_the_templates_passes_the_guest_checks";
+    assert!(script.contains(command), "{script}");
+    assert!(!script.contains("python") && !script.contains("unittest"));
+    // The test the step names is the one this crate holds.
+    let source = include_str!("public_templates.rs");
+    assert!(
+        source.contains(
+            "fn the_provisioned_compose_model_of_the_templates_passes_the_guest_checks()"
+        )
+    );
+    assert!(source.contains("std::env::var(\"VM_COMPOSE_REQUIRED\")"));
     assert!(deployment.at(COMPOSE_TOOL) < deployment.at(GUEST));
     assert!(deployment.at(PREPARE) < deployment.at(GUEST));
     assert!(deployment.at(GUEST) < deployment.at(INTEGRATION));
@@ -380,10 +391,9 @@ fn optional_http_owner_is_built_once_with_explicit_system_tls_and_separate_targe
     ] {
         assert!(script.contains(&format!("-u {variable}")), "{variable}");
     }
-    assert!(
-        script.find("-k ComposeSerializationTests -v").unwrap()
-            < script.find("cargo build").unwrap()
-    );
+    // The feature-enabled executable is the step's last build into its tree.
+    assert!(script.find("cargo test").unwrap() < script.find("cargo build").unwrap());
+    assert_eq!(script.matches("cargo build").count(), 1);
     assert!(!RUN_COMMAND.contains("cargo run"));
     assert_eq!(deployment.step(INTEGRATION)["run"], RUN_COMMAND);
 }

@@ -27,6 +27,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release deploy [OPTIONS]\n",
     "       simplestchat-ops release backup verify [OPTIONS]\n",
     "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
+    "       simplestchat-ops release infrastructure-guest ACTION --run-id RUN\n",
     "       simplestchat-ops release maintain [OPTIONS]\n",
     "       simplestchat-ops release seed-lobby\n",
     "       simplestchat-ops release admit-unsigned --request ABS\n",
@@ -82,6 +83,11 @@ fn main() -> ExitCode {
     if args.len() >= 2 && args[0] == "release" && args[1] == "maintain-prerequisite" {
         return simplestchat_ops::release::maintain_prerequisite::run(&args[2..]);
     }
+    #[cfg(feature = "maintain-guest")]
+    if args.len() >= 2 && args[0] == "release" && args[1] == "infrastructure-guest" {
+        return simplestchat_ops::release::infrastructure::run(&args[2..]);
+    }
+
     if args.len() >= 3 && args[0] == "release" && args[1] == "backup" && args[2] == "verify" {
         return simplestchat_ops::release::backup::verify::run(&args[3..]);
     }

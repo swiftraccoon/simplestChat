@@ -10,6 +10,9 @@ pub(super) const DELIVERY_PLAYBOOK: &str = "ops/ansible/security-vm-ops-install.
 pub(super) const DELIVERY_TASKS: &str = "ops/ansible/tasks/signed-ops.yml";
 
 pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
+    if matches!(purpose, Purpose::Infrastructure | Purpose::Boot) {
+        return infrastructure_sources();
+    }
     let mut names = sources();
     if purpose == Purpose::Deploy {
         for name in [
@@ -20,6 +23,30 @@ pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
         }
     }
     names
+}
+/// What the infrastructure job reads or runs by name: its workflow, the
+/// image pin, the four playbooks, the delivery and the controller's own
+/// Ansible configuration.
+pub(super) fn infrastructure_sources() -> BTreeSet<String> {
+    [
+        ".github/workflows/infrastructure-security.yml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "security/vm/debian-cloud.json",
+        "security/vm/stage.yml",
+        "ops/ansible/site.yml",
+        "ops/ansible/public.yml",
+        "ops/ansible/backup.yml",
+        DELIVERY_PLAYBOOK,
+        DELIVERY_TASKS,
+        "ops/ansible/ansible.cfg",
+        "ops/ansible/requirements.txt",
+        "ops/ansible/group_vars/benchmark_hosts.yml",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
 }
 pub(super) const MIGRATIONS: [&str; 38] = [
     "001_create_users.sql",
@@ -112,6 +139,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         names.insert(name.into());
     }
     for name in [
+        "ansible",
         "auth",
         "catalog",
         "control",
@@ -122,12 +150,16 @@ pub(super) fn sources() -> BTreeSet<String> {
         "deploy_projection",
         "deploy_projection_tests",
         "deploy_workflow_tests",
+        "evidence",
         "execute",
         "files",
         "host_baseline",
         "host_diagnostic",
         "host_projection",
         "host_upgrade",
+        "infrastructure",
+        "infrastructure_oracle_tests",
+        "infrastructure_tests",
         "install_tests",
         "mod",
         "options",

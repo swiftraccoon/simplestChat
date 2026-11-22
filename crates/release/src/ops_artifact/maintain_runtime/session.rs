@@ -154,6 +154,8 @@ impl Session {
             super::super::options::Purpose::Prerequisite => "guest".into(),
             super::super::options::Purpose::Host => "host-guest".into(),
             super::super::options::Purpose::Deploy => "deploy-guest".into(),
+            super::super::options::Purpose::Infrastructure
+            | super::super::options::Purpose::Boot => return Err(Error::Input),
         };
         let args = vm.ssh(
             runner,

@@ -1,6 +1,6 @@
-//! The nightly backup playbook, its wrapper script and units, and the
-//! source-built Ops executable the infrastructure proof's guest runs them
-//! with. Nothing connects to a host.
+//! The nightly backup playbook, its wrapper script and units, and the signed
+//! Ops executable the infrastructure job's guest runs them with. Nothing
+//! connects to a host.
 
 use super::ansible::{asserted, render};
 use super::monitoring::{LOOK, OPS, REQUIRE, named, names, play, requirement, section};
@@ -10,7 +10,6 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 const GROUP_VARS: &str = "ops/ansible/group_vars/benchmark_hosts.yml";
-const BUILT: &str = "target/x86_64-unknown-linux-gnu/release/simplestchat-ops";
 
 /// The playbook copies no helper to the host: it requires the executable a
 /// signed release delivered, then installs only the wrapper and the units.
@@ -182,54 +181,120 @@ fn units_share_the_canonical_runtime_lock_directory() {
     }
 }
 
-/// The infrastructure proof's guest is provisioned from source and has no
-/// signed release, so its stage playbook installs the executable the workflow
-/// built from the same checkout, before the playbooks that require it.
+/// The infrastructure job's guest receives the signed Ops executable through
+/// the production delivery before staging, so the backup units and the
+/// staging run the signed build. Its staging playbook copies no executable
+/// and no Python, and stages with exactly the production command and unit
+/// properties `release.yml` uses.
 #[test]
-fn infrastructure_guest_receives_the_source_built_ops_executable() {
+fn infrastructure_guest_stages_with_the_delivered_signed_executable() {
     let stage = document("security/vm/stage.yml");
     let tasks = stage[0]["tasks"].as_array().unwrap();
-    let install = named(
-        tasks,
-        "Install the source-built Ops executable the backup units run",
-    );
+    let text = serde_json::to_string(tasks).unwrap();
+    assert!(!text.contains(".py") && !text.contains("python") && !text.contains("target/"));
+    let copied: Vec<&str> = tasks
+        .iter()
+        .filter_map(|task| task["ansible.builtin.copy"]["src"].as_str())
+        .collect();
     assert_eq!(
-        install["ansible.builtin.copy"],
-        json!({
-            "src": format!("{{{{ playbook_dir }}}}/../../{BUILT}"),
-            "dest": OPS,
-            "owner": "root", "group": "root", "mode": "0755",
-        })
+        copied,
+        [
+            "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}",
+            "{{ vm_fixture_artifact_dir }}/{{ item }}",
+        ]
     );
-    assert!(install.get("when").is_none());
+    let staged = named(
+        tasks,
+        "Import and verify the image through the delivered Ops executable",
+    );
+    let release = play("ops/ansible/release.yml");
+    let production = named(
+        section(&release, "tasks"),
+        "Import and verify the image while the public service remains running",
+    );
+    let argv = |task: &Value| {
+        task["ansible.builtin.command"]["argv"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    let (fixture, real) = (argv(staged), argv(production));
+    assert_eq!(fixture.len(), real.len());
+    for (at, (fixture, real)) in fixture.iter().zip(&real).enumerate() {
+        if at == 1 {
+            // Each names its own transient unit by revision and run.
+            assert!(
+                fixture
+                    .as_str()
+                    .unwrap()
+                    .starts_with("--unit=simplestchat-stage-")
+            );
+            continue;
+        }
+        let real = real
+            .as_str()
+            .unwrap()
+            .replace("scpub_release_revision", "scbench_revision");
+        assert_eq!(fixture.as_str().unwrap(), real);
+    }
+    assert_eq!(fixture[6], OPS);
+    assert_eq!(staged["environment"], production["environment"]);
+    // The job delivers the signed executable before staging and builds the
+    // GNU Ops only for its runner-side verifiers.
+    let controller =
+        checkout_file("crates/release/src/ops_artifact/maintain_runtime/infrastructure.rs");
+    let delivery = controller
+        .find("checkpoint(report, \"ops-install\")")
+        .unwrap();
+    let staging = controller.find("Playbook::Stage);").unwrap();
+    assert!(delivery < staging);
     let security = workflow("infrastructure-security.yml");
     let steps = steps(&security, "infrastructure");
-    let position = |name: &str| steps.iter().position(|step| step["name"] == name).unwrap();
-    let toolchain = unique(
+    let build = unique(
         steps,
-        "Install the pinned Rust toolchain for the guest's Ops executable",
+        "Compile the controller and its runner-side verifier before credentials",
+    );
+    let script = run(build).replace("\\\n", " ");
+    let script = script.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(script.contains("--target x86_64-unknown-linux-gnu -p simplestchat-ops"));
+    // The play binds itself to the generated guest, its run and its revision
+    // before it writes anything.
+    let pre_tasks = stage[0]["pre_tasks"].as_array().unwrap();
+    let that = |at: usize| pre_tasks[at]["ansible.builtin.assert"]["that"].clone();
+    assert_eq!(
+        that(0),
+        serde_json::json!([
+            "inventory_hostname == 'vmfixture'",
+            "ansible_host == '127.0.0.1'",
+            "vm_fixture_run_id is match('^[a-f0-9]{32}$')",
+            "scbench_revision is match('^[a-f0-9]{40}$')",
+            "vm_fixture_revision == scbench_revision",
+            "vm_fixture_artifact_dir is match('^/')",
+        ])
     );
     assert_eq!(
-        run(toolchain).trim(),
-        "rustup toolchain install --profile minimal"
+        pre_tasks[1]["ansible.builtin.slurp"]["src"],
+        "/etc/simplestchat-vm-fixture"
     );
-    let build = unique(steps, "Build the Ops executable the guest's units run");
-    let command = "cargo build --locked --release --target x86_64-unknown-linux-gnu \
-                   -p simplestchat-ops --bin simplestchat-ops";
     assert_eq!(
-        run(build).split_whitespace().collect::<Vec<_>>().join(" "),
-        command
+        that(2),
+        serde_json::json!(["vm_fixture_marker.content | b64decode | trim == vm_fixture_run_id"])
     );
-    assert!(BUILT.starts_with("target/x86_64-unknown-linux-gnu/release/"));
-    for step in [toolchain, build] {
-        assert_eq!(step["if"], "${{ !inputs.boot_only }}");
-        assert!(step.get("env").is_none() && step.get("continue-on-error").is_none());
-    }
-    let applied = position("Apply twice and verify host policy and isolated restore");
-    assert!(
-        position(toolchain["name"].as_str().unwrap()) < position(build["name"].as_str().unwrap())
+    let transfer = named(
+        tasks,
+        "Transfer only the authenticated release manifest and image archive",
     );
-    assert!(position(build["name"].as_str().unwrap()) < applied);
+    assert_eq!(
+        transfer["loop"],
+        serde_json::json!(["release.json", "image.tar"])
+    );
+    let bound = named(
+        tasks,
+        "Bind guest assertions to this run and release revision",
+    );
+    let content = bound["ansible.builtin.copy"]["content"].as_str().unwrap();
+    assert!(content.contains("'runId': vm_fixture_run_id, 'revision': scbench_revision"));
+    assert_eq!(bound["ansible.builtin.copy"]["mode"], "0600");
 }
 
 /// The offsite playbook requires the executable too, verifies the host

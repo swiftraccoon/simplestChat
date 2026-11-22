@@ -321,9 +321,11 @@ attestation. It records the override and retains artifact, workload-lock,
 backup, readiness and rollback safeguards; it does not report skipped checks as
 passed. See the [release procedure](../ops/ansible/RELEASES.md).
 
-The daily [disposable Debian VM check](../security/vm/README.md) acquires that
-same signed release, applies the real host and application configuration twice,
-then checks host permissions, service policy and an isolated backup restore.
+The daily [disposable Debian VM check](../security/vm/README.md) selects and
+authenticates that same signed release, applies the real host and application
+configuration twice, installs the signed Ops executable and stages the release
+through the production delivery and `release stage`, then checks host
+permissions, service policy and an isolated backup restore from inside the guest.
 It runs on an owned local KVM guest and accepts no external target. This adds
 host evidence beyond the container fixture; public DNS/TLS, provider firewalls,
 TURN and encrypted off-host backup delivery remain separate operational checks.

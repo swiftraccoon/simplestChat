@@ -197,6 +197,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
     "       simplestchat-ops release deploy [OPTIONS]\n",
     "       simplestchat-ops release backup verify [OPTIONS]\n",
                 "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
+                "       simplestchat-ops release infrastructure-guest ACTION --run-id RUN\n",
                 "       simplestchat-ops release maintain [OPTIONS]\n",
                 "       simplestchat-ops release seed-lobby\n",
                 "       simplestchat-ops release admit-unsigned --request ABS\n",

@@ -789,6 +789,9 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
     '!ops/src/release/attestation/verify/',
     'ops/src/release/attestation/verify/**',
     '!ops/src/release/attestation/verify/*.rs',
+    '!ops/src/release/infrastructure/',
+    'ops/src/release/infrastructure/**',
+    '!ops/src/release/infrastructure/*.rs',
   ].toSorted());
   assert.match(dockerfile, /^COPY ops\/Cargo\.toml ops\/Cargo\.toml$/m);
   assert.match(dockerfile, /^COPY ops\/src \.\/ops\/src$/m);

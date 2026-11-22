@@ -11,7 +11,7 @@ mod lifecycle;
 mod migrate;
 mod options;
 mod plan;
-mod policy;
+pub(crate) mod policy;
 pub(crate) mod tools;
 mod worker;
 

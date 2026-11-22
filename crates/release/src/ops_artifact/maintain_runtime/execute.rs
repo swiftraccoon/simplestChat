@@ -1,7 +1,9 @@
 //! Complete fixed controller body. Every admitted owner remains registered until finalization.
 
 use super::{
-    Error, Result, auth, catalog,
+    Error, Result,
+    ansible::Recap,
+    auth, catalog,
     control::Control,
     decode,
     deploy_options::DeployOptions,
@@ -101,7 +103,7 @@ pub(super) fn delivery_command(root: &Path, inventory: &Path, values: &Path) -> 
     ]
 }
 
-fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
+pub(super) fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
     control.check()?;
     let elapsed = Instant::now()
         .checked_duration_since(control.start)
@@ -112,7 +114,7 @@ fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
     report["elapsedSeconds"][name] = json!((elapsed.as_secs_f64() * 1000.0).round() / 1000.0);
     control.check()
 }
-fn identity(control: &mut Control) -> Result<String> {
+pub(super) fn identity(control: &mut Control) -> Result<String> {
     control.check()?;
     let mut file = OpenOptions::new()
         .read(true)
@@ -198,7 +200,7 @@ fn fixture_config(runner: &Runner, control: &mut Control) -> Result<FixtureConfi
     control.check()?;
     Ok(config)
 }
-fn quote(text: &str) -> String {
+pub(super) fn quote(text: &str) -> String {
     if !text.is_empty()
         && text
             .bytes()
@@ -209,7 +211,7 @@ fn quote(text: &str) -> String {
         format!("'{}'", text.replace('\'', "'\"'\"'"))
     }
 }
-fn ssh_options(work: &Path) -> Vec<String> {
+pub(super) fn ssh_options(work: &Path) -> Vec<String> {
     let mut values = vec!["-F".into(), "/dev/null".into()];
     for value in [
         "BatchMode=yes".into(),
@@ -260,29 +262,10 @@ fn inventory(
         .insert("generated/inventory.json".into(), original);
     Ok(path)
 }
-fn recap(data: &[u8]) -> Result<()> {
-    let text = std::str::from_utf8(data).map_err(|_| Error::Refused)?;
-    let re = regex::Regex::new(concat!(
-        r"(?m)^vmfixture\s+:\s+ok=(\d+)\s+changed=(\d+)\s+unreachable=(\d+)",
-        r"\s+failed=(\d+)\s+skipped=(\d+)\s+rescued=(\d+)\s+ignored=(\d+)\s*$"
-    ))
-    .map_err(|_| Error::Input)?;
-    let matches = re.captures_iter(text).collect::<Vec<_>>();
-    let hosts = regex::Regex::new(r"(?m)^(\S+)\s+:\s+ok=").map_err(|_| Error::Input)?;
-    let hosts = hosts
-        .captures_iter(text)
-        .map(|row| row[1].to_string())
-        .collect::<Vec<_>>();
-    if matches.len() != 1 || hosts != ["vmfixture"] {
-        return Err(Error::Refused);
-    }
-    let counts = (1..=7)
-        .map(|index| matches[0][index].parse::<u64>().map_err(|_| Error::Refused))
-        .collect::<Result<Vec<_>>>()?;
-    if counts[0] == 0 || [2, 3, 5, 6].iter().any(|index| counts[*index] != 0) {
-        return Err(Error::Refused);
-    }
-    Ok(())
+/// One complete playbook run on the generated guest (see [`Recap::verdict`]).
+pub(super) fn recap(data: &[u8]) -> Result<()> {
+    let counts = Recap::parse(data).map_err(|_| Error::Refused)?;
+    counts.verdict(false).map_err(|_| Error::Refused)
 }
 
 pub(super) struct Owners {
@@ -416,7 +399,7 @@ impl Owners {
         report["runId"] = run.clone().into();
         checkpoint(report, "boot");
         let work = runner.work.clone();
-        self.vm = Some(Vm::create(runner, control, &work, &run).await?);
+        Vm::create(&mut self.vm, runner, control, &work, &run).await?;
         let vm = self.vm.as_mut().ok_or(Error::Refused)?;
         runner.set_guest_health(vm.health(), vm.failure());
         timing(report, "boot", control)?;
@@ -634,7 +617,9 @@ impl Owners {
         let request_scope = match options.purpose {
             Purpose::Prerequisite => "MaintainLauncherPrerequisiteRequest",
             Purpose::Host => "PreparedHostMaintenanceRequest",
-            Purpose::Deploy => return Err(Error::Input),
+            Purpose::Deploy | Purpose::Infrastructure | Purpose::Boot => {
+                return Err(Error::Input);
+            }
         };
         let setup_seconds = (control.start + control.setup_limit())
             .saturating_duration_since(sample)
@@ -654,7 +639,9 @@ impl Owners {
                 .body_end()
                 .min(Instant::now() + Duration::from_secs(300)),
             Purpose::Host => control.body_end(),
-            Purpose::Deploy => return Err(Error::Input),
+            Purpose::Deploy | Purpose::Infrastructure | Purpose::Boot => {
+                return Err(Error::Input);
+            }
         };
         let first = session.line(control, end).await?;
         let (guest_scope, ready_scope) = match options.purpose {
@@ -666,13 +653,17 @@ impl Owners {
                 "PreparedHostMaintenanceGuest",
                 "PreparedHostMaintenanceReady",
             ),
-            Purpose::Deploy => return Err(Error::Input),
+            Purpose::Deploy | Purpose::Infrastructure | Purpose::Boot => {
+                return Err(Error::Input);
+            }
         };
         if first["scope"] == guest_scope {
             report[options.purpose.proof_key()] = match options.purpose {
                 Purpose::Prerequisite => projection::guest(first, &expected)?,
                 Purpose::Host => host_projection::guest(first, &expected)?,
-                Purpose::Deploy => return Err(Error::Input),
+                Purpose::Deploy | Purpose::Infrastructure | Purpose::Boot => {
+                    return Err(Error::Input);
+                }
             };
             return Err(Error::Refused);
         }
@@ -710,7 +701,9 @@ impl Owners {
         let final_frame = match options.purpose {
             Purpose::Prerequisite => projection::guest(frame, &expected)?,
             Purpose::Host => host_projection::guest(frame, &expected)?,
-            Purpose::Deploy => return Err(Error::Input),
+            Purpose::Deploy | Purpose::Infrastructure | Purpose::Boot => {
+                return Err(Error::Input);
+            }
         };
         let passed = final_frame["passed"] == true;
         report[options.purpose.proof_key()] = final_frame;

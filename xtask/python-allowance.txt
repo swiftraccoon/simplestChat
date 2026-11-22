@@ -1,4 +1,4 @@
-total 27485
+total 22047
 11	build/build-release.py
 11	build/fetch-release.py
 407	build/release_attestation.py
@@ -8,10 +8,6 @@ total 27485
 461	build/security_archive.py
 179	build/security_context.py
 512	build/security_tools.py
-1423	build/security_vm.py
-1124	build/security_vm_guest.py
-259	build/security_vm_qmp.py
-100	build/security_vm_release.py
 93	build/verify-release.py
 772	build/vps_ops_bootstrap.py
 241	ops/ansible/callback_plugins/release_timing.py
@@ -54,11 +50,6 @@ total 27485
 281	ops/ansible/tests/test_security_archive.py
 58	ops/ansible/tests/test_security_context.py
 419	ops/ansible/tests/test_security_tools.py
-1040	ops/ansible/tests/test_security_vm.py
-320	ops/ansible/tests/test_security_vm_boot.py
-818	ops/ansible/tests/test_security_vm_guest.py
-261	ops/ansible/tests/test_security_vm_qmp.py
-93	ops/ansible/tests/test_security_vm_release.py
 75	ops/ansible/tests/test_support.py
 512	ops/ansible/tests/test_vps_ops_bootstrap.py
 22	typings/ansible/plugins/callback/__init__.pyi

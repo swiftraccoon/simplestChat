@@ -7,6 +7,7 @@ pub(super) const REPOSITORY: &str = "swiftraccoon/simplestChat";
 pub(super) const WORKFLOW: &str = "Signed musl maintenance launcher prerequisite KVM runtime";
 pub(super) const HOST_WORKFLOW: &str = "Signed musl prepared-host maintenance KVM runtime";
 pub(super) const DEPLOY_WORKFLOW: &str = "Signed musl host deploy KVM runtime";
+pub(super) const INFRASTRUCTURE_WORKFLOW: &str = "Disposable infrastructure security";
 pub(super) const HOST_CASES: [&str; 4] = [
     "host-success",
     "host-launcher-refusal",
@@ -26,11 +27,15 @@ maintain-host-runtime --run-id N --run-attempt N --artifact-id N --scenario CASE
 pub(super) fn host_success(scenario: &str) -> bool {
     HOST_CASES.contains(&scenario) && scenario != "host-launcher-refusal"
 }
+/// One flow: the three maintenance proofs, and the scheduled infrastructure
+/// job's full and boot-only scopes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Purpose {
     Prerequisite,
     Host,
     Deploy,
+    Infrastructure,
+    Boot,
 }
 impl Purpose {
     pub fn workflow(self) -> &'static str {
@@ -38,6 +43,7 @@ impl Purpose {
             Self::Prerequisite => WORKFLOW,
             Self::Host => HOST_WORKFLOW,
             Self::Deploy => DEPLOY_WORKFLOW,
+            Self::Infrastructure | Self::Boot => INFRASTRUCTURE_WORKFLOW,
         }
     }
     pub fn cases(self) -> &'static [&'static str] {
@@ -45,6 +51,8 @@ impl Purpose {
             Self::Prerequisite => &CASES,
             Self::Host => &HOST_CASES,
             Self::Deploy => &["deploy-rollback"],
+            Self::Infrastructure => &["deployment-restore"],
+            Self::Boot => &["boot"],
         }
     }
     pub fn usage(self) -> &'static str {
@@ -52,6 +60,7 @@ impl Purpose {
             Self::Prerequisite => USAGE,
             Self::Host => HOST_USAGE,
             Self::Deploy => super::deploy_options::USAGE,
+            Self::Infrastructure | Self::Boot => super::infrastructure::USAGE,
         }
     }
     pub fn summary_scope(self) -> &'static str {
@@ -59,6 +68,8 @@ impl Purpose {
             Self::Prerequisite => "SignedMuslMaintenanceLauncherPrerequisiteKvm",
             Self::Host => "SignedMuslPreparedHostMaintenanceKvm",
             Self::Deploy => "SignedMuslHostDeployKvm",
+            Self::Infrastructure => "deployment-restore",
+            Self::Boot => "boot",
         }
     }
     pub fn proof_key(self) -> &'static str {
@@ -66,6 +77,17 @@ impl Purpose {
             Self::Prerequisite => "maintainProof",
             Self::Host => "hostProof",
             Self::Deploy => "deployProof",
+            Self::Infrastructure | Self::Boot => "phases",
+        }
+    }
+    /// The longest the flow's QEMU may live, in seconds: its whole budget.
+    pub fn watchdog(self) -> u64 {
+        match self {
+            Self::Prerequisite => 1800,
+            Self::Host => 3780,
+            Self::Deploy => 4500,
+            Self::Infrastructure => 3240,
+            Self::Boot => 1920,
         }
     }
 }
@@ -143,30 +165,37 @@ impl Options {
         }))
     }
     pub fn guard(&self) -> Result<()> {
-        let expected = [
-            ("GITHUB_ACTIONS", "true"),
-            ("RUNNER_ENVIRONMENT", "github-hosted"),
-            ("GITHUB_REPOSITORY", REPOSITORY),
-            ("GITHUB_REF", "refs/heads/main"),
-            ("GITHUB_WORKFLOW", self.purpose.workflow()),
-        ];
-        if !cfg!(target_os = "linux")
-            || expected
-                .iter()
-                .any(|(key, value)| std::env::var(key).as_deref() != Ok(*value))
-        {
-            return Err(Error::Refused);
-        }
-        if self.output.try_exists().map_err(|_| Error::Io)?
-            || std::fs::symlink_metadata(&self.output).is_ok()
-            || self.output.parent().is_none_or(|parent| {
-                !std::fs::canonicalize(parent).is_ok_and(|canonical| canonical == parent)
-            })
-        {
-            return Err(Error::Refused);
-        }
-        Ok(())
+        guard(self.purpose, &self.output)
     }
+}
+
+/// Only the purpose's own workflow on a hosted main runner of this
+/// repository, with a fresh output beside a canonical parent, may start a
+/// flow.
+pub(super) fn guard(purpose: Purpose, output: &std::path::Path) -> Result<()> {
+    let expected = [
+        ("GITHUB_ACTIONS", "true"),
+        ("RUNNER_ENVIRONMENT", "github-hosted"),
+        ("GITHUB_REPOSITORY", REPOSITORY),
+        ("GITHUB_REF", "refs/heads/main"),
+        ("GITHUB_WORKFLOW", purpose.workflow()),
+    ];
+    if !cfg!(target_os = "linux")
+        || expected
+            .iter()
+            .any(|(key, value)| std::env::var(key).as_deref() != Ok(*value))
+    {
+        return Err(Error::Refused);
+    }
+    if output.try_exists().map_err(|_| Error::Io)?
+        || std::fs::symlink_metadata(output).is_ok()
+        || output.parent().is_none_or(|parent| {
+            !std::fs::canonicalize(parent).is_ok_and(|canonical| canonical == parent)
+        })
+    {
+        return Err(Error::Refused);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
