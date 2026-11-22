@@ -4,7 +4,6 @@
 //! the same text.
 
 mod ops_artifact_workflow;
-mod ops_runtime_workflow;
 mod pinned_gh_installation;
 
 use serde_json::Value;

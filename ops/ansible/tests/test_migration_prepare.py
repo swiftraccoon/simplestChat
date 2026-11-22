@@ -10,7 +10,6 @@ from jinja2 import Environment, StrictUndefined, UndefinedError
 from test_support import obj, objects, strings, yaml_value
 
 # isort: split
-import release_preflight
 from release_json import JsonObject
 
 if TYPE_CHECKING:
@@ -26,14 +25,6 @@ class MigrationPrepareTests(unittest.TestCase):
     def play(self) -> JsonObject:
         """Read the maintained playbook once per test."""
         return obj(yaml_value((ROOT / "migration-prepare.yml").read_text()), 0)
-
-    def block(self, action: str) -> list[JsonObject]:
-        """Find the task block selected by an actual migration action."""
-        return next(
-            objects(task, "block")
-            for task in objects(self.play, "tasks")
-            if f"scmig_action == '{action}'" in str(task["when"])
-        )
 
     def test_selection_guard_refuses_check_mode_extra_hosts_and_bad_operation(self) -> None:
         """Evaluate real guard expressions against ambiguous and malformed target selections."""
@@ -85,29 +76,3 @@ class MigrationPrepareTests(unittest.TestCase):
                 except (UndefinedError, TypeError):
                     passed = False
                 self.assertFalse(passed)
-
-    def test_bootstrap_preserves_unfinished_work_and_complete_helper_contract(self) -> None:
-        """The refusal guard precedes file writes and the canonical helper set is complete."""
-        tasks = self.block("bootstrap")
-        guard = tasks[0]
-        self.assertIn("ansible.builtin.command", guard)
-        self.assertFalse(guard["changed_when"])
-        source = "\n".join(strings(guard, "ansible.builtin.command", "argv"))
-        for token in (
-            "LOCK_EX | fcntl.LOCK_NB",
-            "record.get('finalized') is True",
-            "request.exists()",
-            "release-state.json",
-            "current.json",
-        ):
-            self.assertIn(token, source)
-        install = next(
-            task
-            for task in tasks
-            if obj(task.get("ansible.builtin.copy", {})).get("src") == "{{ item }}"
-        )
-        required = release_preflight.BASE_HELPERS | release_preflight.FETCH_HELPERS
-        installed = set(strings(install, "loop"))
-        self.assertLessEqual(required | {"backup_public.py"}, installed)
-        # A move's own steps are commands of the executable it keeps.
-        self.assertFalse({name for name in installed if name.startswith("migrat")})

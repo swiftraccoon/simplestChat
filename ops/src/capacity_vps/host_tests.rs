@@ -1252,3 +1252,67 @@ fn same_inode_changed_bytes_with_restored_mtime_are_not_rebased_as_our_rename() 
     let _ = fs.finish();
     owner.finish().unwrap();
 }
+
+#[test]
+fn a_staged_candidate_that_is_not_the_running_image_is_refused_without_effects() {
+    // The bootstrap executes the staged binary itself. An exchanged, unlinked or foreign
+    // copy running instead cannot open the stage, whatever bytes it holds.
+    let harness = Harness::new();
+    let stage = harness
+        .temporary
+        .path(&format!("{ROOT}/artifacts/ops-runtime.{RUN}"));
+    let snapshot = |path: &Path| {
+        let mut entries = fs::read_dir(path)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                let metadata = entry.metadata().unwrap();
+                (
+                    entry.file_name(),
+                    metadata.ino(),
+                    metadata.mode(),
+                    fs::read(entry.path()).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.sort();
+        entries
+    };
+    let before = snapshot(&stage);
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let seen = events.clone();
+    let mut fs = Fs::new(Access {
+        root: Some(harness.temporary.0.clone()),
+        hook: Some(Rc::new(move |event| {
+            seen.borrow_mut().push(event);
+            Ok(())
+        })),
+    })
+    .unwrap();
+    let mut owner = Owner::fixture(clock());
+    assert_eq!(
+        Stage::open(&harness.header, &mut fs, &mut owner).err(),
+        Some(Failure::Identity)
+    );
+    let _ = fs.finish();
+    owner.finish().unwrap();
+    assert!(
+        events.borrow().iter().all(|event| *event == "close"),
+        "{:?}",
+        events.borrow()
+    );
+    assert_eq!(snapshot(&stage), before);
+}
+
+#[test]
+fn an_invocation_reaching_its_window_before_admission_is_a_deadline() {
+    let time = clock();
+    let mut owner = Owner::fixture(time.clone());
+    let origin = time.get();
+    time.set(origin + 60 * SECOND - 1);
+    owner.check(false).unwrap();
+    time.set(origin + 60 * SECOND);
+    assert_eq!(owner.check(false), Err(Failure::Deadline));
+    assert_eq!(owner.admit(Action::Lookup), Err(Failure::Deadline));
+    assert_eq!(owner.finish().err(), Some(Failure::Deadline));
+}

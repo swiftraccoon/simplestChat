@@ -141,7 +141,7 @@ mod tests {
             "manifest":{"bytes":1,"sha256":"1".repeat(64)},
             "archive":{"bytes":1,"sha256":"1".repeat(64)},
             "sourceBundle":{"bytes":1,"sha256":"1".repeat(64)},
-            "sourceTree":"b".repeat(40),"sourcePins":{},"helperPins":{},
+            "sourceTree":"b".repeat(40),"sourcePins":{},
             "postgresImage":"postgres","caddyImage":"caddy","engineVersion":"29.0.0"
         }))
         .unwrap();

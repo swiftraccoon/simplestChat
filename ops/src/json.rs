@@ -356,13 +356,6 @@ pub(crate) fn decode_limited(bytes: &[u8], maximum: usize) -> Result<Json, Error
     convert(raw, &mut remaining, 0)
 }
 
-pub(crate) fn character_count(bytes: &[u8], maximum: usize) -> Result<usize, Error> {
-    if bytes.is_empty() || bytes.len() > maximum {
-        return Err(Error::Json);
-    }
-    Ok(text(bytes, maximum.saturating_mul(2))?.chars().count())
-}
-
 /// A finite float as Python writes it: the shortest text that reads back as
 /// the value, with a signed exponent of at least two digits outside the
 /// fixed-notation range.

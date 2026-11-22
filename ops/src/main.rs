@@ -37,7 +37,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
-    "       simplestchat-ops release preflight [--helpers-json JSON]\n",
+    "       simplestchat-ops release preflight\n",
     "       simplestchat-ops release assets initialize [--revision REV]\n",
     "       simplestchat-ops release assets prune|inspect\n",
     "       simplestchat-ops release assets select --revision REV\n",
@@ -237,10 +237,7 @@ fn main() -> ExitCode {
     }
     if args.len() >= 2 && args[0] == "release" && args[1] == "preflight" {
         if args.len() == 2 {
-            return preflight_cli::run(None);
-        }
-        if args.len() == 4 && args[2] == "--helpers-json" {
-            return preflight_cli::run(Some(&args[3]));
+            return preflight_cli::run();
         }
         eprintln!("{USAGE}");
         return ExitCode::from(2);

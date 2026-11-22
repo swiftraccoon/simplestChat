@@ -6,42 +6,31 @@
 mod files;
 #[path = "preflight_platform.rs"]
 mod platform;
-#[path = "preflight_request.rs"]
-mod request;
 
 /// The distribution and version an os-release file names.
 pub(crate) use platform::fields as os_release;
-pub use request::ExpectedHelpers;
 use serde::Serialize;
 use std::fmt;
 
-/// The Python preflight's fixed public failure vocabulary. Operating-system
-/// errors, input JSON, file names and helper bytes never enter these messages.
+/// The fixed public failure vocabulary. Operating-system errors and file names
+/// never enter these messages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Failure {
-    Request,
-    HelperSet,
-    HelperDigest,
     Root,
     Platform,
     Distribution,
     Path,
     Size,
-    Digest,
     Unavailable,
 }
 impl Failure {
     pub fn code(self) -> &'static str {
         match self {
-            Self::Request => "invalid_request",
-            Self::HelperSet => "invalid_helper_set",
-            Self::HelperDigest => "invalid_helper_digest",
             Self::Root => "root_required",
             Self::Platform => "unsupported_platform",
             Self::Distribution => "unsupported_distribution",
             Self::Path => "unsafe_release_path",
             Self::Size => "invalid_release_file_size",
-            Self::Digest => "helper_digest_mismatch",
             Self::Unavailable => "preflight_unavailable",
         }
     }
@@ -54,14 +43,13 @@ impl fmt::Display for Failure {
 impl std::error::Error for Failure {}
 type Result<T> = std::result::Result<T, Failure>;
 
-/// Exactly the established public receipt. A fresh operation identifier does
+/// The public receipt: its schema and a fresh operation identifier, which does
 /// not establish durability, later namespace stability or workload readiness.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     schema_version: u8,
     run_id: String,
-    prepared: bool,
 }
 
 trait Host {
@@ -109,12 +97,16 @@ impl Host for Native {
     }
 }
 
-/// Check fixed release paths on the current root Linux/amd64 Debian 13 host.
-/// Only an already validated helper selection can enter this operation. All
-/// selected bytes and namespace bindings are checked and all owned File closes
-/// are attempted before success. Python/Ansible remain the installed runtime.
-pub fn check(expected: &ExpectedHelpers) -> Result<Receipt> {
-    check_with(&mut Native, expected)
+/// Check the fixed release paths on the current root Linux/amd64 Debian 13 host:
+/// the configuration and release roots are root-owned 0700 directories and
+/// `images.json` is a root-owned 0600 regular file of at most 64 KiB. Namespace
+/// bindings are checked and all owned File closes are attempted before success.
+///
+/// # Errors
+/// Returns the first fixed [`Failure`]: not root, another platform or
+/// distribution, an unsafe path, an unsupported size, or an unavailable check.
+pub fn check() -> Result<Receipt> {
+    check_with(&mut Native)
 }
 
 /// Admit only the existing root/Linux/amd64/Debian13 platform profile. Reuse the
@@ -160,7 +152,7 @@ fn installer_platform_facade_uses_only_original_os_snapshot_and_closes() {
     assert!(failed.access.0.borrow().live.is_empty());
 }
 
-fn check_with(host: &mut impl Host, expected: &ExpectedHelpers) -> Result<Receipt> {
+fn check_with(host: &mut impl Host) -> Result<Receipt> {
     host.identity()?.validate()?;
     let mut tree = host.filesystem()?;
     let observed = (|| {
@@ -168,25 +160,6 @@ fn check_with(host: &mut impl Host, expected: &ExpectedHelpers) -> Result<Receip
         tree.protected_directory("etc/simplestchat-public", 0o700)?;
         tree.protected_directory("srv/simplestchat-public", 0o700)?;
         tree.protected_file("etc/simplestchat-public/images.json", 0o600, 65536)?;
-        if !expected.values.is_empty() {
-            tree.protected_directory("srv/simplestchat-public/releases", 0o700)?;
-            for parent in [
-                "",
-                "usr",
-                "usr/local",
-                "usr/local/libexec",
-                "usr/local/libexec/simplestchat-public",
-            ] {
-                tree.protected_directory(parent, 0o755)?;
-            }
-            for (name, digest) in &expected.values {
-                let path = format!("usr/local/libexec/simplestchat-public/{name}");
-                let index = tree.protected_file(&path, 0o644, 1024 * 1024)?;
-                if tree.hash(index)? != *digest {
-                    return Err(Failure::Digest);
-                }
-            }
-        }
         tree.verify()
     })();
     let closed = tree.finish();
@@ -198,13 +171,9 @@ fn check_with(host: &mut impl Host, expected: &ExpectedHelpers) -> Result<Receip
     Ok(Receipt {
         schema_version: 1,
         run_id: bytes.iter().map(|byte| format!("{byte:02x}")).collect(),
-        prepared: !expected.values.is_empty(),
     })
 }
 
-#[cfg(test)]
-#[path = "preflight_oracle_tests.rs"]
-mod oracle_tests;
 #[cfg(test)]
 #[path = "preflight_tests.rs"]
 mod tests;

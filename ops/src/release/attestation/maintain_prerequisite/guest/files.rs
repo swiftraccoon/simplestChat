@@ -1,4 +1,4 @@
-//! Original no-follow descriptors, exact role profiles and the fixed inert-input handoff.
+//! Original no-follow descriptors and exact role profiles.
 
 use super::{Error, Result, control::Control};
 use sha2::{Digest, Sha256};
@@ -484,19 +484,4 @@ pub(super) fn write_new(
     let closed = close(file, control);
     result.and(closed)?;
     Original::open(path, bytes.len() as u64, uid, mode, control)
-}
-pub(super) fn inert_images_handoff(control: &mut Control) -> Result<()> {
-    let mut original = Original::open(
-        Path::new(super::CONFIG).join("images.json").as_path(),
-        3,
-        0,
-        0o600,
-        control,
-    )?;
-    if let Err(error) = original.require_parent(0, 0o700, control) {
-        control.record(error);
-        let _ = original.finish(control);
-        return Err(error);
-    }
-    original.retire_exact(b"{}\n", control)
 }

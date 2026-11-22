@@ -1,15 +1,10 @@
 //! Small public projection; the host adapter has no caller-selected paths.
 
-use simplestchat_ops::release::preflight::{ExpectedHelpers, Failure, check};
-use std::{ffi::OsStr, io::Write, process::ExitCode};
+use simplestchat_ops::release::preflight::check;
+use std::{io::Write, process::ExitCode};
 
-pub(super) fn run(raw: Option<&OsStr>) -> ExitCode {
-    let result = raw
-        .map(|value| value.to_str().ok_or(Failure::Unavailable))
-        .transpose()
-        .and_then(ExpectedHelpers::decode)
-        .and_then(|expected| check(&expected));
-    let (value, code) = match result {
+pub(super) fn run() -> ExitCode {
+    let (value, code) = match check() {
         Ok(receipt) => (serde_json::to_value(receipt), ExitCode::SUCCESS),
         Err(failure) => (
             Ok(serde_json::json!({

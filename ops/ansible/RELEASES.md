@@ -545,8 +545,7 @@ verification, then skips remote transfer and runtime changes.
 ### Repeated runs and timing
 
 Every run delivers the signed Ops executable for its own revision before
-staging, so no helper set is installed or compared and a repeat needs no extra
-option. A previously downloaded signed candidate may be supplied
+staging, so a repeat needs no extra option. A previously downloaded signed candidate may be supplied
 as `scpub_release_verified_directory`; it is reverified against the selected
 GitHub artifact/run before remote work, with no unsigned-directory fallback.
 
@@ -786,8 +785,7 @@ and an owned file read/copy as the fifth transfer slot; it does not invent a
 completed download command. Retained verification adds four actual `gh` roles:
 version, repository API, exact run-attempt API and the single preparation
 attestation verification. Complete native acquisition therefore has eight actual
-`gh` roles with retained input or nine with live input. These counts are separate from
-the KVM fixture's different repeated-verification profile.
+`gh` roles with retained input or nine with live input.
 Acquisition keeps its original 1440-second entry and export its 1860-second entry,
 with the existing verifier and final reserves.
 

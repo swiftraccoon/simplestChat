@@ -290,7 +290,6 @@ impl<'a> Native<'a> {
                 }
                 ReleaseRole::Acquire
                 | ReleaseRole::Hosted
-                | ReleaseRole::Runtime
                 | ReleaseRole::Vps
                 | ReleaseRole::Frontend => {
                     self.ready().await?;
@@ -673,10 +672,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
     if let Some(proof) = &request.release {
         let admitted = match proof.role() {
             // These proofs check the program and arguments themselves.
-            ReleaseRole::Hosted
-            | ReleaseRole::Runtime
-            | ReleaseRole::Vps
-            | ReleaseRole::Frontend => true,
+            ReleaseRole::Hosted | ReleaseRole::Vps | ReleaseRole::Frontend => true,
             role @ (ReleaseRole::Producer
             | ReleaseRole::SourceGit
             | ReleaseRole::Retained

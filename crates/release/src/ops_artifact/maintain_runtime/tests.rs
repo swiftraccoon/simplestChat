@@ -1,4 +1,4 @@
-//! Native protocol neighbors and frozen-reference contracts; no VM-positive simulation.
+//! Native protocol neighbors and catalogue contracts; no VM-positive simulation.
 
 use super::*;
 use serde_json::{Value, json};
@@ -310,7 +310,6 @@ fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_co
 fn closed_render_checkpoints_preserve_pre_native_refusal_without_admitting_success() {
     for checkpoint in [
         "render",
-        "render-inert-handoff",
         "render-files",
         "render-helpers",
         "render-directories",
@@ -337,6 +336,18 @@ fn closed_render_checkpoints_preserve_pre_native_refusal_without_admitting_succe
             Err(Error::Refused)
         );
     }
+    // The guest no longer retires an inert configuration file before rendering.
+    let mut failed = case("positive");
+    failed["passed"] = false.into();
+    failed["failure"] = "refused".into();
+    failed["checkpoint"] = "render-inert-handoff".into();
+    failed["finalStatus"] = 1.into();
+    failed["nativeRawExit"] = Value::Null;
+    failed["nativeFrame"] = Value::Null;
+    assert_eq!(
+        projection::guest(failed, &expected("positive")),
+        Err(Error::Refused)
+    );
 }
 #[test]
 fn network_checkpoints_and_typed_failures_preserve_negative_receipts_only() {
@@ -557,170 +568,11 @@ fn strict_wire_rejects_duplicate_keys_trailing_records_nonfinite_and_deep_input(
         Some(u64::MAX)
     );
 }
-fn ops_receipt() -> Value {
-    let rows = catalog::OPS_CASES
-        .iter()
-        .map(|(name, status)| {
-            json!({"name":name,
-        "exitStatus":status,"passed":true})
-        })
-        .collect::<Vec<_>>();
-    json!({"schemaVersion":1,"scope":"OpsDebianGuestReceipt","runId":"a".repeat(32),
-        "passed":true,"failure":null,"cases":rows,
-        "install":{"firstChanged":true,"secondChanged":false}})
-}
 #[test]
-fn all_thirty_three_original_ops_cases_and_install_repeat_are_mandatory() {
-    let value = ops_receipt();
-    assert!(
-        projection::admit_ops(value.clone(), &"a".repeat(32), 0)
-            .unwrap()
-            .require_success()
-            .is_ok()
-    );
-    let mut missing = value.clone();
-    missing["cases"].as_array_mut().unwrap().pop();
-    assert!(projection::admit_ops(missing, &"a".repeat(32), 0).is_err());
-    assert!(projection::admit_ops(value, &"a".repeat(32), 7).is_err());
-}
-#[test]
-fn negative_ops_prefix_is_preserved_before_positive_completion_is_refused() {
-    let mut value = ops_receipt();
-    value["passed"] = false.into();
-    value["failure"] = "cases".into();
-    value["cases"].as_array_mut().unwrap().truncate(6);
-    // The frozen guest clamps a signalled candidate's recorded status to zero,
-    // while retaining passed=false from its actual unexpected signal status.
-    value["cases"][5]["exitStatus"] = 0.into();
-    value["cases"][5]["passed"] = false.into();
-    value["install"] = json!({"firstChanged":null,"secondChanged":null});
-    let mut report = json!({"opsCases":[],"passed":false});
-    assert_eq!(
-        execute::observe_ops_receipt(
-            &mut report,
-            &serde_json::to_vec(&value).unwrap(),
-            &"a".repeat(32),
-            1,
-        ),
-        Err(Error::Refused)
-    );
-    assert_eq!(report["opsCases"], value["cases"]);
-    assert_eq!(report["install"], value["install"]);
-    assert_eq!(report["opsGuestFailure"], "cases");
-    assert_eq!(report["passed"], false);
-    assert_eq!(
-        report["installDiagnostic"],
-        json!({"checkpoint":"guest-result","rawExit":1})
-    );
-}
-#[test]
-fn closed_failed_guest_receipts_remain_negative_with_empty_or_complete_prefixes() {
-    for failure in [
-        "guard",
-        "transfer",
-        "boot",
-        "stage",
-        "cases",
-        "cleanup",
-        "cancelled",
-        "deadline",
-        "unavailable",
-    ] {
-        for complete in [false, true] {
-            let mut value = ops_receipt();
-            value["passed"] = false.into();
-            value["failure"] = failure.into();
-            if !complete {
-                value["cases"] = json!([]);
-                value["install"] = json!({"firstChanged":null,"secondChanged":null});
-            }
-            let raw = match failure {
-                "deadline" => 124,
-                "cancelled" => 143,
-                _ => 1,
-            };
-            let receipt = projection::admit_ops(value.clone(), &"a".repeat(32), raw).unwrap();
-            assert_eq!(receipt.cases(), &value["cases"]);
-            assert_eq!(receipt.require_success(), Err(Error::Refused));
-            assert!(projection::admit_ops(value, &"a".repeat(32), 0).is_err());
-        }
-    }
-}
-#[test]
-fn failed_receipt_neighbors_never_publish_candidate_strings_or_invalid_fields() {
-    let mut base = ops_receipt();
-    base["passed"] = false.into();
-    base["failure"] = "cases".into();
-    base["cases"].as_array_mut().unwrap().truncate(2);
-    for (pointer, bad) in [
-        ("/failure", json!("SECRET")),
-        ("/failure", Value::Null),
-        ("/runId", json!("SECRET")),
-        ("/schemaVersion", json!(true)),
-        ("/passed", json!(0)),
-        ("/cases/0/name", json!("SECRET")),
-        ("/cases/0/exitStatus", json!(true)),
-        ("/cases/0/exitStatus", json!(1.0)),
-        ("/cases/0/exitStatus", json!(-1)),
-        ("/cases/0/exitStatus", json!(256)),
-        ("/cases/0/exitStatus", json!(0)),
-        ("/cases/0/passed", json!("SECRET")),
-        ("/install/firstChanged", json!(1)),
-        ("/install/secondChanged", json!("SECRET")),
-    ] {
-        let mut value = base.clone();
-        *value.pointer_mut(pointer).unwrap() = bad;
-        let mut report = json!({"opsCases":[]});
-        assert!(
-            execute::observe_ops_receipt(
-                &mut report,
-                &serde_json::to_vec(&value).unwrap(),
-                &"a".repeat(32),
-                1,
-            )
-            .is_err()
-        );
-        assert_eq!(report["opsCases"], json!([]));
-        assert!(report.get("install").is_none());
-        assert!(report.get("opsGuestFailure").is_none());
-        assert_eq!(
-            report["installDiagnostic"]["checkpoint"],
-            "guest-projection"
-        );
-        assert!(!serde_json::to_string(&report).unwrap().contains("SECRET"));
-    }
-    for extra in [false, true] {
-        let mut value = base.clone();
-        if extra {
-            value["cases"] = ops_receipt()["cases"].clone();
-            value["cases"].as_array_mut().unwrap().push(json!({
-                "name":"SECRET","exitStatus":0,"passed":false
-            }));
-        } else {
-            value["cases"].as_array_mut().unwrap().swap(0, 1);
-        }
-        assert!(projection::admit_ops(value, &"a".repeat(32), 1).is_err());
-    }
-}
-#[test]
-fn bounded_decode_projection_and_child_failures_remain_distinct_without_raw_output() {
-    for (bytes, checkpoint) in [
-        (vec![b'x'; 65537], "guest-bounds"),
-        (b"SECRET".to_vec(), "guest-decode"),
-        (b"{\"SECRET\":1}".to_vec(), "guest-projection"),
-        (b"{\"SECRET\":1,\"SECRET\":2}".to_vec(), "guest-decode"),
-    ] {
-        let mut report = json!({"opsCases":[]});
-        assert!(execute::observe_ops_receipt(&mut report, &bytes, &"a".repeat(32), 1).is_err());
-        assert_eq!(
-            report["installDiagnostic"],
-            json!({"checkpoint":checkpoint,"rawExit":1})
-        );
-        assert_eq!(report["opsCases"], json!([]));
-        assert!(!serde_json::to_string(&report).unwrap().contains("SECRET"));
-    }
+fn install_diagnostics_keep_only_an_observed_child_status() {
     for error in [Error::Io, Error::Deadline, Error::Child(255)] {
-        let mut report = json!({"installDiagnostic":{"checkpoint":"stage-command","rawExit":null}});
+        let mut report =
+            json!({"installDiagnostic":{"checkpoint":"install-command","rawExit":null}});
         assert_eq!(execute::install_command_error(&mut report, error), error);
         assert_eq!(
             report["installDiagnostic"]["rawExit"],
@@ -729,51 +581,33 @@ fn bounded_decode_projection_and_child_failures_remain_distinct_without_raw_outp
                 _ => Value::Null,
             }
         );
-        assert_eq!(report["installDiagnostic"]["checkpoint"], "stage-command");
+        assert_eq!(report["installDiagnostic"]["checkpoint"], "install-command");
     }
 }
 #[test]
-fn successful_receipt_preserves_the_existing_summary_shape() {
-    let value = ops_receipt();
-    let mut report = json!({"opsCases":[]});
-    execute::observe_ops_receipt(
-        &mut report,
-        &serde_json::to_vec(&value).unwrap(),
-        &"a".repeat(32),
-        0,
-    )
-    .unwrap();
-    assert_eq!(
-        report,
-        json!({"opsCases":value["cases"],"install":value["install"]})
-    );
-}
-#[test]
 fn native_catalog_keeps_the_frozen_guest_roster_and_thirty_eight_migrations() {
-    let ops = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../build/security_vm_ops_guest.py"
-    ));
-    // Every name of this roster was a literal of the Python guest it
-    // replaced; the digest freezes the roster as it was last compared,
-    // less the two files of the lobby-seeding helper and the two of the
-    // runtime-profile validator the launcher no longer runs.
+    // The digest freezes the guest roster as it was last compared, less the two
+    // files of the lobby-seeding helper and the two of the runtime-profile
+    // validator the launcher no longer runs.
     let roster = catalog::guest_sources().into_iter().collect::<Vec<_>>();
     assert_eq!(
         files::hex(&Sha256::digest(roster.join("\n"))),
         "c741d8374e9a9c0b49394f8f630c85cac90510beeea02f2f9c2fee5b30043145"
     );
-    for (name, _) in catalog::OPS_CASES {
-        assert!(ops.contains(&format!("\"{name}\"")));
-    }
     assert_eq!(catalog::MIGRATIONS.len(), 38);
     assert_eq!(catalog::guest_sources().len(), 50);
-    assert_eq!(catalog::HELPERS.len(), 15);
+    let sources = catalog::sources();
+    assert!(!sources.iter().any(|name| name.contains("private")));
+    // No step of the flows runs, ships or imports repository Python.
     assert!(
-        !catalog::sources()
+        !sources
             .iter()
-            .any(|name| name.contains("private"))
+            .any(|name| name.ends_with(".py") || name.contains("python")),
+        "{sources:?}"
     );
+    for name in [catalog::DELIVERY_PLAYBOOK, catalog::DELIVERY_TASKS] {
+        assert!(sources.contains(name), "{name}");
+    }
 }
 #[test]
 fn workflow_entry_keeps_caps_and_selects_the_installed_native_guest() {
@@ -839,7 +673,6 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
         assert!(sources.contains(file), "{file}");
     }
     assert_eq!(catalog::guest_sources().len(), 50);
-    assert_eq!(catalog::HELPERS.len(), 15);
     assert!(
         !catalog::guest_sources()
             .iter()
@@ -934,42 +767,6 @@ fn outward_failure_is_one_and_only_actual_outer_signals_use_signal_status() {
     assert_eq!(outward_status(7, false), 1);
     assert_eq!(outward_status(130, false), 130);
     assert_eq!(outward_status(143, false), 143);
-}
-#[test]
-fn executable_measurement_refuses_weak_elf_fields_before_transfer() {
-    let mut value = json!({"sha256":"a".repeat(64),"bytes":123,"architecture":"x86_64",
-        "elfClass":64,"fileType":"dynamic","programHeaders":9,"neededCount":0});
-    for name in [
-        "littleEndian",
-        "noInterpreter",
-        "noNeeded",
-        "pieFlag",
-        "bindNow",
-        "nonExecutableStack",
-        "noWritableExecutableLoad",
-        "relroPresent",
-        "noRpath",
-        "noRunpath",
-        "noTextRelocations",
-        "noLoaderHooks",
-    ] {
-        value[name] = true.into();
-    }
-    assert!(projection::executable(&value, &"a".repeat(64), 123).is_ok());
-    for (key, bad) in [
-        ("noInterpreter", json!(false)),
-        ("neededCount", json!(1)),
-        ("architecture", json!("aarch64")),
-        ("pieFlag", json!(0)),
-        ("programHeaders", json!(0)),
-    ] {
-        let mut row = value.clone();
-        row[key] = bad;
-        assert_eq!(
-            projection::executable(&row, &"a".repeat(64), 123),
-            Err(Error::Refused)
-        );
-    }
 }
 #[test]
 fn every_purpose_reads_sources_the_checkout_holds_and_deploy_adds_only_its_two() {

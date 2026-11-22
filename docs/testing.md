@@ -97,49 +97,12 @@ dependencies and its exact three subjects. A successful hosted build and an
 actual post-CI acquisition are separate interoperability evidence; Debian host
 runtime and installation evidence are separate again.
 
-The [authenticated Ops Debian runtime and installer](../ops/README.md#authenticated-debian-runtime-and-first-installation)
-add delegated acquisition/verifier traces, original USTAR/member/source witnesses,
-closed keeper receipts, final replay faults and the fixed first-install lock and
-namespace tests. The source-projection tests reject extra imports, namespace
-changes and identical-byte inode substitutions while retaining the original
-checkout witnesses. Actual isolated Python import regressions place legacy
-bytecode and native-extension siblings in the caller checkout and execute only
-the closed projected keeper. Python keeper/guest fixtures use inert process and
-VM adapters;
-they do not execute the signed candidate or boot a guest. Borrowed regular-file
-stdin tests preserve the original inode after pathname replacement and retain
-caller ownership through process cancellation. Linux signal handling and the
-actual Debian executable/first-install behavior require their respective Linux
-tests and successful manual `ops-runtime.yml` run. The existing full application
-VM workflow remains a separate suite.
-
-Keeper help fixtures cover legacy/current/future global-help layouts while
-retaining strict route, status, stderr and output-size checks. The compiled
-`simplestchat-release ops-artifact runtime-diagnostics` leaf has separate
-pure/bounded-file tests:
-
-```sh
-cargo test --locked -p simplestchat-release --bin simplestchat-release \
-  ops_artifact::runtime::diagnostics::tests:: -- --test-threads=1
-```
-
-The `ops-artifact runtime-request` leaf writes the hosted proof's request. Unit
-tests beside it bind its bytes to the runtime reader and its refusal order, and
-built-binary tests cover canonical identifiers and revision, exclusive private
-creation and the published digest:
-
-```sh
-cargo test --locked -p simplestchat-release --bin simplestchat-release \
-  ops_artifact::runtime::request_writer::tests:: -- --test-threads=1
-cargo test --locked -p simplestchat-release --test runtime_request -- --test-threads=1
-```
-
-The reporter checks source identity, malformed/oversized/nonregular reports,
-fresh output/readback, clamped signal-status compatibility and actual read-only
-stdout refusal. It retains only one sanitized JSON after checked finalization;
-`lastObservedCase` is not a claim about the first failed case. Original runtime
-failure stays negative. The manual signed Debian run remains the actual guest
-execution and first-install gate.
+Installation is tested inert by `distribution::install::tests` and
+`distribution_cli` (first install, exact repeat, foreign bytes or mode, upgrade).
+The signed musl executable is installed on a Debian host only through
+`ops/ansible/tasks/signed-ops.yml`: by every real release, and by the three
+manual KVM runtime workflows, whose disposable guests receive it through those
+same tasks (see [Optional maintenance prerequisite experiments](#optional-maintenance-prerequisite-experiments)).
 
 Operations automation runs the standalone Ops library suite with its default
 dependency profile. On Linux this includes the host, process and archive cases.
@@ -1676,8 +1639,7 @@ verifier performs its four actual `gh` roles, including one fresh cryptographic
 attestation verification of `ops-preparation.json`; it validates the verified
 statement's preparation/manifest/binary subjects and the bound pair/evidence
 graph. Complete acquisition has eight actual `gh` roles with retained input or
-nine with live input. These counts are distinct from the KVM fixture's repeated
-verification profile. This does not reuse a saved verification result
+nine with live input. This does not reuse a saved verification result
 or change the 180-second transfer, 1440-second acquisition or 1860-second export
 limits. The application candidate directory remains the separate original-ZIP
 plus-ten-members contract with four fresh subject checks. The direct Ansible
@@ -3121,19 +3083,31 @@ the producer regressions.
 ## Optional maintenance prerequisite experiments
 
 The four-case launcher workflow selects the Rust outer entry
-`simplestchat-release ops-artifact maintain-runtime`; the previous Python controller remains an
-unchanged reference. The
-authenticated installed Ops binary now owns the explicit native guest role,
-with exactly 54 project source pins and 15 operational helper pins. Frozen Python
-still supplies Ops33, Ansible and operational helpers. The same 1,800-second
-outer limit and 120-second reserve apply,
-with a 510-second setup cap and 1,170 seconds required before GO.
+`simplestchat-release ops-artifact maintain-runtime`. After authenticating the
+signed Ops and server artifacts and booting the guest, the controller delivers
+the Ops executable with `ops/ansible/security-vm-ops-install.yml`, which
+provisions the release roots a prepared host holds, registers the authenticated
+application predicate and manifest the way `release.yml` does, and imports the
+production `tasks/signed-ops.yml` unchanged with the variables a routine
+`release deploy` passes; the tasks' own `ops-artifact export` authenticates the
+artifact again with the runner's token. The playbook then requires the
+installed file to be root-owned 0755 with the size and SHA-256 the controller
+authenticated. The maintenance-host and deploy runtimes deliver the same way;
+the host flow also keeps the delivered candidate members for its upgrade stage.
+The authenticated installed Ops binary owns the explicit native guest role, with
+exactly 50 project source pins. The same 1,800-second outer limit and 120-second
+reserve apply, with a 510-second setup cap and 1,170 seconds required before GO.
+The playbook's shape, the delivery's variables against those of the release
+frontend and the release playbook, its command line and its place between boot
+and fixture setup are source contracts
+(`cargo test --locked -p simplestchat-release maintain_runtime::install`); only
+a hosted run executes it.
 
 The guest's render failure checkpoint distinguishes pure rendering (`render`),
-the exact inert-input handoff (`render-inert-handoff`), configuration publication
-(`render-files`), helper custody (`render-helpers`), data-directory creation
-(`render-directories`), the actual assets child (`render-assets`), its decoded
-receipt (`render-assets-receipt`) and final tool admission (`render-tools`).
+configuration publication (`render-files`), helper custody (`render-helpers`),
+data-directory creation (`render-directories`), the actual assets child
+(`render-assets`), its decoded receipt (`render-assets-receipt`) and final tool
+admission (`render-tools`).
 Only those fixed values cross the outer decoder; no raw file or child details
 are exported. Decoder regressions preserve pre-native failures and null native
 results, reject those labels as success checkpoints, and refuse unknown labels,
@@ -3224,8 +3198,8 @@ cargo test --locked -p simplestchat-ops \
 node --test build/tests/container-inputs.test.mjs
 ```
 
-Native tests cover closed guest/native status and phase joins, complete Ops33
-receipts, real input/namespace mutations, full recap refusal, fixed work cleanup
+Native tests cover closed guest/native status and phase joins, real
+input/namespace mutations, full recap refusal, fixed work cleanup
 and actual isolated-child INT/TERM after runtime teardown. Exact reference
 catalog/source assertions and the existing unmodified Python suites remain
 separate evidence. They do not prove full cross-language controller equivalence
@@ -3411,13 +3385,9 @@ The manual fixed-launcher runtime fixture
 cancellation and the actual unchanged 900-second timeout. It joins the exact
 installed Ops inode, shallow source tree, native PID-namespace settlement,
 PostgreSQL state, naturally generated Caddy materials and known daemon actors.
-Earlier Linux CI ran
-the fixed run/init FD/process methods; the latest frozen-guest trial passed Ops33
-then failed at rendering. All four fresh signed trials remain required for the
-new guest route. This fixture does not replace operational Python or change a
-host caller. Its controller is `simplestchat-release ops-artifact
-maintain-runtime`; the Python keeper and guest it replaced are deleted. Run the
-controller's protocol and catalog tests with:
+All four fresh signed trials remain required for the guest route; the fixture
+changes no host caller. Its controller is `simplestchat-release ops-artifact
+maintain-runtime`. Run the controller's protocol and catalog tests with:
 
 ```sh
 cargo test --locked -p simplestchat-release maintain_runtime -- --test-threads=1
@@ -3512,10 +3482,10 @@ the refusal case by comparison with the clean baseline. Those observations do
 not identify a unique failing Bash branch; the frozen launcher has silent checks
 that can share that exit status.
 
-The host fixture's guest DATA roster is the 54 rendered-input source files
-and 15 helper files. The new Rust host/controller implementation executes from the
-current authenticated Ops binary and is additionally bound by the expanded
-outer source catalogue; it is not interpreted from those 54 guest DATA files.
+The host fixture's guest DATA roster is the 50 rendered-input source files. The
+Rust host/controller implementation executes from the current authenticated Ops
+binary and is additionally bound by the expanded outer source catalogue; it is
+not interpreted from those 50 guest DATA files.
 The migration case reconstructs a source-bound pre-035 generation: it seeds
 member and invitation rows, reverses both real role columns and validated
 constraints, drops `users.avatar_digest` (reversing 037) and the

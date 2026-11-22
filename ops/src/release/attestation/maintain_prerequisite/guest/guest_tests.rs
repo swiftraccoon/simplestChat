@@ -13,20 +13,15 @@ fn request_value() -> Value {
         .into_iter()
         .map(|name| (name, json!("a".repeat(64))))
         .collect::<serde_json::Map<_, _>>();
-    let helpers = sources::helper_names()
-        .into_iter()
-        .map(|name| (name, json!("b".repeat(64))))
-        .collect::<serde_json::Map<_, _>>();
     let pin = json!({"sha256":"c".repeat(64),"bytes":123});
-    json!({"schemaVersion":1,"scope":"MaintainLauncherPrerequisiteRequest","runId":"d".repeat(32),"revision":"e".repeat(40),"scenario":"positive","setupSeconds":510,"bodySeconds":1680,"endSeconds":1800,"binary":pin,"manifest":pin,"archive":pin,"sourceBundle":pin,"sourceTree":"f".repeat(40),"sourcePins":sources,"helperPins":helpers,"postgresImage":format!("postgres@sha256:{}","a".repeat(64)),"caddyImage":protocol::CADDY_IMAGE,"engineVersion":"29.0.0"})
+    json!({"schemaVersion":1,"scope":"MaintainLauncherPrerequisiteRequest","runId":"d".repeat(32),"revision":"e".repeat(40),"scenario":"positive","setupSeconds":510,"bodySeconds":1680,"endSeconds":1800,"binary":pin,"manifest":pin,"archive":pin,"sourceBundle":pin,"sourceTree":"f".repeat(40),"sourcePins":sources,"postgresImage":format!("postgres@sha256:{}","a".repeat(64)),"caddyImage":protocol::CADDY_IMAGE,"engineVersion":"29.0.0"})
 }
 #[test]
-fn exact_request_keeps_fifty_two_sources_fifteen_helpers_and_original_caps() {
+fn exact_request_keeps_fifty_sources_and_original_caps() {
     let value = request_value();
     let request = Request::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
-    assert_eq!(value.as_object().unwrap().len(), 18);
+    assert_eq!(value.as_object().unwrap().len(), 17);
     assert_eq!(request.source_pins.len(), 50);
-    assert_eq!(request.helper_pins.len(), 15);
     for (pointer, bad) in [
         ("/schemaVersion", json!(true)),
         ("/setupSeconds", json!(511)),
@@ -46,12 +41,16 @@ fn exact_request_keeps_fifty_two_sources_fifteen_helpers_and_original_caps() {
     let mut extra = value.clone();
     extra["sourcePins"]["SECRET"] = "a".repeat(64).into();
     assert!(Request::decode(&serde_json::to_vec(&extra).unwrap()).is_err());
-    let mut missing = value;
-    missing["helperPins"]
+    let mut missing = value.clone();
+    missing["sourcePins"]
         .as_object_mut()
         .unwrap()
-        .remove("bounded_process.py");
+        .remove("Caddyfile");
     assert!(Request::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
+    // A helper roster is no longer part of the request.
+    let mut helpers = value;
+    helpers["helperPins"] = json!({"bounded_process.py":"b".repeat(64)});
+    assert!(Request::decode(&serde_json::to_vec(&helpers).unwrap()).is_err());
 }
 #[test]
 fn prepared_host_purpose_does_not_raise_the_original_request_profile() {
@@ -233,7 +232,7 @@ impl Drop for Fixture {
     }
 }
 #[test]
-fn exact_inert_handoff_retires_only_its_original_and_refuses_changed_bytes() {
+fn exact_retirement_removes_only_its_original_and_refuses_changed_bytes() {
     let fixture = Fixture::new();
     let path = fixture.file("images.json", b"{}\n");
     let sentinel = fixture.file("sentinel", b"foreign");

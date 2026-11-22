@@ -363,15 +363,11 @@ mod tests {
             .into_iter()
             .map(|name| (name, "d".repeat(64)))
             .collect::<std::collections::BTreeMap<_, _>>();
-        let helpers = catalog::HELPERS
-            .into_iter()
-            .map(|name| (name, "c".repeat(64)))
-            .collect::<std::collections::BTreeMap<_, _>>();
         let expected = json!({"schemaVersion":1,
             "scope":"PreparedHostMaintenanceRequest", "runId":"a".repeat(32),
             "revision":"b".repeat(40), "scenario":scenario,
             "setupSeconds":1560,"bodySeconds":3660,"endSeconds":3780,
-            "sourcePins":pins,"helperPins":helpers,
+            "sourcePins":pins,
             "binary":{"sha256":"e".repeat(64),"bytes":268435456},
             "manifest":{"sha256":"c".repeat(64),"bytes":131072},
             "archive":{"sha256":"c".repeat(64),"bytes":2147483648u64},
@@ -458,9 +454,8 @@ mod tests {
     fn complete_host_request_and_passing_receipts_fit_the_existing_session_frame() {
         for scenario in options::HOST_CASES {
             let (receipt, request) = fixture_case(scenario);
-            assert_eq!(request.as_object().unwrap().len(), 18);
+            assert_eq!(request.as_object().unwrap().len(), 17);
             assert_eq!(request["sourcePins"].as_object().unwrap().len(), 50);
-            assert_eq!(request["helperPins"].as_object().unwrap().len(), 15);
             assert_eq!(receipt.as_object().unwrap().len(), 19);
             assert_eq!(receipt["observations"].as_object().unwrap().len(), 28);
             assert_eq!(receipt["upgradeEvidence"].as_object().unwrap().len(), 3);

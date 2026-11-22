@@ -1,7 +1,13 @@
-//! Exact source and frozen guest-role catalog; no Python imports select this roster.
+//! Exact source and frozen guest-role catalog. No step of these flows runs, ships or
+//! imports a Python source of the repository, so none is listed.
 
 use super::options::Purpose;
 use std::collections::BTreeSet;
+
+/// The guest playbook that delivers the signed Ops executable, and the production
+/// delivery tasks it imports unchanged.
+pub(super) const DELIVERY_PLAYBOOK: &str = "ops/ansible/security-vm-ops-install.yml";
+pub(super) const DELIVERY_TASKS: &str = "ops/ansible/tasks/signed-ops.yml";
 
 pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
     let mut names = sources();
@@ -15,23 +21,6 @@ pub(super) fn sources_for(purpose: Purpose) -> BTreeSet<String> {
     }
     names
 }
-pub(super) const HELPERS: [&str; 15] = [
-    "bounded_process.py",
-    "release-public.py",
-    "release_public.py",
-    "release_artifact.py",
-    "release_assets.py",
-    "browser_assets.py",
-    "release_json.py",
-    "runtime_profile.py",
-    "reboot-public.py",
-    "reboot_public.py",
-    "fetch-release.py",
-    "release_fetch_receiver.py",
-    "release_trust.py",
-    "force_release.py",
-    "security_vm_ops_guest.py",
-];
 pub(super) const MIGRATIONS: [&str; 38] = [
     "001_create_users.sql",
     "002_create_sessions.sql",
@@ -101,35 +90,15 @@ pub(super) fn guest_sources() -> BTreeSet<String> {
 }
 pub(super) fn sources() -> BTreeSet<String> {
     let mut names = guest_sources();
-    for helper in HELPERS {
-        names.insert(if helper == "security_vm_ops_guest.py" {
-            format!("build/{helper}")
-        } else {
-            format!("ops/ansible/files/{helper}")
-        });
-    }
     for name in [
         "Cargo.toml",
         "Cargo.lock",
         "rust-toolchain.toml",
         "security/vm/debian-cloud.json",
-        "build/security_vm_ops.py",
-        "build/security_vm_vps_guest.py",
-        "build/vps_ops_bootstrap.py",
-        "build/security_vm.py",
-        "build/security_vm_qmp.py",
-        "build/security_context.py",
-        "build/security_tools.py",
-        "build/python-requirements.txt",
-        "security/vm/ops-stage.yml",
+        DELIVERY_PLAYBOOK,
+        DELIVERY_TASKS,
         "ops/ansible/ansible.cfg",
         "ops/ansible/requirements.txt",
-        "ops/ansible/files/release_preflight.py",
-        "build/security_vm_release.py",
-        "build/release_attestation.py",
-        "build/release_fetch_controller.py",
-        "build/release_deploy.py",
-        "build/release_build.py",
         ".github/workflows/maintenance-launcher-runtime.yml",
         "ops/ansible/security-vm-maintain-prerequisite.yml",
         "ops/ansible/group_vars/benchmark_hosts.yml",
@@ -159,6 +128,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "host_diagnostic",
         "host_projection",
         "host_upgrade",
+        "install_tests",
         "mod",
         "options",
         "prepared",
@@ -434,38 +404,3 @@ pub(super) fn sources() -> BTreeSet<String> {
     }
     names
 }
-pub(super) const OPS_CASES: [(&str, i64); 33] = [
-    ("vps-fd-cloexec", 1),
-    ("vps-stage-exchange", 1),
-    ("vps-stage-unlinked", 1),
-    ("vps-wrong-image", 1),
-    ("vps-origin-expired", 124),
-    ("source-help", 0),
-    ("source-invalid-cli", 2),
-    ("source-forbidden-root", 2),
-    ("source-inspect", 0),
-    ("source-pair", 0),
-    ("install-foreign-bytes", 1),
-    ("install-foreign-mode", 1),
-    ("install-first", 0),
-    ("install-repeat", 0),
-    ("installed-help", 0),
-    ("installed-inspect", 0),
-    ("installed-pair", 0),
-    ("preflight-ordinary", 0),
-    ("preflight-base", 0),
-    ("preflight-fetch", 0),
-    ("preflight-force", 0),
-    ("preflight-invalid-shape", 1),
-    ("preflight-unknown-helper", 1),
-    ("preflight-invalid-digest", 1),
-    ("preflight-combined", 1),
-    ("preflight-cli", 2),
-    ("preflight-unprivileged", 1),
-    ("preflight-mode", 1),
-    ("preflight-hash", 1),
-    ("release-manifest", 0),
-    ("release-manifest-private", 1),
-    ("installed-final-inspect", 0),
-    ("installed-final-pair", 0),
-];

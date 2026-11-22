@@ -207,7 +207,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
-                "       simplestchat-ops release preflight [--helpers-json JSON]\n",
+                "       simplestchat-ops release preflight\n",
                 "       simplestchat-ops release assets initialize [--revision REV]\n",
                 "       simplestchat-ops release assets prune|inspect\n",
                 "       simplestchat-ops release assets select --revision REV\n",

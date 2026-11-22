@@ -13,11 +13,9 @@
 //! - `deploy`, `migrate`, `bootstrap` and `ops-artifact maintain-runtime`,
 //!   `maintain-host-runtime` and `deploy-runtime` use [`root`], the checkout
 //!   two levels above this crate's manifest;
-//! - `ops-artifact verify-retained`, `acquire`, `export` and `runtime`, and
+//! - `ops-artifact verify-retained`, `acquire` and `export`, and
 //!   `vps-capacity`, use the caller's current directory;
-//! - `ops-artifact hosted` uses the hosted runner's `GITHUB_WORKSPACE`, and
-//!   `ops-artifact runtime-request` and `runtime-diagnostics` its
-//!   `RUNNER_TEMP`;
+//! - `ops-artifact hosted` uses the hosted runner's `GITHUB_WORKSPACE`;
 //! - `verify`, and `ops-artifact build`, `source`, `registry` and
 //!   `signing-inputs`, take every path from their arguments or pinned
 //!   request.

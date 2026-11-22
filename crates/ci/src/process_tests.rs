@@ -1202,7 +1202,7 @@ async fn mdns_actual_interruption_stays_distinct_after_group_and_pipe_settlement
 }
 
 /// Every program, in declaration order; the declaration scan below pins it.
-const PROGRAMS: [Program; 43] = [
+const PROGRAMS: [Program; 41] = [
     Program::Git,
     Program::Docker,
     Program::Curl,
@@ -1224,8 +1224,6 @@ const PROGRAMS: [Program; 43] = [
     Program::OpsKitShell,
     Program::OpsKitPerl,
     Program::OpsKitMake,
-    Program::OpsRuntimeGit,
-    Program::OpsRuntimePython,
     Program::OpsVpsGit,
     Program::OpsVpsSsh,
     Program::OpsVpsAnsible,
@@ -1286,7 +1284,6 @@ fn release_roles_partition_exactly_the_runner_selected_programs() {
             | Program::OpsKitShell
             | Program::OpsKitPerl
             | Program::OpsKitMake => (true, &[Hosted]),
-            Program::OpsRuntimeGit | Program::OpsRuntimePython => (true, &[Runtime]),
             Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible => (true, &[Vps]),
             Program::FrontendGit
             | Program::FrontendGh
@@ -1309,7 +1306,7 @@ fn release_roles_partition_exactly_the_runner_selected_programs() {
         assert_eq!(super::selected(program), runner, "{program:?}");
         release += usize::from(!admitted.is_empty());
     }
-    assert_eq!(release, 21);
+    assert_eq!(release, 19);
     let bounded: Vec<(ReleaseRole, Program)> = ReleaseRole::ALL
         .into_iter()
         .flat_map(|role| PROGRAMS.map(|program| (role, program)))
@@ -1392,7 +1389,6 @@ async fn only_a_source_git_proof_without_context_runs_in_the_runner_checkout() {
             SourceGit => Program::OpsGit,
             Retained | Acquire => Program::OpsGh,
             Hosted => Program::OpsMaterialCurl,
-            Runtime => Program::OpsRuntimeGit,
             Vps => Program::OpsVpsGit,
             Frontend => Program::FrontendGit,
         };

@@ -1,6 +1,6 @@
 //! Fixed source roles imported from one exact shallow bundle; no interpreted helpers.
 
-use super::{BUNDLE, Context, Error, INSTALLED, LIBRARY, ROOT, Result, files};
+use super::{BUNDLE, Context, Error, INSTALLED, Result, files};
 use std::{
     collections::BTreeSet,
     fs::{self, OpenOptions},
@@ -10,23 +10,6 @@ use std::{
     time::Duration,
 };
 
-pub(super) const HELPERS: [&str; 15] = [
-    "bounded_process.py",
-    "release-public.py",
-    "release_public.py",
-    "release_artifact.py",
-    "release_assets.py",
-    "browser_assets.py",
-    "release_json.py",
-    "runtime_profile.py",
-    "reboot-public.py",
-    "reboot_public.py",
-    "fetch-release.py",
-    "release_fetch_receiver.py",
-    "release_trust.py",
-    "force_release.py",
-    "security_vm_ops_guest.py",
-];
 pub(super) const MIGRATIONS: [&str; 38] = [
     "001_create_users.sql",
     "002_create_sessions.sql",
@@ -94,11 +77,6 @@ pub(super) fn guest_names() -> Vec<String> {
     );
     names.extend(MIGRATIONS.iter().map(|s| format!("migrations/{s}")));
     names.into_iter().collect()
-}
-pub(super) fn helper_names() -> Vec<String> {
-    let mut names = HELPERS.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>();
-    names.sort();
-    names
 }
 async fn git(ctx: &mut Context, role: &str, args: &[&str]) -> Result<Vec<u8>> {
     ctx.check()?;
@@ -269,22 +247,6 @@ pub(super) async fn prepare(ctx: &mut Context) -> Result<()> {
         }
         let bytes = ctx.originals[index].data(1024 * 1024, &mut ctx.control)?;
         ctx.sources.insert(name, bytes);
-    }
-    for name in helper_names() {
-        let path = if name == "security_vm_ops_guest.py" {
-            Path::new(ROOT).join(&name)
-        } else {
-            Path::new(LIBRARY).join(&name)
-        };
-        let mode = if name == "security_vm_ops_guest.py" {
-            0o600
-        } else {
-            0o644
-        };
-        let index = ctx.retain(&path, 1024 * 1024, 0, mode)?;
-        if ctx.originals[index].sha256 != ctx.request.helper_pins[&name] {
-            return Err(Error::Changed);
-        }
     }
     let installed = ctx.retain(Path::new(INSTALLED), 256 * 1024 * 1024, 0, 0o755)?;
     if ctx.originals[installed].sha256 != ctx.request.binary.sha256

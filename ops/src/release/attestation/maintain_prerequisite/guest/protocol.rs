@@ -35,7 +35,6 @@ pub(super) struct Request {
     pub source_bundle: Pin,
     pub source_tree: String,
     pub source_pins: BTreeMap<String, String>,
-    pub helper_pins: BTreeMap<String, String>,
     pub postgres_image: String,
     pub caddy_image: String,
     pub engine_version: String,
@@ -139,12 +138,7 @@ impl Request {
             }
         }
         if request.source_pins.keys().cloned().collect::<Vec<_>>() != sources::guest_names()
-            || request.helper_pins.keys().cloned().collect::<Vec<_>>() != sources::helper_names()
-            || request
-                .source_pins
-                .values()
-                .chain(request.helper_pins.values())
-                .any(|v| !digest(v, 64))
+            || request.source_pins.values().any(|v| !digest(v, 64))
         {
             return Err(Error::Input);
         }

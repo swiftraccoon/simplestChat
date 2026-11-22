@@ -230,10 +230,6 @@ async fn rendered_files_for(ctx: &mut Context, image: &str, revision: &str) -> R
     if outputs.len() != 13 {
         return Err(Error::Refused);
     }
-    // Deliberate fixture correction: retire only the validated original inert
-    // Ops preflight input before any exclusive real configuration publication.
-    ctx.control.checkpoint = "render-inert-handoff";
-    files::inert_images_handoff(&mut ctx.control)?;
     ctx.control.checkpoint = "render-files";
     for (name, bytes) in outputs {
         let uid = if [

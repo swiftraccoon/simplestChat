@@ -1,6 +1,6 @@
 //! Closed passive guest metadata. It never grants executable or daemon authority.
 
-use super::{Error, Result, catalog, options};
+use super::{Error, Result, options};
 use serde_json::Value;
 
 pub(super) fn exact(value: &Value, names: &[&str]) -> Result<()> {
@@ -268,7 +268,6 @@ pub(super) const GUEST_CHECKPOINTS: &[&str] = &[
     "source-import",
     "payload",
     "render",
-    "render-inert-handoff",
     "render-files",
     "render-helpers",
     "render-directories",
@@ -427,146 +426,4 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
         }
     }
     Ok(value)
-}
-/// A closed guest observation is evidence even when it cannot complete the prerequisite.
-pub(super) struct OpsReceipt {
-    value: Value,
-}
-impl OpsReceipt {
-    pub fn cases(&self) -> &Value {
-        &self.value["cases"]
-    }
-    pub fn install(&self) -> &Value {
-        &self.value["install"]
-    }
-    pub fn failure(&self) -> Option<&str> {
-        self.value["failure"].as_str()
-    }
-    pub fn require_success(&self) -> Result<()> {
-        if self.value["passed"] == true {
-            Ok(())
-        } else {
-            Err(Error::Refused)
-        }
-    }
-}
-
-/// Admit the frozen keeper's bounded ordered prefix before enforcing positive completion.
-pub(super) fn admit_ops(value: Value, run_id: &str, status: i32) -> Result<OpsReceipt> {
-    exact(
-        &value,
-        &[
-            "schemaVersion",
-            "scope",
-            "runId",
-            "cases",
-            "install",
-            "passed",
-            "failure",
-        ],
-    )?;
-    let cases = value["cases"].as_array().ok_or(Error::Refused)?;
-    if value["schemaVersion"].as_u64() != Some(1)
-        || value["scope"] != "OpsDebianGuestReceipt"
-        || value["runId"] != run_id
-        || value["passed"].as_bool().is_none()
-        || cases.len() > catalog::OPS_CASES.len()
-    {
-        return Err(Error::Refused);
-    }
-    for (row, (name, expected)) in cases.iter().zip(catalog::OPS_CASES) {
-        exact(row, &["name", "exitStatus", "passed"])?;
-        if row["name"] != name
-            || row["exitStatus"].as_u64().is_none_or(|status| status > 255)
-            || row["passed"].as_bool().is_none()
-            || (row["passed"] == true && row["exitStatus"].as_i64() != Some(expected))
-        {
-            return Err(Error::Refused);
-        }
-    }
-    exact(&value["install"], &["firstChanged", "secondChanged"])?;
-    if ["firstChanged", "secondChanged"].iter().any(|name| {
-        let value = &value["install"][name];
-        !value.is_null() && value.as_bool().is_none()
-    }) {
-        return Err(Error::Refused);
-    }
-    if value["passed"] == true {
-        if status != 0
-            || cases.len() != catalog::OPS_CASES.len()
-            || cases.iter().any(|row| row["passed"] != true)
-            || value["install"]["firstChanged"] != true
-            || value["install"]["secondChanged"] != false
-            || !value["failure"].is_null()
-        {
-            return Err(Error::Refused);
-        }
-    } else if status == 0
-        || !allowed(
-            &value["failure"],
-            &[
-                "guard",
-                "transfer",
-                "boot",
-                "stage",
-                "cases",
-                "cleanup",
-                "cancelled",
-                "deadline",
-                "unavailable",
-            ],
-        )
-    {
-        return Err(Error::Refused);
-    }
-    Ok(OpsReceipt { value })
-}
-pub(super) fn executable(value: &Value, sha256: &str, bytes: u64) -> Result<()> {
-    let booleans = [
-        "littleEndian",
-        "noInterpreter",
-        "noNeeded",
-        "pieFlag",
-        "bindNow",
-        "nonExecutableStack",
-        "noWritableExecutableLoad",
-        "relroPresent",
-        "noRpath",
-        "noRunpath",
-        "noTextRelocations",
-        "noLoaderHooks",
-    ];
-    let mut names = booleans.to_vec();
-    names.extend([
-        "sha256",
-        "bytes",
-        "architecture",
-        "elfClass",
-        "fileType",
-        "programHeaders",
-        "neededCount",
-    ]);
-    exact(value, &names)?;
-    if value["sha256"] != sha256
-        || value["bytes"].as_u64() != Some(bytes)
-        || value["architecture"] != "x86_64"
-        || value["elfClass"].as_u64() != Some(64)
-        || !allowed(&value["fileType"], &["executable", "dynamic"])
-        || booleans.iter().any(|name| value[name].as_bool().is_none())
-        || value["programHeaders"]
-            .as_u64()
-            .is_none_or(|n| n == 0 || n > 65535)
-        || value["neededCount"].as_u64().is_none_or(|n| n > 65535)
-    {
-        return Err(Error::Refused);
-    }
-    for name in ["littleEndian", "noInterpreter", "noNeeded", "noLoaderHooks"] {
-        if value[name] != true {
-            return Err(Error::Refused);
-        }
-    }
-    if value["neededCount"].as_u64() != Some(0) {
-        return Err(Error::Refused);
-    }
-    Ok(())
 }

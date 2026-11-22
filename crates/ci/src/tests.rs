@@ -1680,7 +1680,7 @@ fn only_dev_dependencies_enable_the_test_hooks() {
 }
 
 #[test]
-fn release_proof_implementors_are_the_eight_proofs_and_two_test_doubles() {
+fn release_proof_implementors_are_the_seven_proofs_and_two_test_doubles() {
     // The role vocabulary is closed but the public trait is open, so any crate
     // may implement it, and Rust cannot seal a trait that another crate must
     // implement. Pin every implementor under each crates/*/src and
@@ -1763,11 +1763,6 @@ fn release_proof_implementors_are_the_eight_proofs_and_two_test_doubles() {
             "ops_artifact/hosted/tools.rs",
             "Invocation",
             "ReleaseRole::Hosted",
-        ),
-        (
-            "ops_artifact/runtime/tools.rs",
-            "Invocation",
-            "ReleaseRole::Runtime",
         ),
         (
             "ops_artifact/capacity_vps/tools.rs",

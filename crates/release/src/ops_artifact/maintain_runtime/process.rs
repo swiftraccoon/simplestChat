@@ -333,7 +333,6 @@ impl Runner {
                 args,
                 cap,
                 accepted: &[0],
-                input: None,
                 environment: Some(environment),
             },
         )
@@ -387,29 +386,6 @@ impl Runner {
                 args,
                 cap,
                 accepted,
-                input: None,
-                environment: None,
-            },
-        )
-        .await
-    }
-    pub async fn run_input(
-        &mut self,
-        control: &mut Control,
-        role: &str,
-        args: Vec<OsString>,
-        cap: Duration,
-        input: &File,
-    ) -> Result<Observed> {
-        self.execute(
-            control,
-            Call {
-                role,
-                tool: "ssh",
-                args,
-                cap,
-                accepted: &[0, 1, 2, 124, 130, 143],
-                input: Some(input),
                 environment: None,
             },
         )
@@ -422,7 +398,6 @@ impl Runner {
             args,
             cap,
             accepted,
-            input,
             environment,
         } = call;
         self.check(control)?;
@@ -452,10 +427,6 @@ impl Runner {
             let mut command = self.command(tool, &args, control)?;
             if let Some(environment) = environment {
                 command.env_clear().envs(environment);
-            }
-            if let Some(input) = input {
-                // SDK duplicate close is opaque; retained original closes separately.
-                command.stdin(Stdio::from(input.try_clone().map_err(|_| Error::Io)?));
             }
             control.check()?;
             if Instant::now() >= body_end {
@@ -618,7 +589,6 @@ struct Call<'a> {
     args: Vec<OsString>,
     cap: Duration,
     accepted: &'a [i32],
-    input: Option<&'a File>,
     environment: Option<BTreeMap<OsString, OsString>>,
 }
 fn lookup(name: &str) -> Result<PathBuf> {

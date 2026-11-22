@@ -409,16 +409,12 @@ fn actual_migration_admission_and_terminal_uncertainty_keep_cold_and_mutating_de
         .into_iter()
         .map(|name| (name, json!("a".repeat(64))))
         .collect::<serde_json::Map<_, _>>();
-    let helper_pins = sources::helper_names()
-        .into_iter()
-        .map(|name| (name, json!("b".repeat(64))))
-        .collect::<serde_json::Map<_, _>>();
     let request = Request::decode_host(&serde_json::to_vec(&json!({
         "schemaVersion":1,"scope":"PreparedHostMaintenanceRequest",
         "runId":"d".repeat(32),"revision":"e".repeat(40),"scenario":"host-migration-upgrade",
         "setupSeconds":1560,"bodySeconds":3660,"endSeconds":3780,
         "binary":pin,"manifest":pin,"archive":pin,"sourceBundle":pin,"sourceTree":"f".repeat(40),
-        "sourcePins":source_pins,"helperPins":helper_pins,
+        "sourcePins":source_pins,
         "postgresImage":format!("postgres@sha256:{}","a".repeat(64)),
         "caddyImage":protocol::CADDY_IMAGE,"engineVersion":"29.8.2"
     })).unwrap()).unwrap();

@@ -60,11 +60,11 @@ the upstream release and independently authenticate every changed digest before
 accepting a lock update. A checksum obtained from the same compromised upstream
 release would not establish publisher identity.
 
-The manual Ops runtime workflow separately selects GitHub CLI `2.102.0` through
+The runtime proof workflows separately select GitHub CLI `2.102.0` through
 this same installer. Its reviewed release archive and member mapping support
 only Linux x86-64; other platforms are refused. It is outside the default fast
-scanner set. Bootstrap it into a separate prefix before supplying the Ops
-caller's token, then resolve the verified path:
+scanner set. Bootstrap it into a separate prefix before supplying the
+controller's token, then resolve the verified path:
 
 ```sh
 cargo run --locked -q -p simplestchat-security -- tools install --tools gh \

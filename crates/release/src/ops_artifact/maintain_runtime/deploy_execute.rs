@@ -71,25 +71,6 @@ fn request(
             Ok((name, sha))
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
-    let helper_pins = catalog::HELPERS
-        .into_iter()
-        .map(|name| {
-            let path = if name == "security_vm_ops_guest.py" {
-                format!("build/{name}")
-            } else {
-                format!("ops/ansible/files/{name}")
-            };
-            Ok((
-                name,
-                runner
-                    .sources
-                    .get(&path)
-                    .ok_or(Error::Input)?
-                    .sha256
-                    .clone(),
-            ))
-        })
-        .collect::<Result<BTreeMap<_, _>>>()?;
     let now = Instant::now();
     let setup = (control.start + control.setup_limit())
         .saturating_duration_since(now)
@@ -112,7 +93,6 @@ fn request(
         "setupSeconds": setup,
         "bodySeconds": body,
         "sourcePins": source_pins,
-        "helperPins": helper_pins,
         "binary": pin(ops.pin("simplestchat-ops")?),
         "current": {
             "release.json": pin(current.pin("release.json")?),
@@ -214,7 +194,6 @@ pub(super) async fn run(options: &DeployOptions, control: &mut Control) -> Value
         "failureKind": null,
         "elapsedSeconds": {},
         "opsVerifierCalls": 0,
-        "opsCases": [],
         "currentServerVerifierCalls": 0,
         "previousServerVerifierCalls": 0,
         "currentServerMetadataApiCalls": 0,

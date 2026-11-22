@@ -12,6 +12,8 @@ mod deploy_workflow_tests;
 mod execute;
 mod files;
 mod host_projection;
+#[cfg(test)]
+mod install_tests;
 mod options;
 mod process;
 mod projection;

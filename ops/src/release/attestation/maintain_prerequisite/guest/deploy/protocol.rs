@@ -27,7 +27,6 @@ pub(super) struct Request {
     pub setup_seconds: u64,
     pub body_seconds: u64,
     pub source_pins: BTreeMap<String, String>,
-    pub helper_pins: BTreeMap<String, String>,
     pub binary: super::super::protocol::Pin,
     pub current: Payload,
     pub previous: Payload,
@@ -59,17 +58,7 @@ impl Request {
             request.source_pins.keys().cloned().collect::<BTreeSet<_>>()
                 == sources::guest_names().into_iter().collect(),
         )?;
-        require(
-            request.helper_pins.keys().cloned().collect::<BTreeSet<_>>()
-                == sources::helper_names().into_iter().collect(),
-        )?;
-        require(
-            request
-                .source_pins
-                .values()
-                .chain(request.helper_pins.values())
-                .all(|hash| hex(hash, 64)),
-        )?;
+        require(request.source_pins.values().all(|hash| hex(hash, 64)))?;
         pin(&request.binary, 256 * 1024 * 1024)?;
         pin(&request.source_bundle, 320 * 1024 * 1024)?;
         for payload in [&request.current, &request.previous] {
@@ -96,7 +85,6 @@ impl Request {
             source_bundle: self.source_bundle.clone(),
             source_tree: self.source_tree.clone(),
             source_pins: self.source_pins.clone(),
-            helper_pins: self.helper_pins.clone(),
             postgres_image: self.postgres_image.clone(),
             caddy_image: self.caddy_image.clone(),
             engine_version: self.engine_version.clone(),

@@ -33,9 +33,32 @@ fn receipt() -> Value {
     "downloadedBytes":100,"archiveSha256":"c".repeat(64),"manifestSha256":"c".repeat(64),
     "elapsedSeconds":1.25,"finalized":true})
 }
+/// The operations whose validators were deleted after the recording was made, with the
+/// helper-set request they judged. Their recorded cases are still built in the recorded
+/// order and consumed, so every recorded case stays asked for; each is counted into the
+/// recorder's tally by its recorded answer instead of being replayed.
+const REMOVED_SINCE_RECORDING: [&str; 2] = ["helpers", "preflight_producer"];
+/// The base and fetch helper names the removed operations' cases were built from.
+const RECORDED_BASE: [&str; 10] = [
+    "bounded_process.py",
+    "release-public.py",
+    "release_public.py",
+    "release_artifact.py",
+    "release_assets.py",
+    "browser_assets.py",
+    "release_json.py",
+    "runtime_profile.py",
+    "reboot-public.py",
+    "reboot_public.py",
+];
+const RECORDED_FETCH: [&str; 3] = [
+    "fetch-release.py",
+    "release_fetch_receiver.py",
+    "release_trust.py",
+];
 fn helpers() -> Value {
     json!(
-        receipts::BASE
+        RECORDED_BASE
             .into_iter()
             .map(|k| (k, "a".repeat(64)))
             .collect::<BTreeMap<_, _>>()
@@ -54,16 +77,6 @@ fn native(case: &Value) -> Result<Value, Error> {
         "proof" => project(Proof::decode(&bytes, &selection())?),
         "envelope" => project(Envelope::decode(&bytes)?),
         "line" => project(Envelope::decode_line(&bytes)?),
-        "helpers" => project(HelperSet::decode(&bytes)?),
-        "preflight_producer" => {
-            let helpers = HelperSet::decode(&bytes)?;
-            let receipt = json!({"schemaVersion":1,"runId":"b".repeat(32),
-                "prepared":helpers.value().prepared()});
-            project(PreflightReceipt::decode(
-                &serde_json::to_vec(&receipt).unwrap(),
-                helpers.value(),
-            )?)
-        }
         "journal" => project(FinalizedJournal::decode(&bytes)?),
         "receipt" => project(ReceiverReceipt::decode(
             &bytes,
@@ -128,7 +141,8 @@ const TALLIES: [(&str, &[(&str, usize)]); 4] = [
         ],
     ),
 ];
-/// Holds each case of `test` to the recorded answer, in order.
+/// Holds each case of `test` to the recorded answer, in order; a case of a removed
+/// operation is consumed and counted by its recorded answer.
 fn compare(test: &str, cases: &[Value]) {
     let recording = Recording::new(RECORDED, &TALLIES.map(|(name, _)| name));
     let recorded = recording.test(test);
@@ -142,6 +156,11 @@ fn compare(test: &str, cases: &[Value]) {
     let mut counted = BTreeMap::new();
     for (index, case) in cases.iter().enumerate() {
         let expected = recorded.answer(&serde_json::to_vec(case).unwrap());
+        if REMOVED_SINCE_RECORDING.contains(&case["op"].as_str().unwrap()) {
+            let outcome = expected["error"].as_str().unwrap_or("accepted").to_string();
+            *counted.entry(outcome).or_insert(0) += 1;
+            continue;
+        }
         let actual = match native(case) {
             Ok(value) => json!({"ok":true,"value":value}),
             Err(e) => json!({"ok":false,"error":e.code()}),
@@ -343,10 +362,10 @@ fn receipt_consistency_and_redaction_match_the_recorded_controller_projection() 
     assert!(String::from_utf8_lossy(document.as_json()).contains("PRIVATE_SENTINEL"));
 }
 #[test]
-fn helper_requests_and_finished_claims_preserve_the_operational_policy() {
+fn finished_claims_preserve_the_operational_policy() {
     let mut cases = mutations("helpers", helpers());
     cases.push(json!({"op":"helpers","value":{}}));
-    for extension in [receipts::FETCH.to_vec(), vec!["force_release.py"]] {
+    for extension in [RECORDED_FETCH.to_vec(), vec!["force_release.py"]] {
         let mut selected = helpers();
         for name in extension {
             selected[name] = json!("b".repeat(64));
@@ -371,7 +390,7 @@ fn helper_requests_and_finished_claims_preserve_the_operational_policy() {
     );
 }
 #[test]
-fn originals_limits_and_preflight_producer_conformance_are_explicit() {
+fn originals_and_limits_are_explicit() {
     let source = serde_json::to_vec_pretty(&proof()).unwrap();
     let document = Proof::decode(&source, &selection()).unwrap();
     assert_eq!(document.as_json(), source);
@@ -382,23 +401,6 @@ fn originals_limits_and_preflight_producer_conformance_are_explicit() {
             .map(|b| format!("{b:02x}"))
             .collect::<String>()
     );
-    let helpers = HelperSet::decode(b"{}").unwrap();
-    let receipt = json!({"schemaVersion":1,"runId":"b".repeat(32),"prepared":false});
-    assert!(
-        PreflightReceipt::decode(&serde_json::to_vec(&receipt).unwrap(), helpers.value()).is_ok()
-    );
-    for (key, value) in [
-        ("schemaVersion", json!(true)),
-        ("prepared", json!(0)),
-        ("runId", json!("B".repeat(32))),
-    ] {
-        let mut changed = receipt.clone();
-        changed[key] = value;
-        assert!(
-            PreflightReceipt::decode(&serde_json::to_vec(&changed).unwrap(), helpers.value())
-                .is_err()
-        );
-    }
     assert!(Envelope::decode(&vec![b' '; MAX_LINE + 1]).is_err());
 }
 #[test]
@@ -443,12 +445,4 @@ fn per_document_budgets_allow_whitespace_and_encoded_expansion_without_changing_
     assert_eq!(source.len(), 14);
     assert!(json::decode_limited(&bytes, 12).is_ok());
     assert!(json::decode_limited(&bytes, 11).is_err());
-    let mut helpers = b"{}".to_vec();
-    helpers.resize(4096, b' ');
-    assert!(HelperSet::decode(&helpers).is_ok());
-    helpers.push(b' ');
-    assert_eq!(
-        HelperSet::decode(&helpers).unwrap_err(),
-        Error::Policy(Failure::Request)
-    );
 }

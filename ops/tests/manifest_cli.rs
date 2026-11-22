@@ -94,19 +94,7 @@ fn failures_are_fixed_and_do_not_echo_paths_or_private_values() {
 }
 #[test]
 fn usage_and_help_never_read_a_manifest_or_start_another_command() {
-    for args in [
-        vec![],
-        vec!["release"],
-        vec!["release", "manifest", "--wrong", "PRIVATE_PATH"],
-        vec!["release", "manifest", "--path", "PRIVATE_PATH", "extra"],
-        vec!["deploy"],
-    ] {
-        let output = cli(&args.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>());
-        assert_eq!(output.status.code(), Some(2));
-        assert!(output.stdout.is_empty());
-        assert_eq!(
-            output.stderr,
-            concat!(
+    let usage = concat!(
                 "Usage: simplestchat-ops release build --output PATH ",
                 "[--timeout-seconds N] [--image-id ID]\n",
                 "       simplestchat-ops release verify [OPTIONS]\n",
@@ -126,7 +114,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
-                "       simplestchat-ops release preflight [--helpers-json JSON]\n",
+                "       simplestchat-ops release preflight\n",
                 "       simplestchat-ops release assets initialize [--revision REV]\n",
                 "       simplestchat-ops release assets prune|inspect\n",
                 "       simplestchat-ops release assets select --revision REV\n",
@@ -158,11 +146,22 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops migrate restore-target|verify-target|abort-target --request PATH\n",
                 "       simplestchat-ops migrate handoff OPERATION SOURCE TARGET DOMAIN 7200\n",
                 "       simplestchat-ops migrate tls export|import OPERATION\n",
-            )
-            .as_bytes()
-        );
+    )
+    .as_bytes();
+    for args in [
+        vec![],
+        vec!["release"],
+        vec!["release", "manifest", "--wrong", "PRIVATE_PATH"],
+        vec!["release", "manifest", "--path", "PRIVATE_PATH", "extra"],
+        vec!["deploy"],
+    ] {
+        let output = cli(&args.iter().map(std::ffi::OsStr::new).collect::<Vec<_>>());
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(output.stderr, usage);
     }
     let output = cli(&["--help".as_ref()]);
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout, usage);
 }

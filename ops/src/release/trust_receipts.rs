@@ -1,25 +1,8 @@
-//! Pure preflight producer conformance and the controller's redacted receiver
+//! The finished-journal claim and the controller's redacted receiver
 //! projection. A decoded `settled`/`finalized` bit does not prove any write/fsync;
 //! the operation owner must establish persistence and current process success.
 
 use super::*;
-pub(super) const BASE: [&str; 10] = [
-    "bounded_process.py",
-    "release-public.py",
-    "release_public.py",
-    "release_artifact.py",
-    "release_assets.py",
-    "browser_assets.py",
-    "release_json.py",
-    "runtime_profile.py",
-    "reboot-public.py",
-    "reboot_public.py",
-];
-pub(super) const FETCH: [&str; 3] = [
-    "fetch-release.py",
-    "release_fetch_receiver.py",
-    "release_trust.py",
-];
 const RECEIPT_KEYS: [&str; 16] = [
     "schemaVersion",
     "status",
@@ -38,81 +21,6 @@ const RECEIPT_KEYS: [&str; 16] = [
     "elapsedSeconds",
     "finalized",
 ];
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(transparent)]
-pub struct HelperSet(BTreeMap<String, String>);
-impl HelperSet {
-    /// The exact current Python helper-set policy. This validates source hash
-    /// declarations only; it never reads or executes an installed helper.
-    pub fn decode(bytes: &[u8]) -> Result<Document<Self>, Error> {
-        require(
-            bytes.len() <= 4 * 4096 + 4 && json::character_count(bytes, 4 * 4096 + 4)? <= 4096,
-            Failure::Request,
-        )?;
-        let value = json::decode_limited(bytes, 4 * 4096 + 4)?;
-        let values = value.object().ok_or(Error::Policy(Failure::HelperSet))?;
-        let mut fetch = BASE.to_vec();
-        fetch.extend(FETCH);
-        let mut force = BASE.to_vec();
-        force.push("force_release.py");
-        require(
-            !value.truthiness()
-                || exact(values, &BASE)
-                || exact(values, &fetch)
-                || exact(values, &force),
-            Failure::HelperSet,
-        )?;
-        require(values.values().all(digest), Failure::HelperDigest)?;
-        Ok(Document::new(
-            Self(
-                values
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.string().unwrap().into()))
-                    .collect(),
-            ),
-            bytes,
-        ))
-    }
-    pub fn prepared(&self) -> bool {
-        !self.0.is_empty()
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreflightReceipt {
-    schema_version: u8,
-    run_id: String,
-    prepared: bool,
-}
-impl PreflightReceipt {
-    /// Validate the producer's exact three-field output against the selected
-    /// helper request. This is stronger than Ansible's current two-field assert;
-    /// it does not prove root/OS/path checks, a fresh invocation, or a held lock.
-    pub fn decode(bytes: &[u8], helpers: &HelperSet) -> Result<Document<Self>, Error> {
-        let value = json::decode_limited(bytes, MAX_LINE)?;
-        let value = value
-            .object()
-            .ok_or(Error::Policy(Failure::PreflightReceipt))?;
-        let run = string(value, "runId").unwrap_or("");
-        require(
-            exact(value, &["schemaVersion", "runId", "prepared"])
-                && integer(value, "schemaVersion") == Some(1)
-                && hex(run, 32)
-                && boolean(value, "prepared") == Some(helpers.prepared()),
-            Failure::PreflightReceipt,
-        )?;
-        Ok(Document::new(
-            Self {
-                schema_version: 1,
-                run_id: run.into(),
-                prepared: helpers.prepared(),
-            },
-            bytes,
-        ))
-    }
-}
 
 #[derive(Clone, Debug, Serialize)]
 pub struct FinalizedJournal {

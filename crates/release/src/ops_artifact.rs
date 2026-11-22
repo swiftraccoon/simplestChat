@@ -26,7 +26,6 @@ pub(super) mod recipe;
 mod registry;
 mod request;
 mod resolution;
-pub(crate) mod runtime;
 pub(crate) mod source;
 #[cfg(test)]
 mod tests;
@@ -52,13 +51,11 @@ pub(super) fn run_migration_frontend(
 }
 
 const USAGE: &str = "usage: cargo run --locked -q -p simplestchat-release -- ops-artifact \
-build|source|registry|verify-retained|acquire|export|runtime \
+build|source|registry|verify-retained|acquire|export \
 --request PATH --request-sha256 SHA256\n\
 cargo run --locked -q -p simplestchat-release -- ops-artifact hosted --output PATH\n\
 cargo run --locked -q -p simplestchat-release -- ops-artifact signing-inputs \
 --directory PATH --output PATH\n\
-cargo run --locked -q -p simplestchat-release -- ops-artifact runtime-request\n\
-cargo run --locked -q -p simplestchat-release -- ops-artifact runtime-diagnostics\n\
 simplestchat-release ops-artifact maintain-runtime --run-id N --run-attempt N --artifact-id N \
 --scenario CASE --output ABS\n\
 simplestchat-release ops-artifact maintain-host-runtime --run-id N --run-attempt N \
@@ -94,12 +91,6 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         println!("{USAGE}");
         return Ok(std::process::ExitCode::SUCCESS);
     }
-    if arguments == ["runtime-diagnostics"] {
-        return Ok(runtime::diagnostics());
-    }
-    if arguments == ["runtime-request"] {
-        return Ok(runtime::request_writer());
-    }
     if let [operation, flag, output] = arguments
         && operation == "hosted"
         && flag == "--output"
@@ -129,14 +120,13 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     };
     if !matches!(
         operation.as_str(),
-        "build" | "source" | "registry" | "verify-retained" | "acquire" | "runtime"
+        "build" | "source" | "registry" | "verify-retained" | "acquire"
     ) || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
         || !digest(selected)
         || (operation == "verify-retained" && !verify::request_path(std::path::Path::new(path)))
         || (operation == "acquire" && !acquire::request_path(std::path::Path::new(path)))
-        || (operation == "runtime" && !runtime::request_path(std::path::Path::new(path)))
     {
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
@@ -146,8 +136,6 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
             verify::native(std::path::Path::new(path), selected).await
         } else if operation == "acquire" {
             acquire::native(std::path::Path::new(path), selected).await
-        } else if operation == "runtime" {
-            runtime::native(std::path::Path::new(path), selected).await
         } else if operation == "source" {
             source::native(std::path::Path::new(path), selected)
                 .await

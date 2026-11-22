@@ -294,53 +294,33 @@ distinguishes actual inert process tests and hosted Docker/signing evidence.
 
 ## Read-only release preflight
 
-The release playbook runs the first form below through the executable its
-signed delivery just installed. The helper-digest form remains for the force
-route, whose Python preflight Ansible still supplies.
+The release playbook and the force route run it through the executable the
+signed delivery installed.
 Do not install or substitute an unverified development binary on a release host.
 The native check requires effective UID 0, kernel Linux/x86_64 and Debian major
-13. It starts no process and does not import or execute an installed helper.
+13. It starts no process, takes no argument and does not import or execute an
+installed helper.
 
 ```sh
 simplestchat-ops release preflight
-simplestchat-ops release preflight --helpers-json "$EXPECTED_HELPER_JSON"
 ```
 
-The first form selects ordinary reconciliation. The second requires an exact
-complete mapping of the ten base helpers, the base plus three GitHub-fetch
-helpers, or the base plus `force_release.py`, to lowercase SHA-256 digests of
-their original bytes. The controller supplies `EXPECTED_HELPER_JSON` with all
-names and all 64-digit digests from its checkout, without trimming source. The
-14-helper combined fetch/force set is refused. The request cannot choose paths,
-identity, a fixture root, file modes or the helper directory.
-
-Both modes require `/etc/simplestchat-public` and `/srv/simplestchat-public` to be
+It requires `/etc/simplestchat-public` and `/srv/simplestchat-public` to be
 root:root directories with exact mode 0700, plus nonempty regular
 `/etc/simplestchat-public/images.json` with exact mode 0600 and at most 65,536
-bytes. Its contents are never read. Prepared mode additionally requires
-`/srv/simplestchat-public/releases` mode 0700, and every directory from `/`
-through `/usr/local/libexec/simplestchat-public` root:root with exact mode 0755.
-Selected helper files must be root:root regular files with exact mode 0644,
-nonempty and at most 1 MiB each. All permission checks include special bits.
+bytes. Its contents are never read. All permission checks include special bits.
 Hardlinks are accepted and their original link counts remain part of the
-mutation checks; no exclusive inode ownership is claimed. Helpers are visited
-in request order, and hashes cover whitespace and final newlines exactly.
+mutation checks; no exclusive inode ownership is claimed.
 
-Success is only `{"schemaVersion":1,"runId":"32 lowercase hexadecimal digits","prepared":true}`
-(or `false` in ordinary mode). `runId` is fresh UUID-v4 entropy without hyphens.
-Failures return exit 1 and only
-`{"schemaVersion":1,"passed":false,"failure":"fixed_code"}`. The fixed codes
-match `release_preflight.py`; no private paths, configuration, helper bytes or
-operating-system error text are printed. Invalid command syntax returns 2.
-Successful output writes must complete before the command returns zero; this
-does not impose a wall-clock guarantee on a blocked output or filesystem.
-
-The optional argument is UTF-8 JSON at most 4096 bytes. Absent input means `{}`.
-Its explicit conservative domain rejects a BOM, decoded duplicate keys,
-nonfinite numbers, unpaired surrogates and more than 128 nested containers;
-these malformed-input refusals return `preflight_unavailable`. Python's raw
-string character count, duplicate-last and nonfinite behavior are broader.
-Valid helper names and digests remain the same fixed ASCII domain.
+Success is only `{"schemaVersion":1,"runId":"32 lowercase hexadecimal digits"}`.
+`runId` is fresh UUID-v4 entropy without hyphens. Failures return exit 1 and only
+`{"schemaVersion":1,"passed":false,"failure":"fixed_code"}` with one of
+`root_required`, `unsupported_platform`, `unsupported_distribution`,
+`unsafe_release_path`, `invalid_release_file_size` and `preflight_unavailable`;
+no private paths, configuration or operating-system error text are printed. Any
+argument is invalid command syntax and returns 2. Successful output writes must
+complete before the command returns zero; this does not impose a wall-clock
+guarantee on a blocked output or filesystem.
 
 The selected OS data is at most 64 KiB of UTF-8 from `/etc/os-release`, with
 `/usr/lib/os-release` used only when the preferred name is absent. The standard
@@ -353,25 +333,20 @@ five backslash escapes, universal newlines and last-value-wins keys. Only exact
 See [CPython's parser](https://github.com/python/cpython/blob/3.14/Lib/platform.py)
 and the [os-release standard](https://www.freedesktop.org/software/systemd/man/latest/os-release.html).
 
-The native filesystem profile is deliberately stronger than Python's path-based
-snapshot: selected OS data is root:root regular mode 0644, every traversed
-directory is root:root without group/other write permission, and other links are
-refused. A single shared descriptor tree retains at most 48 owned Files,
-including transient probes. Before/after hashes and final namespace checks bind
-original file stamps, modes, owners, sizes and link counts. A 64 KiB streaming
-buffer reads at most 13 MiB of helper bytes plus 64 KiB of OS data; configuration
-contents are excluded. Every acquired File receives an explicit close attempt,
-including constructor, read, verification and close-failure paths.
+Selected OS data is root:root regular mode 0644, every traversed directory is
+root:root without group/other write permission, and other links are refused. A
+single shared descriptor tree retains at most 48 owned Files, including transient
+probes. Final namespace checks bind original file stamps, modes, owners, sizes
+and link counts. A 64 KiB streaming buffer reads at most 64 KiB of OS data;
+configuration contents are excluded. Every acquired File receives an explicit
+close attempt, including constructor, read, verification and close-failure paths.
 
 These are optimistic observations, not a filesystem lock, authentication,
-durable receipt, helper update serialization or runtime readiness. Operators
-must still serialize releases. The existing locked rustix 1.1.6 `process`,
-`system` and `rand` APIs supply effective UID, uname and Linux getrandom without
-unsafe first-party code or external commands; no new package or version is
-introduced. Tests use actual owned files with synthetic ownership/identity and
-the retained Python helper's answers recorded in
-`src/release/recorded_preflight.json`, never the actual host's protected release
-paths.
+durable receipt or runtime readiness. Operators must still serialize releases.
+The existing locked rustix 1.1.6 `process`, `system` and `rand` APIs supply
+effective UID, uname and Linux getrandom without unsafe first-party code or
+external commands. Tests use actual owned files with synthetic ownership and
+identity, never the actual host's protected release paths.
 
 ## Browser asset filesystem transactions
 
@@ -1179,16 +1154,8 @@ and both declared archive/manifest digests. The owning operation must still prov
 its process exit status, current byte bindings and durable publication. A decoded
 journal `finalized` bit alone proves none of those actions.
 
-`HelperSet` preserves the exact Python base/fetch/force source-helper declarations.
-`PreflightReceipt` models the producer's three-field output, including its strict
-prepared boolean and selected helper request. This is stronger than the current
-Ansible two-field assertion; it does not establish a fresh run, root/OS/path
-checks or a held lock. No installed binary or runtime callsite consumes these
-new library APIs yet.
-
-Claims/proofs accept at most 64 MiB, envelopes/journals/preflight receipts 16 KiB,
-and receiver receipts 64 KiB. Helper requests retain the 4,096-character argument
-limit, with a bounded UTF-8/16/32 byte envelope. Each JSON decode has a matching
+Claims/proofs accept at most 64 MiB, envelopes and journals 16 KiB, and receiver
+receipts 64 KiB. Each JSON decode has a matching
 encoded limit and at most twice that decoded UTF-8 budget, plus the existing
 128-container/100,000-value bounds. Numeric tokens retain their original spelling;
 strict integer fields never accept booleans or floats. Unknown receipt fields
@@ -1683,126 +1650,22 @@ binary subjects; separate pair/evidence checks validate their retained payload
 relationships. Complete acquisition therefore has eight actual `gh` roles
 with retained input and nine with live input, including one fresh cryptographic
 attestation verification in either case. A retained ZIP or saved receipt cannot
-reconstruct that authority. These counts do not describe the KVM fixture's
-separate repeated-verification profile. On the live branch, gh
+reconstruct that authority. On the live branch, gh
 handles GitHub's archive redirect; its normal redirect and trust-provider policy
 remains part of the selected client trust boundary. This operation authenticates
 retained bytes. It does not execute a candidate or install or replace a host tool.
 
-## Authenticated Debian runtime and first installation
+## Debian installation
 
-The manual [Ops runtime workflow](../.github/workflows/ops-runtime.yml) checks one
-signed Ops artifact from a successful main CI attempt for the workflow's exact
-checkout revision. Supply that CI run ID, attempt and signed artifact ID. The
-workflow uses a free Ubuntu 24.04 runner, the pinned caller `gh` bootstrap and a
-separate Debian 13 KVM guest. Its checkout is never selected by an input.
-Controller compilation and dependency installation precede the credential-bearing
-step. The compiled controller's `ops-artifact runtime-request` writes the request
-from the three inputs and the event revision to a fresh private file, and the
-runtime step requires the SHA-256 of those exact bytes. This workflow is separate
-from the full application deployment/restore VM.
-
-The local entry point uses the closed acquisition request schema above:
-
-```sh
-cargo build --locked -p simplestchat-release --bin simplestchat-release
-target/debug/simplestchat-release ops-artifact runtime \
-  --request /absolute/runtime-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
-```
-
-Provide `GH_TOKEN` only to the compiled controller invocation. This operation
-also requires Linux x86-64, the owned-guest prerequisites, the current package
-version, protocol 1 and target `x86_64-unknown-linux-musl`. Its output directory
-must be fresh and absolute, with at most thirteen ordinary path components;
-the received request path permits sixteen. The request chooses an artifact identity and output;
-it cannot choose a host, command, compiler, guest image or executable path.
-
-One original cancellation owner and monotonic deadline cover fresh API identity,
-artifact download, certificate verification, transfer, guest work, destruction
-and final original-witness checks. Acquisition's retained manifest, binary and
-namespace witnesses remain live through final replay. A saved acquisition JSON
-or keeper receipt cannot reconstruct that authority.
-
-The controller constructs a bounded uncompressed USTAR with exactly three
-0600 members: original `ops-release.json`, controller-selected `ops-selection.json`
-and authenticated `simplestchat-ops`. Whole-transfer and individual SHA/count
-pins, the original installer-request bytes and the controller's typed executable
-identity cross the keeper boundary. The selected first-party keeper dependency
-closure is measured against Git HEAD and retained original files. The controller
-copies exactly those 28 files into a fresh private source tree and runs the
-keeper from that tree. Exact directory inventories, immutable metadata and file
-hashes are checked through dispatch, settlement and final replay. Unselected
-checkout siblings cannot supply Python imports; additions or substitutions in
-the execution tree refuse. Isolated Python also uses a fresh bytecode namespace.
-The source tree and any partial construction remain private output evidence.
-No candidate runs on the controller.
-
-The guest checks the complete 19-field executable identity, local pair policy,
-ordinary/base/fetch/force preflight against the unchanged Python oracle, typed
-negative cases, first installation and exact repeat. Its 33 ordered cases use
-fixed commands: five VPS execution-boundary probes precede the existing 28
-installation and CLI cases. The new probes use a separate closed guest source
-directory containing the measured probe, original guest and bootstrap scripts.
-They check actual same-descriptor ELF execution, kernel CLOEXEC retirement by
-candidate inode, exchanged/unlinked/wrong running-image refusals and the original
-remote monotonic deadline. Their expected negative statuses are not success
-receipts; each probe separately asserts its kernel/custody observations before
-the parent admits that row. They run no measured capacity workload.
-Writers close before the original executable inode receives its
-checked executable mode; commands execute through the retained read-only file
-descriptor. Per-command completion observes the leader and pipes. Final owned
-VM destruction supplies guest process closure, with authenticated SSH, QMP,
-cloud-init and drainer observations checked separately.
-
-The owner allows 4,200 seconds after entry, reserving 3,900 seconds for the complete
-phase sequence and 300 seconds of slack. The keeper slot includes 30 seconds of
-setup, a 1,800-second body, 120-second TERM grace and 20-second Native settlement
-allowance. The workflow's 90-minute job also covers cold setup/compilation.
-These are admission/deadline policies, not measured cold-start promises or hard
-bounds on OS I/O, scheduling or reap. Only final CLI zero includes original
-readback, all explicit closes, replay and cancellation/deadline fences. The
-workflow uploads the runtime summary only after success; a partial local
-`summary.json` is not independent success or installation authority.
-
-A separate prebuilt Rust diagnostic operation runs under `always()` after the
-runtime step. It starts no process or runtime; the workflow does not forward
-`GH_TOKEN` to this operation. It reads only the bounded, no-follow
-`ops-runtime/keeper/summary.json`,
-checks the selected revision/run/attempt/artifact and fixed package/protocol/target,
-and writes a fresh private `ops-runtime-diagnostics/diagnostic.json`. Only a
-successful readback, namespace replay and explicit owner closes publish its
-`retained` marker. The workflow uploads that exact JSON for one day, including
-when the original runtime fails; it never uploads raw reports, logs, caches,
-images, sockets or keys. Without a compiled controller it does not compile a
-replacement during finalization. Missing, malformed or foreign reports remain
-explicitly unavailable. The diagnostic records the last observed fixed case and
-reported exit-match facts; it does not identify an unobserved first failure or
-authorize installation. The original runtime status and all 33 cases stay intact.
-
-The keeper's global-help check accepts the exact manifest route in the older
-manifest-first layout and the current indented layout. It keeps the fixed program
-prefix, one Usage line, other required commands, empty stderr, 8 KiB limit and
-successful command status. Extra supported routes do not invalidate that receipt.
-
-The affected API decisions are prospective. **C-SERDE/C-VALIDATE apply:** fixed
-projected data and typed source identities never deserialize runtime authority.
-**C-CALLER-CONTROL/C-RW-VALUE apply:** original file owners remain with the
-operation; stdout is borrowed and checked at the kernel writer boundary, including
-read-only descriptor failures. **C-DTOR-FAIL/C-GOOD-ERR apply:** independent closes
-are attempted, first failures remain primary, and public diagnostics contain only
-fixed classes and allowed case/status fields. This reuses the existing namespace
-adapter and JSON parser, adds no dependency or permission, and makes no wider API
-inventory or runtime-readiness claim.
-
-The corrected source passed 24 guest fixtures, nine focused diagnostic tests,
-30 runtime/controller tests, the eight workflow/request tests, native/GNU lint,
-formatting, Python quality, 575 helper tests and fast security. The full runtime
-set preceded only an import move into its test module; the nine diagnostics and
-all production lint checks were repeated afterward. Independent review added
-regressions for the guest's clamped negative statuses and real stdout write errors.
-The original signed `6a3acc8` runtime trial failed without a retained per-case
-report. Its stale help expectation is independently proven; its earliest failing
-case remains unproven until a new signed runtime run supplies the required evidence.
+A real host receives the signed executable only through
+`ops/ansible/tasks/signed-ops.yml`, the delivery `release.yml`, `maintenance.yml`
+and `migration-prepare.yml` import: the controller's `ops-artifact export`
+authenticates the artifact, the host receives the three-member tar and the
+installer request, and the authenticated candidate runs `distribution install`
+or `distribution upgrade` on itself. The three manual KVM runtime workflows
+deliver into their disposable Debian 13 guest through the same tasks file
+(`ops/ansible/security-vm-ops-install.yml`); see the testing guide's
+[maintenance prerequisite section](../docs/testing.md#optional-maintenance-prerequisite-experiments).
 
 The binary's separate host entry is:
 

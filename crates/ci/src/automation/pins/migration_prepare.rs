@@ -292,6 +292,52 @@ fn bootstrap_keeps_the_authenticated_executable_beside_the_request_on_both_machi
     }
 }
 
+/// Bootstrap refuses unfinished owned work before it writes anything: its
+/// first task changes nothing and checks the workload lock, an unfinished
+/// journal and an existing request. The helpers it then installs include
+/// every one a host's releases, fetches, reboots and backups run, and none
+/// of a move's own steps, which are commands of the executable it keeps.
+#[test]
+fn bootstrap_refuses_unfinished_work_and_installs_every_host_helper() {
+    let play = play();
+    let steps = block(&play, "bootstrap");
+    let guard = &steps[0];
+    assert_eq!(guard["changed_when"], false);
+    let source = strings(&guard["ansible.builtin.command"]["argv"]).join("\n");
+    for token in [
+        "LOCK_EX | fcntl.LOCK_NB",
+        "record.get('finalized') is True",
+        "request.exists()",
+        "release-state.json",
+        "current.json",
+    ] {
+        assert!(source.contains(token), "{token}");
+    }
+    let install = first(steps, |task| {
+        task["ansible.builtin.copy"]["src"] == "{{ item }}"
+    });
+    let installed = strings(&install["loop"]);
+    for helper in [
+        "bounded_process.py",
+        "release-public.py",
+        "release_public.py",
+        "release_artifact.py",
+        "release_assets.py",
+        "browser_assets.py",
+        "release_json.py",
+        "runtime_profile.py",
+        "reboot-public.py",
+        "reboot_public.py",
+        "fetch-release.py",
+        "release_fetch_receiver.py",
+        "release_trust.py",
+        "backup_public.py",
+    ] {
+        assert!(installed.contains(&helper), "{helper}");
+    }
+    assert!(installed.iter().all(|name| !name.starts_with("migrat")));
+}
+
 /// Every data step of a move runs the executable the move keeps, with the
 /// step and the request it names, after its bytes were joined again on that
 /// machine. Nothing is interpreted, and the bounded units stay as they were.

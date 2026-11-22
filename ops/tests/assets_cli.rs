@@ -10,6 +10,7 @@ fn fixed_syntax_has_no_managed_root_owner_or_lock_bypass() {
         vec!["publish", "--capture", "PRIVATE_REVISION"],
         vec!["initialize", "--skip-lock"],
         vec!["inspect", "--fixture", "PRIVATE_ROOT"],
+        vec!["inspect", "--root", "PRIVATE_ROOT"],
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_simplestchat-ops"))
             .args(["release", "assets"])

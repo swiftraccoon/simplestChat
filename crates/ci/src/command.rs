@@ -30,8 +30,6 @@ pub enum Program {
     OpsKitShell,
     OpsKitPerl,
     OpsKitMake,
-    OpsRuntimeGit,
-    OpsRuntimePython,
     OpsVpsGit,
     OpsVpsSsh,
     OpsVpsAnsible,
@@ -78,8 +76,6 @@ impl Program {
             Self::OpsKitShell => "dash",
             Self::OpsKitPerl => "perl",
             Self::OpsKitMake => "make",
-            Self::OpsRuntimeGit => "git",
-            Self::OpsRuntimePython => "python3",
             Self::OpsVpsGit => "git",
             Self::OpsVpsSsh => "ssh",
             Self::OpsVpsAnsible => "ansible-playbook",
@@ -113,18 +109,16 @@ pub enum ReleaseRole {
     Retained,
     Acquire,
     Hosted,
-    Runtime,
     Vps,
     Frontend,
 }
 impl ReleaseRole {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::Producer,
         Self::SourceGit,
         Self::Retained,
         Self::Acquire,
         Self::Hosted,
-        Self::Runtime,
         Self::Vps,
         Self::Frontend,
     ];
@@ -144,7 +138,6 @@ impl ReleaseRole {
                     | Program::OpsKitPerl
                     | Program::OpsKitMake
             ),
-            Self::Runtime => matches!(program, Program::OpsRuntimeGit | Program::OpsRuntimePython),
             Self::Vps => matches!(
                 program,
                 Program::OpsVpsGit | Program::OpsVpsSsh | Program::OpsVpsAnsible

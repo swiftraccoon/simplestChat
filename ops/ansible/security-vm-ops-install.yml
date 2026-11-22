@@ -1,0 +1,120 @@
+---
+# The disposable guest receives the signed Ops executable through the same delivery tasks
+# a release gives a prepared host; only the guest binding and the host provisioning that
+# precedes a first release are fixture steps.
+- name: Deliver the signed Ops executable into the marked disposable guest
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the generated loopback guest and the controller's delivery inputs
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+          - vm_fixture_revision == scpub_release_expected_revision
+          - vm_current_artifact_dir is match('^/')
+          - vm_ops_binary.sha256 is match('^[a-f0-9]{64}$')
+          - vm_ops_binary.bytes is integer
+          - vm_ops_upgrade_input is boolean
+
+    - name: Read only the cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: ops_fixture_marker
+      no_log: true
+
+    - name: Bind this delivery to its exact guest
+      ansible.builtin.assert:
+        that:
+          - ops_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+
+    - name: Provision the release roots a prepared host holds before its first release
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /usr/local/libexec/simplestchat-public, mode: '0755'}
+        - {path: /etc/simplestchat-public, mode: '0700'}
+        - {path: /srv/simplestchat-public, mode: '0700'}
+
+    - name: Snapshot the controller-authenticated application predicate
+      ansible.builtin.stat:
+        path: "{{ vm_current_artifact_dir }}/release-predicate.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_file
+
+    - name: Snapshot the controller-authenticated application manifest
+      ansible.builtin.stat:
+        path: "{{ vm_current_artifact_dir }}/release.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_app_manifest_file
+
+    - name: Read the controller-authenticated application predicate
+      ansible.builtin.slurp:
+        src: "{{ vm_current_artifact_dir }}/release-predicate.json"
+      delegate_to: localhost
+      become: false
+      register: scpub_app_predicate_bytes
+      no_log: true
+
+  tasks:
+    - name: Deliver the signed current Ops executable through native policy
+      ansible.builtin.import_tasks: tasks/signed-ops.yml
+
+    - name: Snapshot the installed executable
+      ansible.builtin.stat:
+        path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: ops_installed
+
+    - name: Require the executable the controller authenticated, installed by root
+      ansible.builtin.assert:
+        that:
+          - ops_installed.stat.isreg | default(false)
+          - not (ops_installed.stat.islnk | default(false))
+          - ops_installed.stat.uid == 0
+          - ops_installed.stat.gid == 0
+          - ops_installed.stat.mode == '0755'
+          - ops_installed.stat.size == vm_ops_binary.bytes
+          - ops_installed.stat.checksum == vm_ops_binary.sha256
+
+    - name: Create the private candidate input of the prepared-host upgrade
+      ansible.builtin.file:
+        path: /root/simplestchat-vm-fixture/ops-input
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      when: vm_ops_upgrade_input
+
+    - name: Keep the delivered candidate members for the prepared-host upgrade
+      ansible.builtin.copy:
+        src: "{{ scpub_ops_remote }}/input/{{ item.name }}"
+        dest: "/root/simplestchat-vm-fixture/ops-input/{{ item.name }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+        force: false
+      loop:
+        - {name: ops-release.json, mode: '0600'}
+        - {name: ops-selection.json, mode: '0600'}
+        - {name: simplestchat-ops, mode: '0755'}
+      when: vm_ops_upgrade_input

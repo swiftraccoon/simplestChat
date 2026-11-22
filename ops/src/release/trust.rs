@@ -52,9 +52,6 @@ pub enum Failure {
     ProofDigests,
     Envelope,
     Request,
-    HelperSet,
-    HelperDigest,
-    PreflightReceipt,
     Journal,
     Receipt,
     Identity,
@@ -82,9 +79,6 @@ impl Failure {
             Self::ProofDigests => "attestation_proof_digests",
             Self::Envelope => "invalid_envelope",
             Self::Request => "invalid_request",
-            Self::HelperSet => "invalid_helper_set",
-            Self::HelperDigest => "invalid_helper_digest",
-            Self::PreflightReceipt => "invalid_preflight_receipt",
             Self::Journal => "unfinished_operation",
             Self::Receipt => "receiver_receipt_invalid",
             Self::Identity => "receiver_identity_mismatch",
@@ -463,7 +457,7 @@ impl Envelope {
 
 #[path = "trust_receipts.rs"]
 mod receipts;
-pub use receipts::{FinalizedJournal, HelperSet, PreflightReceipt, ReceiverReceipt};
+pub use receipts::{FinalizedJournal, ReceiverReceipt};
 #[cfg(test)]
 #[path = "trust_tests.rs"]
 mod tests;

@@ -7,7 +7,6 @@ use nix::{
     fcntl::{AtFlags, OFlag, open, openat, readlinkat},
     sys::stat::{Mode, fstatat},
 };
-use sha2::{Digest, Sha256};
 use std::{fs::File, io::Read, os::unix::fs::MetadataExt};
 
 const FLAGS: OFlag = OFlag::O_RDONLY
@@ -289,11 +288,6 @@ impl<A: Access> Tree<A> {
             return Err(Failure::Unavailable);
         }
         Ok(())
-    }
-    pub fn hash(&mut self, index: usize) -> Result<[u8; 32]> {
-        let mut digest = Sha256::new();
-        self.read(index, |bytes| digest.update(bytes))?;
-        Ok(digest.finalize().into())
     }
     fn stat(&self, parent: usize, name: &str, path: &str) -> Result<Stamp> {
         let value = fstatat(

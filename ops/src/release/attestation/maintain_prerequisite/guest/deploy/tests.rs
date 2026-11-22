@@ -33,7 +33,7 @@ fn request() -> Value {
     json!({"schemaVersion":1,"scope":"NativeHostDeployRequest","runId":"c".repeat(32),
         "revision":"d".repeat(40),"previousRevision":"e".repeat(40),
         "setupSeconds":600,"bodySeconds":4320,"sourcePins":pins(sources::guest_names()),
-        "helperPins":pins(sources::helper_names()),"binary":pin,
+        "binary":pin,
         "current":{"release.json":pin,"image.tar":pin},
         "previous":{"release.json":pin,"image.tar":pin},"sourceBundle":pin,
         "sourceTree":"f".repeat(40),"engineVersion":engine,

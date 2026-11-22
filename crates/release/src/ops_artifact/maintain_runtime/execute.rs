@@ -8,13 +8,14 @@ use super::{
     deploy_projection,
     files::{self, Original},
     host_projection,
-    options::{Options, Purpose},
+    options::{Options, Purpose, REPOSITORY},
     process::Runner,
     projection, source,
     vm::{self, Session, Vm},
 };
 use serde_json::{Value, json};
 use std::{
+    ffi::OsString,
     fs::{self, OpenOptions},
     io::Read,
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
@@ -27,31 +28,21 @@ fn checkpoint(report: &mut Value, name: &str) {
     report["failure"] = name.into();
 }
 
+/// The last step of the signed Ops delivery that began; a failed delivery leaves it in
+/// `installDiagnostic` with the playbook's raw exit once one was observed.
 #[derive(Clone, Copy)]
 enum InstallCheckpoint {
     Inventory,
-    StageCommand,
-    StageRecap,
-    StageIntegrity,
-    GuestCommand,
-    GuestBounds,
-    GuestDecode,
-    GuestProjection,
-    GuestResult,
+    Command,
+    Recap,
     Integrity,
 }
 impl InstallCheckpoint {
     fn name(self) -> &'static str {
         match self {
             Self::Inventory => "inventory",
-            Self::StageCommand => "stage-command",
-            Self::StageRecap => "stage-recap",
-            Self::StageIntegrity => "stage-integrity",
-            Self::GuestCommand => "guest-command",
-            Self::GuestBounds => "guest-bounds",
-            Self::GuestDecode => "guest-decode",
-            Self::GuestProjection => "guest-projection",
-            Self::GuestResult => "guest-result",
+            Self::Command => "install-command",
+            Self::Recap => "install-recap",
             Self::Integrity => "integrity",
         }
     }
@@ -71,29 +62,43 @@ fn clear_install_diagnostic(report: &mut Value) {
         object.remove("installDiagnostic");
     }
 }
-pub(super) fn observe_ops_receipt(
-    report: &mut Value,
-    bytes: &[u8],
-    run_id: &str,
-    raw: i32,
-) -> Result<()> {
-    install_checkpoint(report, InstallCheckpoint::GuestBounds, Some(raw));
-    if bytes.len() > 65536 {
-        return Err(Error::Refused);
+/// What the guest delivery is given: the variables a routine `release deploy` gives
+/// `signed-ops.yml`, with the controller and `gh` it retains, plus the guest's own
+/// inputs: the authenticated server directory whose predicate and manifest the delivery
+/// joins, the installed executable it must find afterwards, and the flow, whose
+/// prepared-host upgrade alone needs the delivered candidate members kept.
+pub(super) struct Delivery<'a> {
+    pub revision: &'a str,
+    pub run: u64,
+    pub artifact: u64,
+    pub selection: &'a Value,
+    pub controller: &'a Path,
+    pub gh: &'a Path,
+    pub server: &'a Path,
+    pub binary: &'a Original,
+    pub purpose: Purpose,
+}
+impl Delivery<'_> {
+    pub fn variables(&self) -> Value {
+        json!({"scpub_release_repository":REPOSITORY,"scpub_release_ci_run":self.run,
+            "scpub_release_expected_revision":self.revision,
+            "scpub_release_revision":self.revision,
+            "scpub_ops_release_controller":self.controller,"scpub_ops_gh_executable":self.gh,
+            "scpub_ops_artifact_id":self.artifact,"scpub_ops_selection":self.selection,
+            "vm_current_artifact_dir":self.server,
+            "vm_ops_binary":{"sha256":self.binary.sha256,"bytes":self.binary.bytes},
+            "vm_ops_upgrade_input":self.purpose == Purpose::Host})
     }
-    install_checkpoint(report, InstallCheckpoint::GuestDecode, Some(raw));
-    let value = decode(bytes)?;
-    install_checkpoint(report, InstallCheckpoint::GuestProjection, Some(raw));
-    let receipt = projection::admit_ops(value, run_id, raw)?;
-    report["opsCases"] = receipt.cases().clone();
-    report["install"] = receipt.install().clone();
-    install_checkpoint(report, InstallCheckpoint::GuestResult, Some(raw));
-    if let Some(failure) = receipt.failure() {
-        report["opsGuestFailure"] = failure.into();
-    }
-    receipt.require_success()?;
-    clear_install_diagnostic(report);
-    Ok(())
+}
+/// The one `ansible-playbook` command line of the guest delivery.
+pub(super) fn delivery_command(root: &Path, inventory: &Path, values: &Path) -> Vec<OsString> {
+    vec![
+        "-i".into(),
+        inventory.as_os_str().into(),
+        root.join(catalog::DELIVERY_PLAYBOOK).into_os_string(),
+        "--extra-vars".into(),
+        format!("@{}", values.display()).into(),
+    ]
 }
 
 fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
@@ -286,7 +291,6 @@ pub(super) struct Owners {
     pub server: Option<auth::AuthenticatedServer>,
     pub previous: Option<auth::AuthenticatedServer>,
     pub bundle: Option<source::Bundle>,
-    pub transfer: Option<source::Transfer>,
     pub vm: Option<Vm>,
     pub session: Option<Session>,
 }
@@ -304,7 +308,6 @@ impl Owners {
             server: None,
             previous: None,
             bundle: None,
-            transfer: None,
             vm: None,
             session: None,
         }
@@ -411,8 +414,6 @@ impl Owners {
         timing(report, "source-bundle", control)?;
         let run = identity(control)?;
         report["runId"] = run.clone().into();
-        self.transfer = Some(source::transfer(runner, control, ops, options, &run).await?);
-        let transfer = self.transfer.as_ref().ok_or(Error::Refused)?;
         checkpoint(report, "boot");
         let work = runner.work.clone();
         self.vm = Some(Vm::create(runner, control, &work, &run).await?);
@@ -422,65 +423,45 @@ impl Owners {
         checkpoint(report, "install");
         install_checkpoint(report, InstallCheckpoint::Inventory, None);
         let inventory = inventory(runner, control, vm, options, &run)?;
-        let argv = vec![
-            "-i".into(),
-            inventory.as_os_str().into(),
-            runner
-                .root
-                .join("security/vm/ops-stage.yml")
-                .into_os_string(),
-        ];
-        install_checkpoint(report, InstallCheckpoint::StageCommand, None);
-        let staged = runner
-            .run(
+        let controller = PathBuf::from(runner.tool("controller", control)?);
+        let gh = PathBuf::from(runner.tool("gh", control)?);
+        let delivery = Delivery {
+            revision: &options.revision,
+            run: options.run,
+            artifact: options.artifact,
+            selection: &ops.selection,
+            controller: &controller,
+            gh: &gh,
+            server: server.path(),
+            binary: ops.pin("simplestchat-ops")?,
+            purpose: options.purpose,
+        };
+        let values = runner.output.join("ops-install-vars.json");
+        files::write(&values, &auth::encoded(&delivery.variables())?, control)?;
+        let original = Original::open(&values, 16384, control)?;
+        runner
+            .sources
+            .insert("generated/ops-install-vars.json".into(), original);
+        let argv = delivery_command(&runner.root, &inventory, &values);
+        install_checkpoint(report, InstallCheckpoint::Command, None);
+        // The delivery's export authenticates through `gh`, as a release's does.
+        let installed = runner
+            .credential(
                 control,
-                "ops-stage",
+                "ops-install",
                 "ansible-playbook",
                 argv,
-                Duration::from_secs(180),
-                &[0],
+                Duration::from_secs(600),
             )
             .await
             .map_err(|error| install_command_error(report, error))?;
-        install_checkpoint(report, InstallCheckpoint::StageRecap, Some(staged.status));
-        recap(&staged.stdout)?;
-        install_checkpoint(
-            report,
-            InstallCheckpoint::StageIntegrity,
-            Some(staged.status),
-        );
-        vm.check(control)?;
-        install_checkpoint(report, InstallCheckpoint::GuestCommand, None);
-        let mut command = vec![
-            "/usr/bin/sudo".to_string(),
-            "-n".into(),
-            "/usr/bin/python3".into(),
-            "-I".into(),
-            "-B".into(),
-            "-X".into(),
-            "pycache_prefix=/root/simplestchat-vm-fixture/python-cache".into(),
-            "/root/simplestchat-vm-fixture/security_vm_ops_guest.py".into(),
-        ];
-        for value in &transfer.argv {
-            command.push(value.to_str().ok_or(Error::Input)?.into());
-        }
-        let arguments = vm.ssh(runner, control, &command)?;
-        transfer.original.check(control)?;
-        let observed = runner
-            .run_input(
-                control,
-                "ops-cases",
-                arguments,
-                Duration::from_secs(1800),
-                transfer.original.file()?,
-            )
-            .await
-            .map_err(|error| install_command_error(report, error))?;
-        observe_ops_receipt(report, &observed.stdout, &run, observed.status)?;
-        install_checkpoint(report, InstallCheckpoint::Integrity, Some(observed.status));
+        install_checkpoint(report, InstallCheckpoint::Recap, Some(installed.status));
+        recap(&installed.stdout)?;
+        install_checkpoint(report, InstallCheckpoint::Integrity, Some(installed.status));
         ops.check(control)?;
-        transfer.original.check(control)?;
+        server.check(control)?;
         vm.check(control)?;
+        runner.integrity(control)?;
         timing(report, "install", control)?;
         clear_install_diagnostic(report);
         let bundle = self.bundle.as_ref().ok_or(Error::Refused)?;
@@ -649,25 +630,6 @@ impl Owners {
                 Ok((name, checksum))
             })
             .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
-        let helpers = catalog::HELPERS
-            .into_iter()
-            .map(|name| {
-                let source = if name == "security_vm_ops_guest.py" {
-                    format!("build/{name}")
-                } else {
-                    format!("ops/ansible/files/{name}")
-                };
-                Ok((
-                    name,
-                    runner
-                        .sources
-                        .get(&source)
-                        .ok_or(Error::Input)?
-                        .sha256
-                        .clone(),
-                ))
-            })
-            .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
         let pin = |original: &Original| json!({"sha256":original.sha256,"bytes":original.bytes});
         let request_scope = match options.purpose {
             Purpose::Prerequisite => "MaintainLauncherPrerequisiteRequest",
@@ -683,7 +645,7 @@ impl Owners {
             "setupSeconds":setup_seconds,
             "bodySeconds":control.whole_body_end().saturating_duration_since(sample).as_secs(),
             "endSeconds":control.end().saturating_duration_since(sample).as_secs(),
-            "sourcePins":sources,"helperPins":helpers,"binary":pin(ops.pin("simplestchat-ops")?),
+            "sourcePins":sources,"binary":pin(ops.pin("simplestchat-ops")?),
             "manifest":pin(server.pin("release.json")?),"archive":pin(server.pin("image.tar")?),
             "sourceBundle":pin(&bundle.original),"sourceTree":bundle.tree});
         session.send(&expected, control).await?;
@@ -793,9 +755,6 @@ impl Owners {
             remember(&mut first, session.close(control).await, control);
             report["guestSession"] = session.diagnostics();
         }
-        if let Some(transfer) = &self.transfer {
-            remember(&mut first, transfer.original.check(control), control);
-        }
         if let Some(server) = &self.server {
             remember(&mut first, server.check(control), control);
         }
@@ -825,9 +784,6 @@ impl Owners {
             remember(&mut first, result.map(|_| ()), control);
         }
         // Keep the same actual payload originals through every VM finalizer.
-        if let Some(transfer) = &mut self.transfer {
-            remember(&mut first, transfer.original.finish(control), control);
-        }
         if let Some(server) = &mut self.server {
             remember(&mut first, server.finish(control), control);
         }
@@ -852,7 +808,7 @@ pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
         "scope":options.purpose.summary_scope(),
         "scenario":options.scenario,"passed":false,"failure":"guard","checkpoint":"guard",
         "cleanupPassed":false,"failureKind":null,"elapsedSeconds":{},"opsVerifierCalls":0,
-        "opsCases":[],"maintainProof":null,"serverVerifierCalls":0,
+        "maintainProof":null,"serverVerifierCalls":0,
         "serverCurrentMetadataApiCalls":0,
         "authenticatedServerDistribution":false,"authenticatedOpsDistribution":false,
         "nativeTarget":"x86_64-unknown-linux-musl",
@@ -893,6 +849,26 @@ pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_failed_delivery_names_the_step_it_reached() {
+        // A red hosted run is read by these labels, so each step keeps its own.
+        for (step, name) in [
+            (InstallCheckpoint::Inventory, "inventory"),
+            (InstallCheckpoint::Command, "install-command"),
+            (InstallCheckpoint::Recap, "install-recap"),
+            (InstallCheckpoint::Integrity, "integrity"),
+        ] {
+            let mut report = json!({"checkpoint":"install"});
+            install_checkpoint(&mut report, step, Some(2));
+            assert_eq!(
+                report,
+                json!({"checkpoint":"install",
+                    "installDiagnostic":{"checkpoint":name,"rawExit":2}})
+            );
+            clear_install_diagnostic(&mut report);
+            assert_eq!(report, json!({"checkpoint":"install"}));
+        }
+    }
     #[test]
     fn successful_recap_requires_complete_counts_and_exact_sole_host() {
         let good =
