@@ -38,7 +38,6 @@ async function fixture(t, options = {}) {
   for (const [original, replacement] of [
     ['/lib/systemd/systemd-journald', path.join(bin, 'journald')],
     ['/usr/local/bin', bin],
-    ['/usr/local/lib/docker/cli-plugins', path.join(directory, 'plugins')],
     ['/run/systemd', path.join(directory, 'systemd')],
     ['/run/log/journal', journalLogs],
     ['/var/run/docker.sock', path.join(directory, 'docker.sock')],
@@ -72,15 +71,13 @@ async function fixture(t, options = {}) {
           process.kill(Number(fs.readFileSync(${JSON.stringify(path.join(temporary, 'local-ci-docker/journald.pid'))}, 'utf8')), 'SIGTERM');
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
         }
-      } else if (args.includes('buildx')) console.log('github.com/docker/buildx v0.37.2 revision');
-      else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2', Components: [{Name: 'containerd', Version: settings.wrongComponent ? 'v2.3.6' : 'v2.4.1'}, {Name: 'runc', Version: '1.5.2'}]}));
+      } else if (args.includes('version')) console.log(JSON.stringify({ApiVersion: '1.48', Version: settings.wrongServer ? '29.7.2' : '29.8.2', Components: [{Name: 'containerd', Version: settings.wrongComponent ? 'v2.3.6' : 'v2.4.1'}, {Name: 'runc', Version: '1.5.2'}]}));
       else process.exit(92);
     } else if (tool === 'curl') {
       const output = args[args.indexOf('--output') + 1];
       if (settings.wrongChecksum) fs.writeFileSync(output, 'corrupt archive');
       else {
-        const name = args.some(arg => arg.includes('github.com/containerd/')) ? 'containerd.tgz'
-          : args.some(arg => arg.includes('github.com/docker/buildx/')) ? 'docker-buildx' : 'docker.tgz';
+        const name = args.some(arg => arg.includes('github.com/containerd/')) ? 'containerd.tgz' : 'docker.tgz';
         fs.copyFileSync(path.join(${JSON.stringify(directory)}, name), output);
       }
     } else process.exit(93);
@@ -119,11 +116,8 @@ async function fixture(t, options = {}) {
   const componentPack = spawn('/usr/bin/tar', ['-czf', path.join(directory, 'containerd.tgz'), '-C', archiveRoot, 'bin']);
   const [componentStatus] = await once(componentPack, 'close');
   assert.equal(componentStatus, 0);
-  await writeFile(path.join(directory, 'docker-buildx'), '#!/bin/sh\nexit 0\n');
-  for (const [key, filename] of [['containerd', 'containerd.tgz'], ['buildx', 'docker-buildx']]) {
-    const componentDigest = createHash('sha256').update(await readFile(path.join(directory, filename))).digest('hex');
-    source = source.replaceAll(new RegExp(`${key}_sha256=[a-f0-9]{64}`, 'g'), `${key}_sha256=${componentDigest}`);
-  }
+  const componentDigest = createHash('sha256').update(await readFile(path.join(directory, 'containerd.tgz'))).digest('hex');
+  source = source.replaceAll(/containerd_sha256=[a-f0-9]{64}/g, `containerd_sha256=${componentDigest}`);
   await writeFile(helper, source);
   return {
     directory, temporary, journal, journalLogs, config, githubEnv,
@@ -155,6 +149,8 @@ test('private Docker starts a bounded real-journal command before its daemon and
   const journal = calls.findIndex(call => call.tool === 'journald');
   const daemon = calls.findIndex(call => call.tool === 'dockerd' && !call.args.includes('--version'));
   assert.ok(journal >= 0 && daemon > journal);
+  // Buildx comes only from the pinned installer step that follows in an image-building job.
+  assert.equal(calls.some(call => call.args.some(arg => arg.toLowerCase().includes('buildx'))), false);
   for (const name of ['LISTEN_FDS', 'LISTEN_PID', 'NOTIFY_SOCKET', 'RUNTIME_DIRECTORY', 'LOGS_DIRECTORY']) {
     assert.equal(calls[journal].env[name], undefined);
   }

@@ -37,7 +37,7 @@ mod fingerprint;
 mod github_output;
 mod image_cache;
 mod inputs;
-mod install_compose;
+mod install_plugin;
 mod io;
 mod load_generator_image;
 mod local;
@@ -88,6 +88,8 @@ Commands:
                 Build and verify the immutable CI production image.
   install-compose
                 Install the authenticated Compose release in explicit CI.
+  install-buildx
+                Install the authenticated Buildx release in explicit CI.
   apt-mirror    Prefer official archives in the fixed root/hosted Ubuntu profile.
   rpm-diagnostic --root ABSOLUTE_SCAN_OUTPUT --output ABSOLUTE_NEW_DIRECTORY
                 Encrypt one failed image's RPM database for the configured recipient.
@@ -527,11 +529,11 @@ pub fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     {
         return audit_rust::run(root, &arguments[1..]);
     }
-    if arguments
+    if let Some(plugin) = arguments
         .first()
-        .is_some_and(|argument| argument == "install-compose")
+        .and_then(|argument| install_plugin::Plugin::from_subcommand(argument))
     {
-        return install_compose::run(root, &arguments[1..]);
+        return install_plugin::run(root, plugin, &arguments[1..]);
     }
     if arguments
         .first()

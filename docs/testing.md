@@ -1367,10 +1367,11 @@ ignore the old failed `[[ ]]` port check; Rust always refuses non-loopback ports
 
 The manually dispatched `load-generator-image.yml` keeps its Linux/amd64
 `loadtest` target, fixed tag, restore-only layer cache, 45-minute job and two
-uploaded filenames. After the pinned Rust 1.99 bootstrap it runs
-`cargo run --locked -q -p simplestchat-ci -- load-generator-image`. Bootstrap and cold
-compile timing have not been measured; they consume the same external job
-budget. This command requires an explicit hosted GitHub Linux runner or an
+uploaded filenames. After the pinned Rust 1.99 bootstrap and the checksum-pinned
+Buildx installation (`install-buildx`, described with the plugin installers
+below) it runs `cargo run --locked -q -p simplestchat-ci -- load-generator-image`.
+Bootstrap and cold compile timing have not been measured; they consume the same
+external job budget. This command requires an explicit hosted GitHub Linux runner or an
 ACT runner marked `LOCAL_CI_DISPOSABLE=1`. It captures one environment and signal
 registration, clears Git context overrides, and observes the selected checkout's
 clean HEAD before and after the recipe. Selected Git, Docker and Zstd paths and
@@ -1390,9 +1391,10 @@ lookup after an uncertain creation is unproved. Foreign replacements and changed
 labels, mounts, references or daemon identity refuse success. These are
 optimistic observations under exclusive caller-trusted engine authority, not
 atomic ownership or whole-engine cleanup. Formatter shapes are source-checked
-against Docker CLI 28.5.1 and Buildx 0.29.1/0.30.1; this is not a claim of
-observed hosted-engine compatibility. The nonce builder deliberately replaces
-the old shell's unconditional deletion of a fixed builder name.
+against Docker CLI 28.5.1 and Buildx 0.29.1/0.30.1, not against the installed
+Buildx 0.39.1; this is not a claim of observed hosted-engine compatibility.
+The nonce builder deliberately replaces the old shell's unconditional deletion
+of a fixed builder name.
 
 The scheduling policy admits at most 2,700 seconds from command entry. The
 40-minute build remains an upper cap; its actual body is clipped after reserving
@@ -1845,32 +1847,52 @@ dependency guards and production-image non-root/loader checks.
 The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
 manual Firefox/Linux and WebKit/macOS runs.
 
-The preceding Compose installation uses
-`cargo run --locked -q -p simplestchat-ci -- install-compose` in the same explicit
-hosted/disposable Linux contexts. It authenticates the existing Compose 5.6.0
-AMD64/ARM64 digests before either fixed `sudo install` command. Curl retains its
-HTTPS/TLS policy, 10-second connection and 60-second transfer bounds, plus a
-256 MiB artifact cap. Output goes directly to a retained descriptor in a fresh
-0700 directory. Both the download and the private install copy receive bounded
-SHA-256 checks with stable metadata/bindings; input files close before privilege.
-The caller's version check retains its 10-second limit and two-second kill grace.
-The root check retains its clean environment, fixed daemon socket and inner
-GNU timeout (10 seconds plus two-second kill grace), with an outer 15-second
-owned-command bound. Both must report exactly 5.6.0.
+The preceding Docker CLI plugin installations use
+`cargo run --locked -q -p simplestchat-ci -- install-compose` and
+`cargo run --locked -q -p simplestchat-ci -- install-buildx` in the same explicit
+hosted/disposable Linux contexts. One installer serves both; each plugin is a
+fixed release record: Compose 5.6.0 and Buildx 0.39.1, each with its AMD64 and
+ARM64 asset from `github.com/docker/<plugin>/releases` and that asset's SHA-256.
+The Buildx digests are the ones the release's `checksums.txt` publishes. Every
+job that builds an image from a context holding the repository's
+`.dockerignore` installs the pinned Buildx before its first build: the
+production image job, `load-generator-image.yml` and `release-artifact.yml`.
+The Caddy image workflow builds with `build/caddy-image.Dockerfile`, whose own
+ignore file BuildKit reads instead, and uses the runner's Buildx. Buildx
+0.39.0 fails such builds with HTTP 431 once the ignore file holds more than 490
+patterns; this one holds 502.
+
+The installer authenticates the selected digest before either fixed
+`sudo install` command. Curl uses HTTPS/TLS only, 10-second connection and
+60-second transfer bounds, plus a 256 MiB artifact cap. Output goes directly to a
+retained descriptor in a fresh 0700 directory. Both the download and the private
+install copy receive bounded SHA-256 checks with stable metadata/bindings; input
+files close before privilege. The plugin lands in
+`/usr/local/lib/docker/cli-plugins/docker-<plugin>`. The Docker CLI searches the
+user's `~/.docker/cli-plugins` and configured extra directories first, then that
+directory, and only then the runner image's own `/usr/libexec/docker/cli-plugins`.
+The version checks therefore ask the CLI itself: the caller runs
+`docker compose version --short` or `docker buildx version` with a 10-second limit
+and two-second kill grace; root runs the same arguments through a clean
+environment, the fixed daemon socket and an inner GNU timeout (10 seconds plus
+two-second kill grace), with an outer 15-second owned-command bound. Both must
+print exactly `5.6.0`, or exactly
+`github.com/docker/buildx v0.39.1 334b63fe2bb0f0e89a8fd067704a0d113f57ec25`, the
+release commit both Buildx binaries embed. A shadowing copy that answers with
+anything else fails the step before any build.
 
 All exits attempt owned staging cleanup. A fixed private
-`compose-install-<random>.json` records stage, status, verified/download state,
+`<plugin>-install-<random>.json` records stage, status, verified/download state,
 installation attempts/completion, version checks and separate process/staging
 cleanup proofs. The process proof covers the owned CLI group; sudo can separate
-root process groups. The retained inner timeout bounds the root version check.
-Its parent
+root process groups. The inner timeout bounds the root version check. Its parent
 namespace stays descriptor-bound through the final exclusive 0600 report write;
 received command text and paths never enter that evidence. An interrupted
 privileged install can already have changed the plugin; cleanup retires staging
-and does not undo that installation. The step keeps its three-minute budget,
-including its first cold simplestchat-ci compile; hosted cold-start timing remains
-unmeasured. Owned fake commands verify policy and cleanup, without downloading,
-installing or contacting an engine.
+and does not undo that installation. Each step has a three-minute budget,
+including the job's first cold simplestchat-ci compile; hosted cold-start timing is
+unmeasured. Owned fake commands verify policy and cleanup for both plugins,
+without downloading, installing or contacting an engine.
 
 The npm setup steps keep `node build/install-npm.mjs` as the authenticated
 installer, followed by `cargo run --locked -q -p simplestchat-ci -- npm-path` to
@@ -1997,9 +2019,11 @@ Docker-dependent job authenticates the official Docker 29.8.2 static archive for
 its architecture and starts that pinned daemon with a fresh storage volume, private
 cgroup namespace and private socket. The installer replaces the runner image's
 older embedded daemon only inside the guarded disposable job container; it checks
-both the executable and running server version. Authenticated containerd 2.4.1
-and Buildx 0.37.2 releases override the older bundled components; the running
-containerd and runc versions must match the maintained host selection. The outer engine socket is
+both the executable and running server version. An authenticated containerd 2.4.1
+release overrides the older bundled one; the running containerd and runc versions
+must match the maintained host selection. This setup installs no Buildx: the
+production image job then runs the same `install-buildx` step as hosted CI, with
+the ARM64 asset on Apple silicon. The outer engine socket is
 never mounted, and the production release fixture keeps its empty-engine and
 disposable-host checks.
 

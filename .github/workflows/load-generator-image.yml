@@ -29,6 +29,11 @@ jobs:
         with:
           toolchain: 1.99.0
 
+      - name: Install checksum-pinned Buildx
+        timeout-minutes: 3
+        shell: bash
+        run: cargo run --locked -q -p simplestchat-ci -- install-buildx
+
       - name: Restore the production image layer cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

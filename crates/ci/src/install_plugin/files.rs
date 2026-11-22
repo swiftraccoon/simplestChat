@@ -1,6 +1,6 @@
 //! Descriptor-bound private staging. Only the known owned entries are removed.
 
-use super::plan::{Context, MAX_BYTES, VERSION};
+use super::plan::{Checksum, Context, MAX_BYTES};
 use rustix::fs::{AtFlags, Mode, OFlags};
 use sha2::{Digest, Sha256};
 use simplestchat_toolkit::tooling::{Failure, Result};
@@ -15,7 +15,7 @@ pub(super) fn failure(message: &str) -> Failure {
     Failure::new(1, message)
 }
 fn io<T>(value: std::io::Result<T>) -> Result<T> {
-    value.map_err(|_| failure("Compose staging operation failed."))
+    value.map_err(|_| failure("Plugin staging operation failed."))
 }
 fn open_at(directory: &File, name: &str, flags: OFlags) -> Result<File> {
     rustix::fs::openat(
@@ -25,10 +25,10 @@ fn open_at(directory: &File, name: &str, flags: OFlags) -> Result<File> {
         Mode::from_bits_truncate(0o600),
     )
     .map(File::from)
-    .map_err(|_| failure("Compose staging descriptor unavailable."))
+    .map_err(|_| failure("Plugin staging descriptor unavailable."))
 }
 fn close(file: File) -> Result<()> {
-    nix::unistd::close(file).map_err(|_| failure("Compose staging close failed."))
+    nix::unistd::close(file).map_err(|_| failure("Plugin staging close failed."))
 }
 fn same(left: &Metadata, right: &Metadata) -> bool {
     left.dev() == right.dev() && left.ino() == right.ino()
@@ -64,7 +64,7 @@ fn binding(directory: &File, name: &str, expected: &Metadata, is_directory: bool
             !metadata.is_file()
         }
     {
-        return Err(failure("Compose staging identity changed."));
+        return Err(failure("Plugin staging identity changed."));
     }
     Ok(())
 }
@@ -82,11 +82,11 @@ fn write_new(directory: &File, name: &str, bytes: &[u8]) -> Result<()> {
 
 /// Authenticate the bytes of the actual private install input, independently
 /// of the source hash. Stable metadata and binding bracket the full read-back.
-fn authenticate_copy(directory: &File, file: &mut File, expected: &str) -> Result<Metadata> {
+fn authenticate_copy(directory: &File, file: &mut File, expected: Checksum) -> Result<Metadata> {
     let before = io(file.metadata())?;
     if !before.is_file() || before.nlink() != 1 || before.len() == 0 || before.len() > MAX_BYTES {
         return Err(failure(
-            "Verified Compose copy must be bounded regular bytes.",
+            "Verified plugin copy must be bounded regular bytes.",
         ));
     }
     binding(directory, "verified", &before, false)?;
@@ -101,7 +101,7 @@ fn authenticate_copy(directory: &File, file: &mut File, expected: &str) -> Resul
         }
         count += length as u64;
         if count > MAX_BYTES {
-            return Err(failure("Verified Compose copy exceeds its bound."));
+            return Err(failure("Verified plugin copy exceeds its bound."));
         }
         digest.update(&buffer[..length]);
     }
@@ -112,9 +112,9 @@ fn authenticate_copy(directory: &File, file: &mut File, expected: &str) -> Resul
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
-    if count != before.len() || !unchanged(&before, &after) || actual != expected {
+    if count != before.len() || !unchanged(&before, &after) || actual != expected.as_str() {
         return Err(failure(
-            "Verified Compose copy checksum or identity mismatch.",
+            "Verified plugin copy checksum or identity mismatch.",
         ));
     }
     Ok(after)
@@ -140,17 +140,17 @@ impl Owned {
         read?;
         closed?;
         let token: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-        let name = format!("simplestchat-compose-{token}");
+        let name = format!("simplestchat-{}-{token}", context.release.name);
         let parent = rustix::fs::open(
             &context.temporary,
             OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
             Mode::empty(),
         )
         .map(File::from)
-        .map_err(|_| failure("Compose temporary directory unavailable."))?;
+        .map_err(|_| failure("Plugin temporary directory unavailable."))?;
         if rustix::fs::mkdirat(&parent, name.as_str(), Mode::from_bits_truncate(0o700)).is_err() {
             close(parent)?;
-            return Err(failure("Fresh Compose directory unavailable."));
+            return Err(failure("Fresh plugin directory unavailable."));
         }
         let directory = match open_at(&parent, &name, OFlags::RDONLY | OFlags::DIRECTORY) {
             Ok(directory) => directory,
@@ -166,7 +166,7 @@ impl Owned {
                 let _ = close(directory);
                 let _ = rustix::fs::unlinkat(&parent, name.as_str(), AtFlags::REMOVEDIR);
                 let _ = close(parent);
-                return Err(failure("Compose directory metadata unavailable."));
+                return Err(failure("Plugin directory metadata unavailable."));
             }
         };
         Ok(Self {
@@ -176,7 +176,7 @@ impl Owned {
             download: None,
             identity,
             path: context.temporary.join(&name),
-            report_name: format!("compose-install-{token}.json"),
+            report_name: format!("{}-install-{token}.json", context.release.name),
             name,
             verified: None,
         })
@@ -188,10 +188,10 @@ impl Owned {
             &self.directory,
             "intent.json",
             &serde_json::to_vec(&serde_json::json!({
-                "version":VERSION,"architecture":context.asset.architecture,
-                "expectedSha256":context.asset.digest,"maxBytes":MAX_BYTES
+                "version":context.release.version,"architecture":context.asset.architecture,
+                "expectedSha256":context.asset.digest.as_str(),"maxBytes":MAX_BYTES
             }))
-            .map_err(|_| failure("Compose intent unavailable."))?,
+            .map_err(|_| failure("Plugin intent unavailable."))?,
         )?;
         self.download = Some(open_at(
             &self.directory,
@@ -205,7 +205,7 @@ impl Owned {
         let file = self
             .download
             .as_ref()
-            .ok_or_else(|| failure("Compose download not owned."))?;
+            .ok_or_else(|| failure("Plugin download not owned."))?;
         io(file.try_clone()).map(std::sync::Arc::new)
     }
 
@@ -216,25 +216,25 @@ impl Owned {
             Mode::empty(),
         )
         .map(File::from)
-        .map_err(|_| failure("Compose parent binding unavailable."))?;
+        .map_err(|_| failure("Plugin parent binding unavailable."))?;
         let observed = io(visible.metadata());
         let closed = close(visible);
         let observed = observed?;
         closed?;
         if !same(&observed, &io(self.parent.metadata())?) {
-            return Err(failure("Compose parent identity changed."));
+            return Err(failure("Plugin parent identity changed."));
         }
         binding(&self.parent, &self.name, &self.identity, true)
     }
 
     /// Copy the stopped curl output through a retained FD, authenticate the copy,
     /// and explicitly close both files before any sudo invocation is permitted.
-    pub(super) fn verify(&mut self, expected: &str) -> Result<u64> {
+    pub(super) fn verify(&mut self, expected: Checksum) -> Result<u64> {
         self.check_directory()?;
         let mut source = self
             .download
             .take()
-            .ok_or_else(|| failure("Compose download not owned."))?;
+            .ok_or_else(|| failure("Plugin download not owned."))?;
         let result: Result<(u64, Metadata)> = (|| {
             let before = io(source.metadata())?;
             if !before.is_file()
@@ -243,7 +243,7 @@ impl Owned {
                 || before.len() > MAX_BYTES
             {
                 return Err(failure(
-                    "Compose download must be bounded nonempty regular bytes.",
+                    "Plugin download must be bounded nonempty regular bytes.",
                 ));
             }
             binding(&self.directory, "download", &before, false)?;
@@ -264,7 +264,7 @@ impl Owned {
                     }
                     count += length as u64;
                     if count > MAX_BYTES {
-                        return Err(failure("Compose download exceeds its bound."));
+                        return Err(failure("Plugin download exceeds its bound."));
                     }
                     digest.update(&buffer[..length]);
                     io(output.write_all(&buffer[..length]))?;
@@ -278,9 +278,9 @@ impl Owned {
                         .iter()
                         .map(|byte| format!("{byte:02x}"))
                         .collect::<String>()
-                        != expected
+                        != expected.as_str()
                 {
-                    return Err(failure("Compose download checksum or identity mismatch."));
+                    return Err(failure("Plugin download checksum or identity mismatch."));
                 }
                 io(output.sync_all())?;
                 Ok((
@@ -306,7 +306,7 @@ impl Owned {
         let expected = self
             .verified
             .as_ref()
-            .ok_or_else(|| failure("Compose copy not verified."))?;
+            .ok_or_else(|| failure("Plugin copy not verified."))?;
         let file = open_at(
             &self.directory,
             "verified",
@@ -317,7 +317,7 @@ impl Owned {
         let observed = observed?;
         closed?;
         if !observed.is_file() || !unchanged(expected, &observed) {
-            return Err(failure("Verified Compose copy changed."));
+            return Err(failure("Verified plugin copy changed."));
         }
         Ok(())
     }
@@ -349,7 +349,7 @@ impl Owned {
         let result = if passed {
             Ok(())
         } else {
-            Err(failure("Compose staging cleanup failed."))
+            Err(failure("Plugin staging cleanup failed."))
         };
         (reporter, result)
     }
@@ -365,7 +365,7 @@ impl Reporter {
     pub(super) fn write(self, value: &impl serde::Serialize) -> Result<()> {
         let result = (|| {
             let bytes =
-                serde_json::to_vec_pretty(value).map_err(|_| failure("Compose report invalid."))?;
+                serde_json::to_vec_pretty(value).map_err(|_| failure("Plugin report invalid."))?;
             write_new(&self.parent, &self.name, &bytes)
         })();
         let closed = close(self.parent);

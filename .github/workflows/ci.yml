@@ -1017,6 +1017,11 @@ jobs:
         shell: bash
         run: cargo run --locked -q -p simplestchat-ci -- install-compose
 
+      - name: Install checksum-pinned Buildx
+        timeout-minutes: 3
+        shell: bash
+        run: cargo run --locked -q -p simplestchat-ci -- install-buildx
+
       - name: Validate Compose rendering
         env:
           # Reserved example values only; no deployment secret enters CI.

@@ -335,9 +335,9 @@ crates/ci/src/automation/pins/security_ci/**
 !crates/ci/src/production_image/
 crates/ci/src/production_image/**
 !crates/ci/src/production_image/*.rs
-!crates/ci/src/install_compose/
-crates/ci/src/install_compose/**
-!crates/ci/src/install_compose/*.rs
+!crates/ci/src/install_plugin/
+crates/ci/src/install_plugin/**
+!crates/ci/src/install_plugin/*.rs
 !crates/ci/src/audit_rust/
 crates/ci/src/audit_rust/**
 !crates/ci/src/audit_rust/*.rs

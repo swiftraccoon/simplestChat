@@ -6,6 +6,8 @@ use super::{checkout_file, lacks, run, script, steps, unique, uses, workflow};
 use serde_json::{Value, json};
 
 const COMPOSE_TOOL: &str = "Install checksum-pinned production Compose";
+const BUILDX_TOOL: &str = "Install checksum-pinned Buildx";
+const LOCAL_DOCKER: &str = "Start Docker inside the isolated local runner";
 const PREPARE: &str = "Install isolated release-container checks";
 const PREPARE_START: &str = "Start the isolated release-container controller build";
 const INTEGRATION: &str = "App-only release and rollback on a disposable host";
@@ -334,6 +336,31 @@ fn compose_is_verified_before_install_and_matches_both_execution_users() {
     );
     assert!(deployment.at(COMPOSE_TOOL) < deployment.at("Validate Compose rendering"));
     assert!(deployment.at(COMPOSE_TOOL) < deployment.at(BUILD));
+}
+
+/// The production image is built by the pinned Buildx: the installer runs
+/// unconditionally after the local runner's own Docker starts and before the
+/// build, and the local runner's Docker setup installs no Buildx of its own.
+/// Pin selection, verified bytes and both version checks are covered by the
+/// installer's tests.
+#[test]
+fn buildx_is_verified_before_the_production_build_on_both_ci_paths() {
+    let deployment = Deployment::read();
+    let step = deployment.step(BUILDX_TOOL);
+    assert_eq!(step["timeout-minutes"], 3);
+    assert_eq!(step["shell"], "bash");
+    assert!(lacks(step, &["continue-on-error", "if", "env"]));
+    assert_eq!(
+        step["run"],
+        "cargo run --locked -q -p simplestchat-ci -- install-buildx"
+    );
+    assert!(deployment.ordered(&[LOCAL_DOCKER, COMPOSE_TOOL, BUILDX_TOOL, BUILD]));
+    assert_eq!(deployment.step(LOCAL_DOCKER)["if"], "${{ env.ACT }}");
+    assert_eq!(
+        deployment.step(LOCAL_DOCKER)["run"],
+        "build/ci-local-docker.sh"
+    );
+    assert!(!checkout_file("build/ci-local-docker.sh").contains("buildx"));
 }
 
 /// From `test_guest_compose_contract_runs_with_required_pinned_renderer`: the

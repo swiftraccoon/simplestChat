@@ -12,6 +12,7 @@ const PREPARATION_COMMAND: &str = concat!(
     "cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \\\n",
     "  --target-dir \"$RUNNER_TEMP/release-builder-build\"\n"
 );
+const BUILDX_COMMAND: &str = "cargo run --locked -q -p simplestchat-ci -- install-buildx";
 const BUILDER_COMMAND: &str = concat!(
     "\"$RUNNER_TEMP/release-builder-build/release/simplestchat-ops\" release build \\\n",
     "  --output \"${RUNNER_TEMP}/simplestchat-release\"\n"
@@ -96,7 +97,8 @@ fn only_checkout_toolchain_and_retention_actions_are_used_and_pinned() {
 }
 
 /// From `test_native_preparation_precedes_the_exact_production_builder`: cold
-/// source compilation stays outside the operation's original entry clock.
+/// source compilation stays outside the operation's original entry clock, and
+/// the pinned Buildx is installed before the selected commit is built.
 #[test]
 fn native_preparation_precedes_the_exact_production_builder() {
     let release = document(WORKFLOW);
@@ -106,14 +108,23 @@ fn native_preparation_precedes_the_exact_production_builder() {
         .enumerate()
         .filter(|(_, step)| step.get("run").is_some())
         .collect::<Vec<_>>();
-    let [(prepared, preparation), (built, builder)] = commands[..] else {
-        panic!("exactly two commands");
+    let [
+        (prepared, preparation),
+        (installed, installer),
+        (built, builder),
+    ] = commands[..]
+    else {
+        panic!("exactly three commands");
     };
     assert_eq!(preparation["run"], PREPARATION_COMMAND);
     assert_eq!(preparation["timeout-minutes"], 6);
+    assert_eq!(installer["run"], BUILDX_COMMAND);
+    assert_eq!(installer["name"], "Install checksum-pinned Buildx");
+    assert_eq!(installer["timeout-minutes"], 3);
+    assert_eq!(installer["shell"], "bash");
     assert_eq!(builder["run"], BUILDER_COMMAND);
     assert_eq!(builder["timeout-minutes"], 65);
-    for step in [preparation, builder] {
+    for step in [preparation, installer, builder] {
         // An unconditional selected-commit build must not be silently skipped.
         let step = step.as_object().unwrap();
         assert!(!step.contains_key("if"));
@@ -121,9 +132,9 @@ fn native_preparation_precedes_the_exact_production_builder() {
     }
     let job = release["jobs"]["artifact"].as_object().unwrap();
     assert!(!job.contains_key("continue-on-error"));
-    assert_eq!(steps.len(), 5);
+    assert_eq!(steps.len(), 6);
     assert!(0 < built);
-    assert!(prepared < built);
+    assert!(prepared < installed && installed < built);
     let (toolchain, _) = located(steps, |step| uses(step) == Some(TOOLCHAIN_ACTION));
     assert!(toolchain < prepared);
     assert!(uses(&steps[0]).unwrap().starts_with("actions/checkout@"));
@@ -208,6 +219,6 @@ fn no_deployment_publication_credentials_or_service_side_effects_are_configured(
     // registry push, release creation, VPS command or deploy environment.
     assert_eq!(
         commands,
-        format!("\n\n{PREPARATION_COMMAND}\n{BUILDER_COMMAND}\n")
+        format!("\n\n{PREPARATION_COMMAND}\n{BUILDX_COMMAND}\n{BUILDER_COMMAND}\n")
     );
 }

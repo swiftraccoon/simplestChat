@@ -596,7 +596,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'crates/ci/src/codeql_cache/private.env',
     'crates/ci/src/codeql_cache/recorded_reference.json',
     'crates/ci/src/production_image/private.env',
-    'crates/ci/src/install_compose/private.env',
+    'crates/ci/src/install_plugin/private.env',
     'crates/ci/src/audit_rust/private.env',
     'crates/ci/src/release_checks/private.env',
     'crates/ci/src/image_cache/private.env',

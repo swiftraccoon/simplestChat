@@ -27,14 +27,15 @@ struct Report {
     staging_cleanup_passed: bool,
 }
 
-fn version(bytes: &[u8]) -> Result<()> {
+/// Accept only the release's exact version line, with any trailing newlines.
+fn version(bytes: &[u8], release: &plan::Release) -> Result<()> {
     if std::str::from_utf8(bytes)
         .ok()
         .map(|value| value.trim_end_matches('\n'))
-        != Some(plan::VERSION)
+        != Some(release.answer)
     {
         return Err(files::failure(
-            "Compose version must match the pinned release.",
+            "Plugin version must match the pinned release.",
         ));
     }
     Ok(())
@@ -44,7 +45,7 @@ pub(super) async fn install(context: &Context, runner: &mut impl Executor) -> Re
     runner.ready().await?;
     let mut owned = Owned::new(context)?;
     let mut report = Report {
-        version: plan::VERSION,
+        version: context.release.version,
         architecture: context.asset.architecture,
         passed: false,
         failure: None,
@@ -64,7 +65,11 @@ pub(super) async fn install(context: &Context, runner: &mut impl Executor) -> Re
         owned.prepare(context)?;
         stage = "download";
         runner
-            .run(plan::download(context.asset, owned.download_sink()?))
+            .run(plan::download(
+                context.release,
+                context.asset,
+                owned.download_sink()?,
+            ))
             .await?;
         runner.ready().await?;
         stage = "authenticate";
@@ -79,14 +84,23 @@ pub(super) async fn install(context: &Context, runner: &mut impl Executor) -> Re
         owned.check_verified()?;
         stage = "install_file";
         runner
-            .run(plan::install_file(&owned.path.join("verified")))
+            .run(plan::install_file(
+                context.release,
+                &owned.path.join("verified"),
+            ))
             .await?;
         report.installation_completed = true;
         stage = "caller_version";
-        version(&runner.run(plan::caller_version()).await?)?;
+        version(
+            &runner.run(plan::caller_version(context.release)).await?,
+            context.release,
+        )?;
         report.caller_version_passed = true;
         stage = "root_version";
-        version(&runner.run(plan::root_version()).await?)?;
+        version(
+            &runner.run(plan::root_version(context.release)).await?,
+            context.release,
+        )?;
         report.root_version_passed = true;
         runner.ready().await
     }
@@ -99,7 +113,7 @@ pub(super) async fn install(context: &Context, runner: &mut impl Executor) -> Re
     let cleanup = cleanup.and(if report.process_cleanup_passed {
         Ok(())
     } else {
-        Err(files::failure("Compose process cleanup unproven."))
+        Err(files::failure("Plugin process cleanup unproven."))
     });
     report.cleanup_passed = cleanup.is_ok();
     if primary.is_ok() && cleanup.is_err() {
@@ -124,18 +138,33 @@ pub(super) async fn install(context: &Context, runner: &mut impl Executor) -> Re
 
 #[cfg(test)]
 mod tests {
+    use crate::install_plugin::Plugin;
+
     #[test]
     fn version_matches_shell_trailing_newline_semantics_without_accepting_other_text() {
-        for value in [b"5.6.0".as_slice(), b"5.6.0\n", b"5.6.0\n\n"] {
-            super::version(value).unwrap();
-        }
-        for value in [
-            b"5.6.0\r\n".as_slice(),
-            b"5.6.0 private",
-            b"5.6.0\nextra",
-            b"\xff",
+        let buildx = "github.com/docker/buildx v0.39.1 334b63fe2bb0f0e89a8fd067704a0d113f57ec25";
+        for (plugin, answer, other) in [
+            (Plugin::Compose, "5.6.0", buildx),
+            (Plugin::Buildx, buildx, "5.6.0"),
         ] {
-            assert!(super::version(value).is_err());
+            let release = plugin.release();
+            for suffix in ["", "\n", "\n\n"] {
+                super::version(format!("{answer}{suffix}").as_bytes(), release).unwrap();
+            }
+            for value in [
+                format!("{answer}\r\n").into_bytes(),
+                format!("{answer} private").into_bytes(),
+                format!("{answer}\nextra").into_bytes(),
+                format!(" {answer}").into_bytes(),
+                answer.as_bytes()[..answer.len() - 1].to_vec(),
+                other.as_bytes().to_vec(),
+                b"\xff".to_vec(),
+                Vec::new(),
+            ] {
+                assert!(super::version(&value, release).is_err(), "{plugin:?}");
+            }
         }
+        let older = "github.com/docker/buildx v0.39.0 334b63fe2bb0f0e89a8fd067704a0d113f57ec25";
+        assert!(super::version(older.as_bytes(), Plugin::Buildx.release()).is_err());
     }
 }

@@ -191,26 +191,34 @@ fn image_review_projection_ignores_unrelated_reviews_and_preserves_complete_reco
 }
 
 /// From `test_manual_load_image_keeps_bootstrap_and_artifact_contract`: the
-/// manual owner follows the bootstrap and keeps the fixed cache and artifact
-/// boundary.
+/// manual owner follows the bootstrap and the pinned Buildx installation, and
+/// keeps the fixed cache and artifact boundary.
 #[test]
 fn manual_load_image_keeps_bootstrap_and_artifact_contract() {
     let image = workflow("load-generator-image.yml");
     assert_eq!(image["jobs"]["image"]["timeout-minutes"], 45);
     let steps = steps(&image, "image");
-    assert_eq!(steps.len(), 5);
+    assert_eq!(steps.len(), 6);
     assert_eq!(steps[0]["with"]["persist-credentials"], false);
     assert_eq!(steps[1]["uses"], TOOLCHAIN_ACTION);
     assert_eq!(steps[1]["with"], json!({"toolchain": "1.99.0"}));
     assert!(lacks(&steps[1], &["if"]));
-    assert!(uses(&steps[2]).starts_with("actions/cache/restore@"));
-    assert_eq!(steps[3]["shell"], "bash");
+    assert_eq!(steps[2]["name"], "Install checksum-pinned Buildx");
     assert_eq!(
-        steps[3]["run"],
+        steps[2]["run"],
+        "cargo run --locked -q -p simplestchat-ci -- install-buildx"
+    );
+    assert_eq!(steps[2]["timeout-minutes"], 3);
+    assert_eq!(steps[2]["shell"], "bash");
+    assert!(lacks(&steps[2], &["if", "continue-on-error", "env"]));
+    assert!(uses(&steps[3]).starts_with("actions/cache/restore@"));
+    assert_eq!(steps[4]["shell"], "bash");
+    assert_eq!(
+        steps[4]["run"],
         "cargo run --locked -q -p simplestchat-ci -- load-generator-image"
     );
-    assert!(lacks(&steps[3], &["if"]));
-    let upload = &steps[4]["with"];
+    assert!(lacks(&steps[4], &["if"]));
+    let upload = &steps[5]["with"];
     assert_eq!(upload["name"], "simplestchat-loadtest-${{ github.sha }}");
     assert_eq!(upload["path"], "${{ runner.temp }}/loadtest-image");
     assert_eq!(upload["if-no-files-found"], "error");

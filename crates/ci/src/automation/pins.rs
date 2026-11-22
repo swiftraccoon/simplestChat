@@ -13,6 +13,7 @@ mod ci_database_check;
 mod ci_verified;
 mod force_release;
 mod host_playbooks;
+mod image_builders;
 mod migration_prepare;
 mod monitoring;
 mod performance_compare_ci;

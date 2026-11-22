@@ -32,6 +32,11 @@ jobs:
           cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
             --target-dir "$RUNNER_TEMP/release-builder-build"
 
+      - name: Install checksum-pinned Buildx
+        timeout-minutes: 3
+        shell: bash
+        run: cargo run --locked -q -p simplestchat-ci -- install-buildx
+
       - name: Build the exact selected commit without publishing or deploying
         timeout-minutes: 65
         run: |

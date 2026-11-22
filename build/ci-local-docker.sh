@@ -30,14 +30,12 @@ case "$(uname -m)" in
     docker_arch=x86_64
     component_arch=amd64
     containerd_sha256=d65eda6a188aac1006848d8060099be88ba9c4bcddbfd9a23a961194710d0dd4
-    buildx_sha256=982ca20490b45ed1ec8d99795974d3d874a358f75938c9c237305010e6b7e548
     docker_sha256=995d1ef289677f74fd58d8d2c35727b6a4ee389c69db8638a3e42d0487aa5b0f
     ;;
   aarch64)
     docker_arch=aarch64
     component_arch=arm64
     containerd_sha256=67f9b0a81c7140aaf15fe69053e88175270fadd33aeaffc1b9017123c1f55cea
-    buildx_sha256=efa38cb7aa7db2dbb9ad049b00b0a9737f66f033626177b5a4e845184ad7ab29
     docker_sha256=76a624e4a8e5da654d1150e808175125efb5a6f1b6aa1cbd9caee18f51047a50
     ;;
 esac
@@ -52,8 +50,9 @@ tar --extract --gzip --file "$docker_tools/docker.tgz" --directory "$docker_tool
   docker/containerd docker/containerd-shim-runc-v2 docker/ctr docker/docker \
   docker/docker-init docker/docker-proxy docker/dockerd docker/runc
 sudo install -m 0755 "$docker_tools"/docker/* /usr/local/bin/
-# Match the maintained host's current upstream components even when Docker's
-# bundled containerd and the runner's Buildx package have not caught up yet.
+# Match the maintained host's current containerd even when Docker's bundled
+# one has not caught up yet. A job that builds an image installs the pinned
+# Buildx afterwards through the same CI step as hosted runners.
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
   --retry 3 --max-time 120 \
   "https://github.com/containerd/containerd/releases/download/v2.4.1/containerd-2.4.1-linux-${component_arch}.tar.gz" \
@@ -62,19 +61,9 @@ printf '%s  %s\n' "$containerd_sha256" "$docker_tools/containerd.tgz" | sha256su
 tar --extract --gzip --file "$docker_tools/containerd.tgz" --directory "$docker_tools" \
   bin/containerd bin/containerd-shim-runc-v2 bin/ctr
 sudo install -m 0755 "$docker_tools"/bin/* /usr/local/bin/
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-  --retry 3 --max-time 120 \
-  "https://github.com/docker/buildx/releases/download/v0.37.2/buildx-v0.37.2.linux-${component_arch}" \
-  --output "$docker_tools/docker-buildx"
-printf '%s  %s\n' "$buildx_sha256" "$docker_tools/docker-buildx" | sha256sum --check --status
-sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins
-sudo install -m 0755 "$docker_tools/docker-buildx" /usr/local/lib/docker/cli-plugins/docker-buildx
 export PATH="/usr/local/bin:${PATH}"
 [[ "$(dockerd --version)" == 'Docker version 29.8.2, build 8af9fe3' ]] || {
   echo 'The authenticated Docker daemon differs from the selected version.' >&2; exit 2;
-}
-[[ "$(docker buildx version)" == 'github.com/docker/buildx v0.37.2 '* ]] || {
-  echo 'The installed Buildx plugin differs from the selected version.' >&2; exit 2;
 }
 # The launcher supplies a private cgroup namespace. Moby's hack/dind pattern
 # moves its root processes into a leaf before delegating resource controllers.
