@@ -6,15 +6,11 @@
 use super::{checkout_file, steps, workflow};
 use serde_json::Value;
 
-const WORKFLOWS: [&str; 8] = [
+const WORKFLOWS: [&str; 4] = [
     "maintenance-host-runtime.yml",
     "maintenance-launcher-runtime.yml",
     "ops-runtime.yml",
-    "release-backup-runtime.yml",
     "release-deploy-runtime.yml",
-    "release-fetch-runtime.yml",
-    "release-receive-runtime.yml",
-    "release-stage-runtime.yml",
 ];
 const TOOLS: &str = "cargo run --locked -q -p simplestchat-security -- tools";
 

@@ -38,6 +38,26 @@ fn write(path: &std::path::Path, bytes: &[u8], mode: u32) {
     fs::write(path, bytes).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
 }
+/// Serve the candidate's current artifact from the inert curl and return the
+/// envelope frame that selects it.
+fn served(cached: &cached::Fixture) -> Vec<u8> {
+    let mut envelope = serde_json::to_value(&cached.selection).unwrap();
+    let sha = files::hex(&Sha256::digest(
+        cached::read(&cached.candidate.join("release-attestation.jsonl")).unwrap(),
+    ));
+    envelope["attestation"] = serde_json::json!({"predicate":cached.claim,
+        "bundleSha256":sha,"verificationSha256":{
+        "image.tar":"d".repeat(64),"sbom.spdx.json":"d".repeat(64),
+        "runtime-proof.json":"d".repeat(64),"vex.openvex.json":"d".repeat(64)}});
+    let mut frame = serde_json::to_vec(&envelope).unwrap();
+    frame.push(b'\n');
+    let zip = cached::read(&cached.candidate.join("artifact.zip")).unwrap();
+    let mut response =
+        format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", zip.len()).into_bytes();
+    response.extend(zip);
+    write(&cached.home.join("raw-response"), &response, 0o600);
+    frame
+}
 struct Fixture {
     cached: cached::Fixture,
     access: Access,
@@ -66,21 +86,7 @@ impl Fixture {
         }
         let ca = base.join("ca.pem");
         write(&ca, b"inert fixed CA; never a trust proof\n", 0o600);
-        let mut envelope = serde_json::to_value(&cached.selection).unwrap();
-        let sha = files::hex(&Sha256::digest(
-            cached::read(&cached.candidate.join("release-attestation.jsonl")).unwrap(),
-        ));
-        envelope["attestation"] = serde_json::json!({"predicate":cached.claim,
-            "bundleSha256":sha,"verificationSha256":{
-            "image.tar":"d".repeat(64),"sbom.spdx.json":"d".repeat(64),
-            "runtime-proof.json":"d".repeat(64),"vex.openvex.json":"d".repeat(64)}});
-        let mut frame = serde_json::to_vec(&envelope).unwrap();
-        frame.push(b'\n');
-        let zip = cached::read(&cached.candidate.join("artifact.zip")).unwrap();
-        let mut response =
-            format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", zip.len()).into_bytes();
-        response.extend(zip);
-        write(&cached.home.join("raw-response"), &response, 0o600);
+        let frame = served(&cached);
         write(
             &cached.bin.join("curl"),
             concat!(
@@ -175,6 +181,65 @@ impl Fixture {
                     .starts_with(b"download.")
             })
     }
+    /// The selected revision's directory below the releases.
+    fn destination(&self) -> PathBuf {
+        self.access
+            .root
+            .join("releases")
+            .join(&self.cached.selection.revision)
+    }
+    /// Replace one candidate member, rebuild the artifact around it and serve
+    /// the rebuilt artifact with an envelope that selects it.
+    fn rebuilt(mut self, name: &str, bytes: &[u8]) -> Self {
+        self.cached
+            .rewrite(name, bytes)
+            .expect("the candidate admits every bound member");
+        self.cached.rebuild().expect("a rebuilt candidate artifact");
+        self.frame = served(&self.cached);
+        self
+    }
+}
+/// The sorted names in one directory, which must exist.
+fn names(path: &std::path::Path) -> Vec<String> {
+    let mut names = fs::read_dir(path)
+        .expect("a fixture directory")
+        .map(|entry| {
+            let name = entry.expect("a readable entry").file_name();
+            name.into_string().expect("fixture names are UTF-8")
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+/// The inode of one fixture file.
+fn inode(path: &std::path::Path) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata(path).expect("a fixture file").ino()
+}
+/// Requires a refused run: no success, the exact class in `phase` of a
+/// failed, unfinalized report that was or was not settled into an attempt,
+/// the channel finished and every original closed by its checked finalizer.
+fn assert_refused(
+    run: &(bool, Option<Cause>, Memory, (usize, usize)),
+    class: &str,
+    phase: &str,
+    settled: bool,
+) -> serde_json::Value {
+    let report = Fixture::report(&run.2);
+    assert!(!run.0, "{report}");
+    assert!(run.2.finished, "{report}");
+    assert!(run.3.0 > 0, "{report}");
+    assert_eq!(
+        run.3.1, 0,
+        "an original was closed without its check: {report}"
+    );
+    assert_eq!(report["failureClass"], class, "{report}");
+    assert_eq!(report["phase"], phase, "{report}");
+    assert_eq!(report["status"], "failed", "{report}");
+    assert_eq!(report["passed"], false, "{report}");
+    assert_eq!(report["finalized"], false, "{report}");
+    assert_eq!(report["settled"], settled, "{report}");
+    report
 }
 #[test]
 fn complete_receive_publishes_both_pins_and_repeats_with_checked_original_closes() {
@@ -791,4 +856,206 @@ fn selected_publication_socket_is_refused_by_exact_regular_type_before_open() {
     assert_eq!(primary, Some(Cause::Policy));
     assert_eq!(final_owner, Err(Cause::Policy));
     assert_eq!(captures.1, 0);
+}
+
+/// Another holder of the workload lock refuses the receive in preflight as
+/// `filesystem_error`, before a revision directory or attempt exists; once
+/// that holder lets go, the same host receives.
+#[test]
+fn a_held_workload_lock_refuses_in_preflight_before_any_attempt() {
+    let fixture = Fixture::new(false);
+    let path = fixture.access.work.join("workload.lock");
+    write(&path, b"", 0o600);
+    let holder = fs::File::open(&path).expect("the lock file this test wrote");
+    let held = rustix::fs::flock(
+        &holder,
+        rustix::fs::FlockOperation::NonBlockingLockExclusive,
+    );
+    let refused = fixture.run();
+    let releases = names(&fixture.access.root.join("releases"));
+    let released = nix::unistd::close(holder);
+    let admitted = fixture.run();
+    drop(fixture);
+    assert!(held.is_ok() && released.is_ok());
+    let report = assert_refused(&refused, "filesystem_error", "preflight", false);
+    assert_eq!(refused.1, Some(Cause::Io));
+    assert_eq!(report["evidence"], serde_json::Value::Null);
+    assert_eq!(report["downloadedBytes"], 0);
+    assert!(releases.is_empty(), "{releases:?}");
+    assert!(admitted.0, "{}", Fixture::report(&admitted.2));
+}
+
+/// An unfinished operation journal, `current.json` in the work directory or
+/// `release-state.json` in the root, refuses the receive in preflight as
+/// `unfinished_operation` and is left as it was; a finalized journal in the
+/// same place admits the receive.
+#[test]
+fn an_unfinished_journal_in_the_work_directory_or_root_refuses_in_preflight() {
+    let unfinished = b"{\"schemaVersion\":1,\"finalized\":false}\n";
+    let mut facts = Vec::new();
+    for (in_work, name) in [(true, "current.json"), (false, "release-state.json")] {
+        let fixture = Fixture::new(false);
+        let path = if in_work {
+            fixture.access.work.join(name)
+        } else {
+            fixture.access.root.join(name)
+        };
+        write(&path, unfinished, 0o600);
+        let refused = fixture.run();
+        let releases = names(&fixture.access.root.join("releases"));
+        let kept = fs::read(&path).expect("the journal this test wrote");
+        write(&path, b"{\"schemaVersion\":1,\"finalized\":true}\n", 0o600);
+        let admitted = fixture.run();
+        drop(fixture);
+        facts.push((name, refused, releases, kept, admitted));
+    }
+    for (name, refused, releases, kept, admitted) in facts {
+        let report = assert_refused(&refused, "unfinished_operation", "preflight", false);
+        assert_eq!(refused.1, Some(Cause::Policy), "{name}");
+        assert_eq!(report["evidence"], serde_json::Value::Null, "{name}");
+        assert!(releases.is_empty(), "{name}: {releases:?}");
+        assert_eq!(kept, unfinished, "{name}");
+        assert!(admitted.0, "{name}: {}", Fixture::report(&admitted.2));
+    }
+}
+
+/// A publication target that is not the verified member is refused in publish
+/// as `retained_artifact_differs` and never replaced: a foreign image or a
+/// same-length foreign manifest left where an earlier receive published, a
+/// foreign image before any publication (both names are checked before
+/// either own link, so the manifest stays unpublished), and a foreign
+/// manifest that appears just before the own link.
+#[test]
+fn a_foreign_or_racing_publication_target_is_refused_and_never_replaced() {
+    let mut facts = Vec::new();
+    for case in [
+        "foreign-image",
+        "foreign-manifest",
+        "first-foreign-image",
+        "racing",
+    ] {
+        let mut fixture = Fixture::new(false);
+        let destination = fixture.destination();
+        // The racing fault places its foreign manifest, so the image is the
+        // name that must stay unpublished.
+        let (name, other) = if matches!(case, "foreign-manifest" | "racing") {
+            ("release.json", "image.tar")
+        } else {
+            ("image.tar", "release.json")
+        };
+        let mut foreign = b"owned receive conflict fixture\n".to_vec();
+        if case == "first-foreign-image" {
+            fs::create_dir(&destination).expect("an absent revision directory");
+            fs::set_permissions(&destination, fs::Permissions::from_mode(0o700))
+                .expect("a private revision directory");
+            write(&destination.join(name), &foreign, 0o600);
+        } else if case == "racing" {
+            fixture.access.fault = Some(Fault::RaceDifferent);
+            foreign = b"racing-different".to_vec();
+        } else {
+            let first = fixture.run();
+            assert!(first.0, "{}", Fixture::report(&first.2));
+            let published = destination.join(name);
+            if case == "foreign-manifest" {
+                foreign = fs::read(&published).expect("the published manifest");
+                foreign[0] ^= 1;
+            }
+            fs::remove_file(&published).expect("the published name");
+            write(&published, &foreign, 0o600);
+        }
+        let before = (destination.join(other).exists()).then(|| inode(&destination.join(other)));
+        let held = (case != "racing").then(|| inode(&destination.join(name)));
+        let refused = fixture.run();
+        let report = Fixture::report(&refused.2);
+        let evidence = PathBuf::from(report["evidence"].as_str().expect("a settled attempt"));
+        let journal: serde_json::Value = serde_json::from_slice(
+            &cached::read(&evidence.join("fetch-outcome.json")).expect("the attempt's journal"),
+        )
+        .expect("a JSON journal");
+        let after = (
+            fs::read(destination.join(name)).expect("the foreign target"),
+            (case != "racing").then(|| inode(&destination.join(name))),
+            (destination.join(other).exists()).then(|| inode(&destination.join(other))),
+        );
+        drop(fixture);
+        facts.push((case, refused, journal, foreign, held, before, after));
+    }
+    for (case, refused, journal, foreign, held, before, after) in facts {
+        let report = assert_refused(&refused, "retained_artifact_differs", "publish", true);
+        assert_eq!(
+            journal["failureClass"], "retained_artifact_differs",
+            "{case}"
+        );
+        assert_eq!(journal["phase"], "publish", "{case}");
+        assert_eq!(journal["settled"], true, "{case}");
+        assert_eq!(after.0, foreign, "{case}: {report}");
+        assert_eq!(after.1, held, "{case}");
+        // The pair's other name is as the earlier receive left it, and absent
+        // when nothing was published before.
+        assert_eq!(after.2, before, "{case}");
+        assert_eq!(before.is_some(), case.starts_with("foreign-"), "{case}");
+    }
+}
+
+/// An envelope whose archive checksum is not the served archive's refuses in
+/// download as `zip_checksum_mismatch`: the attempt keeps the received bytes
+/// beside its envelope and journal, nothing is extracted and nothing is
+/// published.
+#[test]
+fn a_wrong_archive_checksum_refuses_in_download_and_publishes_nothing() {
+    let mut fixture = Fixture::new(false);
+    let served = fixture.cached.selection.zip_sha256.clone();
+    let wrong = if served == "0".repeat(64) { "1" } else { "0" }.repeat(64);
+    let mut envelope: serde_json::Value =
+        serde_json::from_slice(&fixture.frame).expect("the fixture's own envelope");
+    envelope["zipSha256"] = wrong.clone().into();
+    fixture.frame = serde_json::to_vec(&envelope).expect("an encodable envelope");
+    fixture.frame.push(b'\n');
+    let refused = fixture.run();
+    let attempt = fixture.attempt().expect("the refused attempt");
+    let kept = names(&attempt);
+    let received = files::hex(&Sha256::digest(
+        cached::read(&attempt.join("artifact.zip")).expect("the received archive"),
+    ));
+    let destination = names(&fixture.destination());
+    drop(fixture);
+    let report = assert_refused(&refused, "zip_checksum_mismatch", "download", true);
+    assert_eq!(report["zipSha256"], wrong);
+    assert_eq!(
+        kept,
+        ["artifact.zip", "envelope.json", "fetch-outcome.json"]
+    );
+    assert_eq!(received, served);
+    assert_eq!(destination.len(), 1, "{destination:?}");
+    assert!(destination[0].starts_with("download."), "{destination:?}");
+}
+
+/// A manifest whose revision is not the selected one refuses in verify as
+/// `release_revision_mismatch`, although the build outcome and source record
+/// name the selected revision; nothing is published.
+#[test]
+fn a_manifest_for_another_revision_refuses_in_verify_and_publishes_nothing() {
+    let fixture = Fixture::new(false);
+    let selected = fixture.cached.selection.revision.clone();
+    let other = "b".repeat(40);
+    let mut manifest: serde_json::Value = serde_json::from_slice(
+        &cached::read(&fixture.cached.candidate.join("release.json"))
+            .expect("the candidate manifest"),
+    )
+    .expect("a JSON manifest");
+    manifest["revision"] = other.clone().into();
+    manifest["imageTag"] = format!("simplestchat-release/production:{other}").into();
+    let manifest = serde_json::to_vec(&manifest).expect("an encodable manifest");
+    let fixture = fixture.rebuilt("release.json", &manifest);
+    let refused = fixture.run();
+    let attempt = fixture.attempt().expect("the refused attempt");
+    let extracted = cached::read(&attempt.join("release.json")).expect("the extracted manifest");
+    let destination = names(&fixture.destination());
+    drop(fixture);
+    assert_ne!(other, selected);
+    let report = assert_refused(&refused, "release_revision_mismatch", "verify", true);
+    assert_eq!(report["revision"], selected);
+    assert_eq!(extracted, manifest);
+    assert_eq!(destination.len(), 1, "{destination:?}");
+    assert!(destination[0].starts_with("download."), "{destination:?}");
 }

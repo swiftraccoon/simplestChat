@@ -26,6 +26,10 @@ the original paths and includes redaction as well.
 
 ## GitHub Actions portability findings
 
+The installer the `superfluous-actions` records of this section review is the
+immutable `dtolnay/rust-toolchain` action at
+`89b12181fb390509a0842a86cc55eeb8eb928c1d`; its reviewed source has SHA-256
+`88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`.
 The later server signing-input port adds one exact installer review at
 `ci.yml#jobs/release-prepare/steps/1/uses`. It uses that same immutable action and
 Rust 1.99.0 after credential-free checkout. Its job has only contents/read and
@@ -262,22 +266,6 @@ at this new location. Artifact, provenance, source, runtime and finalization
 checks remain blocking. The `actions: read` permission is documented inline for
 acquiring the exact selected CI run and its artifact; it receives no exception.
 This review makes no claim about cold hosted compilation or guest runtime.
-
-The manual native-fetch proof adds one exact informational installer review at
-`release-fetch-runtime.yml#jobs/release-fetch-runtime/steps/2/uses`, reviewed
-on 2026-10-24. The same immutable action source was re-read. Its explicit
-`toolchain: 1.99.0` reaches `rustup toolchain install` unchanged, and its fixed
-`targets: x86_64-unknown-linux-gnu` becomes the target argument. Installation
-and compilation precede the sole read-only credential leaf. Credential-free
-checkout and the fixed repository/main dispatch guard retain the earlier trust
-boundary; no workflow input, artifact or cache chooses installer arguments.
-The official HTTPS rustup bootstrap remains without an independent installer
-checksum claim. No signing or OIDC permission is granted. This location retains
-the existing feature fingerprint and 2026-11-29 expiry, and covers only the
-informational redundant-installer finding. Source, signed-artifact, host-key,
-process/resource, actual runtime and finalization checks remain blocking.
-Source-built GNU execution does not establish authenticated musl distribution
-or authorize an operational caller switch.
 
 ## Account-room action reference
 
@@ -790,32 +778,6 @@ inventoried before explicit closes and bounded fixed public replay. The
 [Cargo directory-source contract](https://doc.rust-lang.org/cargo/reference/source-replacement.html)
 does not authenticate registry origin or establish a resolved build graph,
 toolchain readiness, compiler sandbox or complete filesystem/network isolation.
-
-The manual signed receiver proof additionally uses the same immutable Rust
-installer at
-`.github/workflows/release-receive-runtime.yml#jobs/release-receive-runtime/steps/2/uses`.
-The reviewed action source remains
-`89b12181fb390509a0842a86cc55eeb8eb928c1d`, SHA-256
-`88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`.
-It selects fixed Rust 1.99.0 and the GNU target before controller compilation and
-the sole read-only token step. Public run and artifact selectors cannot choose
-installer source or options. Checkout credentials are disabled; the workflow
-has no signing or OIDC permission. The official HTTPS rustup bootstrap remains
-a trust boundary, without an independent checksum claim for downloaded installer
-bytes. The exact informational review expires on 2026-11-29. This source review
-provides no evidence that the new receiver VM proof has actually executed.
-
-The manual signed staging proof uses the same immutable Rust installer at
-`.github/workflows/release-stage-runtime.yml#jobs/release-stage-runtime/steps/2/uses`.
-The action remains `89b12181fb390509a0842a86cc55eeb8eb928c1d`, with reviewed
-source SHA-256 `88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`.
-Fixed Rust 1.99.0 and its GNU target are selected before compiling either
-controller and before the sole read-only token leaf. Checkout credentials are
-disabled, public IDs cannot choose installer options, and there is no signing
-or OIDC permission. Official HTTPS rustup bootstrap remains a trust boundary;
-no independent downloaded-installer checksum is claimed. This exact
-informational location review expires on 2026-11-29 and establishes no actual
-Stage VM execution.
 
 The `automation-references` job and its
 `ci.yml#jobs/automation-references/steps/2/uses` toolchain step were removed on

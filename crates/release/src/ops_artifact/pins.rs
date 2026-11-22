@@ -1,15 +1,11 @@
 //! Workflow pins, one file per subject. A file carried over from a Python test
 //! module takes that module's name and holds only its assertions: each pin
 //! reads the same workflow, selects the same steps the same way and compares
-//! the same text. `release_runtime_controllers` is not carried over; it pins
-//! each release runtime workflow's controller build to the path its Python
-//! helper opens.
+//! the same text.
 
 mod ops_artifact_workflow;
 mod ops_runtime_workflow;
 mod pinned_gh_installation;
-mod release_fetch_runtime_workflow;
-mod release_runtime_controllers;
 
 use serde_json::Value;
 use std::path::Path;

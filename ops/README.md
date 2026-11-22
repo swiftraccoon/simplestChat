@@ -2049,8 +2049,8 @@ The test replays them request by request: every command must be the recorded
 one, and every invocation must leave the recorded selection, evidence,
 downloads and journal. The isolated verification here serves the drill;
 `release backup verify` remains the verifier of a release attempt's backup,
-and `restore_verify.py` stays in the tree, frozen, for the restore proofs'
-guests that still import it.
+and `restore_verify.py` stays in the tree, frozen, for the infrastructure
+proof's guest that still imports it.
 
 ## Prepared reboot
 
@@ -3106,7 +3106,7 @@ uses the retained fixed `/etc/ssl/certs/ca-certificates.crt`, an owned empty cap
 and disabled native CA discovery. It runs HTTP/1.1 with TLS 1.2 minimum, fixed
 `simplestchat-release-receive` User-Agent, no ambient config/proxy/netrc/redirect/retry or
 decompression role, and carries the opaque URL only in bounded stdin config.
-Version/backend/CA exclusivity still require actual free-VM evidence. Curl's
+No test establishes version, backend or CA exclusivity on a real host. Curl's
 fifteen-second connect limit and the original native whole/body clock do not
 recreate urllib's fifteen-second per-socket idle timer. No low-speed floor is
 used. Raw first CE/CL values are checked, but malformed/conflicting HTTP framing
@@ -3122,7 +3122,14 @@ Ready, partial output or a complete earlier report, including a late failure.
 The release playbook reaches this command through the controller's
 `release fetch`, after its signed delivery installed the executable. Source
 compilation and inert comparison do not authenticate a Linux musl executable on
-the target; that authentication is the delivery's.
+the target; that authentication is the delivery's. The inert tests in the
+[testing guide](../docs/testing.md#native-host-receiver-checks) drive its
+refusals of a held workload lock (`filesystem_error`), an unfinished journal in
+the work directory or the root (`unfinished_operation`), a foreign or racing
+publication target (`retained_artifact_differs`), a wrong archive checksum
+(`zip_checksum_mismatch`) and a manifest for another revision
+(`release_revision_mismatch`). No test runs the receiver on a real host or
+through OpenSSH.
 
 
 ## Explicit native host staging
@@ -3213,9 +3220,9 @@ separate authenticated native callers. First installation and
 identical repeat remain distinct from an explicit Ops upgrade.
 Source implementation and inert fixtures do not establish Docker
 execution, signed musl readiness or measured caller budgets.
-The separate free Debian KVM proof authenticates both artifact contracts,
-executes the installed native stage first/repeat and checks original publication,
-image identity, validator retirement and all final owners.
+The required CI release fixture stages each candidate with the job's
+source-built command against real Docker on every push, before `release
+deploy`; the signed musl build runs on a host only in a real release.
 
 
 ### Native application-only host deployment
@@ -3314,11 +3321,6 @@ known cleanup inside B, output, runtime/mask restoration and signal finalization
 A final nonzero status invalidates any earlier line or private passive record.
 Kernel/daemon stalls are outside a hard wall guarantee. `--help` and the inherited
 limited-scope `--licenses` route run before host effects.
-
-Actual authenticated signed-musl whole-host restore proof is owned by the
-optional three-case disposable KVM fixture
-(`.github/workflows/release-backup-runtime.yml`). Its source and inert checks
-pass; actual runtime proof and any operational caller switch remain pending.
 
 The native test commands and scope are in the
 [testing guide](../docs/testing.md#native-standalone-restore-verification).

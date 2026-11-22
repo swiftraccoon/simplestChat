@@ -2983,15 +2983,12 @@ result and status 1. Invalid native-only whole/finalization budgets are usage er
 The native path profile rejects an explicit-empty cached directory; it never
 turns that supplied value into a fresh download.
 
-Keep these fixtures separate from the actual disposable-VM SSH proof. That
-proof must bind the selected source-built executable, signed server artifact,
-generated guest/client identities and pinned known-host entry; execute both
-local-cache and local-download branches through real OpenSSH and the same
-source-built executable's `release receive` in the guest; compare original
-published hashes and inodes; and finish all known
-VM, process, pipe and file owners before reporting success. Source-built Linux
-GNU execution is separate evidence from authenticated musl distribution. An
-already acquired archive alone does not exercise SSH or the receiver's download.
+These fixtures start no OpenSSH session and no receiver. The release playbook
+runs this command, as `simplestchat-release fetch`, through real OpenSSH into
+the host's installed `release receive` in every signed routine release, and the
+migration preparation does the same for its destination. Both pass
+`--verified-directory`, so the branch that downloads the bundle itself runs only
+in these fixtures.
 
 ## Native host receiver checks
 
@@ -3020,13 +3017,14 @@ User-Agent, parser bounds and socket-idle behavior are native-profile
 differences. These tests do not establish unrestricted Python compatibility or
 actual TLS behavior.
 
-The separate manual signed musl runtime proof
-(`.github/workflows/release-receive-runtime.yml`) authenticates both artifacts, installs the retained Ops executable in a free
-Debian KVM guest, and exercises actual SSH fetch with the native host receiver.
-It requires positive repeat-publication identity plus lock, journal, conflicting
-target and wrong-checksum negatives. Its one 1800-second keeper includes both
-acquisitions and reserves 120 seconds for settlement. Source/inert checks alone
-do not establish a successful workflow run, signed musl execution or deployment.
+These inert checks are the receiver's only tests. They drive its refusals of a
+held workload lock (`filesystem_error`), an unfinished journal in the work
+directory or the root (`unfinished_operation`), a foreign or racing publication
+target (`retained_artifact_differs`), a wrong archive checksum
+(`zip_checksum_mismatch`) and a manifest for another revision
+(`release_revision_mismatch`). No test runs the receiver on a real host or
+through OpenSSH; a signed routine release runs the signed musl receiver on the
+host, reached over SSH by the controller's `release fetch`.
 
 ## Native host staging checks
 
@@ -3048,12 +3046,11 @@ fences. The 40-second validator tail stays inside the original body, leaving
 finalization for local records and runtime retirement. Small accepted budgets
 can refuse before container creation.
 
-The separate manual signed musl staging proof
-(`.github/workflows/release-stage-runtime.yml`) authenticates both artifacts and exercises actual Docker first stage and repeat
-in one free Debian KVM guest. Native actor history and the separately inspected
-checksum probe have distinct claims; the probe establishes its own isolation.
-Source/inert checks alone do not establish signed Stage execution, production
-application deployment, a database migration, rollback or caller cutover.
+The required CI release fixture ([app-only releases and
+rollback](#app-only-releases-and-rollback)) runs the job's source-built command
+against real Docker on every push: it stages each candidate before `release
+deploy` replaces the running release. The signed musl build runs on a host only
+in a real release.
 
 
 ## Native deploy and rollback fixture
@@ -3120,18 +3117,6 @@ cargo test --locked -p simplestchat-ops --test release_backup_cli
 
 The ordinary Ops gate runs `release_backup_cli`; full Python discovery retains
 the producer regressions.
-
-The optional signed backup-verification runtime fixture
-(`.github/workflows/release-backup-runtime.yml`) adds three independent free Debian KVM cases: current data, a valid historical
-subset from a failed release, and a restorable privacy-invalid backup. It reuses
-the authenticated Ops installation and exercises the same installed musl binary
-with actual PostgreSQL. Each case retains its original 1800/120 fixture budget,
-360-second setup ceiling and one explicit native 1200/120 invocation. The
-[three-case signed run at `1f5098d`](https://github.com/swiftraccoon/simplestChat/actions/runs/40232524502)
-passed with actual installed-musl restore/amcheck, the expected privacy SQL
-refusal, preserved source state and complete fixture/VM cleanup. The proof guide
-records its exact artifacts, earlier failed trial and process-lifecycle limits.
-Existing operational Python and nightly/offsite callers are unchanged.
 
 
 ## Optional maintenance prerequisite experiments
