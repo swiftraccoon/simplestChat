@@ -261,10 +261,6 @@ async fn successful_audit_uses_validated_path_with_inherited_output_and_retires_
             "--deny",
             "unsound",
             "--ignore",
-            "RUSTSEC-2021-0145",
-            "--ignore",
-            "RUSTSEC-2026-0097",
-            "--ignore",
             "RUSTSEC-2026-0459"
         ]
     );

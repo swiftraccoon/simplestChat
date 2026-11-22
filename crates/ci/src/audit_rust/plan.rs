@@ -73,17 +73,13 @@ pub(super) fn reference(path: &Path, install: bool, deadline: Instant) -> Result
 }
 pub(super) fn audit(executable: Arc<Executable>, deadline: Instant) -> Result<Command> {
     // SQLx 0.9 removed the optional rsa lockfile entry; leave that advisory
-    // unsuppressed. These atty/rand exclusions affect mediasoup-sys build tools.
+    // unsuppressed.
     let mut command = Command::capture(
         Program::CargoAudit,
         &[
             "audit",
             "--deny",
             "unsound",
-            "--ignore",
-            "RUSTSEC-2021-0145",
-            "--ignore",
-            "RUSTSEC-2026-0097",
             // libsqlite3-sys is a never-compiled lockfile entry of SQLx's optional
             // SQLite driver (security/reviews.md). This ignore and the fast gate's
             // exact libsqlite3-sys@0.37.0 scope bind the advisory and the version;

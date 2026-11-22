@@ -1,7 +1,8 @@
 # Fedora base-image secret findings
 
-Reviewed **2026-09-30** by agents under the owner-authorized security rollout.
-Owner: `swiftraccoon`. Review expiry: **2026-11-29**.
+Reviewed **2026-09-30** by agents under the owner-authorized security rollout and
+[re-reviewed **2026-11-22**](reviews.md#re-review-of-every-record-2026-11-22).
+Owner: `swiftraccoon`. Review expiry: **2027-02-20**.
 
 The [retained evidence](secret-evidence/fedora-base-2026-09-30.json) supports
 15 exact Gitleaks findings in five files from the pinned Fedora 44 amd64 base

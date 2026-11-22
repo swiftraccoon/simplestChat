@@ -1930,8 +1930,7 @@ snapshot, not descriptor execution or a lock against a compromised same-UID
 runner.
 
 The scanner retains inherited audit output and exactly `audit --deny unsound`,
-with only `RUSTSEC-2021-0145` and `RUSTSEC-2026-0097` excluded for mediasoup-sys
-build tools and `RUSTSEC-2026-0459` for the never-compiled `libsqlite3-sys`
+with only `RUSTSEC-2026-0459` excluded, for the never-compiled `libsqlite3-sys`
 lockfile entry of SQLx's optional SQLite driver (see `security/reviews.md`);
 the workspace test `libsqlite3_sys_stays_outside_the_linux_build_graph` fails
 if that crate enters the x86_64 Linux gnu or musl build graph. The removed

@@ -4,9 +4,10 @@ These notes support the exact records in `exceptions.json`. They are not a
 blanket acceptance of a scanner, package, directory or severity. The initial
 review uses the supplied security assessment and the checked-out sources at
 `2bd6d38215ddc4217b3f6cde0bd8fa30d93ce1cb`, with new scanner results reviewed on
-2026-09-30. Records expire on 2026-11-29 and remain visible in gate summaries.
-The repository owner is responsible for replacing the dependency or renewing a
-specific assessment with current evidence.
+2026-09-30. Records expire on 2027-02-20, the date the
+[re-review of 2026-11-22](#re-review-of-every-record-2026-11-22) set, and remain
+visible in gate summaries. The repository owner is responsible for replacing the
+dependency or renewing a specific assessment with current evidence.
 
 ## Public source fixtures
 
@@ -785,3 +786,92 @@ The `automation-references` job and its
 retired from the active ledger. The other `dtolnay/rust-toolchain` reviews in
 this section are unchanged; the required-job policy now demands ten
 correctness/security jobs before signing.
+
+## Re-review of every record (2026-11-22)
+
+Every record of `exceptions.json` and the runtime source review were re-reviewed
+before their 2026-11-29 expiry. Each record's exact scanner, fingerprint and scope
+was compared with current scanner output: the fast gate at
+`a8e9ce1468c8741b4f2b9b17f8c1fd5d68eb24e6` for Zizmor, Cargo Audit (advisory
+database `55e1c3dfbd834237a05bbbf7b50ba3b5be27b662`, all 484 locked packages) and
+the Gitleaks tree scan with its public-fixture allowlists; Rust CodeQL 2.27.1 at
+the same revision; and the hosted run of
+`174905c2ef523d4ff9c36371c57665e35ae5732a` for the JavaScript/TypeScript, Python
+and Actions CodeQL policy reports and for the image tier of the `linux/amd64`
+image `sha256:fcf0cf801b5475a630bfd5fe916980d955f25f8aa816ec28261bf9953b69b410`
+(every layer's secret findings and the licences of all 418 packages). The commit
+between the two revisions changes no JavaScript, Dockerfile or server source: it
+deletes Python files, workflows and playbooks and edits Rust tooling and its
+tests. A record is active when that output names its exact identity, and dormant
+when the scanner covered its scope and named nothing for it, or when its scope no
+longer exists in the checkout; a dormant record leaves the ledger. A record whose
+scope exists but no output covers is unverified and is renewed. Every kept record
+expires on **2027-02-20**; no fingerprint, scope, owner, rationale or reachability
+text changed.
+
+| Scanner | Records | Active | Unverified | Removed | Kept |
+| --- | --- | --- | --- | --- | --- |
+| codeql | 99 | 39 | 0 | 60 | 39 |
+| zizmor | 31 | 31 | 0 | 0 | 31 |
+| gitleaks | 30 | 30 | 0 | 0 | 30 |
+| image-license | 30 | 28 | 1 | 1 | 29 |
+| cargo-audit | 8 | 4 | 0 | 4 | 4 |
+| Total | 198 | 132 | 1 | 65 | 133 |
+
+All 31 Zizmor findings match their records. The self-repository and trigger
+reviews still describe their workflows: each local composite follows a
+credential-free checkout that nothing replaces, and the two `workflow_run`
+triggers keep their repository, branch, event and permission guards. Both source
+public fixtures are still allowlisted by their reviewed entries and still hold
+their values. The image outcome waives all 28 reviewed secret regions and 28 of
+the licence records. The 39 active CodeQL records bind the current bytes of their
+files, so every flagged line holds its reviewed text. Cargo Audit still reports
+`libsqlite3-sys` 0.37.0, `basic-toml` 0.1.10, `chrono` 0.4.45 and `paste` 0.1.18.
+No patched release of the last three exists; `libsqlite3-sys` 0.39.0 fixes
+RUSTSEC-2026-0459, but `sqlx-sqlite` 0.9.0, still the newest release, requires
+`>=0.30.1, <0.38.0`.
+
+Removed records:
+
+- Cargo Audit RUSTSEC-2024-0375 and RUSTSEC-2021-0145 (`atty` 0.2.14),
+  RUSTSEC-2024-0384 (`instant` 0.1.13) and RUSTSEC-2026-0097 (`rand` 0.7.3): none
+  of these packages is locked any more. The hosted Rust audit ignores only
+  RUSTSEC-2026-0459.
+- CodeQL alerts 1, 4 and 9–18 (JavaScript), 19–23, 28, 29, 31 and 32 (Python)
+  and 59–65 (Rust). The files of alerts 19–23, 28 and 29 no longer exist. The
+  benchmark harnesses' `js/http-to-file-access` findings (alerts 9–18) are still
+  reported, at other lines and file digests, as unreviewed Medium advisory
+  findings, which do not block. The other identities produce no finding. The
+  [review JSON](codeql-review-2026-09-30.json) keeps each observation as it was
+  reviewed, with disposition `retired`, and its test refuses an exception for any
+  of them.
+- The 32 native CodeQL records (alerts 70–101). Each binds a member of
+  `vendor/mediasoup-sys-0.17.0`, which is no longer in the checkout (the vendored
+  worker is `vendor/mediasoup-sys-0.19.0`), so no scan of this repository can
+  report those scopes again. The
+  [native review JSON](codeql-native-review-2026-09-30.json) keeps each
+  observation with disposition `retired`, and its test refuses an exception for
+  any of them. Analysis of `vendor/` remains an optional local check. A local
+  `--include-vendor` run reports every native finding of the 0.19.0 tree as
+  unreviewed; that was already so before this re-review, because the 0.17.0
+  scopes could not match them.
+- The `util-linux-core` 2.41.5-1 licence record: the image holds 2.41.6-1, waived
+  by its own record. The 2.41.5 row of the canonical runtime evidence stays
+  historical; the licence tests substitute the 2.41.6 package and refuse the
+  2.41.5 scope.
+
+The one unverified record is the `aarch64` `libstdc++-static` 16.2.1-2 licence
+record: no ARM image was scanned.
+
+The [runtime source review](runtime-source-review.json) binds the current `src`
+tree, `Cargo.toml`, `Cargo.lock` and `vendor/integrity.json`; the vendored
+mediasoup trees, native inventory and profile files are unchanged. The production
+source delta since its previous binding adds no process execution, dynamic
+loading, locale conversion or outbound destination, and the server's Linux
+dependency graph only loses `jsonwebtoken`, `signature` and `zeroize_derive` and
+takes two patch releases. That review was made on 2026-11-22 and expires on
+**2027-01-21**, the 60 days a source review may cover.
+
+The dated `review` blocks inside the licence and secret evidence files keep their
+original dates: no gate reads them, and later evidence binds earlier files by
+SHA-256.

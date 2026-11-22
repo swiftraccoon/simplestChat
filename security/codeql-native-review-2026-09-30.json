@@ -31,7 +31,7 @@
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:586-610",
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:646-668"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/70",
       "severity": "high",
       "state": "open",
@@ -63,7 +63,7 @@
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:586-610",
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:646-668"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/71",
       "severity": "high",
       "state": "open",
@@ -95,7 +95,7 @@
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:586-610",
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:646-668"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/72",
       "severity": "high",
       "state": "open",
@@ -127,7 +127,7 @@
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:586-610",
         "abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:646-668"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/73",
       "severity": "high",
       "state": "open",
@@ -160,7 +160,7 @@
         "abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc:71-92",
         "abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_posix.cc:128-148"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/74",
       "severity": "high",
       "state": "open",
@@ -193,7 +193,7 @@
         "abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc:1284-1304",
         "abseil-cpp-20240722.2/absl/strings/internal/str_format/float_conversion.cc:1335-1360"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/75",
       "severity": "high",
       "state": "open",
@@ -225,7 +225,7 @@
         "libuv-v1.52.1/src/inet.c:26",
         "libuv-v1.52.1/src/inet.c:62-145"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/76",
       "severity": "high",
       "state": "open",
@@ -256,7 +256,7 @@
       "supportingSource": [
         "abseil-cpp-20240722.2/absl/strings/substitute.cc:112-130"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/77",
       "severity": "high",
       "state": "open",
@@ -287,7 +287,7 @@
       "supportingSource": [
         "libuv-v1.52.1/src/unix/linux.c:313-364"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/78",
       "severity": "high",
       "state": "open",
@@ -318,7 +318,7 @@
       "supportingSource": [
         "libuv-v1.52.1/src/unix/linux.c:313-364"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/79",
       "severity": "high",
       "state": "open",
@@ -349,7 +349,7 @@
       "supportingSource": [
         "libuv-v1.52.1/src/unix/linux.c:313-364"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/80",
       "severity": "high",
       "state": "open",
@@ -380,7 +380,7 @@
       "supportingSource": [
         "abseil-cpp-20240722.2/absl/time/internal/cctz/src/time_zone_info.cc:429-456"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/81",
       "severity": "high",
       "state": "open",
@@ -414,7 +414,7 @@
         "flatbuffers-24.3.25/meson.build:130-172",
         "vendor/mediasoup-sys-0.17.0/fbs/meson.build:1-52"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/82",
       "severity": "high",
       "state": "open",
@@ -447,7 +447,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/83",
       "severity": "high",
       "state": "open",
@@ -480,7 +480,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/84",
       "severity": "high",
       "state": "open",
@@ -513,7 +513,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/85",
       "severity": "high",
       "state": "open",
@@ -546,7 +546,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/86",
       "severity": "high",
       "state": "open",
@@ -579,7 +579,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/87",
       "severity": "high",
       "state": "open",
@@ -612,7 +612,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/88",
       "severity": "high",
       "state": "open",
@@ -645,7 +645,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/89",
       "severity": "high",
       "state": "open",
@@ -678,7 +678,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/90",
       "severity": "high",
       "state": "open",
@@ -711,7 +711,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/91",
       "severity": "high",
       "state": "open",
@@ -744,7 +744,7 @@
         "libuv-v1.52.1/src/unix/linux.c:2129-2269",
         "libuv-v1.52.1/src/unix/linux.c:2290-2440"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/92",
       "severity": "high",
       "state": "open",
@@ -776,7 +776,7 @@
         "abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h:1154-1189",
         "abseil-cpp-20240722.2/absl/container/internal/raw_hash_set.h:1386-1395"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/93",
       "severity": "high",
       "state": "open",
@@ -808,7 +808,7 @@
         "flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h:1169-1207",
         "flatbuffers-24.3.25/include/flatbuffers/flexbuffers.h:1329-1334"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/94",
       "severity": "high",
       "state": "open",
@@ -842,7 +842,7 @@
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.h:608-612",
         "abseil-cpp-20240722.2/absl/strings/internal/cord_internal.h:280-285"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/95",
       "severity": "critical",
       "state": "open",
@@ -877,7 +877,7 @@
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.cc:98-125",
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.cc:214-223"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/96",
       "severity": "critical",
       "state": "open",
@@ -912,7 +912,7 @@
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.cc:98-125",
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_btree.cc:214-223"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/97",
       "severity": "critical",
       "state": "open",
@@ -945,7 +945,7 @@
         "abseil-cpp-20240722.2/absl/strings/internal/cord_rep_crc.h:49-92",
         "abseil-cpp-20240722.2/absl/strings/internal/cord_internal.cc:44-60"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/98",
       "severity": "critical",
       "state": "open",
@@ -980,7 +980,7 @@
         "libuv-v1.52.1/src/unix/signal.c:348",
         "libuv-v1.52.1/src/uv-common.h:331-341"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/99",
       "severity": "critical",
       "state": "open",
@@ -1015,7 +1015,7 @@
         "libuv-v1.52.1/src/unix/signal.c:348",
         "libuv-v1.52.1/src/uv-common.h:331-341"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/100",
       "severity": "critical",
       "state": "open",
@@ -1050,7 +1050,7 @@
         "libuv-v1.52.1/src/unix/signal.c:348",
         "libuv-v1.52.1/src/uv-common.h:331-341"
       ],
-      "disposition": "false-positive",
+      "disposition": "retired",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/101",
       "severity": "critical",
       "state": "open",

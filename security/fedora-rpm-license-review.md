@@ -49,7 +49,7 @@ The probe exposes two declared records whose `spdxExpression` is empty:
   recorded key fingerprint, version and PURL. It is not a general software
   exemption based on the package name.
 
-Both reviews expire on 2026-11-29. Their `license-raw-v2:` fingerprint hashes the
+Both reviews expire on 2027-02-20. Their `license-raw-v2:` fingerprint hashes the
 ordered raw license-record array, using compact JSON with sorted object keys and
 ASCII escapes. Values, parsed expressions, declaration type, URLs, evidence
 paths, annotations, unknown fields and every array's order participate. Only a

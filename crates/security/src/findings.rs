@@ -586,6 +586,8 @@ pub fn new_migrations(root: &Path) -> Result<Vec<String>> {
 }
 
 #[cfg(test)]
+mod advisory_reviews;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod workflow_reviews;

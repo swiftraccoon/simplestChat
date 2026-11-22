@@ -12,8 +12,11 @@ This review covers the first 69 GitHub CodeQL alerts observed for revision
 The machine-readable [review](codeql-review-2026-09-30.json) retains the precise
 query, range, rendered-message digest and complete primary-file digest.
 [Exceptions](exceptions.json) provide the owner, rationale, reachability and
-2026-11-29 expiry for each reviewed false positive. These are individual reviews,
-not exclusions for test files, upstream code or entire queries.
+expiry for each reviewed false positive that is still reported; an observation
+whose identity no longer occurs keeps the disposition `retired` and has no
+exception ([re-review of 2026-11-22](reviews.md#re-review-of-every-record-2026-11-22)).
+These are individual reviews, not exclusions for test files, upstream code or
+entire queries.
 
 The initial disposition is 64 false positives, four findings requiring source
 fixes, and one Medium upstream finding left open. Native C/C++ alerts

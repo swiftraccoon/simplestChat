@@ -393,7 +393,7 @@ fn every_reviewed_record_of_the_checkout_is_exact_and_fixes_stay_unwaived() {
     assert_eq!(numbers, expected);
     let today = Date::new(2026, 9, 30).expect("a day");
     let reviews = policy::read(&ledger.policy, today, false).expect("the policy");
-    let mut pending = Vec::new();
+    let (mut pending, mut retired) = (Vec::new(), Vec::new());
     for item in entries {
         let decided = text(item, "disposition") == "false-positive";
         let fingerprint = text(item, "fingerprint");
@@ -404,12 +404,21 @@ fn every_reviewed_record_of_the_checkout_is_exact_and_fixes_stay_unwaived() {
         assert_eq!(ours, Ok(decided), "{fingerprint}");
         let theirs = false_positive(item, "another/repository", &ledger);
         assert_eq!(theirs, Ok(false), "{fingerprint}");
-        if text(item, "disposition") == "fix-pending" {
-            pending.push(super::positive(item.get("number").expect("a number")).expect("one"));
+        let number = super::positive(item.get("number").expect("a number")).expect("one");
+        match text(item, "disposition") {
+            "fix-pending" => pending.push(number),
+            "retired" => retired.push(number),
+            _ => {}
         }
     }
     pending.sort_unstable();
     assert_eq!(pending, [5, 24, 25, 26]);
+    // A retired observation stays as it was reviewed, and no exception may
+    // permit its identity again.
+    retired.sort_unstable();
+    let mut retirements: Vec<u64> = vec![1, 4];
+    retirements.extend((9..=23).chain([28, 29, 31, 32]).chain(59..=65));
+    assert_eq!(retired, retirements);
 }
 
 #[test]
@@ -444,11 +453,13 @@ fn every_native_review_record_of_the_checkout_binds_its_source_and_policy() {
         "sourceOverlaySha256",
         "sourceMember",
     ];
+    let mut retired = Vec::new();
     for item in entries {
         let scope = text(item, "scope");
+        let decided = text(item, "disposition") == "false-positive";
         assert_eq!(
             false_positive(item, "swiftraccoon/simplestChat", &ledger),
-            Ok(true)
+            Ok(decided)
         );
         assert_eq!(text(item, "sourceManifestSha256"), manifest);
         let identity = item.fields().expect("a record").iter();
@@ -456,7 +467,10 @@ fn every_native_review_record_of_the_checkout_binds_its_source_and_policy() {
         let mut identity = Document::Record(identity.cloned().collect());
         let fingerprint = format!("codeql:{}", digest(&identity));
         assert_eq!(text(item, "fingerprint"), fingerprint);
-        assert!(permitted(&reviews, "codeql", &fingerprint, scope));
+        assert_eq!(permitted(&reviews, "codeql", &fingerprint, scope), decided);
+        if text(item, "disposition") == "retired" {
+            retired.push(super::positive(item.get("number").expect("a number")).expect("one"));
+        }
         identity.put("sourceManifestSha256", previous.into());
         let stale = format!("codeql:{}", digest(&identity));
         assert!(!permitted(&reviews, "codeql", &stale, scope));
@@ -470,4 +484,10 @@ fn every_native_review_record_of_the_checkout_binds_its_source_and_policy() {
         }
         assert!(!scope.contains('*'));
     }
+    // Every observation binds a member of the 0.17.0 worker tree, which the
+    // checkout no longer holds: each stays as it was reviewed, retired, and
+    // no exception may permit its identity again.
+    assert!(!root.join("vendor/mediasoup-sys-0.17.0").exists());
+    retired.sort_unstable();
+    assert_eq!(retired, (70..102).collect::<Vec<u64>>());
 }

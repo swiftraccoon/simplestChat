@@ -289,8 +289,8 @@ fn a_fedora_review_cannot_be_renewed_implicitly() {
         .filter(|item| item["scanner"] == "image-license" && item["scope"] == scope.as_str())
         .collect();
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0]["expires"], "2026-11-29");
-    let after = Date::parse("2026-11-30").expect("a day");
+    assert_eq!(entries[0]["expires"], "2027-02-20");
+    let after = Date::parse("2027-02-21").expect("a day");
     assert_eq!(
         parse(entries[0], after).err(),
         Some(Fault("expired_security_exception"))
@@ -496,10 +496,12 @@ const TZDATA_2026F: &str = "fedora-tzdata-2026f-1.fc44.json";
 const VIM: &str = "fedora-vim-2026-11-11.json";
 const VIM_BEFORE: &str = "fedora-vim-2026-10-19.json";
 const GCC: &str = "fedora-gcc-16.2.1-3.fc44.json";
+const UTIL_LINUX: &str = "fedora-util-linux-2.41.6-1.fc44.json";
 const GLIBC_PACKAGES: [&str; 3] = ["glibc", "glibc-common", "glibc-minimal-langpack"];
 const TZDATA_PACKAGES: [&str; 1] = ["tzdata"];
 const VIM_PACKAGES: [&str; 2] = ["vim-data", "vim-minimal"];
 const GCC_PACKAGES: [&str; 3] = ["libgcc", "libgomp", "libstdc++"];
+const UTIL_LINUX_PACKAGES: [&str; 1] = ["util-linux-core"];
 const REFRESH_RUN: i128 = 42_453_211_328;
 
 /// The unchanged canonical packages of `value`, with their full ordered
@@ -560,6 +562,7 @@ fn current_packages() -> Vec<Document> {
         .chain(&TZDATA_PACKAGES)
         .chain(&VIM_PACKAGES)
         .chain(&GCC_PACKAGES)
+        .chain(&UTIL_LINUX_PACKAGES)
         .copied()
         .collect();
     let mut kept: Vec<Document> = packages(&evidence(RUNTIME))
@@ -569,7 +572,22 @@ fn current_packages() -> Vec<Document> {
     for name in [GLIBC, TZDATA_2026F, VIM, GCC] {
         kept.extend(packages(&evidence(name)));
     }
+    kept.push(util_linux_package());
     kept
+}
+
+/// The util-linux-core package its source and RPM evidence reviews: the
+/// earlier canonical record, whose declaration that review found unchanged,
+/// under the exact scope the evidence names.
+fn util_linux_package() -> Document {
+    let subject = field(&evidence(UTIL_LINUX), "subject").clone();
+    let earlier = named(&evidence(RUNTIME), &UTIL_LINUX_PACKAGES);
+    let mut package = earlier.first().expect("the earlier record").clone();
+    let (version, release) = (text(&subject, "version"), text(&subject, "release"));
+    package.put("purl", field(&subject, "expectedScannerScope").clone());
+    package.put("version", format!("{version}-{release}").into());
+    package.put("sourceRpm", field(&subject, "sourceRpm").clone());
+    package
 }
 
 /// The reviews whose scope is `scope`.
@@ -809,6 +827,38 @@ fn superseded_vim_scopes_are_historical_evidence_only() {
 }
 
 #[test]
+fn the_superseded_util_linux_scope_is_historical_evidence_only() {
+    let runtime = evidence(RUNTIME);
+    let updated = evidence(UTIL_LINUX);
+    let previous = field(&updated, "previousEvidence");
+    let path = repository().join(text(previous, "path"));
+    let bytes = crate::files::bounded(&path, 64 << 20, false).expect("the earlier evidence");
+    assert_eq!(text(previous, "sha256"), crate::digest(&bytes));
+    let entries = items(&runtime, "packages");
+    let entry = entries
+        .iter()
+        .find(|item| text(item, "name") == "util-linux-core")
+        .expect("util-linux-core");
+    for key in ["declaration", "noticeSet"] {
+        assert_eq!(field(previous, key), field(entry, key), "{key}");
+    }
+    let subject = field(&updated, "subject");
+    let declaration = field(field(&runtime, "declarations"), text(entry, "declaration"));
+    let fingerprint = text(subject, "expectedDeclarationFingerprint");
+    assert_eq!(text(declaration, "reviewFingerprint"), fingerprint);
+    let old = named(&runtime, &UTIL_LINUX_PACKAGES);
+    let new = vec![util_linux_package()];
+    assert_ne!(scopes(&old), scopes(&new));
+    let reviews = current();
+    assert!(scoped(&reviews, text(&old[0], "purl")).is_empty());
+    assert_eq!(items(&verdict(&old, &reviews), "blocked").len(), 1);
+    assert!(passed(&verdict(&new, &reviews)));
+    let matching = scoped(&reviews, text(&new[0], "purl"));
+    assert_eq!(matching.len(), 1);
+    assert_eq!(matching[0].fingerprint, fingerprint);
+}
+
+#[test]
 fn declaration_provenance_and_shared_notices_are_retained() {
     let value = evidence(RUNTIME);
     let declarations = field(&value, "declarations")
@@ -901,10 +951,10 @@ fn runtime_expiry_and_contextual_terms_remain_restrictive() {
         .filter(|entry| observed.contains(&entry.scope))
         .collect();
     assert_eq!(selected.len(), 26);
-    let expiry = Date::parse("2026-11-29").expect("a day");
+    let expiry = Date::parse("2027-02-20").expect("a day");
     assert!(selected.iter().all(|entry| entry.expires == expiry));
     assert_eq!(
-        reviews_on("2026-11-30").err(),
+        reviews_on("2027-02-21").err(),
         Some(Fault("expired_security_exception"))
     );
     let (listed, _) = allowed();

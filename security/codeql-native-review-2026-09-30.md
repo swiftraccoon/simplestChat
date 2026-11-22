@@ -2,6 +2,11 @@
 
 This dated review preserves the observed analysis and later source revalidation;
 it is not a statement of the current GitHub alert inventory or current CI status.
+Its 32 exceptions are no longer in `exceptions.json`: every reviewed member lies in
+`vendor/mediasoup-sys-0.17.0`, which the checkout no longer holds, so the
+[machine-readable records](codeql-native-review-2026-09-30.json) keep each
+observation with disposition `retired`
+([re-review of 2026-11-22](reviews.md#re-review-of-every-record-2026-11-22)).
 
 This review covers alerts 70–101 from the real worker compilation analyzed by
 CodeQL 2.27.1 in run `36709013559`, revision
