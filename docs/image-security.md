@@ -615,11 +615,12 @@ secret is uploaded. This optional diagnostic does not change the failed scan,
 grant an exception or permit signing; classify the decrypted bytes privately
 before proposing any exact review record.
 
-The trusted `ci.yml` main-push signing job runs
-`build/release_attestation.py prepare` against those exact directories after all
-required gates pass. It emits `release-predicate.json` and copies the SPDX SBOM,
-image-security outcome, runtime proof and conditional OpenVEX disposition into
-the release artifact. The signed statement has `image.tar`, `sbom.spdx.json`,
+On a trusted `ci.yml` main push, the `release-prepare` job runs
+`simplestchat-ops release attestation prepare` against those exact directories
+after all required gates pass. It emits `release-predicate.json` and copies the
+SPDX SBOM, image-security outcome, runtime proof and conditional OpenVEX
+disposition into the release artifact, which the signing job signs. The signed
+statement has `image.tar`, `sbom.spdx.json`,
 `runtime-proof.json` and `vex.openvex.json` as subjects and binds the other release
 files through the predicate's SHA-256 map. Signing and subsequent deployment
 verification require matching proof/artifact identities, exact evidence hashes
@@ -639,12 +640,12 @@ exact-revision artifact checks and records the missing CI/attestation evidence;
 it does not create a signed image-policy verdict. See
 [release verification](../ops/ansible/RELEASES.md#trusted-artifact-requirements).
 
-Run the image gate's archive, ELF, policy, lifecycle and evidence-join replays
-with the pinned toolchain, and the release attestation's archive fixtures with
-the maintained environment:
+Run the image gate's archive, ELF, policy, lifecycle and evidence-join replays,
+and the attestation preparation's tests, with the pinned toolchain:
 
 ```sh
 cargo test --locked -p simplestchat-security --lib -- --test-threads=1 image:: elf::
-ops/ansible/.venv/bin/python -m unittest discover \
-  -s ops/ansible/tests -p test_security_archive.py -v
+cargo test --locked -p simplestchat-ops --lib release::attestation::prepare:: \
+  -- --test-threads=1
+cargo test --locked -p simplestchat-ops --test release_attestation_cli
 ```

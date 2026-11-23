@@ -23,8 +23,6 @@
    "build/install-openssl.sh",
    "build/native-security.Dockerfile",
    "build/pip-constraints.txt",
-   "build/security_context.py",
-   "build/security_tools.py",
    "ops/ansible/files/bounded_process.py",
    "ops/ansible/files/release_json.py"
   ],
@@ -33,8 +31,6 @@
    "build/codeql-native-build.sh",
    "build/install-openssl.sh",
    "build/pip-constraints.txt",
-   "build/security_context.py",
-   "build/security_tools.py",
    "ops/ansible/files/bounded_process.py",
    "ops/ansible/files/release_json.py",
    "security/codeql-toolchain.json"
@@ -55,7 +51,6 @@
    "build/install-aws-lc.sh",
    "build/install-openssl.sh",
    "build/pip-constraints.txt",
-   "build/security_tools.py",
    "ops/ansible/files/bounded_process.py",
    "ops/ansible/files/release_json.py",
    "ops/ops-build-inputs.lock.json"
@@ -2276,27 +2271,27 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-9af32336375572e9e522dc42d874a993c7add1d449b37cca3c2088a1fc04e383"
+    "key": "ci-verified-v1-rust-lint-main-4afb5b6cff4e3a6ed738ebe92374ed40fb900037289ea632632fd768d33aecc9"
    },
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-00ef10216fe5d60f5e56f124595b81e082cbfa10cf4dc370d4311d805de7f738"
+    "key": "ci-verified-v1-rust-test-main-dad2c138c71e36156c7d803e519d0079ebf9f7400075b0bf91426af7cc411fa5"
    },
    {
     "operation": "save",
     "scope": "rust-lint",
-    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-lint-main-9af32336375572e9e522dc42d874a993c7add1d449b37cca3c2088a1fc04e383\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
+    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-lint-main-4afb5b6cff4e3a6ed738ebe92374ed40fb900037289ea632632fd768d33aecc9\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
    },
    {
     "operation": "save",
     "scope": "rust-test",
-    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-test-main-00ef10216fe5d60f5e56f124595b81e082cbfa10cf4dc370d4311d805de7f738\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
+    "receipt": "{\"schema\": 1, \"key\": \"ci-verified-v1-rust-test-main-dad2c138c71e36156c7d803e519d0079ebf9f7400075b0bf91426af7cc411fa5\", \"revision\": \"1111111111111111111111111111111111111111\", \"artifacts\": {}}\n"
    },
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-fccbef3fd63b2dc513086c7fa8eb91bc8d544b1b87c105e99578a7538271680a"
+    "key": "ci-verified-v1-rust-lint-main-ef679f37f6708507ef87b7ab8a50e8a22501f421b24c979a146ab10e3e0cf1d7"
    },
    {
     "operation": "verify",
@@ -2306,7 +2301,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-df01d49ac9a8cd7a5986a5112dc4f0ced20b00c0137a7195daf79b932e132fe3"
+    "key": "ci-verified-v1-rust-test-main-80917bcc303b36bd3170d07af056b5272a33d27d38744ebe7ff94f5f90991843"
    },
    {
     "operation": "verify",
@@ -2316,7 +2311,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-d2a946cba925fea062a0e1cf6be6aaa4941ac8e412153823de35e7bba925af0f"
+    "key": "ci-verified-v1-rust-lint-main-f93188b0ba2f061763f811b9bc21bccc583d1503b69cb05cd1d46101efd8b6cf"
    },
    {
     "operation": "verify",
@@ -2326,7 +2321,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-650caf73491609a48ad8febeba6870630bc1228e03f4ff65dde20b4bbd6e7e6e"
+    "key": "ci-verified-v1-rust-test-main-28c497276fafedbe1795e52e167572623924b222bc9f6c41db760ed05ddb01ca"
    },
    {
     "operation": "verify",
@@ -2336,7 +2331,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-a2dc476a100d3c846864ea9b58badc3b29190c6b0e2ba1b3faeebe9656734ee8"
+    "key": "ci-verified-v1-rust-lint-main-49e9b6248cb8f13dbac76dd9a0810c5d6102663dcdab0734d41189bcbcc79f9d"
    },
    {
     "operation": "verify",
@@ -2346,7 +2341,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-c0eed6345c44b02c1dea55e30b453516475e2a0f12ce6a6070a473aac9be9eb7"
+    "key": "ci-verified-v1-rust-test-main-d927db2d3c2d5d50edfd25102b3917b1b578485edbc41a88d649607bd0cbffc0"
    },
    {
     "operation": "verify",
@@ -2356,7 +2351,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-bf43d495e730a626349bf5008fa4c9a7984b22e7fca7fa2341bcadab81818a69"
+    "key": "ci-verified-v1-rust-lint-main-37660a31a62de6e8666d299fa453ea5fb9580900488f7757afb60ec41c2a0366"
    },
    {
     "operation": "verify",
@@ -2366,7 +2361,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-858d4907a745d28d9610e021330f816a11473b2f59444eaf12af0534d2851b00"
+    "key": "ci-verified-v1-rust-test-main-5143669cf20a7265544df076c71b30353e39ea966b0f2b3f5dbb95a9027ea5ea"
    },
    {
     "operation": "verify",
@@ -2376,7 +2371,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-1973d29c82c55a7a486be89b32ff62694420279f9df29f1a9856aafe025d3f0d"
+    "key": "ci-verified-v1-rust-lint-main-063cb4b8d1141445854f2e56958a0189b80cccc59e4abf79cb1b895c5f85fa23"
    },
    {
     "operation": "verify",
@@ -2386,7 +2381,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-8eabf8475bcd775dd6990a4c195b6834018e7463457c8c97d19b054dfb4a3b2f"
+    "key": "ci-verified-v1-rust-test-main-7b2c8ab312a85975c7f1d9cb8acef337a8e41aed6c359d0b371b02b85d7c42b0"
    },
    {
     "operation": "verify",
@@ -2396,7 +2391,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-4951d474200c5e818b82a646d233ae6388271018ca906c3f28fe2d6f42ffa664"
+    "key": "ci-verified-v1-rust-lint-main-1e1422e7dd214625f97b616afb6cd74df31bd2ff8a857fac514e260ed6131c45"
    },
    {
     "operation": "verify",
@@ -2406,7 +2401,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-cc8c33f4ae8915459116766b9afa56de0009388e7bef93cb27ffa8f14832effc"
+    "key": "ci-verified-v1-rust-test-main-3156eef5d6aae81c13e4af134d88429df5b74ecbd418a4110fcf972709ee848c"
    },
    {
     "operation": "verify",
@@ -2416,7 +2411,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-567272e2d7cea3c989a1394b96c1401d5b956e649bcd44aedfa73dc6081bceaa"
+    "key": "ci-verified-v1-rust-lint-main-78f646b69b711682c37b0f36d91e25b66dec18f301e4bb15c7f77d770ea5130a"
    },
    {
     "operation": "verify",
@@ -2426,7 +2421,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-fc318f7471ecdb0f5bc68edf3b0aa34fe4e2cdfe32e950b99672dbf5b81abc7d"
+    "key": "ci-verified-v1-rust-test-main-506c12d612986b0c6e7efb513a4b1dae01fd64e2c8da736fe1533eef046f76ae"
    },
    {
     "operation": "verify",
@@ -2436,7 +2431,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-a0823f8db63358c7d58c7d4cabe7c2fe74a11bc97a13b4f1cf94a874bf134955"
+    "key": "ci-verified-v1-rust-lint-main-a430c0c2ce50ca5192711c5ba8f5049b4cb269ecb98635cf3ce693fc7ace2b76"
    },
    {
     "operation": "verify",
@@ -2446,7 +2441,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-225333a8694e264c7a11d2e43e311be38e9b92ba19312cfa8319f7839beb0903"
+    "key": "ci-verified-v1-rust-test-main-1df7315fdcf917f3e50c30b3080761d24560bf7ae410e4b4e9a32c0bfa265f45"
    },
    {
     "operation": "verify",
@@ -2456,7 +2451,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-719c1b1309a23baa543700adf81cf68a88847330576b8b548842d429fda79f40"
+    "key": "ci-verified-v1-rust-lint-main-9de5fbc0607480d0933b975c4b66627bcc27b189b2291cc319c3e9c07e1cc4b2"
    },
    {
     "operation": "verify",
@@ -2466,7 +2461,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-2bdc5fd6504b8d00db8ed9d910db4e71942b46b4e99f10e24601bd96416a1dba"
+    "key": "ci-verified-v1-rust-test-main-6827de94107653ff3a7b538474984a9b1d91dfc642ec778d044645e0237b508f"
    },
    {
     "operation": "verify",
@@ -2476,7 +2471,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-1f105d67804e170419796dd5c195172542bbb26d45cc388fd4ff1133db175491"
+    "key": "ci-verified-v1-rust-lint-main-b5537a4c3916fffd3d7278c44b0071c7d81f2f41e05ba27f633cfd54ba937052"
    },
    {
     "operation": "verify",
@@ -2486,7 +2481,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-cf0cc8d747938f4075ea1d7c51c35e8298a74543c71efc6fd6ccb0e8a8151b18"
+    "key": "ci-verified-v1-rust-test-main-da5a9be927467f6921a39899ac3442a5d3400812238fa74f16b09e46d41a3537"
    },
    {
     "operation": "verify",
@@ -2496,7 +2491,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-7dcc3709d1374315e1862bef7771e385a7d64e5b4a2c799f75d578321f63e957"
+    "key": "ci-verified-v1-rust-lint-main-75bfdf085a0ed327f66674d92047e010c9d4ca3690ce7931967b9ec7b4bf5867"
    },
    {
     "operation": "verify",
@@ -2506,7 +2501,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-b19468388526f7515b474dff05e43e98ada8bbd06368a13610b705e2de0cdd1e"
+    "key": "ci-verified-v1-rust-test-main-e8fbbd3fc8fb90b83b705f15bfc0198a745149396864394989f96a5565117c75"
    },
    {
     "operation": "verify",
@@ -2516,7 +2511,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-0663115d648d6f6df04b7d6ca551cf26fa62d5cda9c692a40d34fce93b17ec72"
+    "key": "ci-verified-v1-rust-lint-main-0728326fa76243e820408049cade6d27fab7caae54b93fb7d23ebcae5c1a7987"
    },
    {
     "operation": "verify",
@@ -2526,7 +2521,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-2a331b8b4a723e28ad17dff3351196e7dc14fea22cf2483843da5d699ffd8841"
+    "key": "ci-verified-v1-rust-test-main-0b1a93ec68ab2278bac3870d0999716b6f58fc765fd166edc88e963d1da73b93"
    },
    {
     "operation": "verify",
@@ -2536,7 +2531,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-e7ae225bceca33f83b5a7f3b35d805e59e5d8d2179cbba47e7644fd5fb5f3066"
+    "key": "ci-verified-v1-rust-lint-main-8fa26256f728ec15ab5ff2429876509adc6e5eabe5a81122f4e46faea2558b37"
    },
    {
     "operation": "verify",
@@ -2546,7 +2541,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-9125458234d401ed2469463cc9c7d70b13e3aac3d3fd465f53cb54d6d1e75227"
+    "key": "ci-verified-v1-rust-test-main-5967d8ce0d7bf36ae1d07592d5a250a439b84334921781a20312b776c07bc37a"
    },
    {
     "operation": "verify",
@@ -2556,7 +2551,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-71e083698b2c7e841edbae6ccb654d5a3ce0c9bf05d9c3c8bc559e341a2e3af7"
+    "key": "ci-verified-v1-rust-lint-main-f5f5e060737deca2e39c73fc0d29503c16e2bc0b150896826080362d7ffe1d62"
    },
    {
     "operation": "verify",
@@ -2566,7 +2561,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-0c1efd1509ea0abe498f54a6ff1e03bded51228f936d3977b528b7dd0efc91af"
+    "key": "ci-verified-v1-rust-test-main-a3ae90ed20ef8210a2841cd35c042187e3f4b6464c23f866e30fe5093abef7c2"
    },
    {
     "operation": "verify",
@@ -2576,7 +2571,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-89ef29814d65b8d6da41593873464f363e433b02ea66aa48b6ce4d1fae23e325"
+    "key": "ci-verified-v1-rust-lint-main-9e8627bbe2fcdbd30886f867f18202a9784716eb557af363546b15ddc9152d36"
    },
    {
     "operation": "verify",
@@ -2586,7 +2581,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-f8eea743864938d22d62b18cfd3bdbf31949edd75b597f15611103b2fb8fc626"
+    "key": "ci-verified-v1-rust-test-main-d669253aefb830d68a992e7e614f6509a9cff33c454014d9ea20f1bffb278a79"
    },
    {
     "operation": "verify",
@@ -2596,7 +2591,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-3615629cec0705a18a4a8c742f20bc21882682b0f7d90f7d3f5665a8b66cace5"
+    "key": "ci-verified-v1-rust-lint-main-6d625cd76e77436378258f6e4670011c27eac2eabe7dbc083296b81cf6c02d2c"
    },
    {
     "operation": "verify",
@@ -2606,7 +2601,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-337763eae80b9dd98d52f48b4a9af3f31f26dd775568d1d5340a0a407a6472bc"
+    "key": "ci-verified-v1-rust-test-main-561ffae59f0de30e56791a10b9caedd338464bec2711f591ae2e6675c92520e4"
    },
    {
     "operation": "verify",
@@ -2616,7 +2611,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-f8ea3ef9041337a29702649540895f276ea6ef2028562906522e3f8e4e4c3916"
+    "key": "ci-verified-v1-rust-lint-main-1af73151fbb74c434e023bb91fe1db1c9230de4ab846fc31fcd8d1cfd571d00d"
    },
    {
     "operation": "verify",
@@ -2626,7 +2621,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-2ee33c38c0d176deb15365b2fc67e181924f1add6d8bffdabffe76c76ca904a7"
+    "key": "ci-verified-v1-rust-test-main-b243e7c0705198e21abfe2017a8073277ff98055f53cd4a342117e2ed03ab3a2"
    },
    {
     "operation": "verify",
@@ -2636,7 +2631,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-5617ddb2367d9b02762b6a02f2537eee9ed5816a57901242aa7fe9a56c47b0af"
+    "key": "ci-verified-v1-rust-lint-main-7981914c2bdc3a4d5bd347b327c2bc7023cdf15f0da70dfdd55e9c9c3b51275b"
    },
    {
     "operation": "verify",
@@ -2646,7 +2641,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-5892b070b70f9a349a5fe4176499d842015fc078cf818723c599aba6d5bc32be"
+    "key": "ci-verified-v1-rust-test-main-876bba937ee78db927faad93808d300c8e7c912b8bcd89e23b46df9603fbf2af"
    },
    {
     "operation": "verify",
@@ -2656,7 +2651,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-c02ef6949afc236b3346f6a00e59c7356de3236a36ec2e1cfa19c1034869f2ea"
+    "key": "ci-verified-v1-rust-lint-main-f32b3e260aff53d8e184c90224e9387a51380047ae16b65b75acb5ea1d2a3827"
    },
    {
     "operation": "verify",
@@ -2666,7 +2661,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-11143457e3d5c50a57141a9e330b9cd66fa24390b769dc8350a5c73c935ad1da"
+    "key": "ci-verified-v1-rust-test-main-640dabc92f388ff5843d07845b1579c7f76b801da2e77dc44082af167bf72f5a"
    },
    {
     "operation": "verify",
@@ -2676,7 +2671,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-465da3b443fb0f52001e4695bd1c40593f93a167d1bfe780dc7c06879a5266af"
+    "key": "ci-verified-v1-rust-lint-main-9268783aa045af9a0cfbeda21b870fab6850c4146b619ea51d84cf8cb3edeb85"
    },
    {
     "operation": "verify",
@@ -2686,7 +2681,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-ece4d19692fa5d85b1a0f432cd3753981d938a8d491a53d41415cf8007fc1ea8"
+    "key": "ci-verified-v1-rust-test-main-ab56c16669c043619f8bb8cd1a14bee6535d2e215f91694d0ea281578e0570c5"
    },
    {
     "operation": "verify",
@@ -2696,7 +2691,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-a9264fc97dfa798ae6592ab52d056d8fb61a2b341182457dcf1d4abb61715562"
+    "key": "ci-verified-v1-rust-lint-main-a806f80f9c60277d6df2866408e8df09d570273fac5520967f835a51f54d3080"
    },
    {
     "operation": "verify",
@@ -2706,7 +2701,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-6ee2035261bc6fcb3a17ba7c2f4ca39bbded440bbb2353097e0d58111fd94354"
+    "key": "ci-verified-v1-rust-test-main-9f50aca2ed578fb595878f0bb5a3cccd1d87111de5ea9a9f7496a2e42d3fefa1"
    },
    {
     "operation": "verify",
@@ -2716,7 +2711,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-1697183fb9147bea0b6cc0cf9a997655222b3843de7145ed3c571283936552ad"
+    "key": "ci-verified-v1-rust-lint-main-5321f5e12a7a0096fbe43dc0a3ccb693da137a20fbce1a63648a5a5ce538f3c5"
    },
    {
     "operation": "verify",
@@ -2726,7 +2721,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-c3a6b3c84acd57e21b5dcad6408bf71abc151ff2009a6a2ac9b52044bd70e77b"
+    "key": "ci-verified-v1-rust-test-main-780f65264afc667aa20dc1e7d011ee7f0326d30fc596d56f19dea721f4320d48"
    },
    {
     "operation": "verify",
@@ -2736,7 +2731,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-7a33042f1a66b5929d31280a1b1701b417c8e1ecfe8adebfacfcd2a40a86981c"
+    "key": "ci-verified-v1-rust-lint-main-c90818b7bfdc7e3f46ae17133d7ed72c7c33bb4cb99fec5c40ae643a1dfbc109"
    },
    {
     "operation": "verify",
@@ -2746,7 +2741,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-52658aae761e5f8aa7eb8cebc347ecf731e6b8b01ae4441d2aa74f8c8555eae3"
+    "key": "ci-verified-v1-rust-test-main-af6338104614b169863a2b0b365b2eba3ae72e258e220a423047225cdfbe85ba"
    },
    {
     "operation": "verify",
@@ -2756,7 +2751,7 @@
    {
     "operation": "key",
     "scope": "rust-lint",
-    "key": "ci-verified-v1-rust-lint-main-e15ca1110177c39da3f355cd2510db862234b02a3bc24bbc16db0535b4311a78"
+    "key": "ci-verified-v1-rust-lint-main-99d4aa9c3d1d5f0bb9a3b69e1e4c5fd431f1be2765d65f7923ca49f08c2a0894"
    },
    {
     "operation": "verify",
@@ -2766,7 +2761,7 @@
    {
     "operation": "key",
     "scope": "rust-test",
-    "key": "ci-verified-v1-rust-test-main-7e3d74146dbda2789069ed1d27927ca16d07327c1e2c8e83409249364fcc1a04"
+    "key": "ci-verified-v1-rust-test-main-e7d67e87ba3110167cb78bc78b907e314797d6acdccbdcc5f03eaf56ca75380a"
    },
    {
     "operation": "verify",
@@ -2851,8 +2846,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2866,7 +2859,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -2880,8 +2873,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2895,7 +2886,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -2909,8 +2900,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2924,7 +2913,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -2938,8 +2927,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2953,7 +2940,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -2967,8 +2954,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -2982,7 +2967,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -2996,8 +2981,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3011,7 +2994,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3025,8 +3008,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3040,7 +3021,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3054,8 +3035,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3069,7 +3048,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3083,8 +3062,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3098,7 +3075,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3112,8 +3089,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3127,7 +3102,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3141,8 +3116,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3156,7 +3129,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3170,8 +3143,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3185,7 +3156,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3199,8 +3170,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3214,7 +3183,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3228,8 +3197,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3243,7 +3210,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3257,8 +3224,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3272,7 +3237,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3286,8 +3251,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3301,7 +3264,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3315,8 +3278,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3330,7 +3291,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3344,8 +3305,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3359,7 +3318,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3373,8 +3332,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3388,7 +3345,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3402,8 +3359,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3417,7 +3372,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3431,8 +3386,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3446,7 +3399,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3460,8 +3413,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3475,7 +3426,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3489,8 +3440,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3504,7 +3453,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3518,8 +3467,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3533,7 +3480,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3547,8 +3494,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3562,7 +3507,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3576,8 +3521,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3591,7 +3534,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3605,8 +3548,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3620,7 +3561,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3634,8 +3575,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3649,7 +3588,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3663,8 +3602,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3678,7 +3615,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3692,8 +3629,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3707,7 +3642,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3721,8 +3656,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3736,7 +3669,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3750,8 +3683,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3765,7 +3696,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3779,8 +3710,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3794,7 +3723,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3808,8 +3737,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3823,7 +3750,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-9d2e93e359066e9d567ef1a6ec0da988696e4c6025f3f07b5d65ee467a9cec27"
+    "key": "ci-verified-v1-native-asan-main-0fb3e4b5cc057d2c09997c3e8f235cbb187497a81724f2fe697922883d05a885"
    },
    {
     "operation": "key",
@@ -3837,8 +3764,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3852,7 +3777,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-42389c14250885bb212fee563028a7f48d46f19923947a406f6b4551f74432dd"
+    "key": "ci-verified-v1-native-ubsan-main-78202a72160c9f7df659fe203499205754f19caafd46b74c28fc891aaf66a511"
    },
    {
     "operation": "key",
@@ -3866,8 +3791,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3881,7 +3804,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-1b429c516300ca5d675d06bff5785cdb6e3149d36b378b894e16d5f70effaf24"
+    "key": "ci-verified-v1-native-replay-main-c0c7a41aac3e34c0ddf1f37cb9370600968d885165196055d66b7a14796adf56"
    },
    {
     "operation": "key",
@@ -3895,8 +3818,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3910,7 +3831,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-f38762aa6eda7de4bd49dbafeedaa83ad09cf3cfcf4b7845362a443b7b87b9d7"
+    "key": "ci-verified-v1-native-asan-main-0c7eb162ed65868f1f2cb31cc94cc55e28023464d5ca84c609ccd23684b12ce5"
    },
    {
     "operation": "key",
@@ -3924,8 +3845,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3939,7 +3858,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-b41205419a1989559739e9e9717c07295b95a76ff81cee7345184e9a5a50ce18"
+    "key": "ci-verified-v1-native-ubsan-main-f90c3f440d7b12646bcf932da0c2875e16933651a714defca6d8251446d5346d"
    },
    {
     "operation": "key",
@@ -3953,8 +3872,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3968,7 +3885,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-0fb9ac413592bbdc2b9f543d7dbe7c3e44d65194028999cc8a7a6cc37d5322a3"
+    "key": "ci-verified-v1-native-replay-main-ed674d08146faa85afbdb9183ab2bbc78ac9fe05859b3d6b15ed85f25ecd9f0a"
    },
    {
     "operation": "key",
@@ -3982,8 +3899,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -3997,7 +3912,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-9c4ddb8f739c1ef82cca1dd846c6e5ac818fcea13e8d6ef31af9757967acaa9b"
+    "key": "ci-verified-v1-native-asan-main-9b2c378e52daf41dac3ba8c72a955426ded1d6831acf932c8575da23fcba2945"
    },
    {
     "operation": "key",
@@ -4011,8 +3926,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4026,7 +3939,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-a1cf36f0ceb82e4787aee9c4909d211ccbfc358370b9f2afa4d8b7f901cf5f43"
+    "key": "ci-verified-v1-native-ubsan-main-129013201c83deae3f28fe29ea2b882b4d5b6835fe2cf269038afbc2f7cf32b4"
    },
    {
     "operation": "key",
@@ -4040,8 +3953,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4055,7 +3966,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-72f407bdda31a5007f69536f780ef0ab1b6f5425a5323afed8736bb15f94bcb4"
+    "key": "ci-verified-v1-native-replay-main-c4cbb2c4f98fbebfea6c52a322b7f55d8bcd79d32bfb8e095928e059b72d19a5"
    },
    {
     "operation": "key",
@@ -4069,8 +3980,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4084,7 +3993,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-327343d7554eedbe1d056a9183d1fd38b3dba42b1cc7c174f372d85d171be90e"
+    "key": "ci-verified-v1-native-asan-main-b185ab0b3268cb982a9aa441ef2870e291db8f3a97d109afbc32df89bccf046b"
    },
    {
     "operation": "key",
@@ -4098,8 +4007,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4113,7 +4020,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-579335a2ed12801877105ac3bec72d67bf564ba5738eb971c7052d35e38077de"
+    "key": "ci-verified-v1-native-ubsan-main-ecc665bcce287a072acd0482c669b2af37ed115bc47d2f1e78c8ce1cb1310b51"
    },
    {
     "operation": "key",
@@ -4127,8 +4034,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4142,7 +4047,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-2e374a0d8dafafcada111d5adca438fe987e31939e43e5b78bf254c9755c80ba"
+    "key": "ci-verified-v1-native-replay-main-d3ad927782a624c468610d44cff41c1e67face468ac1a5ca4dde8931b0e60b9d"
    },
    {
     "operation": "key",
@@ -4156,8 +4061,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4171,7 +4074,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-b5b754c055936166d8c10b4d420487d62671043769995bd3b7d0a937ec4b3510"
+    "key": "ci-verified-v1-native-asan-main-8fe4c2678d7690fef1022af20c2f5d2c88b37de45ac447998c245ebb1ef11ac4"
    },
    {
     "operation": "key",
@@ -4185,8 +4088,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4200,7 +4101,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-8ab34b89ad13b546c4b6c521aca6b8b9d1e13a1a41f4af1c656c8b332f117255"
+    "key": "ci-verified-v1-native-ubsan-main-04e62e1dc16b8ab300f992a88c5280320da2c46a84f375a086317f6a1907ffd2"
    },
    {
     "operation": "key",
@@ -4214,8 +4115,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4229,7 +4128,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-c7ca59cc6bcb10a14f5f2db6d3a0b2258b77d0f8b767eb2f4f8ce4d22220ea06"
+    "key": "ci-verified-v1-native-replay-main-a382036614dcee1186b48efb5cce4dfd827e1116669629014b80755720f48191"
    },
    {
     "operation": "key",
@@ -4243,8 +4142,6 @@
      "build/install-openssl.sh\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4258,7 +4155,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-fa04605e343267b85ecdd7cebb6c2142ad886da9499d2720ecc4d8f81d0f22d1"
+    "key": "ci-verified-v1-native-asan-main-d577bf302d9431d85697a69826ce01595955579006e9c79c308cff722e4e3656"
    },
    {
     "operation": "key",
@@ -4272,8 +4169,6 @@
      "build/install-openssl.sh\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4287,7 +4182,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-6a105ec0f51a7f0c3c2271478c88035cfedd1f170e30b3a0e5ad8566e2aea41a"
+    "key": "ci-verified-v1-native-ubsan-main-7e0c7398e10517d68dce45070e70a3d06225e8fc7ca31e26ac2a8a98474a1dfc"
    },
    {
     "operation": "key",
@@ -4301,8 +4196,6 @@
      "build/install-openssl.sh\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4316,7 +4209,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-4d9304ab08704291a6eafe706e3bbcba93b4836fe3e38c641c8927985bf73016"
+    "key": "ci-verified-v1-native-replay-main-3a7bd6182e0b294415d283500007725b49d9be6380854b3d47f877c15449dc4d"
    },
    {
     "operation": "key",
@@ -4330,8 +4223,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4345,7 +4236,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-8daf47a7e4f7e3eecc2012e8b311388e1a4977731b73f1c5744fbb9d9bf9d596"
+    "key": "ci-verified-v1-native-asan-main-6e202681207c343be40facde4e7de0d52432fff9e2f84e0a866ec2c81204ca7d"
    },
    {
     "operation": "key",
@@ -4359,8 +4250,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4374,7 +4263,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-e8b9a6d81b76e7b6651397b3ad120e0fb2ab0b4ee63583e82af51e07ae1452f5"
+    "key": "ci-verified-v1-native-ubsan-main-b2e07f8039dd76b4ed6177ef086730814b0ebfa6a89ae739218dd62fbdbbadda"
    },
    {
     "operation": "key",
@@ -4388,8 +4277,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4403,7 +4290,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-f052a56df13984e024702a3dce24b2da6547c49c7c0cd548e05ecc85114422b1"
+    "key": "ci-verified-v1-native-replay-main-4c9c5f3931d680cc0429278f5cbfb99dfbe1b523af1704c388e96be43932f311"
    },
    {
     "operation": "key",
@@ -4417,8 +4304,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4432,7 +4317,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-6dc516820da3d04fd7cafab261060bc97724f59971bbc0055673449614cbf57c"
+    "key": "ci-verified-v1-native-asan-main-437c239506c849dc37bcae0bda5323b72df14861bc793c1d67171a4dd26fee62"
    },
    {
     "operation": "key",
@@ -4446,8 +4331,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4461,7 +4344,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-d236c7b23a215719afb4a0211bfa8c42c6b9b67ae916d89e502442246e036018"
+    "key": "ci-verified-v1-native-ubsan-main-b4e8f5b136617799a00cf9947c3c853dc2041751157091607af65e2a8d12433a"
    },
    {
     "operation": "key",
@@ -4475,8 +4358,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4490,7 +4371,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-048b9671034949a9ed81ff557a59afe2b3f57d89c85c389a24401beaa0cd0af7"
+    "key": "ci-verified-v1-native-replay-main-d0e82b89050dd8e884ed59424ea6effd5870a9dc5c1a686cf8cf2204f3c25024"
    },
    {
     "operation": "key",
@@ -4504,182 +4385,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-asan-main-a294bc04f9a4a677632fe03118786f90f0cc39c41a3387669bedebeba1dcee52"
-   },
-   {
-    "operation": "key",
-    "scope": "native-ubsan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-ubsan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-ubsan-main-b4ae14703797501e3a85ee5bb64a80c77c06f91d694a80267fbc1eb06cdf9f41"
-   },
-   {
-    "operation": "key",
-    "scope": "native-replay",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-replay\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-replay-main-f9f38ea8f5d64806538c68448a5046e81b6d44d3d98a1691b4961ee117726a5f"
-   },
-   {
-    "operation": "key",
-    "scope": "native-asan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-asan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-asan-main-bd389b3b27b7ab1379b4fdba09a98830074a2fef6c8fd64bb5a41c389cb73559"
-   },
-   {
-    "operation": "key",
-    "scope": "native-ubsan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-ubsan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-ubsan-main-1aafd003c3966c2214c30ec2e613febb5d325e1feeaa09e9d43522a8285fc3c8"
-   },
-   {
-    "operation": "key",
-    "scope": "native-replay",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-replay\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/corpus/rtp/header-short.hex\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "security/native/toolchain.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/integrity.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/native-components.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "omitted": [
-     "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
-    ],
-    "key": "ci-verified-v1-native-replay-main-e6dfaa1737361aea804a879c0f938a888d3a56539d66121d2263e5106ac98078"
-   },
-   {
-    "operation": "key",
-    "scope": "native-asan",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"native-asan\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "inputs": [
-     ".github/workflows/security.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-docker.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4693,7 +4398,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-a8dc04b99ee1cb7c6e72b196bd5c47c67d29c09985720f20f8f9399fe59bad1e"
+    "key": "ci-verified-v1-native-asan-main-e55a99107dd401188dce17ce3b130e5c724a4871f54a5930fd43b45e1e006d04"
    },
    {
     "operation": "key",
@@ -4707,8 +4412,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4722,7 +4425,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-16d9b9d986bdff68203e205ee8d633c9ca479e7e59c3b88e003f1cd21f1d0b99"
+    "key": "ci-verified-v1-native-ubsan-main-58ce9b8b41beea6d1974199373183188052b9c83a5d19dc223f5a1c18c23c39d"
    },
    {
     "operation": "key",
@@ -4736,8 +4439,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4751,7 +4452,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-cb0e99fa7a97985e896fd71685b284a218639a376eb360ecdf236d6b0c9282ba"
+    "key": "ci-verified-v1-native-replay-main-c3812885aea67b71f2c106069cae3bdc838616ce18e83cd17eea36708a524774"
    },
    {
     "operation": "key",
@@ -4765,8 +4466,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4780,7 +4479,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-5f3904fc0673dcff6ab820cb4ba0798f147129ccc062388cd0a1d5d3cd4958b9"
+    "key": "ci-verified-v1-native-asan-main-b195ce7176dbbdab70806ed77013645eda86dfd4e4a828f68078d39ec01b2fc9"
    },
    {
     "operation": "key",
@@ -4794,8 +4493,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4809,7 +4506,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-5df99a2c1629ebb9c9682a16ccc61f12b951322fc503d1ec92ac5cda441d20b5"
+    "key": "ci-verified-v1-native-ubsan-main-4d1aafb10a8870060b0424aae3331a9286239dd036441ca133e314cc70b6ff12"
    },
    {
     "operation": "key",
@@ -4823,8 +4520,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4838,7 +4533,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-61c43c3d0937dd086b1ca71e01ffdd8205c0d9709c12dbbc6b13f3ef9fb3094c"
+    "key": "ci-verified-v1-native-replay-main-3a17aff803ef7ad43e1d84df54332fbbcf46d3809743fa8f3691d5d1325fdd3a"
    },
    {
     "operation": "key",
@@ -4852,8 +4547,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4867,7 +4560,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-60526cb72cfecff0ef34bbaa55580527b70adc3233efb195a063b5b54ca0fd95"
+    "key": "ci-verified-v1-native-asan-main-b70003bdb9f66e887073786cc1c8c146b7e13777c321935556212d98415a7366"
    },
    {
     "operation": "key",
@@ -4881,8 +4574,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4896,7 +4587,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-41915b92f2974fd252d21709114527f4bbe292278a68a11ec4d387ee089fb208"
+    "key": "ci-verified-v1-native-ubsan-main-763fff2402852d461bd249d14cff676db86ba8f7088d636c6aa41513eb05cfe0"
    },
    {
     "operation": "key",
@@ -4910,8 +4601,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4925,7 +4614,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-86775f08e8b0886ec5b563c0e368878416bb484fee1339b80e5c1e8c4bf65290"
+    "key": "ci-verified-v1-native-replay-main-67836f8fc7633545f0157603a00e4979ab14b8e710f79e1fdac7786f0f6cba32"
    },
    {
     "operation": "key",
@@ -4939,8 +4628,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4954,7 +4641,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-47862cc57f4e5f8652398ac90580921ba533ec983afbf84bb68d1356fb7ab563"
+    "key": "ci-verified-v1-native-asan-main-7a362598fa8e33d8b997975eb1231289d68693feaa9ca939c70ecf3808b23aed"
    },
    {
     "operation": "key",
@@ -4968,8 +4655,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -4983,7 +4668,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-dffe42366f1cf1e14a34a3b13337bcfd3b1185edabeae28b8258d93fd4b93646"
+    "key": "ci-verified-v1-native-ubsan-main-e7393529f7e1cd5dc2c716d9f5d9d769559f78b117e722b08a3138c6594f9bbd"
    },
    {
     "operation": "key",
@@ -4997,8 +4682,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5012,7 +4695,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-f725ba09590e0270c83f93dbadeebd4628643f81fe841a5c5f4c0b6b3c602a9e"
+    "key": "ci-verified-v1-native-replay-main-ffd88ddf3d55e5be2def1040d8f3944db307933c1564b5125647a30010375332"
    },
    {
     "operation": "key",
@@ -5026,8 +4709,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -5041,7 +4722,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-6ad2763abe75677e30c3809f3610cd09486836eac62e57c215793ca708dc1dff"
+    "key": "ci-verified-v1-native-asan-main-01e456a0f35793f224da83e479d0816b7a02d235123188d3326e8bc9f5ac4519"
    },
    {
     "operation": "key",
@@ -5055,8 +4736,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -5070,7 +4749,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-4d3d504ef61fc5b4619759a99ff48a46afe5e0ccf12442b6cfc60e2b90feea82"
+    "key": "ci-verified-v1-native-ubsan-main-4eeae67c4975454b29368cbb3ccaa83c4990eca203158bf031aff184464813ef"
    },
    {
     "operation": "key",
@@ -5084,8 +4763,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1",
@@ -5099,7 +4776,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-27d403a1c09b61bc56c4a6274ac5fb3da1cdf892fc7d191db5c46ebe4d53bdc2"
+    "key": "ci-verified-v1-native-replay-main-42e785f5540244762c5021b68612322f69738551ad16eaf6a7b4657dee3c1791"
    },
    {
     "operation": "key",
@@ -5113,8 +4790,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5128,7 +4803,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-asan-main-197a16ff03b09443af193833c8c6bff2de08b44cc55a6e3cdeb156c920acd613"
+    "key": "ci-verified-v1-native-asan-main-4ae5b910471ed43267b6b632f3ef2766be834c7bb81c8f918a78f2a44f7ae736"
    },
    {
     "operation": "key",
@@ -5142,8 +4817,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5157,7 +4830,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-ubsan-main-22c3f25b2f5e0270a71e5fbf053dcd7fa20558aa970c7b4eea1ed4b84797f259"
+    "key": "ci-verified-v1-native-ubsan-main-1b384acf4d460d877815c200d8a0136f31c2a313578ba02dad1ae36418e43090"
    },
    {
     "operation": "key",
@@ -5171,8 +4844,6 @@
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/native-security.Dockerfile\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_context.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "security/native/corpus.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -5186,7 +4857,7 @@
     "omitted": [
      "crates/security/src/image/gate.rs\u0000100644\u00007f8b1dfc466b6249f06cbe55c9174df2578e7754da793fded244ef5cba2a38f1"
     ],
-    "key": "ci-verified-v1-native-replay-main-03eca86f69fd8dc71fb99959c3a5976fa5597b74a3d0b8131cc2490333d2a449"
+    "key": "ci-verified-v1-native-replay-main-81c24b95e1b1c7352a41f3a9f12b5fd64c3d94525e05025f7ebad0ad95261212"
    }
   ],
   "codeql_review_data_changes_do_not_invalidate_evaluated_databases": [
@@ -5576,152 +5247,142 @@
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-7370d6c9998390f18114b70fcab04a0bdb117823dadcf95cd22297d298a69dfe"
+    "key": "ci-verified-v1-codeql-rust-main-e5135f37221d85f2693b4b400025da16e8a0f2b99d84c437c9089fcf99e77dea"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-89a8fcafdcebfbed55f1a197da3f4107c8336a849ad3f46cb55ca190bd1ad15c"
+    "key": "ci-verified-v1-codeql-rust-main-481f7135e5e7d189a513eadcc929fb8d1b92451cd91091c756ac68606c755427"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-6ca03bd64ce18d58529b70427c6265671c5f6e2ab037a224a5fb5d642fad0549"
+    "key": "ci-verified-v1-codeql-rust-main-59fab163366263a4e1351f9133ee538d7ed58bf9e9889ff2dc7512623ed7c4f3"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-6a49e6ced01998b3c9bb55cd40aa857e37a5dae68bdb60ab82c612d4f09baf2a"
+    "key": "ci-verified-v1-codeql-rust-main-f3801ba3f498bb0d24ac3f7cd740bff8c2ddbcdd3e50dbe1518f6ab88921e98b"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-44bc293b7899fb0ca9a2f4207887354593ee48d361c8211c606ef0d1cea6d036"
+    "key": "ci-verified-v1-codeql-rust-main-2bc690f9d6ee0c0c1d3c10b0c240c7ecb69ff5bd66f616eb442a30e215e41a8d"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-77260de54bfa1323fc3e4db65f9416d2785e24ae36c7fc8f6bfe5edcfcbc8f4d"
+    "key": "ci-verified-v1-codeql-rust-main-b84e9c61f3bc0775bbe8e511f6c571db9b9adcbe11a39f94ee6ed73f9d399e2b"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-3ca37358a1dccbfea9a49d66404f289a6ee692979c11eb6d8b4e084e36b1d5da"
+    "key": "ci-verified-v1-codeql-rust-main-b3f919064bf0f792ee5806aaa97c4ce71c3fc7832a9ef0a3066f79517865a3e5"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-b0929f04d508296677c980226c2f80ec2a4196d8b062dcec5059837c62ae5356"
+    "key": "ci-verified-v1-codeql-rust-main-bea252294d3b931f73a4aa60a8e58c6e0e8516e2b1fdd18546939cb83c4fae42"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-3e05094114855258f6ff2031c4ca827bf971d122280433a098d84074daedfbed"
+    "key": "ci-verified-v1-codeql-rust-main-54dbb448685a89efff6cbd5bd0e4b8baa83edf3d95c808ba0185c964f3223851"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-adb30028a399bbf5267ad2ddcbf3e2bebeaf691915f0a69c76eb4d665134fb92"
+    "key": "ci-verified-v1-codeql-rust-main-eeec992058e1a8122faa8d98bdf3edaf9151069d2f992298c59e1c0fdedde9f8"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-40bb39f491fffcf34867dcca62b6b818fc47a5a74bb4c291e44a13641b9e9cb8"
+    "key": "ci-verified-v1-codeql-rust-main-025dce04b54f3b8027a2c278af2bcb13770f0168b727a808e3696b569680dee9"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-8ef27c7fd580eaab0062609dae5d3935b455650798b25e871521d548d1fb3235"
+    "key": "ci-verified-v1-codeql-rust-main-2fe32adddbd9d3da827a0b25b1d8091e0149a8d759e887c84bdd912a3794568d"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-90113f3f861afcefd0a75aefb31c45892ed596bb4d83834b2c73f824bd49f785"
+    "key": "ci-verified-v1-codeql-rust-main-a3a6a4e1d49205b0808c68846c3631b799f6205d94fc0a8cdb80fc02ffad2bce"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-09d1e022464bcd899fb1bb17c7cf040574d66868ab5a961539902e420c8ed188"
+    "key": "ci-verified-v1-codeql-rust-main-03762a6e3c5449260573efd937052d476d207d3537819483daebe42efe0b2715"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-76d4a734285e3216da79b822c3fd3f13e15df6b436c33c405a5483ed568301b9"
+    "key": "ci-verified-v1-codeql-rust-main-f57dda6e044989b70a2261036955dd754dd097cbe621603149d056769840f915"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-a647a6085b3521ce8905407d2f986468352cff18b082a046def8e8a56d09741e"
+    "key": "ci-verified-v1-codeql-rust-main-a53c1fd1b636546058277ff8ef7029e0e3ee483e6f3a0ea40fa697fec0e68c4a"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-a47f96371c3d56012e0d33bb138c07b3942cd5aadaf8204472582a5137a4f0d9"
+    "key": "ci-verified-v1-codeql-rust-main-99913ac6c783da0753544630aa85219b041f484f7af8f7b5096c5807aaec6725"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-d0b06e07cae40ce1fd46193fffc446b7c807f7a8e7d7f822f6abeb657309b028"
+    "key": "ci-verified-v1-codeql-rust-main-84c64aaae3e3e7966eacfde8a032caf5fb5b81b8aea2969c83b7ca1ba5c823bd"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-440a8400df05f16d6ecbec490357c57aedcfb22cfeb2a2db9960d270b507e843"
+    "key": "ci-verified-v1-codeql-rust-main-a9e9a70f0440a8a172d2250b41160990a3706270d6d352d4517448d14fcdf3b5"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-387812619f4764777d76e01c2461d132ed89b91168c3653c01b97c7c3238e1df"
+    "key": "ci-verified-v1-codeql-rust-main-749d99c9a7ac8cdf5d1c472d7d80059e7a33e96333ca6adeab3d0104f488ab25"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-b4c8c3dfc26811d68fe9d3ba90fa39c6e6839bce698334476d87c0c4b3b34a62"
+    "key": "ci-verified-v1-codeql-rust-main-0c858a5a59bd4c812cb2fc08645bd01a5e1d3093ed5a9b8f69b83988a360e9a3"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-2a71e4d8bfc06958a46b7023a6f68c5939bcbfac4be2c871460cf9cf0d81587b"
+    "key": "ci-verified-v1-codeql-rust-main-652c26012e32b0bee3f5f4374539be1c09b2fe9086897a0c559900bcf59fbd1a"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-970f46434b5c4dcae87798a9183ef2dc7159826d5de0537126fe12256d461e01"
+    "key": "ci-verified-v1-codeql-rust-main-7e4eaa00b2896bc064a5d85e21a2e6825d1652ebfd40a11ad09887a0601aa0e0"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-d9ae00cd243684412100bc840b9ce9d6a98b5f9c159e51b427b29e04b5c5b18e"
+    "key": "ci-verified-v1-codeql-rust-main-5b62bf5091e3801c4c45e771f69b6ebb40106964a7d17f9530dac56ac12177b1"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-ffb23a96f78aecb71136106b096eb3b25d9a7ce983ae4d3a1ec77762cb6681c9"
+    "key": "ci-verified-v1-codeql-rust-main-b779dc725508fbe840379d27e3dad233ee3c4c822cf22f831354f0744dc06f85"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-21288e7045b4e3c03f5ac48cc97ded928e2c76776be02866f46031582e8219fd"
+    "key": "ci-verified-v1-codeql-rust-main-e93b511f2edb0dc3eb422632dbf19f5eebd547c8e22ee97d18728f4511d6461b"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-8f9d712d0240c991ea119f59a5aee54138c6ade60ff1126d0e73e9060a7225c5"
+    "key": "ci-verified-v1-codeql-rust-main-f92d4a40fadf635b2f9e4719876772b27e562a2d6861b111f816e2544c8f61a8"
    },
    {
     "operation": "key",
     "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-02a30ef903f2dee9729743cd6148c8d777618acce744a5986681dddcbf2cf796"
-   },
-   {
-    "operation": "key",
-    "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-240fc3c2e2b28db04095348250c12e16ff62072600533f1fc4b62763af0702ff"
-   },
-   {
-    "operation": "key",
-    "scope": "codeql-rust",
-    "key": "ci-verified-v1-codeql-rust-main-6acf8bb8f7b930a040112709e434f68530b63e3a789f281dc7fa12301d09e63e"
+    "key": "ci-verified-v1-codeql-rust-main-fc31328d97dc12b06d03f63a5283c81488aa67501c41174e4e7c9362790d9cb9"
    }
   ],
   "rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling": [
@@ -6411,7 +6072,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6446,7 +6106,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6481,7 +6140,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6516,7 +6174,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6551,7 +6208,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6586,7 +6242,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6621,7 +6276,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6656,7 +6310,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6691,7 +6344,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6726,7 +6378,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6761,7 +6412,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6796,7 +6446,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6831,7 +6480,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6866,7 +6514,6 @@
      "build/install-aws-lc.sh\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6901,7 +6548,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6936,7 +6582,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -6971,42 +6616,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
-     "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/bounded_process.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ansible/files/release_json.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "ops/ops-build-inputs.lock.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "other-target/helper.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "rust-toolchain.toml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "src/embedded.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "vendor/worker.cpp\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "web/new-target/helper.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "web/tests/layer-cap-cases.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "xtask/src/check.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218"
-    ],
-    "prefix": "ci-verified-v1-backend-main-"
-   },
-   {
-    "operation": "key",
-    "scope": "backend",
-    "identity": "{\"architecture\": \"arm64\", \"runner\": \"local:docker.io/owned/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"scope\": \"backend\", \"system\": \"Darwin\", \"trust\": \"main\"}",
-    "environment": "{\"CARGO_HOME\": \"/simplestchat-ci-home/.cargo\", \"CARGO_INCREMENTAL\": \"0\", \"workspace\": \"<root>\"}",
-    "inputs": [
-     ".cargo/config.toml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     ".github/actions/native-toolchain/action.yml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     ".github/workflows/ci.yml\u0000100644\u00004ba0b5d26050c5c683096299116057c9796858ef70d12be8779a207cb66a69a8",
-     "Cargo.lock\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "Cargo.toml\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.json\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-act.patch\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/ci-local-postgres.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7041,7 +6650,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7076,7 +6684,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7111,7 +6718,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7146,7 +6752,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7181,7 +6786,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7216,7 +6820,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7251,7 +6854,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7286,7 +6888,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7321,7 +6922,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000083c501b8680de820b75def62b155a8cca85516c531e8596daf448505580d0e8c",
@@ -7356,7 +6956,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7391,7 +6990,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7426,7 +7024,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
@@ -7461,7 +7058,6 @@
      "build/install-aws-lc.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/install-openssl.sh\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "build/pip-constraints.txt\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
-     "build/security_tools.py\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/main.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "load_tests/src/metrics/measurement.rs\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",
      "migrations/new.sql\u0000100644\u000025718360e05d3c2d0963d1381e9dd4dae5fca789244ee4b9f861adcc0cc96218",

@@ -337,11 +337,7 @@ fn preparation_has_only_read_authority_after_all_required_checks() {
         assert_eq!(step["with"]["path"], "${{ runner.temp }}/signed-release");
     }
     for step in signer {
-        for text in [
-            "cargo",
-            "release_attestation.py prepare",
-            "simplestchat-ops",
-        ] {
+        for text in ["cargo", "attestation prepare", "simplestchat-ops"] {
             assert!(!script(step).contains(text), "{text}");
         }
     }

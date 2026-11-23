@@ -25,11 +25,13 @@ const RECORDED: &[u8] = include_bytes!("recorded_cargo.json");
 /// Files of the native analysis that were deleted after the recording was
 /// made: the recording lists them among the files every CodeQL key binds
 /// and judged each an input, and none is one any longer.
-const REMOVED_SINCE_RECORDING: [&str; 5] = [
+const REMOVED_SINCE_RECORDING: [&str; 7] = [
     "build/ci_verified.py",
+    "build/security_context.py",
     "build/security_findings.py",
     "build/security_policy.py",
     "build/security_source_scope.py",
+    "build/security_tools.py",
     "build/security_vendor.py",
 ];
 
@@ -96,7 +98,7 @@ fn every_recorded_name_is_judged_an_input_alike() {
         assert_eq!(dependency_input(name), held != removed, "{name}");
         judged[usize::from(removed)] += 1;
     }
-    assert_eq!(judged, [46, 5]);
+    assert_eq!(judged, [44, 7]);
     let listed = |name: &str| -> Vec<String> {
         let words = items(&recorded, name)
             .iter()

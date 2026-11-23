@@ -21,7 +21,8 @@ workflow.
 
 ## Scan scope and evidence
 
-The shared `security_context.Context` takes a bounded copy of Git-tracked and
+The gate's shared context (`Context::snapshot` in
+`crates/security/src/context.rs`) takes a bounded copy of Git-tracked and
 nonignored source files. It rejects symbolic links and special files and records
 each copied file's SHA-256. This pack selects `.rs`, `.py`, `.ts` and `.js` files
 under these maintained production paths:

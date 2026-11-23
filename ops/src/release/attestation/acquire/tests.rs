@@ -598,3 +598,50 @@ fn late_real_signals_after_runtime_restore_refuse_fresh_success() {
     assert!(probes.0 > 0 && probes.1 == 0);
     assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
 }
+
+/// The selected CI run must be a finished, successful push run of `ci.yml`
+/// named CI, on `main`, at the selected revision and of the selected
+/// repository and head. A run of the manual build workflow, a dispatched or
+/// pull-request run, another branch or revision, an unfinished or failed
+/// run and a fork's head are each refused, however much else matches.
+#[test]
+fn only_a_successful_main_push_run_of_ci_is_ever_selected() {
+    let revision = "a".repeat(40);
+    let selected = options::Selected::new("owner/repo".into(), revision.clone(), 456, 789)
+        .expect("a selection");
+    let artifact = policy::Artifact {
+        run: 789,
+        bytes: 1024,
+        digest: "b".repeat(64),
+    };
+    let run = serde_json::json!({"id":789,"run_attempt":1,"head_branch":"main","name":"CI",
+        "path":".github/workflows/ci.yml","event":"push","head_sha":revision,
+        "status":"completed","conclusion":"success","repository":{"full_name":"owner/repo"},
+        "head_repository":{"full_name":"owner/repo"}});
+    let judged = |value: &Value| {
+        let decoded = crate::json::decode(&serde_json::to_vec(value).unwrap()).unwrap();
+        policy::run(&decoded, &artifact, &selected, &mut owner()).err()
+    };
+    assert_eq!(judged(&run), None);
+    for (pointer, changed) in [
+        (
+            "/path",
+            serde_json::json!(".github/workflows/release-artifact.yml"),
+        ),
+        ("/name", serde_json::json!("Release artifact")),
+        ("/event", serde_json::json!("workflow_dispatch")),
+        ("/event", serde_json::json!("pull_request")),
+        ("/head_branch", serde_json::json!("other")),
+        ("/head_sha", serde_json::json!("c".repeat(40))),
+        ("/status", serde_json::json!("in_progress")),
+        ("/conclusion", serde_json::json!("failure")),
+        ("/id", serde_json::json!(790)),
+        ("/run_attempt", serde_json::json!(0)),
+        ("/repository/full_name", serde_json::json!("other/repo")),
+        ("/head_repository/full_name", serde_json::json!("fork/repo")),
+    ] {
+        let mut value = run.clone();
+        *value.pointer_mut(pointer).expect("a field") = changed;
+        assert_eq!(judged(&value), Some(Cause::Policy), "{pointer}");
+    }
+}

@@ -1,14 +1,14 @@
 //! `image check IMAGE [--output DIR] [--engine docker|podman]
 //! [--artifact-dir DIR] [--image-tools DIR] [--image-database-cache DIR]`:
-//! the image tier. It exports the image once when no export is named,
-//! installs the image scanners or verifies the ones it is given, and runs
-//! the image gate as one check of a new private directory of evidence,
-//! whose `summary.json` is what may be uploaded.
+//! the image tier. It exports the image once with the checkout's own
+//! `simplestchat-ops release build` when no export is named, installs the
+//! image scanners or verifies the ones it is given, and runs the image gate
+//! as one check of a new private directory of evidence, whose
+//! `summary.json` is what may be uploaded.
 
 use crate::{
     Result,
     context::{Context, Outcome, Run, executable},
-    environment,
     image::{gate::LOCK, host::TOOL_CACHE},
     require, tier,
     tools::{self, Curl, Site},
@@ -32,6 +32,23 @@ const PATIENCE: Duration = Duration::from_secs(1800);
 const SCANNERS: [&str; 3] = ["syft", "grype", "gitleaks"];
 /// The lock's name of the platform the image is for.
 const PLATFORM: &str = "linux-x86_64";
+/// What Cargo is given before the image to export it: the checkout's
+/// production release builder, built with the release profile as CI builds
+/// it, run from the checkout as `release build`.
+const EXPORT: [&str; 12] = [
+    "run",
+    "--locked",
+    "-q",
+    "--release",
+    "-p",
+    "simplestchat-ops",
+    "--bin",
+    "simplestchat-ops",
+    "--",
+    "release",
+    "build",
+    "--image-id",
+];
 
 /// What a command line asks for.
 #[derive(Debug, PartialEq, Eq)]
@@ -98,8 +115,9 @@ pub(super) fn parsed(arguments: &[String]) -> Option<Request> {
 /// What the image tier asks of the machine it runs on, beside its own
 /// context.
 pub(super) trait Machine {
-    /// The interpreter that runs the release's exporter.
-    fn python(&self, context: &mut Context) -> Outcome<PathBuf>;
+    /// The Cargo of the toolchain the checkout pins, which builds and runs
+    /// the checkout's release exporter.
+    fn cargo(&self, context: &mut Context) -> Outcome<PathBuf>;
 
     /// Install the scanners `names` for the lock's platform `platform` as
     /// the directory `directory`, or verify the ones there, and answer it.
@@ -114,19 +132,21 @@ pub(super) trait Machine {
     fn program(&self) -> &Path;
 }
 
-/// This machine, for the checkout at `root`: the scanners' own environment
-/// for the exporter, the scanners checksum-pinned by its lock, and this very
-/// program for the gate.
+/// This machine, for the checkout at `root`: the Cargo of the checkout's
+/// pinned toolchain for the exporter, the scanners checksum-pinned by its
+/// lock, and this very program for the gate.
 struct Here<'a> {
     root: &'a Path,
     program: PathBuf,
 }
 
 impl Machine for Here<'_> {
-    fn python(&self, context: &mut Context) -> Outcome<PathBuf> {
+    /// Put the pinned toolchain first on the search path of the tier's
+    /// commands, as the source tiers do, and answer the `cargo` found there.
+    fn cargo(&self, context: &mut Context) -> Outcome<PathBuf> {
+        tier::pinned(context)?;
         let search = context.variable("PATH").map(OsStr::to_owned);
-        let python3 = executable("python3", search.as_deref())?;
-        environment::interpreter(context, &python3)
+        executable("cargo", search.as_deref())
     }
 
     fn install(
@@ -163,16 +183,14 @@ fn checked(context: &mut Context, request: &Request, machine: &dyn Machine) -> O
         None => {
             let docker = request.engine == "docker";
             require(docker, "canonical_release_export_requires_docker")?;
-            let python = machine.python(context)?;
             let export = output.join("export");
-            let argv: [OsString; 6] = [
-                python.into(),
-                "build/build-release.py".into(),
-                "--image-id".into(),
+            let mut argv = vec![machine.cargo(context)?.into_os_string()];
+            argv.extend(EXPORT.map(OsString::from));
+            argv.extend([
                 request.image.clone().into(),
                 "--output".into(),
                 export.clone().into(),
-            ];
+            ]);
             context.run("image-export", &argv, &patient)?;
             export
         }

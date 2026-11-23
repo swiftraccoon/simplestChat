@@ -36,7 +36,6 @@ fn directories(script: &str) -> Vec<&str> {
 fn every_runtime_proof_installs_its_gh_from_the_lock_before_any_credential() {
     for name in WORKFLOWS {
         let text = checkout_file(&format!(".github/workflows/{name}"));
-        assert!(!text.contains("security_tools.py"), "{name}");
         assert_eq!(text.matches("simplestchat-security").count(), 2, "{name}");
         let workflow = workflow(name);
         let mut installed = 0;

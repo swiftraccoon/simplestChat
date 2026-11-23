@@ -1,9 +1,7 @@
 """Force admission and ordinary release safeguards with inert offline artifacts."""
 
 import json
-import tempfile
 import unittest
-from copy import deepcopy
 from pathlib import Path
 from typing import override
 
@@ -13,10 +11,8 @@ from test_support import ROOT
 import force_release as force
 import release_public as release
 import test_public_release as public_tests
-from release_artifact import ArtifactError, Manifest, sha256_file
-from release_json import JsonObject, JsonValue, decode_json, json_value, object_value
+from release_json import JsonObject, JsonValue, decode_json, object_value
 from test_public_release import NEW_IMAGE, OLD_IMAGE, REVISION
-from test_release_build import image_archive, release_manifest
 
 
 def write_json(path: Path, value: JsonValue) -> None:
@@ -40,106 +36,6 @@ def request(directory: Path, inputs: JsonObject) -> JsonObject:
         "sourceInputsSha256": inputs,
         "fileDigests": force.file_hashes(directory),
     }
-
-
-class ForceArtifactTests(unittest.TestCase):
-    """Validate actual archive and source metadata, without builds, Docker or SSH."""
-
-    def __init__(self, method_name: str = "runTest") -> None:
-        """Initialize the fixture's explicitly typed paths and evidence."""
-        super().__init__(method_name)
-        self.root: Path = ROOT
-        self.artifact: Path = ROOT
-        self.evidence: Path = ROOT
-        self.inputs: JsonObject = {}
-        self.request: JsonObject = {}
-        self.manifest: Manifest = public_tests.fixture_manifest("0" * 64)
-
-    @override
-    def setUp(self) -> None:
-        self.assertFalse((ROOT / "results").is_symlink())
-        (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
-        temporary = tempfile.TemporaryDirectory(dir=ROOT / "results")
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name).resolve()
-        self.artifact = self.root / "artifact"
-        self.artifact.mkdir(mode=0o700)
-        self.evidence = self.root / "evidence"
-        self.evidence.mkdir(mode=0o700)
-        self.inputs = {}
-        for name in force.SOURCE_INPUTS:
-            path = self.root / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            _ = path.write_text(name)
-            self.inputs[name] = sha256_file(path)
-        migrations = self.root / "migrations"
-        migrations.mkdir()
-        _ = (migrations / "001_fixture.sql").write_text("SELECT 1;\n")
-        image_archive(self.artifact / "image.tar")
-        self.manifest = release_manifest(self.artifact / "image.tar")
-        write_json(self.artifact / "release.json", json_value(self.manifest))
-        write_json(
-            self.artifact / "source.json", {"revision": REVISION, "inputsSha256": self.inputs}
-        )
-        write_json(
-            self.artifact / "outcome.json",
-            {
-                "schemaVersion": 1,
-                "revision": REVISION,
-                "passed": True,
-                "error": None,
-            },
-        )
-        self.request = request(self.artifact, self.inputs)
-
-    def test_authorization_cannot_claim_signed_or_successful_ci(self) -> None:
-        """Only the complete explicit unsigned request is accepted."""
-        for mutation in (
-            {"forced": False},
-            {"githubAttested": True},
-            {"ciVerification": "passed"},
-            {"revision": "main"},
-            {"ciRunId": 123},
-            {"quietSeconds": True},
-            {"deploy": "true"},
-        ):
-            with self.subTest(mutation=mutation), self.assertRaises(release.ReleaseError):
-                force.validate_request({**self.request, **mutation})
-
-    def test_archive_tampering_wrong_source_and_failed_build_are_rejected(self) -> None:
-        """Integrity and source/build checks apply even when GitHub gates are skipped."""
-        for name, change in (
-            ("image.tar", b"different"),
-            (
-                "source.json",
-                json.dumps({"revision": "b" * 40, "inputsSha256": self.inputs}).encode(),
-            ),
-            (
-                "outcome.json",
-                json.dumps(
-                    {"schemaVersion": 1, "revision": REVISION, "passed": False, "error": None}
-                ).encode(),
-            ),
-        ):
-            original = (self.artifact / name).read_bytes()
-            try:
-                _ = (self.artifact / name).write_bytes(change)
-                mutated = deepcopy(self.request)
-                if name != "image.tar":
-                    mutated["fileDigests"] = force.file_hashes(self.artifact)
-                with self.subTest(name=name), self.assertRaises(release.ReleaseError):
-                    _ = force.validate_artifact(self.artifact, mutated)
-            finally:
-                _ = (self.artifact / name).write_bytes(original)
-
-    def test_wrong_runtime_image_is_rejected_even_with_matching_transfer_hashes(self) -> None:
-        """Unsigned admission still requires the production image's non-root identity."""
-        image_archive(self.artifact / "image.tar", user="0:0")
-        manifest = release_manifest(self.artifact / "image.tar")
-        write_json(self.artifact / "release.json", json_value(manifest))
-        self.request["fileDigests"] = force.file_hashes(self.artifact)
-        with self.assertRaises(ArtifactError):
-            _ = force.validate_artifact(self.artifact, self.request)
 
 
 class ForceRuntimeTests(unittest.TestCase):

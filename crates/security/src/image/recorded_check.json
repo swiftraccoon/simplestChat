@@ -351,8 +351,18 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/build-release.py",
+      "<cargo>",
+      "run",
+      "--locked",
+      "-q",
+      "--release",
+      "-p",
+      "simplestchat-ops",
+      "--bin",
+      "simplestchat-ops",
+      "--",
+      "release",
+      "build",
       "--image-id",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--output",
@@ -438,8 +448,18 @@
    "commands": [
     {
      "argv": [
-      "<python>",
-      "build/build-release.py",
+      "<cargo>",
+      "run",
+      "--locked",
+      "-q",
+      "--release",
+      "-p",
+      "simplestchat-ops",
+      "--bin",
+      "simplestchat-ops",
+      "--",
+      "release",
+      "build",
       "--image-id",
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "--output",

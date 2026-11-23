@@ -309,8 +309,6 @@ test('the builder authenticates cargo-auditable with the security crate built fr
   assert.equal(dockerfile.match(/--bin simplestChat(?=\s|$)/gm).length, 2, 'only the two auditable builds build the application');
   assert.ok(!/cargo build[^\n]*--bin simplestChat(?=\s|$)/m.test(dockerfile), 'no stage builds the application with plain cargo');
   assert.equal(builder.match(/simplestchat-security tools /g).length, 2);
-  assert.ok(!dockerfile.includes('security_tools.py'), 'no stage installs through the retired installer');
-  assert.equal(excluded('build/security_tools.py'), true, 'the retired installer stays outside the context');
   assert.equal(excluded('crates/security/src/tools/recorded_tools.json'), true);
 });
 

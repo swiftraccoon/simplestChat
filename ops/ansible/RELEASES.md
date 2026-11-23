@@ -451,8 +451,8 @@ The default signed deployment artifact is produced only by `.github/workflows/ci
 required CI, security and CodeQL jobs. Pull-request caches or artifacts are never
 promoted. The separate manual image-build workflow is useful for diagnostics;
 its output has no deployment eligibility, even if another run passed for the
-same commit. Local `build/build-release.py` output requires the explicit force path
-above; it does not satisfy the trusted signer contract.
+same commit. Local `simplestchat-ops release build` output requires the explicit
+force path above; it does not satisfy the trusted signer contract.
 
 The controller downloads and verifies the exact API-digested artifact locally
 before SSH, helper installation, remote preflight, image import or service

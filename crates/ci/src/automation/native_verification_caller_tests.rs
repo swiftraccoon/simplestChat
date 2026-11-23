@@ -203,7 +203,7 @@ fn verification_is_unconditional_and_has_no_interpreted_alternative() {
         mutate_task(&mut changed, name, field, value);
         assert!(contract(&changed).is_err(), "{name}: {field}");
     }
-    // The retired interpreted verifier wrote the adopted fact directly.
+    // An interpreted verifier that writes the adopted fact directly.
     let mut changed = original.clone();
     let pre = changed[0]["pre_tasks"].as_array_mut().unwrap();
     let (at, native) = named(pre, NATIVE).unwrap();
@@ -213,7 +213,7 @@ fn verification_is_unconditional_and_has_no_interpreted_alternative() {
     reference["ansible.builtin.command"]["argv"] = json!([
         "{{ ansible_playbook_python }}",
         "-B",
-        "{{ playbook_dir }}/../../build/verify-release.py"
+        "{{ playbook_dir }}/../../build/release-verifier.py"
     ]);
     pre.insert(at, reference);
     assert!(contract(&changed).is_err());
@@ -222,8 +222,9 @@ fn verification_is_unconditional_and_has_no_interpreted_alternative() {
         json!(["/usr/bin/python3", "-B", "/usr/local/libexec/x"]),
         json!([
             "{{ ansible_playbook_python }}",
-            "{{ playbook_dir }}/../../build/fetch-release.py"
+            "{{ playbook_dir }}/../../build/release-step.py"
         ]),
+        json!(["{{ playbook_dir }}/../../build/release-step.py"]),
     ] {
         let mut changed = original.clone();
         changed[0]["tasks"].as_array_mut().unwrap().push(json!({

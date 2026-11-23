@@ -137,11 +137,9 @@ The CLI accepts `--output PATH`, optional `--timeout-seconds N` and optional
 have leading zeroes; signs, whitespace, separators and Unicode numerals are usage
 errors. Selectors may occur once; full option
 names and ordinary ASCII decimal integers are required. `N` is 60 through 7200,
-default 3600. Python's incidental argparse abbreviations and Unicode integer forms
-remain available through the unchanged reference command; the new command does
-not accept them. Help and usage errors require no environment, tool or source
-lookup. Exit 0 means complete success, 1 means an operational failure, deadline or
-interrupt, and 2 means invalid arguments. Private command evidence retains actual
+default 3600. Help and usage errors require no environment, tool or source
+lookup. Exit 0 means complete success, 1 means an operational failure, deadline
+or interrupt, and 2 means invalid arguments. Private command evidence retains actual
 signed child status separately from the operation's cause; a child exit 130 does
 not mean the controller received an interrupt.
 
@@ -168,13 +166,10 @@ beyond `u64` or finite `f64` range. Float spelling is retained when conversion i
 finite; underflow to zero is allowed, while overflow, NaN and Infinity are refused.
 Booleans and null retain their own types.
 
-This adapter rejects raw NUL bytes and a leading UTF-8 BOM. The Python builder
-receives already decoded strings from strict subprocess UTF-8 or `read_text`;
-`json.loads(str)` does not perform the generic byte decoder's UTF-16/32 or BOM
-autodetection. Escaped `\u0000` inside a JSON string remains valid. The Rust metadata
-profile is an explicit accepted-domain boundary: deeper ignored objects accepted
-by Python can be refused here. These limits are not a claim of full Python
-metadata parity.
+This adapter rejects raw NUL bytes and a leading UTF-8 BOM and performs no
+UTF-16/32 or BOM autodetection: metadata must already be strict UTF-8 text.
+Escaped `\u0000` inside a JSON string remains valid. The metadata profile is an
+explicit accepted-domain boundary: deeper ignored objects can be refused.
 
 Both modes stream `docker image save --platform linux/amd64 TAG` stdout into
 an original writer for the admitted `image.tar`. Docker receives no output path:
@@ -287,10 +282,12 @@ evidence; an offline oracle or successful compilation cannot establish that fit.
 Neither caller obtains a same-run signed Ops artifact: that would depend on the
 very CI completion that production export helps establish.
 
-The unchanged `build/build-release.py` and `build/release_build.py` remain runnable.
-Installed Python operations and other users of `release_build.Runner` keep their
-existing roles. The [testing guide](../docs/testing.md#production-release-builder)
-distinguishes actual inert process tests and hosted Docker/signing evidence.
+`simplestchat-security image check` without `--artifact-dir` exports its image
+through this command too: it runs `cargo run --locked -q --release -p
+simplestchat-ops --bin simplestchat-ops -- release build --image-id IMAGE --output
+DIR` from the checkout with the pinned toolchain's Cargo. The
+[testing guide](../docs/testing.md#production-release-builder) distinguishes
+actual inert process tests and hosted Docker/signing evidence.
 
 ## Read-only release preflight
 
@@ -2458,7 +2455,6 @@ directory and at another: 575 judgements, replayed by kind and code.
 server release and successful scanner evidence, creates four metadata copies,
 and writes the unsigned `release-predicate.json`. It performs no signature
 verification, signing, Git, Docker, network, installation or deployment action.
-The unchanged `build/release_attestation.py prepare` remains available.
 
 ```sh
 target/release/simplestchat-ops release attestation prepare \
@@ -2472,13 +2468,12 @@ target/release/simplestchat-ops release attestation prepare \
 Replace the selector placeholders with exact identities. Run IDs satisfy
 `0 < run < 2^53`; attempts satisfy `0 < attempt < 2^31`. Every full flag occurs
 once and accepts split or equals form. Numeric arguments use ASCII decimal
-syntax; Python's incidental plus signs, underscores, Unicode digits and option
-abbreviations remain available through the reference command. Artifact/security
-paths are canonical absolute paths. This Rust profile refuses symlinks in every
-component and admits regular files only, including the five hash-only inputs.
-Python's broader symlink/special-file behavior is not claimed as supported here.
-The two directories may overlap; fixed create-new destination names still refuse
-conflicts. Unrelated directory entries are permitted.
+syntax; plus signs, underscores, Unicode digits and option abbreviations are not
+accepted. Artifact/security paths are canonical absolute paths. This profile
+refuses symlinks in every component and admits regular files only, including the
+five hash-only inputs. The two directories may overlap; fixed create-new
+destination names still refuse conflicts. Unrelated directory entries are
+permitted.
 
 Both budget flags are required and caller-selected: `0 < M < N`, with no default
 or arbitrary maximum. The original entry instant defines the whole `N` seconds,
@@ -2561,8 +2556,7 @@ Same-UID writable-filesystem/check-read races remain outside that claim.
 `simplestchat-ops release attestation verify` verifies an already downloaded
 candidate with four fresh maintained `gh attestation verify` invocations. It
 performs no API selection, download, extraction, signing, SSH, engine or host
-operation. The original Python `verify_directory` remains available. Routine
-deployment uses this verifier through the complete fresh
+operation. Routine deployment uses this verifier through the complete fresh
 verification owner described below, which acquires current API metadata before
 cached verification. No saved selection or receipt replaces that observation.
 
@@ -2690,18 +2684,17 @@ Ops three-subject contracts remain unchanged.
 
 ## Fresh local release verification
 
-`simplestchat-ops release verify` implements the complete local operation from
-`build/verify-release.py`: select an explicitly pinned release through fresh
-GitHub API observations, download and extract it or reverify a supplied cache,
-then run the four maintained cryptographic verifiers. It returns the local
+`simplestchat-ops release verify` is the complete local operation: select an
+explicitly pinned release through fresh GitHub API observations, download and
+extract it or reverify a supplied cache, then run the four maintained
+cryptographic verifiers. It returns the local
 directory and two verified file digests before contacting a deployment host.
 The default `simplestchat-release verify` entry point delegates directly to this
 same synchronous Ops library operation before the controller's ordinary router creates a
 Tokio runtime or looks up a repository root. It adds no
 second parser, nested Cargo command, dependency or verifier implementation.
 The routine Rust deployment frontend selects it for controller-side application
-verification; Python fetching, receiving, host staging, explicit force and other
-documented keeper roles remain unchanged.
+verification.
 
 ```sh
 target/release/simplestchat-ops release verify \
@@ -2721,14 +2714,13 @@ verifiers; it requests no token or download grant and does not resolve curl.
 Neither mode accepts a stored success receipt or caller-supplied API envelope
 as evidence of a fresh selection.
 
-The routine Ansible caller opts into native verification with the strict boolean
-`scpub_release_native_verification`. Omission means false and retains the Python
-verification route; the Rust deployment frontend supplies true. Native mode requires
-trusted absolute controller/GitHub CLI paths and uses 600 seconds including a
-60-second final reserve, inside the existing 660-second Ansible guard. A distinct
-native result is normalized into the existing downstream verification variable
-only after actual success. Refusal stops before host preflight; it never retries
-through Python. The [operator contract](ansible/RELEASES.md#direct-typed-ansible-deployment)
+The routine release playbook always verifies on the controller through
+`simplestchat-release verify`, which runs this operation. It requires trusted
+absolute controller/GitHub CLI paths and uses 600 seconds including a 60-second
+final reserve, inside a 660-second Ansible guard.
+The distinct native result is adopted into the downstream verification variable
+only after actual success. Refusal stops before host preflight; nothing retries
+it. The [operator contract](ansible/RELEASES.md#direct-typed-ansible-deployment)
 records the exact inputs and retained stage-only behavior.
 
 The public selectors are the repository, lowercase 40-character revision and

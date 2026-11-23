@@ -198,10 +198,9 @@ cap-plus-one checks. Actual protected-file cases retain the separate 64 KiB
 benchmark and 16 KiB persistent-state encoded bounds.
 
 The metadata adapter accepts UTF-8 strings and rejects raw NUL or a leading BOM,
-matching the Python builder's already decoded string boundary rather than generic
-JSON byte encoding detection. Escaped `\u0000` remains valid. These tests document
-the explicit Rust profile; they do not establish full Python acceptance parity
-for deeper or otherwise out-of-profile ignored metadata.
+without generic JSON byte encoding detection. Escaped `\u0000` remains valid.
+These tests document the explicit profile, which can refuse deeper or otherwise
+out-of-profile ignored metadata.
 
 The focused budget fixtures cover export selections 60, 139, 140 and 300 seconds.
 The whole export end remains `N + 60`, verification reserve and cap are both
@@ -301,17 +300,19 @@ cargo run -q -p xtask -- test-env \
 
 `simplestchat-security` installs the security gate's scanners
 ([security tool inputs](../security/README.md)). Its tests download nothing.
-They replay `crates/security/src/tools/recorded_tools.json`, the answers of
-`build/security_tools.py` for 135 lock documents, 112 archives built with that
-interpreter's own tar, gzip, xz and ZIP writers, and 81 installation scenarios
-against scripted transport answers: the verdict of every step, the requests
-and delays it made, and every file it left, the receipt byte for byte.
+They replay `crates/security/src/tools/recorded_tools.json`, the answers the
+retired Python installer gave for 135 lock documents, 112 archives built with
+its interpreter's own tar, gzip, xz and ZIP writers, and 81 installation
+scenarios against scripted transport answers: the verdict of every step, the
+requests and delays it made, and every file it left, the receipt byte for byte.
 Fourteen addresses and two damaged archives that the reference accepted are
 refused, and the tests name them. What the recording cannot hold is tested
 directly: the exact curl command line, how a finished transfer is judged, a
 child process that answers, runs late, writes too much or never ends, file
-creation and ownership, the two command forms, and the executable's output
-and exit statuses.
+creation and ownership, the two command forms, the executable's output and
+exit statuses, and the committed lock's GitHub CLI: no fast-gate tool, reviewed
+for `linux-x86_64` alone and refused for every other platform before any
+transfer, its one nested release member installed as `bin/gh` and reused.
 
 ```sh
 cargo test --locked -p simplestchat-security -- --test-threads=1

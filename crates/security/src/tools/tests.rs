@@ -1,10 +1,11 @@
 //! Replays of the recorded installer and direct tests of what it has no record of.
 //!
-//! `recorded_tools.json` holds what `build/security_tools.py` answered for lock
-//! documents, for archives built with its interpreter's own writers, and for
-//! installations against scripted transport answers, with the files each step
-//! left behind. Where the interpreter failed with one of its own exception
-//! names, `named` gives the code this installer has for that failure.
+//! `recorded_tools.json` holds what the reference installer in Python
+//! answered for lock documents, for archives built with its interpreter's
+//! own writers, and for installations against scripted transport answers,
+//! with the files each step left behind. Where the interpreter failed with
+//! one of its own exception names, `named` gives the code this installer has
+//! for that failure.
 
 use super::{
     Answer, Fault, Limits, Site, Transport, archive, cli, digest, files, install,
@@ -840,6 +841,121 @@ fn the_committed_lock_is_admitted_whole() {
             .iter()
             .all(|tool| lock.tools.contains_key(*tool))
     );
+}
+
+/// The committed lock.
+fn committed() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/security-tools.lock.json")
+}
+
+/// A gzip-compressed tar of `members`, each one regular file.
+fn tar_gz(members: &[(&str, &[u8])]) -> Vec<u8> {
+    let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    for (name, content) in members {
+        let mut header = tar::Header::new_ustar();
+        header.set_size(u64::try_from(content.len()).expect("a size"));
+        header.set_mode(0o644);
+        builder
+            .append_data(&mut header, name, *content)
+            .expect("a member");
+    }
+    let encoder = builder.into_inner().expect("a tar");
+    encoder.finish().expect("a gzip stream")
+}
+
+/// A transport that answers every address of `bodies` with its bytes.
+fn serving(bodies: BTreeMap<String, Vec<u8>>) -> Scripted {
+    let mut transport = Scripted::new(&json!({}), None);
+    transport.bodies = bodies;
+    transport
+}
+
+#[test]
+fn the_committed_gh_is_no_fast_tool_and_no_other_platform_borrows_it() {
+    let lock = Lock::load(&committed()).expect("the committed lock");
+    let platforms: Vec<&str> = lock.tools["gh"]
+        .platforms
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(platforms, ["linux-x86_64"]);
+    assert!(!super::FAST_TOOLS.contains(&"gh"));
+    let scratch = Scratch::new("gh-platforms");
+    let destination = scratch.0.join("installed");
+    let lock = committed();
+    for platform in ["linux-aarch64", "darwin-arm64", "darwin-x86_64"] {
+        let site = Site {
+            lock: &lock,
+            cache: &scratch.0.join("cache"),
+            platform,
+            limits: Limits::REVIEWED,
+        };
+        let mut transport = serving(BTreeMap::new());
+        let refused = install(
+            &site,
+            &["gh".to_owned()],
+            Some(&destination),
+            &mut transport,
+        );
+        assert_eq!(
+            code(&refused),
+            Some("unsupported_tool_platform"),
+            "{platform}"
+        );
+        assert!(transport.requests.is_empty(), "{platform}");
+        assert!(!destination.exists(), "{platform}");
+        assert!(!scratch.0.join("cache").exists(), "{platform}");
+    }
+}
+
+#[test]
+fn the_committed_gh_installs_its_one_nested_member_as_bin_gh_and_is_reused() {
+    let mut document: Value =
+        serde_json::from_slice(&std::fs::read(committed()).expect("the lock")).expect("JSON");
+    let mut gh = document["tools"]["gh"].take();
+    let reviewed = &gh["platforms"]["linux-x86_64"];
+    let files = reviewed["files"].as_object().expect("files");
+    assert_eq!(files.len(), 1);
+    let (member, installed) = files.iter().next().expect("one file");
+    assert_eq!(installed, &gh["executable"]);
+    assert!(
+        member.ends_with("/bin/gh"),
+        "a member nested in its release"
+    );
+    let executable = b"reviewed executable fixture bytes\n";
+    let archive = tar_gz(&[(member, executable), ("LICENSE", b"unselected license")]);
+    let address = text(&reviewed["url"]).to_owned();
+    gh["platforms"]["linux-x86_64"]["sha256"] = json!(digest(&archive));
+    let scratch = Scratch::new("gh-nested");
+    let lock = scratch.0.join("lock.json");
+    let only = json!({"schemaVersion": 1, "tools": {"gh": gh}});
+    std::fs::write(&lock, only.to_string()).expect("a lock of the reviewed gh alone");
+    let site = Site {
+        lock: &lock,
+        cache: &scratch.0.join("cache"),
+        platform: "linux-x86_64",
+        limits: Limits::REVIEWED,
+    };
+    let destination = scratch.0.join("installed");
+    let names = ["gh".to_owned()];
+    let mut transport = serving(BTreeMap::from([(address.clone(), archive)]));
+    let made = install(&site, &names, Some(&destination), &mut transport);
+    assert_eq!(made, Ok(destination.clone()));
+    assert_eq!(transport.requests.len(), 1);
+    assert!(transport.requests[0] == address);
+    let found = path(&site, "gh", Some(&destination)).expect("the verified gh");
+    assert_eq!(found, destination.join("bin/gh"));
+    assert_eq!(std::fs::read(&found).expect("gh"), executable);
+    let listed: Vec<PathBuf> = std::fs::read_dir(destination.join("bin"))
+        .expect("bin")
+        .map(|entry| entry.expect("an entry").path())
+        .collect();
+    assert_eq!(listed, [found]);
+    let mut again = serving(BTreeMap::from([(address, Vec::new())]));
+    let reused = install(&site, &names, Some(&destination), &mut again);
+    assert_eq!(reused, Ok(destination));
+    assert!(again.requests.is_empty());
 }
 
 #[test]

@@ -97,9 +97,11 @@ it never runs the vendor/native analysis tier. Summaries identify the selected
 scope and do not imply optional checks were executed.
 
 The image tier needs the selected immutable production image on a Linux amd64
-Docker host and a clean source checkout. It exports that exact image once. When
-the canonical exporter already ran, supply
-`--artifact-dir /private/canonical-release` to scan those same archive bytes.
+Docker host and a clean source checkout. It exports that exact image once, with
+the checkout's own `simplestchat-ops release build` run through the pinned
+toolchain's `cargo run --release`. When the canonical exporter already ran,
+supply `--artifact-dir /private/canonical-release` to scan those same archive
+bytes.
 The tool never rebuilds an image to stand in for the requested ID. Case-insensitive
 filesystems and noncanonical exports fail. See [image security](image-security.md)
 for detailed archive, scanner, database, license and ELF contracts.

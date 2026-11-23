@@ -17,10 +17,9 @@ use std::{
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 const PRIVATE: &str = "PRIVATE_DEPLOY_INVENTORY_SENTINEL";
-const SOURCE_PATHS: [&str; 6] = [
-    "build/verify-release.py",
-    "build/release_attestation.py",
-    "build/release_fetch_controller.py",
+const SOURCE_PATHS: [&str; 5] = [
+    "build/benchmark-container.sh",
+    "build/cleanup-container-benchmark.sh",
     "ops/ansible/ansible.cfg",
     "ops/ansible/release.yml",
     "ops/ansible/tasks/signed-ops.yml",
@@ -589,7 +588,7 @@ impl Executor for Fake {
         if self.late_mutation {
             self.late_mutation = false;
             let path = if self.case == Case::BuildKeeperDrift {
-                self.root.join("build/release_attestation.py")
+                self.root.join("build/benchmark-container.sh")
             } else {
                 self.root.join(".git/refs/heads/main")
             };
@@ -607,7 +606,7 @@ impl Executor for Fake {
                 .unwrap();
             } else if self.case == Case::AnsibleFinalProofRefusal {
                 fs::write(
-                    self.root.join("build/release_attestation.py"),
+                    self.root.join("build/benchmark-container.sh"),
                     b"changed after the actual Ansible exit observation\n",
                 )
                 .unwrap();

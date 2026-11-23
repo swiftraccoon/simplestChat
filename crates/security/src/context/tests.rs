@@ -1,6 +1,6 @@
 //! Replays of the recorded invocation context.
 //!
-//! `recorded_context.json` holds what `build/security_context.py` answered
+//! `recorded_context.json` holds what the reference in Python answered
 //! for child environments, searches of the path, sequences of commands and
 //! snapshots of trees built on disk, and how the reference writes a document.
 //! Where the reference failed with an exception of its interpreter, `named`

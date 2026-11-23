@@ -93,8 +93,8 @@ impl ReceiverReceipt {
         let bytes = files::read(path, 65536).map_err(|_| Error::Policy(Failure::Receipt))?;
         Self::decode(&bytes, envelope)
     }
-    /// Match `release_fetch_controller.verified_receipt`, including field types,
-    /// exact selected identities, partial failures and success/digest consistency.
+    /// Validate the receipt's field types, exact selected identities, partial
+    /// failures and success/digest consistency.
     /// Unknown source fields stay private in Document; Serialize emits only the
     /// established sixteen allowed fields. A success-shaped file alone has no authority.
     pub fn decode(bytes: &[u8], envelope: &Envelope) -> Result<Document<Self>, Error> {

@@ -281,7 +281,7 @@ impl Programs for Equipped<'_> {
 /// Put the pinned compiler's own directory first on the search path of the
 /// invocation's commands: the one that holds what `rustup` names as the
 /// cargo of the channel the toolchain file pins.
-fn pinned(context: &mut Context) -> Outcome<()> {
+pub(crate) fn pinned(context: &mut Context) -> Outcome<()> {
     let fault = Fault("security_rust_toolchain");
     let channel = mutation::channel(context.root())?.ok_or(fault)?;
     let rustup = executable("rustup", context.variable("PATH"))?;

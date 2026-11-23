@@ -34,11 +34,8 @@ does not merge new tools into an unrelated or incomplete prefix; an explicit
 `--directory` selects a separate installation.
 
 The image's builder stage, the runtime proof workflows and the Rust dependency
-audit install through these commands, and so do the source tiers.
-`build/security_tools.py` is the same installer for the release checks: it
-takes the same options, lock and default directory and writes the same files and
-a byte-identical receipt, so either one verifies and
-reuses a directory the other published. The Rust installer downloads with
+audit install through these commands, and so do the source tiers, the image
+tier and the CI release checks. The installer downloads with
 `/usr/bin/curl`, which is given none of the caller's environment and accepts
 only HTTPS, redirects included, within the same three attempts, delays and
 three-minute bound; nothing is parsed before the archive has the locked digest.
@@ -81,10 +78,10 @@ verification. No engine version is borrowed from the developer's global PATH.
 ## Python scanner environment
 
 `requirements.in` declares the small scanner dependency set; `requirements.txt`
-contains its complete hashed wheel lock. The gate creates a separate
-environment keyed by that lock's digest, which the image tier also uses when it
-exports the image itself. It installs with `--require-hashes --only-binary=:all:`
-and checks dependency consistency before publishing the environment receipt.
+contains its complete hashed wheel lock. The source tiers create a separate
+environment keyed by that lock's digest. It installs with
+`--require-hashes --only-binary=:all:` and checks dependency consistency before
+publishing the environment receipt.
 Deployment and build-tool environments are independent and are audited
 separately.
 

@@ -1,7 +1,7 @@
-//! Replays of `recorded_check.json`: what the reference's image tier did
-//! with a command line, its own context running every check for real and
-//! only the process each check starts and the scanners' installation
-//! replaced; with direct tests of the command line.
+//! Replays of `recorded_check.json`: what the image tier did with each of
+//! its recorded command lines, its own context running every check for real
+//! and only the process each check starts and the scanners' installation
+//! replaced; with direct tests of the command line and of this machine.
 
 use super::{Here, Machine, PATIENCE, Request, concluded, parsed, ran, tiered};
 use crate::{
@@ -50,10 +50,10 @@ fn script(path: &Path, log: &Path, status: i128) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("its mode");
 }
 
-/// The machine of one case: the recorder's interpreter and gate, which end
-/// as the recorder's processes ended, and its installation.
+/// The machine of one case: the exporter's Cargo and the gate, which end as
+/// the recorded processes ended, and the recorded installation.
 struct Faked {
-    python: PathBuf,
+    cargo: PathBuf,
     program: PathBuf,
     installed: bool,
     base: PathBuf,
@@ -69,8 +69,8 @@ impl Faked {
 }
 
 impl Machine for Faked {
-    fn python(&self, _context: &mut Context) -> Outcome<PathBuf> {
-        Ok(self.python.clone())
+    fn cargo(&self, _context: &mut Context) -> Outcome<PathBuf> {
+        Ok(self.cargo.clone())
     }
 
     fn install(
@@ -127,7 +127,7 @@ fn logged(machine: &Faked, base: &Path, root: &Path, name: &str) -> Option<Docum
     let log = base.join(format!("{name}.argv"));
     let words = fs::read_to_string(&log).ok()?;
     let shown = |word: &str| {
-        let word = word.replace(machine.python.to_str().expect("text"), "<python>");
+        let word = word.replace(machine.cargo.to_str().expect("text"), "<cargo>");
         let word = word.replace(machine.program.to_str().expect("text"), "<program>");
         machine.shown(Path::new(&word))
     };
@@ -174,13 +174,13 @@ fn replayed(case: &Document) -> Came {
         (status(0), status(1))
     };
     let machine = Faked {
-        python: base.join("python"),
+        cargo: base.join("cargo"),
         program: base.join("gate"),
         installed: flag("installed"),
         base: base.clone(),
         installs: RefCell::new(Vec::new()),
     };
-    script(&machine.python, &base.join("python.argv"), exported);
+    script(&machine.cargo, &base.join("cargo.argv"), exported);
     script(&machine.program, &base.join("gate.argv"), judged);
     let unmasked = |word: &str| {
         let word = word.replace("<base>", base.to_str().expect("text"));
@@ -194,7 +194,7 @@ fn replayed(case: &Document) -> Came {
     let (passed, output) = tiered(&root, &request, &machine, &ambient).expect("evidence");
     let line = crate::tier::proclaimed("image", passed, &output);
     let said = String::from_utf8(line).expect("text");
-    let commands = ["python", "gate"]
+    let commands = ["cargo", "gate"]
         .iter()
         .filter_map(|name| logged(&machine, &base, &root, name));
     let walked = crate::image::sandbox::tests::walked(&output);
@@ -375,6 +375,81 @@ fn this_machine_installs_with_this_checkouts_lock_and_runs_this_program() {
 }
 
 #[test]
+fn this_machine_exports_with_the_cargo_of_the_checkouts_pinned_toolchain() {
+    let scratch = Scratch::new("pinned");
+    let (root, search) = (scratch.0.join("root"), scratch.0.join("bin"));
+    let toolchain = scratch.0.join("toolchain/bin");
+    for directory in [&root, &search, &toolchain] {
+        fs::create_dir_all(directory).expect("a directory");
+    }
+    let file = "[toolchain]\nchannel = \"1.2.3\"\n";
+    fs::write(root.join("rust-toolchain.toml"), file).expect("a toolchain file");
+    // `rustup` names a toolchain's cargo only for the channel the file pins.
+    let pinned = toolchain.join("cargo");
+    let rustup = search.join("rustup");
+    let answer = format!(
+        "#!/bin/sh\n[ \"$*\" = 'which --toolchain 1.2.3 cargo' ] || exit 3\n\
+         printf '%s\\n' '{}'\n",
+        pinned.display()
+    );
+    fs::write(&rustup, answer).expect("rustup");
+    fs::set_permissions(&rustup, fs::Permissions::from_mode(0o755)).expect("its mode");
+    // The pinned cargo fails, so that the tier stops after the export; the
+    // one on the caller's search path would pass.
+    script(&search.join("cargo"), &scratch.0.join("unpinned.argv"), 0);
+    script(&pinned, &scratch.0.join("pinned.argv"), 1);
+    let machine = Here {
+        root: &root,
+        program: scratch.0.join("gate"),
+    };
+    let line = format!("sha256:x --output {}", scratch.0.join("evidence").display());
+    let request = parsed(&words(&line)).expect("a request");
+    let home = scratch.0.join("home");
+    let ambient = |name: &str| match name {
+        "PATH" => Some(search.clone().into_os_string()),
+        "HOME" => Some(home.clone().into_os_string()),
+        _ => None,
+    };
+    let (passed, output) = tiered(&root, &request, &machine, &ambient).expect("evidence");
+    assert!(!passed);
+    let summary = timeless(&output.join("summary.json"));
+    assert_eq!(
+        summary.get("failure"),
+        Some(&"scanner_command_failed_image-export".into())
+    );
+    let asked = fs::read_to_string(scratch.0.join("pinned.argv")).expect("the pinned cargo ran");
+    let mut expected = vec![pinned.display().to_string()];
+    // Written out, not read from the constant it checks: the production
+    // builder, built with the release profile, exporting this image.
+    expected.extend(
+        [
+            "run",
+            "--locked",
+            "-q",
+            "--release",
+            "-p",
+            "simplestchat-ops",
+            "--bin",
+            "simplestchat-ops",
+            "--",
+            "release",
+            "build",
+            "--image-id",
+        ]
+        .map(str::to_owned),
+    );
+    let export = output.join("export").display().to_string();
+    expected.extend(["sha256:x".to_owned(), "--output".to_owned(), export]);
+    assert_eq!(asked.lines().collect::<Vec<_>>(), expected);
+    let place = fs::read_to_string(scratch.0.join("pinned.argv.cwd")).expect("a place");
+    assert_eq!(
+        Path::new(place.trim_end()),
+        root.canonicalize().expect("root")
+    );
+    assert!(!scratch.0.join("unpinned.argv").exists());
+}
+
+#[test]
 fn only_a_tier_that_passed_and_said_so_ends_well() {
     let lost = || Err(std::io::Error::other("the line was lost"));
     assert_eq!(concluded(true, Ok(())), std::process::ExitCode::SUCCESS);
@@ -396,7 +471,7 @@ fn prepared_scanners_named_from_where_the_tier_runs_are_refused() {
     );
     let request = parsed(&words(&line)).expect("a request");
     let machine = Faked {
-        python: scratch.0.join("python"),
+        cargo: scratch.0.join("cargo"),
         program: scratch.0.join("gate"),
         installed: true,
         base: scratch.0.clone(),

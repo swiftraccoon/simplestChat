@@ -188,15 +188,16 @@ const RUST_RECEIPT_INPUTS: [&str; 24] = [
     "docs/tool.rs",
     "README.md",
     "Caddyfile",
-    "build/security_context.py",
-    "build/security_tools.py",
+    "build/install-openssl.sh",
+    "build/install-aws-lc.sh",
     ".github/workflows/ci.yml",
     ".github/actions/native-toolchain/action.yml",
 ];
 
 /// From `test_rust_receipts_keep_sources_shared_data_and_runtime_inputs_bound`:
-/// a similar name cannot hide a changed compiled or executed input. The
-/// Python test's own helper among the names is another build helper here.
+/// a similar name cannot hide a changed compiled or executed input. The two
+/// Python build helpers among that test's names are the two native
+/// installers the Rust jobs run here.
 #[test]
 fn rust_receipts_keep_sources_shared_data_and_runtime_inputs_bound() {
     let fixture =
@@ -337,7 +338,7 @@ fn native_suites_bind_each_helper_and_ignore_unrelated_review_changes() {
         }
         fixture.write(name, b"original\n");
     }
-    assert_eq!(fixture.replayed(), [81, 81, 0]);
+    assert_eq!(fixture.replayed(), [75, 75, 0]);
 }
 
 /// From `test_codeql_review_data_changes_do_not_invalidate_evaluated_databases`:
@@ -433,7 +434,7 @@ fn rust_analysis_keeps_all_targets_embedded_data_and_tool_inputs() {
     }
     fixture.git(&["update-index", "--chmod=+x", "new_target/module.rs"]);
     assert_ne!(fixture.key(Scope::CodeqlRust), key);
-    assert_eq!(fixture.replayed(), [30, 0, 0]);
+    assert_eq!(fixture.replayed(), [28, 0, 0]);
 }
 
 /// From `test_rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling`:
@@ -448,7 +449,7 @@ fn rust_analysis_ignores_unrelated_docs_deployment_and_frontend_tooling() {
         "docs/testing.md",
         "ops/ansible/files/release_public.py",
         "ops/ansible/templates/public-app.env.j2",
-        "build/release_deploy.py",
+        "ops/ansible/release.yml",
         ".github/workflows/ci.yml",
         "security/image-policy.json",
         "Dockerfile",
@@ -761,7 +762,7 @@ fn backend_closure_preserves_build_inputs_without_operational_invalidations() {
         assert_ne!(fixture.key(Scope::Backend), original, "{name}");
         fixture.write(name, b"original\n");
     }
-    assert_eq!(fixture.replayed(), [31, 0, 0]);
+    assert_eq!(fixture.replayed(), [30, 0, 0]);
 }
 
 /// From `test_backend_setup_defaults_stay_stable_and_compiler_overrides_invalidate`:
